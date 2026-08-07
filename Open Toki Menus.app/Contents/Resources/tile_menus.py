@@ -5,7 +5,7 @@ One launch dialog:
   • Browser (Chrome / Firefox / Safari)
   • Environment — Local (localhost + Sheets proxy) | Remote (GitHub Pages)
   • Single window — all boards preview
-  • Show chrome — labels & zoom tips on the preview wall (default off)
+  • Show extra info — labels & zoom tips on the preview wall (default off)
 
 Skip UI with env:
   TOKI_BROWSER=chrome|firefox|safari
