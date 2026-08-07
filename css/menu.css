@@ -1398,27 +1398,14 @@ body {
    Multi-board wall embeds (?preview=all → body.preview-wall)
    Cut GPU compositing / VRAM cost for Fire Stick & phone WebViews.
    Solo boards (no preview=all) keep full effects.
-   Shared galaxy/plate lives in preview-all behind transparent iframes.
+   Per-board BG still draws (4 copies) with single-layer pan, no blur/blend.
    ========================================================================== */
-html.preview-wall,
-body.preview-wall {
-  background: transparent !important;
-}
-
 body.preview-wall #stage {
-  background: transparent !important;
-  /* Half-res paint target when parent uses 960×540 iframe (Fix 4) */
   will-change: transform;
 }
 
 body.preview-wall #galaxy {
-  background: transparent !important;
   isolation: auto;
-}
-
-body.preview-wall #galaxy.is-solid .galaxy-layer,
-body.preview-wall .galaxy-layer {
-  display: none !important;
 }
 
 body.preview-wall #hero {
@@ -1438,7 +1425,6 @@ body.preview-wall #galaxy.has-blur .galaxy-layer {
 
 body.preview-wall #stripes-track {
   will-change: auto;
-  /* Still animate, but avoid permanent layer promotion thrash */
   animation-duration: 12s;
 }
 

@@ -1107,20 +1107,8 @@
     let imagePath = config.bgImage || null;
     if (imagePath) imagePath = wallFriendlyBgPath(imagePath);
 
-    // Multi-board wall: one shared BG lives in preview-all behind all iframes.
-    // Each board stays transparent (no per-board galaxy texture ×4).
-    if (wall) {
-      imagePath = null;
-      plate = "transparent";
-      if (document.documentElement) {
-        document.documentElement.style.background = "transparent";
-      }
-      document.body.style.background = "transparent";
-      if (els.stage) els.stage.style.background = "transparent";
-      tokiInfo("stage BG transparent (shared wall background)");
-    }
-
-    // Multi-board wall: no CSS blur / blend (VRAM / compositing)
+    // Multi-board wall: still per-board BG (4 copies), but leaner:
+    // no CSS blur/blend, stage-sized galaxy asset, single-layer pan.
     const blur01 = wall ? 0 : parseUnit01(config.bgBlur, 0);
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
@@ -1128,7 +1116,7 @@
     // Color plate always under the image
     galaxy.style.backgroundColor = plate;
     galaxy.classList.toggle("has-image", !!imagePath);
-    galaxy.classList.toggle("is-solid", !imagePath || wall);
+    galaxy.classList.toggle("is-solid", !imagePath);
 
     // Blur: 0 → filter disabled (not blur(0)); 1 → BG_BLUR_MAX_PX
     if (blur01 <= 0) {
@@ -5759,19 +5747,15 @@
 
   function startGalaxyScroll() {
     applyStageBackground();
-    // Wall: shared BG is painted by preview-all; no per-board galaxy work
-    if (isPreviewWall()) {
-      tokiInfo("galaxy: off (shared wall background in parent)");
-      return;
-    }
     // Color-only (no image): no pan/crossfade loop
     if (!config.bgImage) return;
     if (!els.galaxyA) return;
     if (galaxyStarted) return; // idempotent — softReload must not re-enter
     galaxyStarted = true;
 
-    // Single-layer fallback if B is missing
-    const singleLayer = !els.galaxyB || els.galaxyB.hidden;
+    // Wall: single-layer pan (scroll on). Solo: dual-layer crossfade when B exists.
+    const singleLayer =
+      isPreviewWall() || !els.galaxyB || els.galaxyB.hidden;
 
     const layers = singleLayer
       ? [{ el: els.galaxyA, x: 0 }]
@@ -6115,7 +6099,7 @@
     if (isPreviewWall()) {
       document.documentElement.classList.add("preview-wall");
       document.body.classList.add("preview-wall");
-      tokiInfo("preview-wall mode: lean GPU path + transparent stage BG");
+      tokiInfo("preview-wall mode: lean GPU path, per-board BG scroll");
     }
     if (isBowls) {
       document.body.classList.add("board-bowls");
