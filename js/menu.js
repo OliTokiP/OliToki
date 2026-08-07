@@ -36,7 +36,7 @@
    * empty Subtitle → no parenthetical; Include Protein/Sauces Box? toggles footers.
    * A Menu Title | B Item | C–E Price 1–3 | F Subtitle | G Description |
    * H New | I Image | J Include | K Include Protein Box? | L Include Sauces Box?
-   * M Include Drinks Box? (optional; default off when missing)
+   * M Include Drinks Box? | N Include Descriptions? | O Columns? (Auto|1|2|3)
    */
   const BOARD_COLUMNS = {
     title: 0,
@@ -53,6 +53,8 @@
     includeProteinBox: 10,
     includeSaucesBox: 11,
     includeDrinksBox: 12,
+    includeDescriptions: 13,
+    menuColumns: 14,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,
@@ -247,6 +249,12 @@
     include: false,
     createColumns: false,
     textAlign: "center",
+  };
+  /** Board list options from Include Descriptions? / Columns? (first filled cell) */
+  let boardListOptions = {
+    showDescriptions: true,
+    /** "auto" | 1 | 2 | 3 */
+    columns: "auto",
   };
   let announcementBox = {
     title: "",
@@ -1629,10 +1637,35 @@
     const includeSaucesBox = firstColumnInclude(c.includeSaucesBox, true);
     // Drinks/soda footer: default OFF when column missing or blank
     const includeDrinksBox = firstColumnInclude(c.includeDrinksBox, false);
+    // Descriptions: default ON when column missing (legacy boards)
+    const includeDescriptions = firstColumnInclude(
+      c.includeDescriptions,
+      true
+    );
+
+    function firstColumnMenuColumns(colIdx) {
+      if (colIdx == null) return "auto";
+      for (let i = 1; i < rows.length; i++) {
+        const raw = cell(rows[i], colIdx);
+        if (raw === "" || raw == null) continue;
+        const s = String(raw).trim().toLowerCase();
+        if (!s || s === "auto") return "auto";
+        if (s === "1" || s === "one") return 1;
+        if (s === "2" || s === "two") return 2;
+        if (s === "3" || s === "three") return 3;
+        const n = Number(s);
+        if (n === 1 || n === 2 || n === 3) return n;
+        return "auto";
+      }
+      return "auto";
+    }
+    const menuColumns = firstColumnMenuColumns(c.menuColumns);
 
     const out = {
       title: String(cell(first, c.title) || ""),
       items: parsedItems,
+      includeDescriptions: includeDescriptions,
+      menuColumns: menuColumns,
       proteinBox: {
         title: proteinTitle,
         subtitle: proteinSubtitle,
@@ -2075,6 +2108,25 @@
       );
     }
 
+    boardListOptions = {
+      showDescriptions:
+        parsed.includeDescriptions !== undefined
+          ? !!parsed.includeDescriptions
+          : true,
+      columns:
+        parsed.menuColumns === 1 ||
+        parsed.menuColumns === 2 ||
+        parsed.menuColumns === 3
+          ? parsed.menuColumns
+          : "auto",
+    };
+    console.info(
+      "Board list options: descriptions",
+      boardListOptions.showDescriptions ? "on" : "off",
+      "columns",
+      boardListOptions.columns
+    );
+
     const rawItems = (parsed.items || []).concat(cfg.extraItems || []);
     items = rawItems
       .map((it) => {
@@ -2093,7 +2145,8 @@
         // Keep subtitle and description separate — never invent one from the other
         // when the source board doesn't use that field.
         const subtitle = String(it.subtitle || "").trim();
-        const description = String(it.description || "").trim();
+        let description = String(it.description || "").trim();
+        if (!boardListOptions.showDescriptions) description = "";
 
         return {
           name: String(it.name || "").trim(),
@@ -5175,18 +5228,21 @@
   }
 
   /**
-   * Single- vs two-column mode for bowls/handhelds/munchies lists.
-   * cols=1 → flex column (default CSS). cols=2 → grid, column-major.
+   * Menu list columns for bowls/handhelds/munchies.
+   * cols=1 → flex column; cols=2|3 → grid, column-major.
    */
   function setMenuColumnMode(list, cols) {
     if (!list) return;
-    if (cols === 2) {
-      const rows = Math.max(1, Math.ceil(items.length / 2));
-      list.classList.add("cols-2");
+    const n = Math.max(1, Math.min(3, cols | 0));
+    list.classList.remove("cols-2", "cols-3");
+    if (n >= 2) {
+      const rows = Math.max(1, Math.ceil(items.length / n));
+      list.classList.add(n === 3 ? "cols-3" : "cols-2");
       list.style.setProperty("--menu-col-rows", String(rows));
+      list.style.setProperty("--menu-cols", String(n));
     } else {
-      list.classList.remove("cols-2");
       list.style.removeProperty("--menu-col-rows");
+      list.style.removeProperty("--menu-cols");
     }
   }
 
@@ -5249,38 +5305,59 @@
       return best;
     }
 
-    // —— Pass 1: single column ——
-    setMenuColumnMode(list, 1);
-    const scale1 = bestScaleForCurrentLayout();
-    let chosenCols = 1;
-    let chosenScale = scale1;
+    const forced =
+      boardListOptions.columns === 1 ||
+      boardListOptions.columns === 2 ||
+      boardListOptions.columns === 3
+        ? boardListOptions.columns
+        : null;
 
-    // —— Pass 2 (bowls + handhelds): try 2-col when dense / type is small ——
-    if (usesAutoMenuColumns && items.length >= MENU_COLS_MIN_ITEMS) {
-      const shouldTry =
-        items.length >= MENU_COLS_ALWAYS_TRY || scale1 < MENU_COLS_SCALE_FLOOR;
-      if (shouldTry) {
-        setMenuColumnMode(list, 2);
-        const scale2 = bestScaleForCurrentLayout();
-        // Prefer 2-col only when type is meaningfully larger
-        if (scale2 >= chosenScale * MENU_COLS_WIN_RATIO) {
-          chosenCols = 2;
-          chosenScale = scale2;
-          console.info(
-            menuColumnLabel() + " columns: 2 (scale",
-            scale1.toFixed(3),
-            "→",
-            scale2.toFixed(3) + ")"
-          );
-        } else {
-          setMenuColumnMode(list, 1);
-          fits(scale1);
-          console.info(
-            menuColumnLabel() + " columns: 1 (2-col scale",
-            scale2.toFixed(3),
-            "not enough better than",
-            scale1.toFixed(3) + ")"
-          );
+    let chosenCols = 1;
+    let chosenScale;
+
+    if (forced != null) {
+      // Sheet Columns? override — Auto is handled below
+      setMenuColumnMode(list, forced);
+      chosenCols = forced;
+      chosenScale = bestScaleForCurrentLayout();
+      console.info(
+        menuColumnLabel() + " columns: " + forced + " (forced, scale",
+        chosenScale.toFixed(3) + ")"
+      );
+    } else {
+      // —— Pass 1: single column ——
+      setMenuColumnMode(list, 1);
+      const scale1 = bestScaleForCurrentLayout();
+      chosenCols = 1;
+      chosenScale = scale1;
+
+      // —— Pass 2: try 2-col when dense / type is small (legacy Auto) ——
+      if (usesAutoMenuColumns && items.length >= MENU_COLS_MIN_ITEMS) {
+        const shouldTry =
+          items.length >= MENU_COLS_ALWAYS_TRY ||
+          scale1 < MENU_COLS_SCALE_FLOOR;
+        if (shouldTry) {
+          setMenuColumnMode(list, 2);
+          const scale2 = bestScaleForCurrentLayout();
+          if (scale2 >= chosenScale * MENU_COLS_WIN_RATIO) {
+            chosenCols = 2;
+            chosenScale = scale2;
+            console.info(
+              menuColumnLabel() + " columns: 2 auto (scale",
+              scale1.toFixed(3),
+              "→",
+              scale2.toFixed(3) + ")"
+            );
+          } else {
+            setMenuColumnMode(list, 1);
+            fits(scale1);
+            console.info(
+              menuColumnLabel() + " columns: 1 auto (2-col scale",
+              scale2.toFixed(3),
+              "not enough better than",
+              scale1.toFixed(3) + ")"
+            );
+          }
         }
       }
     }
@@ -5305,7 +5382,7 @@
       }
       spare = list.clientHeight - maxBottom - padBottom;
     }
-    if (chosenCols === 2) {
+    if (chosenCols >= 2) {
       list.style.alignContent = spare > 12 ? "center" : "start";
       list.style.justifyContent = "flex-start";
     } else {

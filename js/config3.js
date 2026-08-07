@@ -5,8 +5,7 @@
  * Theme / speeds / highlights from Style tab.
  * Protein/Sauces content: shared sheets.
  *
- * Same column schema as Board 1 / Board 2 — leave Description empty for a
- * dense multi-price list; use Subtitle / Price 2–3 when needed.
+ * Schema + optional: N Include Descriptions? | O Columns? (Auto|1|2|3).
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
@@ -41,6 +40,8 @@ window.TOKI_CONFIG = {
     includeProteinBox: 10,
     includeSaucesBox: 11,
     includeDrinksBox: 12,
+    includeDescriptions: 13,
+    menuColumns: 14,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

@@ -492,13 +492,14 @@ body {
 }
 
 /*
-  Auto 2-column mode for Bowls + Handhelds + Munchies (JS adds .cols-2 when
-  2-col wins the scale bake-off). Column-major: left top→bottom, then right.
-  --menu-col-rows = ceil(itemCount / 2), set by fitMenuText.
+  Multi-column mode for Bowls + Handhelds + Munchies.
+  .cols-2 / .cols-3 from Auto bake-off or Columns? sheet override.
+  Column-major: left top→bottom, then next column.
+  --menu-col-rows = ceil(itemCount / N), set by fitMenuText.
 */
-#menu-list.cols-2 {
+#menu-list.cols-2,
+#menu-list.cols-3 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   grid-auto-flow: column;
   grid-template-rows: repeat(var(--menu-col-rows, 8), auto);
   /* Wider gutter so left text never kisses the right column */
@@ -509,13 +510,28 @@ body {
   gap: unset;
 }
 
-/* Munchies rows are single-line — tighter vertical rhythm in 2-col */
-.board-munchies #menu-list.cols-2 {
+#menu-list.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+#menu-list.cols-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+  column-gap: calc(28px * var(--menu-scale));
+}
+
+/* Munchies rows are single-line — tighter vertical rhythm in multi-col */
+.board-munchies #menu-list.cols-2,
+.board-munchies #menu-list.cols-3 {
   row-gap: calc(6px * var(--menu-scale));
   column-gap: calc(36px * var(--menu-scale));
 }
 
-#menu-list.cols-2 .menu-item {
+.board-munchies #menu-list.cols-3 {
+  column-gap: calc(24px * var(--menu-scale));
+}
+
+#menu-list.cols-2 .menu-item,
+#menu-list.cols-3 .menu-item {
   min-width: 0; /* grid children default to min-content; allow shrink */
   max-width: 100%;
   box-sizing: border-box;
@@ -524,9 +540,10 @@ body {
   overflow: hidden; /* last resort if a glyph still pokes out */
 }
 
-#menu-list.cols-2 .menu-item .item-desc {
+#menu-list.cols-2 .menu-item .item-desc,
+#menu-list.cols-3 .menu-item .item-desc {
   max-width: 100%;
-  /* Break long tokens instead of spilling into col 2.
+  /* Break long tokens instead of spilling into next col.
      hyphens: auto needs html[lang] (boards set lang="en"). */
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -535,7 +552,8 @@ body {
 }
 
 /* Munchies title lines are nowrap; ensure they can't paint into the gutter */
-.board-munchies #menu-list.cols-2 .menu-item .item-line {
+.board-munchies #menu-list.cols-2 .menu-item .item-line,
+.board-munchies #menu-list.cols-3 .menu-item .item-line {
   max-width: 100%;
   overflow: hidden;
 }
