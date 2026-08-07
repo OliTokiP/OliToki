@@ -29,6 +29,39 @@
 | `Open Toki Menus.app` | Launches server + tiles board windows |
 | `vendor/xlsx.full.min.js` | Local workbook + style fills when needed |
 
+### Private Google Sheet + live boards (what the API is for)
+
+The Sheets **API + service account** exists so a **trusted program** can read a **private** spreadsheet without “Anyone with the link.” That is the intended product path.
+
+```text
+[Private Google Sheet]
+        ↑  Sheets API (authenticated with service account key)
+[Trusted backend]   ← only place that holds secrets/google-service-account.json
+   Local:  toki_server.py on this Mac
+   Market: same idea, hosted (Fly / Cloud Run / VPS / …)
+        ↑  plain HTTP JSON/CSV (no Google key)
+[Browser boards]    ← GitHub Pages or localhost HTML/JS only
+```
+
+| Question | Answer |
+|----------|--------|
+| Does **Local** use the API or public export? | **API**, when `toki_server.py` is up (`/api/sheets/*`). Public `/export` is only a fallback if the proxy is missing. |
+| Can the sheet stay private? | **Yes**, with Local (or a hosted backend). Share the sheet with the service account email as Viewer (or Editor if the app writes). |
+| Can **GitHub Pages alone** use that private API path? | **No.** Pages is static files only — no Python process, nowhere safe for the key. |
+| Is “market Remote = private sheet + live boards via API” possible? | **Yes.** Same as Local: host the proxy; frontend stays static. Pages is fine as the **frontend** host. |
+| Dropbox / iCloud as the API server? | **No.** They sync files; they do not run code or serve `/api/sheets/*`. This repo *lives* in Dropbox; that is storage, not a backend. |
+| Mac + tunnel (Cloudflare / ngrok / Tailscale)? | Possible for demos: tunnel exposes local `toki_server` to the internet. Mac must stay awake; not a product host. |
+| Put the service account JSON in the website/repo? | **Don’t.** Public repo scrapers steal keys; that is not “private sheet.” |
+
+**Launcher Environment (Open Toki Menus):**
+
+| Choice | Meaning |
+|--------|---------|
+| **Local** | `http://127.0.0.1:8765` + start `toki_server` → private sheet API path |
+| **Remote** | GitHub Pages static site → no proxy unless you later point boards at a hosted API |
+
+Service account email is a **robot identity** for *your software*, not a substitute for making the whole internet a Viewer of the sheet.
+
 ### Pain points (why hybrid rewrite)
 
 1. **One 5k+ line IIFE** — hard to test layout pure functions; high regression risk.  

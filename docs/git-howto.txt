@@ -84,8 +84,9 @@ Open Toki Menus — Environment
               A git push does NOT enable Pages by itself.
               Repo Settings → Pages → deploy from branch main (root).
               Private repos need GitHub Pro for Pages (or make public).
-              Remote cannot run the Sheets API proxy; use Local for
-              live private menu data.
+              Remote cannot run the Sheets API proxy by itself; use Local
+              for live private menu data. (Dropbox/iCloud are not servers.)
+              See docs/ARCHITECTURE.md — "Private Google Sheet + live boards".
 
   Also on the same panel:
     Single window — all boards preview (preview-all.html)
