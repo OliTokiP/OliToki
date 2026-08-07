@@ -163,57 +163,26 @@ Body padding (wrap): ~`12px 18px 14px`; columns mode slightly tighter.
 
 ---
 
-## 6. Generic Box 1 / 2 / 3 — **target** width rules
+## 6. Footer boxes 1 / 2 / 3 — width rules
 
-When boxes are no longer hard-coded as protein/sauces, the **footer strip** is a single row of enabled boxes inside the combined footprint:
-
-```
-Strip origin:  left = 38, top = 863
-Strip size:    width = 1082, height = 197
-Inter-box gap: 15px (keep when 2+ boxes)
-```
-
-**Priority:** lower box number wins more space when exactly two are on.
-
-| Enabled set | Width split |
-|-------------|-------------|
-| One box only | **100%** of strip (1082px) |
-| Two boxes *i* + *j* with *i* &lt; *j* | **i → 2/3**, **j → 1/3** of strip width (minus gap) |
-| All three | **Even thirds** of strip width (minus gaps) |
-
-Examples:
-
-- Box1 + Box2 → same visual as today’s protein + sauces (≈768 / 299 after gap).
-- Box2 + Box3 → Box2 gets 2/3, Box3 gets 1/3.
-- Box1 + Box3 → Box1 2/3, Box3 1/3.
-- Only Box3 → full 1082 width.
-
-**Implementation hint (CSS classes):**
-
-```text
-footer-boxes--1
-footer-boxes--2
-footer-boxes--3
-footer-boxes--1-2
-footer-boxes--1-3
-footer-boxes--2-3
-footer-boxes--1-2-3
-```
-
-Suggested flex math with 15px gaps:
+**Canonical pixel sizes:** [FOOTER_BOXES.md](./FOOTER_BOXES.md) (heights, header 64px, 1/2/3-box widths).
 
 ```
-n = number of visible boxes
-gapTotal = 15 * (n - 1)
-inner = 1082 - gapTotal
-// one box:  width = 1082
-// two:      major = round(inner * 2/3), minor = inner - major
-// three:    each = floor(inner / 3), remainder to leftmost
+Strip:  left 38, top 863, 1082×197
+Gap:    15px between adjacent boxes
+Header: 64px | Body: 133px | Total height: 197px
 ```
 
-Do **not** invent other proportional schemes (no “content-weighted” widths).
+| Enabled | Widths (left → right) | Notes |
+|---------|------------------------|--------|
+| **One** | **1082** | Full strip |
+| **Two** | **768** · **299** | Left-heavy **by design** (mockup); not pure ⅓ |
+| **Three** | **Even thirds** of 1052 (≈350⅔ each) | Do **not** keep 768/299; equal looks cleaner |
 
-### Board 4 multi-box (target)
+Two-box order: Protein → Sauces → Soda (leftmost of the pair gets 768).  
+Near-term: Handhelds **Include soda box?** only; Board 4 unchanged.
+
+### Board 4 multi-box (target — later)
 
 Today Board 4 has a fixed stack:
 
