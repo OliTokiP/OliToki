@@ -4471,9 +4471,35 @@
   }
 
   /**
+   * Greedy pack in sheet order: fill each line up to boxW before wrapping.
+   * Better for wide footer-major boxes (full rows, reading order, no orphans).
+   */
+  function packGreedyByWidth(items, sepW, boxW) {
+    const lines = [];
+    let cur = { items: [], width: 0 };
+    const limit = Math.max(1, boxW);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const add = it.width + (cur.items.length ? sepW : 0);
+      if (cur.items.length && cur.width + add > limit) {
+        lines.push(cur);
+        cur = { items: [], width: 0 };
+      }
+      cur.width += (cur.items.length ? sepW : 0) + it.width;
+      cur.items.push(it);
+    }
+    if (cur.items.length) lines.push(cur);
+    return lines;
+  }
+
+  /**
    * Reorder wrap items into balanced flex lines.
    * Picks line count that maximizes estimated type scale (width + height),
-   * with a small preference for even character/pixel utilization per row.
+   * with preference for even rows AND width fill.
+   *
+   * Width fill matters in the wide footer-major slot (~768px): a 3–4 line pack
+   * can be height-capped at ~same type size as a 2-line pack while each row only
+   * uses ~60% of the box — looks sparse. Reward packs that use the row width.
    *
    * rawItems: [{ label, ...payload }]
    * opts: { font, sepText, containerWidth, containerHeight, lineHeight, maxLines,
@@ -4502,10 +4528,14 @@
             return measureTextPx(it.label, f);
           };
 
+    // Inflate measured widths slightly — canvas/DOM probe is still a hair
+    // narrower than live flex+middot layout, which caused mid-line wraps
+    // (e.g. lone "Spicy Toki") in the wide sauces slot.
+    const WIDTH_PAD = 1.08;
     const items = list.map(function (it, idx) {
       return {
         idx: idx,
-        width: Math.max(1, measureLabel(it, font)),
+        width: Math.max(1, measureLabel(it, font) * WIDTH_PAD),
         raw: it,
       };
     });
@@ -4515,10 +4545,12 @@
 
     let bestLines = null;
     let bestScore = -Infinity;
+    let bestType = -Infinity;
+    let bestTag = "";
+    const candidates = [];
 
-    for (let L = 1; L <= maxLines; L++) {
-      const packed = packLptLines(items, L, sepW);
-      if (!packed.length) continue;
+    function considerPacked(packed, tag) {
+      if (!packed || !packed.length) return;
       let maxW = 0;
       let minW = Infinity;
       for (let i = 0; i < packed.length; i++) {
@@ -4533,17 +4565,67 @@
         ? 1 / packed.length
         : boxH / (packed.length * lineH);
       const balance = minW / maxW;
-      // Primary: max type size; secondary: even rows; tiny bias to fewer lines
+      const fill = unmeasured ? 0.85 : Math.min(1, maxW / boxW);
+      const typeScore = Math.min(scaleW, scaleH);
+      const L = packed.length;
+      // Type size primary; width fill heavy (wide major slot); even rows; fewer lines
       const score =
-        Math.min(scaleW, scaleH) * (0.82 + 0.18 * balance) - L * 1e-4;
+        typeScore * (0.58 + 0.12 * balance + 0.3 * fill) - L * 0.008;
 
+      const lines = packed.map(function (ln) {
+        return ln.items.map(function (it) {
+          return it.raw;
+        });
+      });
+      candidates.push({
+        tag: tag,
+        L: L,
+        score: score,
+        typeScore: typeScore,
+        fill: fill,
+        lines: lines,
+      });
       if (score > bestScore) {
         bestScore = score;
-        bestLines = packed.map(function (ln) {
-          return ln.items.map(function (it) {
-            return it.raw;
-          });
-        });
+        bestType = typeScore;
+        bestLines = lines;
+        bestTag = tag;
+      }
+    }
+
+    for (let L = 1; L <= maxLines; L++) {
+      considerPacked(packLptLines(items, L, sepW), "lpt-" + L);
+    }
+    // Sheet-order greedy: fills wide boxes without single-item orphan rows
+    if (!unmeasured) {
+      considerPacked(packGreedyByWidth(items, sepW, boxW * 0.96), "greedy");
+      considerPacked(
+        packGreedyByWidth(items, sepW, boxW * 0.88),
+        "greedy-tight"
+      );
+    }
+
+    // Among packs within 8% of best type size, pick fullest width (then fewer lines)
+    if (candidates.length && bestType > 0) {
+      let pick = null;
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        if (c.typeScore < bestType * 0.92) continue;
+        if (
+          !pick ||
+          c.fill > pick.fill + 0.03 ||
+          (Math.abs(c.fill - pick.fill) <= 0.03 && c.L < pick.L) ||
+          (Math.abs(c.fill - pick.fill) <= 0.03 &&
+            c.L === pick.L &&
+            c.score > pick.score)
+        ) {
+          pick = c;
+        }
+      }
+      if (pick) {
+        bestLines = pick.lines;
+        bestScore = pick.score;
+        bestTag = (pick.tag || "?") + "*";
       }
     }
 
@@ -4560,8 +4642,9 @@
         })
         .join(" || ");
       console.info(
-        "Balanced wrap (" + bestLines.length + " lines):",
-        summary
+        "Balanced wrap (" + bestLines.length + " lines, " + bestTag + "):",
+        summary,
+        "boxW=" + Math.round(boxW)
       );
     }
     return bestLines;
@@ -4610,21 +4693,27 @@
         return it.label != null ? it.label : it.name;
       };
 
+    // Each planned line is a nowrap row so items never flex-wrap mid-line
+    // (orphans like a lone "Spicy Toki" between force-breaks).
     lines.forEach(function (line, li) {
+      const row = document.createElement("span");
+      row.className = "wrap-line-row";
+      row.setAttribute("data-line", String(li));
       line.forEach(function (it, i) {
         const span = document.createElement("span");
         span.className = itemClass;
         span.textContent = getText(it);
         if (typeof c.onItem === "function") c.onItem(span, it, li, i);
-        body.appendChild(span);
+        row.appendChild(span);
         if (i < line.length - 1) {
           const sep = document.createElement("span");
           sep.className = sepClass;
           sep.textContent = sepText;
           sep.setAttribute("aria-hidden", "true");
-          body.appendChild(sep);
+          row.appendChild(sep);
         }
       });
+      body.appendChild(row);
       if (li < lines.length - 1) {
         const br = document.createElement("span");
         br.className = breakClass;
@@ -5001,6 +5090,9 @@
               child.style.width = prev;
             }
             if (natural > child.clientWidth + 1) return false;
+          } else if (child.classList.contains("wrap-line-row")) {
+            // Planned wrap line: scrollWidth > clientWidth when nowrap overflows
+            if (child.scrollWidth > el.clientWidth + 1) return false;
           } else if (child.offsetWidth > el.clientWidth + 1) {
             return false;
           }

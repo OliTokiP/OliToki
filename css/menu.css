@@ -824,6 +824,18 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* One planned wrap line — never splits items across flex rows */
+.info-box-body.layout-wrap .wrap-line-row {
+  display: flex;
+  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  align-items: baseline;
+  justify-content: inherit;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 /* Text Align dropdown (Left / Center / Right) — columns + wrap */
 #protein-box .info-box-body.align-left,
 #sauces-box .info-box-body.align-left,
@@ -879,7 +891,7 @@ body {
 
 /*
   Sauces + footer drinks wrap — match footer-verify density.
-  Tighter leading/padding lets fitWrapBox reach ~24px type.
+  Tighter leading/padding lets fitWrapBox reach ~24px type in the narrow slot.
 */
 #sauces-box .info-box-body.layout-wrap,
 #footer-drinks-box .info-box-body.layout-wrap {
@@ -890,6 +902,18 @@ body {
   padding: 6px 10px 8px;
   row-gap: calc(2px * var(--box-scale));
   letter-spacing: -0.015em;
+}
+
+/*
+  Sauces in footer-major (~768px, protein off): slightly larger base so the
+  wide slot can land ~34–36px type with fuller 2-line packs (see pack score
+  width-fill term in balanceItemsIntoLines).
+*/
+#sauces-box.footer-major .info-box-body.layout-wrap {
+  font-size: calc(36px * var(--box-scale));
+  line-height: 1.08;
+  padding: 8px 14px 10px;
+  row-gap: calc(4px * var(--box-scale));
 }
 
 #footer-drinks-box .info-box-body.layout-columns {
