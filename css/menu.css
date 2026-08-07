@@ -1408,10 +1408,8 @@ body.preview-wall #galaxy {
   isolation: auto;
 }
 
-body.preview-wall #hero {
-  /* Soft drop-shadow is a multi-pass filter — expensive ×4 */
-  filter: none;
-}
+/* Hero drop-shadow kept (same as solo) — re-enabled for visual fidelity.
+   If Fire Stick stutters, reinstate: body.preview-wall #hero { filter: none; } */
 
 body.preview-wall .galaxy-layer {
   will-change: auto;
@@ -1426,9 +1424,4 @@ body.preview-wall #galaxy.has-blur .galaxy-layer {
 body.preview-wall #stripes-track {
   will-change: auto;
   animation-duration: 12s;
-}
-
-body.preview-wall #new-sticker,
-body.preview-wall #new-sticker * {
-  filter: none;
 }
