@@ -26,6 +26,10 @@ _i*.html
 tokimenu.zip
 *.zip
 
+# Sheet snapshots next to git commits (local only; see backups/sheet-snapshots/README.md)
+backups/sheet-snapshots/INDEX.txt
+backups/sheet-snapshots/Menu-sheet-*.zip
+
 # Editor / OS
 *.swp
 .idea/

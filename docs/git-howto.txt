@@ -71,15 +71,46 @@ Push to GitHub (optional)
        gh repo create TokiMenu --private --source=. --remote=origin --push
 
 
+Toki Git Commit (app)
+---------------------
+
+  Double-click **Toki Git Commit.app** in the project folder (next to
+  Open Toki Menus). Or from a terminal:
+
+       python3 scripts/toki_git_commit.py
+       python3 scripts/toki_git_commit.py -m "what you finished"
+
+  It will, in one shot:
+
+    1. Commit dirty files (asks for a message in a dialog)
+    2. Pull the Google Sheet two ways and zip them together:
+         • Menu.xlsx  — formatting (fills / fonts) via Drive export
+         • values/*.csv — plain values via Sheets API
+    3. Name the zip with the git commit SHA and push to origin
+
+  Zip location + naming (always joinable to GitHub):
+
+       backups/sheet-snapshots/Menu-sheet-<12-char-sha>.zip
+
+  Example: commit 9ba31760fe6a… → Menu-sheet-9ba31760fe6a.zip
+  Full 40-char SHA and GitHub URL are inside the zip (MANIFEST.txt).
+
+  Log: /tmp/toki-git-commit.log
+
+  Flags (advanced):
+
+       --no-commit   --no-push   --no-sheet   --no-ui
+
+
 Sheets are not in git
 ---------------------
 
   Google Sheet content lives in Drive, not in this repo.
 
   For a true full restore later:
-    - Code: git checkout / reset
-    - Sheet: Drive version history, OR File → Download → .xlsx
-      saved under backups/ and committed (e.g. backups/sheet-YYYYMMDD.xlsx)
+    - Code: git checkout <sha>  (or GitHub commit page)
+    - Sheet: unzip backups/sheet-snapshots/Menu-sheet-<same-sha-prefix>.zip
+      (or Drive version history)
 
   Service account key stays only in secrets/ (never commit).
 

@@ -1,0 +1,34 @@
+#!/bin/bash
+# Toki Git Commit — git commit/push + Google Sheet snapshot zip
+set -euo pipefail
+
+PYTHON_FW="/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
+PROJECT="$(cd "${APP_BUNDLE}/.." && pwd)"
+LOG="/tmp/toki-git-commit.log"
+
+if [[ -x "$PYTHON_FW" ]]; then
+  PYTHON="$PYTHON_FW"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON="$(command -v python3)"
+else
+  osascript -e 'display dialog "Python 3 not found.\nInstall Python from python.org." buttons {"OK"} default button 1 with icon stop with title "Toki Git Commit"'
+  exit 1
+fi
+
+SCRIPT="${PROJECT}/scripts/toki_git_commit.py"
+if [[ ! -f "$SCRIPT" ]]; then
+  osascript -e "display dialog \"Missing scripts/toki_git_commit.py in:\n${PROJECT}\" buttons {\"OK\"} default button 1 with icon stop with title \"Toki Git Commit\""
+  exit 1
+fi
+
+cd "$PROJECT"
+{
+  echo "==== $(date) ===="
+  echo "PROJECT=$PROJECT"
+  echo "PYTHON=$PYTHON"
+  "$PYTHON" "$SCRIPT" "$@"
+  ec=$?
+  echo "exit=$ec"
+  exit $ec
+} >>"$LOG" 2>&1
