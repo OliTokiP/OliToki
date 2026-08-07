@@ -5782,21 +5782,19 @@
     // Color-only (no image): no pan/crossfade loop
     if (!config.bgImage) return;
     if (!els.galaxyA) return;
-    // Multi-board wall: static single layer (no dual-buffer rAF pan)
-    if (isPreviewWall() || !els.galaxyB || els.galaxyB.hidden) {
-      els.galaxyA.classList.add("active");
-      els.galaxyA.style.opacity = String(bgImageOpacityPeak());
-      els.galaxyA.style.transform = "translate3d(0, -50%, 0)";
-      tokiInfo("galaxy: static single layer (preview-wall or one-layer)");
-      return;
-    }
     if (galaxyStarted) return; // idempotent — softReload must not re-enter
     galaxyStarted = true;
 
-    const layers = [
-      { el: els.galaxyA, x: 0 },
-      { el: els.galaxyB, x: 0 },
-    ];
+    // Wall / single-layer: pan one image (no dual-buffer crossfade = less VRAM)
+    const singleLayer =
+      isPreviewWall() || !els.galaxyB || els.galaxyB.hidden;
+
+    const layers = singleLayer
+      ? [{ el: els.galaxyA, x: 0 }]
+      : [
+          { el: els.galaxyA, x: 0 },
+          { el: els.galaxyB, x: 0 },
+        ];
     let active = 0;
     let lastTs = null;
     let fading = false;
@@ -5874,9 +5872,16 @@
     }
 
     function onReady() {
-      prepareLayer(layers[0], initialX(layers[0]), true);
-      prepareLayer(layers[1], initialX(layers[1]), false);
-      layers[0].el.classList.add("active");
+      if (singleLayer) {
+        prepareLayer(layers[0], initialX(layers[0]), true);
+        layers[0].el.classList.add("active");
+        tokiInfo("galaxy: single-layer pan (preview-wall)");
+      } else {
+        prepareLayer(layers[0], initialX(layers[0]), true);
+        prepareLayer(layers[1], initialX(layers[1]), false);
+        layers[0].el.classList.add("active");
+        tokiInfo("galaxy: dual-layer pan + crossfade");
+      }
       lastTs = null;
       if (galaxyRaf) cancelAnimationFrame(galaxyRaf);
       galaxyRaf = requestAnimationFrame(tick);
@@ -5902,7 +5907,7 @@
     });
 
     function beginCrossfade(now) {
-      if (fading) return;
+      if (singleLayer || fading || layers.length < 2) return;
       fading = true;
       fadeUntil = now + FADE_DURATION_MS;
 
@@ -5926,6 +5931,7 @@
     }
 
     function finishCrossfade() {
+      if (singleLayer || layers.length < 2) return;
       const from = layers[active];
       const to = layers[1 - active];
 
@@ -5959,7 +5965,7 @@
       // Keep both layers moving in lockstep during a crossfade so the blend
       // doesn't shear apart (old code only moved active + incoming, but
       // after swap the parked layer could be far out of date).
-      if (fading) {
+      if (fading && !singleLayer && layers.length > 1) {
         layers[0].x += dx;
         layers[1].x += dx;
         apply(layers[0]);
@@ -5971,7 +5977,13 @@
         apply(cur);
 
         if (cur.x >= maxTravel() - 10) {
-          beginCrossfade(ts);
+          if (singleLayer) {
+            // Loop by snapping back (no second texture for seamless crossfade)
+            cur.x = initialX(cur);
+            apply(cur);
+          } else {
+            beginCrossfade(ts);
+          }
         }
       }
     }

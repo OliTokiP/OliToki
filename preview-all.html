@@ -325,11 +325,11 @@
             return;
           }
           const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          // pause=1: no slideshow thrash ×4 on weak GPUs
+          // preview=all → lean GPU path; slideshow stays ON (item + hero cycle)
           const url =
             src +
             sep +
-            "preview=all&pause=1&t=" +
+            "preview=all&t=" +
             t +
             "-" +
             (idx + 1);
