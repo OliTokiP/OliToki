@@ -5068,6 +5068,9 @@
       if (!heightOk) return false;
 
       if (opts.checkChildWidth) {
+        const padXY = parsePadXY(window.getComputedStyle(el));
+        // Content box width (clientWidth includes padding)
+        const contentW = Math.max(1, el.clientWidth - padXY.x);
         for (let i = 0; i < el.children.length; i++) {
           const child = el.children[i];
           const isColRow =
@@ -5099,8 +5102,9 @@
             if (natural < 1) {
               natural = child.scrollWidth;
             }
-            if (natural > el.clientWidth + 1) return false;
-          } else if (child.offsetWidth > el.clientWidth + 1) {
+            // 2px AA cushion so right-aligned glyphs are not clipped
+            if (natural > contentW - 2) return false;
+          } else if (child.offsetWidth > contentW + 1) {
             return false;
           }
         }
