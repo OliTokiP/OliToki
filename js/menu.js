@@ -1360,9 +1360,15 @@
     };
   }
 
-  async function fetchWorkbookXlsxBuffer(forceRefresh) {
-    // Wall: never download/parse full xlsx (×4 boards = Stick stutter)
-    if (isPreviewWall()) {
+  /**
+   * @param {boolean} forceRefresh
+   * @param {object} [opts]
+   * @param {boolean} [opts.allowInWall] Board 4 rich text may load xlsx even in wall
+   */
+  async function fetchWorkbookXlsxBuffer(forceRefresh, opts) {
+    opts = opts || {};
+    // Wall: skip xlsx unless explicitly allowed (drinks announcement rich text)
+    if (isPreviewWall() && !opts.allowInWall) {
       throw new Error("preview-wall: xlsx disabled");
     }
     const id = (cfg.googleSheetId || "").trim();
@@ -1867,7 +1873,8 @@
     const c = columnMap || col;
     // Walk every data row by original CSV index so Excel row numbers stay aligned
     // with xlsx styles (G2, G3, …). Each non-empty Announcement Text (G) is one
-    // message-board slide; blank E/F/I inherit previous resolved values.
+    // message-board slide. Blank E/I inherit previous title/speed; blank F
+    // clears subtitle (does not inherit). Text align lives in the cell itself.
     const dataRows = rows.slice(1);
     if (
       !dataRows.some(
@@ -1884,7 +1891,6 @@
     const parsedItems = [];
     const messages = [];
     let lastTitle = "";
-    let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -1902,12 +1908,12 @@
           c.announcementTitle != null
             ? String(cell(row, c.announcementTitle) || "").trim()
             : "";
-        const rawSub =
+        // Blank subtitle = cleared for this message (do not inherit previous)
+        const subtitle =
           c.announcementSubtitle != null
             ? String(cell(row, c.announcementSubtitle) || "").trim()
             : "";
         const title = rawTitle || lastTitle;
-        const subtitle = rawSub || lastSubtitle;
         const speed = parseAnnouncementSpeed(
           c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
           lastSpeed
@@ -1917,13 +1923,13 @@
           subtitle: subtitle,
           text: String(copyText).trim(),
           speedSec: speed,
+          // Cell-level font only used when no rich runs (see paintAnnouncementBody)
           color: announcementFontColor(font.color),
           bold: !!font.bold,
           italic: !!font.italic,
           runs: runs,
         });
-        lastTitle = title;
-        lastSubtitle = subtitle;
+        if (rawTitle) lastTitle = rawTitle;
         lastSpeed = speed;
       }
 
@@ -2953,9 +2959,10 @@
   /**
    * Styles for one sheet name from the cached workbook xlsx (single download).
    */
-  async function loadSheetStylesByName(sheetNameMatch) {
-    // Wall: no cell-fill/font xlsx work (matches needXlsx skip)
-    if (isPreviewWall()) {
+  async function loadSheetStylesByName(sheetNameMatch, opts) {
+    opts = opts || {};
+    // Wall: no xlsx unless allowInWall (drinks rich text)
+    if (isPreviewWall() && !opts.allowInWall) {
       return { fills: {}, fonts: {}, rich: {} };
     }
     const id = (cfg.googleSheetId || "").trim();
@@ -2967,7 +2974,7 @@
     ) {
       return _workbookXlsxCache.stylesByMatch[cacheKey];
     }
-    const buf = await fetchWorkbookXlsxBuffer(false);
+    const buf = await fetchWorkbookXlsxBuffer(false, opts);
     // Re-check after await (another caller may have filled the cache)
     if (
       _workbookXlsxCache.sheetId === id &&
@@ -2982,8 +2989,8 @@
     return meta;
   }
 
-  async function loadSheetFillsByName(sheetNameMatch) {
-    const meta = await loadSheetStylesByName(sheetNameMatch);
+  async function loadSheetFillsByName(sheetNameMatch, opts) {
+    const meta = await loadSheetStylesByName(sheetNameMatch, opts);
     return meta.fills || {};
   }
 
@@ -2993,9 +3000,13 @@
    * Drinks Deals). NOT the dedicated "Drinks" items sheet — matching "Drinks"
    * would pull the wrong tab and drop intentional G-sheet font colors.
    * One xlsx buffer; try name candidates without re-downloading.
+   * @param {object} [opts] { allowInWall } for Board 4 rich text in multi-board
    */
-  async function loadBoardSheetStyles() {
-    if (isHandhelds) return loadSheetStylesByName("Handhelds");
+  async function loadBoardSheetStyles(opts) {
+    opts = opts || {};
+    // Drinks: allow xlsx even in wall so announcement rich text works
+    if (isDrinks) opts = Object.assign({ allowInWall: true }, opts);
+    if (isHandhelds) return loadSheetStylesByName("Handhelds", opts);
     if (!isDrinks) return { fills: {}, fonts: {}, rich: {} };
 
     const candidates = [
@@ -3008,13 +3019,13 @@
     let lastErr = null;
     // Ensure buffer is warm once, then extract each candidate from it
     try {
-      await fetchWorkbookXlsxBuffer(false);
+      await fetchWorkbookXlsxBuffer(false, opts);
     } catch (err) {
       throw err;
     }
     for (let i = 0; i < candidates.length; i++) {
       try {
-        const meta = await loadSheetStylesByName(candidates[i]);
+        const meta = await loadSheetStylesByName(candidates[i], opts);
         const fonts = meta.fonts || {};
         const rich = meta.rich || {};
         const fills = meta.fills || {};
@@ -3023,7 +3034,7 @@
           Object.keys(rich).length ||
           Object.keys(fills).length
         ) {
-          console.info("Board styles sheet:", candidates[i]);
+          tokiInfo("Board styles sheet:", candidates[i]);
           return meta;
         }
       } catch (err) {
@@ -3690,15 +3701,22 @@
 
     await xlsxWarm;
 
-    // Cell fills + fonts (drinks announcement colors, handheld fills).
-    // Must stay gated with needXlsx — wall mode previously still called this
-    // and pulled full xlsx via loadBoardSheetStyles (Fix 1).
-    if (!isPreviewWall() && (isDrinks || isHandhelds)) {
+    // Cell fills + fonts + rich text for announcements.
+    // Wall: skip handhelds xlsx; drinks still load Board 4 styles (rich text).
+    const loadBoardStyles =
+      isDrinks || (!isPreviewWall() && isHandhelds);
+    if (loadBoardStyles) {
       try {
         const meta = await loadBoardSheetStyles();
         sheetFills = meta.fills || {};
         sheetFonts = meta.fonts || {};
         sheetRich = meta.rich || {};
+        if (isDrinks && Object.keys(sheetRich).length) {
+          tokiInfo(
+            "announcement rich-text runs loaded",
+            Object.keys(sheetRich).length
+          );
+        }
       } catch (err) {
         tokiWarn("Could not load sheet styles (typed hex still works):", err);
         sheetFills = {};
@@ -3706,8 +3724,8 @@
         sheetRich = {};
       }
     } else {
-      if (isPreviewWall() && (isDrinks || isHandhelds)) {
-        tokiInfo("sheet styles skipped (preview-wall)");
+      if (isPreviewWall() && isHandhelds) {
+        tokiInfo("sheet styles skipped (preview-wall handhelds)");
       }
       sheetFills = {};
       sheetFonts = {};
@@ -4141,42 +4159,78 @@
   }
 
   /**
-   * Paint announcement body from one message (text may include \n → multi-line).
-   * When runs exist on the whole cell, use them on a single block; else split lines.
+   * Split rich-text runs across \n into line groups (character offsets).
+   * @returns {Array<Array<run>>}
+   */
+  function splitRunsByNewline(runs) {
+    const lines = [[]];
+    (runs || []).forEach(function (run) {
+      const parts = String(run.text || "").split("\n");
+      parts.forEach(function (part, pi) {
+        if (pi > 0) lines.push([]);
+        if (part.length || (pi === 0 && parts.length === 1)) {
+          lines[lines.length - 1].push({
+            text: part,
+            bold: !!run.bold,
+            italic: !!run.italic,
+            color: run.color,
+          });
+        }
+      });
+    });
+    return lines.length ? lines : [[]];
+  }
+
+  /**
+   * Paint announcement body from one message.
+   * Rich runs: per-span bold/color only (no whole-cell style bleed).
+   * No runs: whole-cell font from sheet (legacy).
    */
   function paintAnnouncementBody(msg, annBodyText) {
     if (!els.announcementBody) return;
     els.announcementBody.innerHTML = "";
     els.announcementBody.style.setProperty("--box-scale", "1");
     els.announcementBody.style.color = annBodyText;
+
+    const hasRuns = msg && msg.runs && msg.runs.length > 0;
+
+    if (hasRuns) {
+      // Per-run formatting only — default contrast for unstyled runs
+      const lineGroups = splitRunsByNewline(msg.runs);
+      lineGroups.forEach(function (group) {
+        const p = document.createElement("p");
+        p.className = "announcement-line";
+        p.style.fontWeight = "400";
+        p.style.fontStyle = "normal";
+        p.style.color = annBodyText;
+        if (!group.length) {
+          p.innerHTML = "&nbsp;";
+          els.announcementBody.appendChild(p);
+          return;
+        }
+        group.forEach(function (run) {
+          const span = document.createElement("span");
+          span.className = "announcement-run";
+          span.textContent = run.text || "";
+          span.style.fontWeight = run.bold ? "700" : "400";
+          span.style.fontStyle = run.italic ? "italic" : "normal";
+          span.classList.toggle("is-bold", !!run.bold);
+          span.classList.toggle("is-italic", !!run.italic);
+          // Intentional run color only; never inherit cell-level orange onto normals
+          const runCol = announcementFontColor(run.color);
+          span.style.color = runCol || annBodyText;
+          p.appendChild(span);
+        });
+        els.announcementBody.appendChild(p);
+      });
+      return;
+    }
+
+    // No rich runs: whole-cell style from sheetFonts (or plain contrast)
     const lineBold = !!(msg && msg.bold);
     const lineItalic = !!(msg && msg.italic);
     const lineColor =
       announcementFontColor(msg && msg.color) || annBodyText;
-
-    if (msg && msg.runs && msg.runs.length) {
-      const p = document.createElement("p");
-      p.className = "announcement-line";
-      p.classList.toggle("is-bold", lineBold);
-      p.classList.toggle("is-italic", lineItalic);
-      p.style.color = lineColor;
-      p.style.fontWeight = lineBold ? "700" : "400";
-      p.style.fontStyle = lineItalic ? "italic" : "normal";
-      msg.runs.forEach(function (run) {
-        const span = document.createElement("span");
-        span.className = "announcement-run";
-        span.textContent = run.text || "";
-        const runBold = run.bold != null ? !!run.bold : lineBold;
-        const runItalic = run.italic != null ? !!run.italic : lineItalic;
-        span.style.fontWeight = runBold ? "700" : "400";
-        span.style.fontStyle = runItalic ? "italic" : "normal";
-        span.style.color = announcementFontColor(run.color) || lineColor;
-        p.appendChild(span);
-      });
-      els.announcementBody.appendChild(p);
-      return;
-    }
-
     const chunks = String((msg && msg.text) || "").split(/\n/);
     chunks.forEach(function (t) {
       const p = document.createElement("p");
@@ -4456,17 +4510,39 @@
   }
 
   function fitDrinksBoxes() {
-    // Announcement copy can be any number of F-column lines — scale down harder
-    // as the line count grows so more announcements still fit in the box.
+    // Announcement: short messages get larger type; long multi-line stay tight.
     const annLines = els.announcementBody
       ? els.announcementBody.querySelectorAll(".announcement-line").length
       : 0;
+    let annChars = 0;
     if (els.announcementBody) {
       els.announcementBody.classList.toggle("many-lines", annLines >= 4);
       els.announcementBody.dataset.lineCount = String(annLines);
+      annChars = (els.announcementBody.textContent || "").replace(
+        /\s+/g,
+        " "
+      ).trim().length;
     }
-    const annMin = annLines >= 6 ? 0.2 : annLines >= 4 ? 0.26 : annLines >= 3 ? 0.34 : 0.45;
-    fitBoxScale(els.announcementBody, annMin, 1.55, {
+    // Happy medium: short copy can grow; dense copy still scales down to fit
+    let annMax = 1.55;
+    let annMin = 0.45;
+    if (annLines <= 1 && annChars < 90) {
+      annMax = 2.05;
+      annMin = 0.55;
+    } else if (annLines <= 2 && annChars < 140) {
+      annMax = 1.85;
+      annMin = 0.48;
+    } else if (annLines <= 3) {
+      annMax = 1.65;
+      annMin = 0.38;
+    } else if (annLines >= 6) {
+      annMax = 1.35;
+      annMin = 0.2;
+    } else if (annLines >= 4) {
+      annMax = 1.45;
+      annMin = 0.26;
+    }
+    fitBoxScale(els.announcementBody, annMin, annMax, {
       checkChildWidth: false,
     });
     if (!els.drinkBoxBody) return;

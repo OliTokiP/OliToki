@@ -34,8 +34,9 @@ window.TOKI_CONFIG = {
    * H Announcement Box Color | I Announcement Speed (seconds; inherit blanks) |
    * J–T legacy drink columns (ignored when drinksSheetGid loads successfully)
    *
-   * Each non-empty G cell is one message-board slide. Blank E/F/I inherit the
-   * previous message’s resolved title/subtitle/speed.
+   * Each non-empty G cell is one message-board slide.
+   * Blank E/I inherit previous title/speed; blank F clears subtitle.
+   * Text align / rich bold-color live in the G cell itself (Sheets formatting).
    */
   columns: {
     title: 0,
