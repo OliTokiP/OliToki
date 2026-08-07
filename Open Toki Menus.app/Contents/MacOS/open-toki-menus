@@ -1,13 +1,9 @@
 #!/bin/bash
-# Open all four Toki Menu boards in a 2×2 grid on the monitor under the mouse.
-# Starts scripts/toki_server.py (static files + private Sheets API proxy).
+# Open Toki Menus — thin launcher. Dialog + server + browsers live in tile_menus.py.
 
 set -euo pipefail
 
-PORT=8765
-LOG="/tmp/toki-menu-server.log"
 PYTHON_FW="/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
-
 APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
 PROJECT="$(cd "${APP_BUNDLE}/.." && pwd)"
 
@@ -20,57 +16,9 @@ else
   exit 1
 fi
 
-for f in index.html index2.html index3.html index4.html preview-all.html scripts/toki_server.py; do
-  if [[ ! -f "${PROJECT}/${f}" ]]; then
-    osascript -e "display dialog \"Missing ${f} in:\n${PROJECT}\" buttons {\"OK\"} default button 1 with icon stop with title \"Toki Menus\""
-    exit 1
-  fi
-done
-
-# Health: prefer API-capable server. If plain http.server is on the port, replace it.
-need_start=1
-if lsof -nP -iTCP:${PORT} -sTCP:LISTEN >/dev/null 2>&1; then
-  if curl -sS -m 2 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null | grep -q '"sheetsApi"[[:space:]]*:[[:space:]]*true'; then
-    need_start=0
-  else
-    # Kill whatever is bound to the port (old static server)
-    if command -v lsof >/dev/null 2>&1; then
-      pids=$(lsof -nP -iTCP:${PORT} -sTCP:LISTEN -t 2>/dev/null || true)
-      if [[ -n "${pids}" ]]; then
-        echo "Replacing server on port ${PORT} with toki_server.py (Sheets API)…" >>"$LOG"
-        kill ${pids} 2>/dev/null || true
-        sleep 0.4
-      fi
-    fi
-    need_start=1
-  fi
-fi
-
-if [[ "$need_start" -eq 1 ]]; then
-  cd "$PROJECT"
-  nohup "$PYTHON" scripts/toki_server.py --port "$PORT" --bind 127.0.0.1 >>"$LOG" 2>&1 &
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    if curl -sS -m 1 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null | grep -q '"ok"'; then
-      break
-    fi
-    sleep 0.2
-  done
-fi
-
-if ! curl -sS -m 2 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null | grep -q '"ok"'; then
-  osascript -e "display dialog \"Could not start Toki server on port ${PORT}.\nSee ${LOG}\" buttons {\"OK\"} default button 1 with icon stop with title \"Toki Menus\""
-  exit 1
-fi
-
-# Warn if API proxy not active (key missing / Drive API / share)
-if ! curl -sS -m 2 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null | grep -q '"sheetsApi"[[:space:]]*:[[:space:]]*true'; then
-  osascript -e 'display dialog "Server is up but Sheets API is off.\n\nMenus need either:\n• secrets/google-service-account.json + sheet shared with that email, and Drive API enabled\n• or sheet General access = Anyone with the link (Viewer)\n\nSee scripts/gsheet_api.md and /tmp/toki-menu-server.log" buttons {"OK"} default button 1 with icon caution with title "Toki Menus"' || true
-fi
-
-# Tile four boards (or single-window preview-all) on the monitor under the mouse.
-# Browser picker + layout checkbox run inside tile_menus.py.
-# Skip prompts: TOKI_BROWSER=chrome|firefox|safari  TOKI_LAYOUT=tiled|single
 export TOKI_PROJECT="$PROJECT"
-export TOKI_PORT="$PORT"
+export TOKI_PORT="${TOKI_PORT:-8765}"
 export TOKI_PYTHON="$PYTHON"
-exec "$PYTHON" "${APP_BUNDLE}/Contents/Resources/tile_menus.py"
+export TOKI_SERVER_LOG="${TOKI_SERVER_LOG:-/tmp/toki-menu-server.log}"
+
+exec "$PYTHON" "${APP_BUNDLE}/Contents/Resources/tile_menus.py" "$@"

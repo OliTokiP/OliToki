@@ -71,6 +71,29 @@ Push to GitHub (optional)
        gh repo create TokiMenu --private --source=. --remote=origin --push
 
 
+Open Toki Menus — Environment
+-----------------------------
+
+  The launcher dialog includes Environment:
+
+    Local   — this Mac at http://127.0.0.1:8765 + toki_server.py
+              Private Google Sheets work here (service account).
+
+    Remote  — GitHub Pages static host (default
+              https://absrdst.github.io/TokiMenu).
+              A git push does NOT enable Pages by itself.
+              Repo Settings → Pages → deploy from branch main (root).
+              Private repos need GitHub Pro for Pages (or make public).
+              Remote cannot run the Sheets API proxy; use Local for
+              live private menu data.
+
+  Also on the same panel:
+    Single window — all boards preview (preview-all.html)
+    Show extra info — board labels + zoom tips (default off)
+
+  Tall preview windows (aspect ≤ 9:16) stack the four boards in one column.
+
+
 Toki Git Commit (app)
 ---------------------
 

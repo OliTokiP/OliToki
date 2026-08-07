@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Open 4 Toki Menu boards tiled 2×2 on the screen under the mouse.
+"""Open 4 Toki Menu boards (tiled or single-window preview).
 
 One launch dialog:
-  • Browser popup (Chrome / Firefox / Safari)
-  • Checkbox: “Single window — all boards preview” → preview-all.html
-  • Open / Cancel  (Cancel exits; no second dialog)
+  • Browser (Chrome / Firefox / Safari)
+  • Environment — Local (localhost + Sheets proxy) | Remote (GitHub Pages)
+  • Single window — all boards preview
+  • Show chrome — labels & zoom tips on the preview wall (default off)
 
 Skip UI with env:
   TOKI_BROWSER=chrome|firefox|safari
   TOKI_LAYOUT=tiled|single
+  TOKI_ENV=local|remote
+  TOKI_CHROME=0|1
+  TOKI_REMOTE_BASE=https://absrdst.github.io/TokiMenu
+  TOKI_PORT=8765
+  TOKI_PROJECT=/path/to/TokiMenu
 """
 
 from __future__ import annotations
@@ -17,18 +23,20 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
+from pathlib import Path
 
 PORT = int(os.environ.get("TOKI_PORT", "8765"))
+DEFAULT_REMOTE_BASE = os.environ.get(
+    "TOKI_REMOTE_BASE", "https://absrdst.github.io/TokiMenu"
+).rstrip("/")
+LOG = Path(os.environ.get("TOKI_SERVER_LOG", "/tmp/toki-menu-server.log"))
+
+# Filled after Environment is chosen
 BASE = f"http://127.0.0.1:{PORT}"
-# TL, TR, BL, BR — production boards (one window each)
-URLS = [
-    f"{BASE}/index.html",  # Board 1 — Bowls
-    f"{BASE}/index2.html",  # Board 2 — Handhelds
-    f"{BASE}/index3.html",  # Board 3 — Munchies
-    f"{BASE}/index4.html",  # Board 4 — Drinks
-]
-# Single-window testing wall (2×2 iframes)
-PREVIEW_ALL_URL = f"{BASE}/preview-all.html"
+URLS: list[str] = []
+PREVIEW_ALL_URL = ""
 
 # Display name → internal key
 BROWSER_CHOICES = (
@@ -36,6 +44,69 @@ BROWSER_CHOICES = (
     ("Firefox", "firefox"),
     ("Safari", "safari"),
 )
+
+ENV_CHOICES = (
+    ("Local — this Mac (Sheets API)", "local"),
+    ("Remote — GitHub Pages (static)", "remote"),
+)
+
+
+def project_root() -> Path:
+    env = os.environ.get("TOKI_PROJECT", "").strip()
+    if env:
+        return Path(env)
+    # Resources/tile_menus.py → Contents → .app → project parent
+    here = Path(__file__).resolve()
+    # …/TokiMenu/Open Toki Menus.app/Contents/Resources/tile_menus.py
+    if here.parent.name == "Resources":
+        return here.parents[3]
+    return here.parents[1]
+
+
+def python_bin() -> str:
+    env = os.environ.get("TOKI_PYTHON", "").strip()
+    if env and Path(env).is_file():
+        return env
+    fw = "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+    if Path(fw).is_file():
+        return fw
+    return sys.executable
+
+
+def set_base_urls(env: str, show_chrome: bool) -> None:
+    """Populate BASE, URLS, PREVIEW_ALL_URL for the chosen environment."""
+    global BASE, URLS, PREVIEW_ALL_URL
+    if env == "remote":
+        BASE = DEFAULT_REMOTE_BASE
+    else:
+        BASE = f"http://127.0.0.1:{PORT}"
+    URLS = [
+        f"{BASE}/index.html",
+        f"{BASE}/index2.html",
+        f"{BASE}/index3.html",
+        f"{BASE}/index4.html",
+    ]
+    chrome_q = "chrome=1" if show_chrome else "chrome=0"
+    PREVIEW_ALL_URL = f"{BASE}/preview-all.html?{chrome_q}"
+
+
+def alert(msg: str, stop: bool = False, title: str = "Toki Menus") -> None:
+    icon = "stop" if stop else "caution"
+    safe = (
+        msg.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+    )
+    subprocess.run(
+        [
+            "osascript",
+            "-e",
+            f'display dialog "{safe}" buttons {{"OK"}} default button 1 '
+            f'with icon {icon} with title "{title}"',
+        ],
+        check=False,
+        capture_output=True,
+    )
 
 
 def screen_quads_appkit():
@@ -69,10 +140,6 @@ def screen_quads_appkit():
 
 
 def screen_quads_osascript():
-    """
-    JXA: mouse location + NSScreen via ObjC bridge in osascript.
-    Works without Python PyObjC.
-    """
     script = r'''
 ObjC.import("AppKit");
 function run() {
@@ -147,7 +214,6 @@ def screen_quads():
         return screen_quads_osascript()
     except Exception as err:
         print("screen probe failed:", err, flush=True)
-        # Last resort: primary-ish 1920×1080 visible area
         return _split(0, 25, 1920, 1055)
 
 
@@ -160,7 +226,6 @@ def _first_existing(*paths: str) -> str | None:
 
 
 def resolve_chrome():
-    """Return (app_name, binary_or_None) for Google Chrome."""
     binary = _first_existing(
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -171,7 +236,6 @@ def resolve_chrome():
 
 
 def resolve_firefox():
-    """Return (app_name, binary_or_None) for Firefox."""
     binary = _first_existing(
         "/Applications/Firefox.app/Contents/MacOS/firefox",
         "~/Applications/Firefox.app/Contents/MacOS/firefox",
@@ -198,55 +262,136 @@ def browser_installed(key: str) -> bool:
 
 
 def resolve_browser(key: str):
-    """Return (family, app_name, binary) or None if not installed.
-
-    family is one of: chrome | firefox | safari
-    """
+    """Return (family, app_name, binary) or None."""
     key = (key or "").strip().lower()
-    aliases = {
-        "chrome": "chrome",
-        "google chrome": "chrome",
-        "google-chrome": "chrome",
-        "chromium": "chrome",
-        "firefox": "firefox",
-        "ff": "firefox",
-        "safari": "safari",
-    }
-    key = aliases.get(key, key)
-    if key == "chrome":
+    if key in ("chrome", "google chrome", "chromium"):
         r = resolve_chrome()
         return ("chrome", r[0], r[1]) if r else None
-    if key == "firefox":
+    if key in ("firefox", "ff", "mozilla firefox"):
         r = resolve_firefox()
         return ("firefox", r[0], r[1]) if r else None
-    if key == "safari":
+    if key in ("safari",):
         r = resolve_safari()
         return ("safari", r[0], r[1]) if r else None
+    # label match
+    for label, k in BROWSER_CHOICES:
+        if key == label.lower() or key == k:
+            return resolve_browser(k)
     return None
 
 
-def alert(message: str, title: str = "Toki Menus", stop: bool = False) -> None:
-    icon = "stop" if stop else "note"
-    # Escape for AppleScript string
-    safe = (
-        message.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", "\\n")
-    )
-    subprocess.run(
-        [
-            "osascript",
-            "-e",
-            f'display dialog "{safe}" buttons {{"OK"}} default button 1 '
-            f'with icon {icon} with title "{title}"',
-        ],
-        check=False,
-        capture_output=True,
-    )
+# ── Server (Local environment) ──────────────────────────────────────────────
 
+def api_health() -> dict | None:
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{PORT}/api/health", timeout=2
+        ) as res:
+            import json
+
+            return json.loads(res.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def ensure_local_server(root: Path) -> bool:
+    """Start toki_server if needed. Returns True if healthy."""
+    health = api_health()
+    if health and health.get("ok") and health.get("sheetsApi"):
+        return True
+    if health and health.get("ok") and not health.get("sheetsApi"):
+        # Wrong/old server on port — replace
+        _kill_port(PORT)
+        time.sleep(0.4)
+    elif health and health.get("ok"):
+        return True
+    elif _port_in_use(PORT):
+        # Something on port without /api/health
+        _kill_port(PORT)
+        time.sleep(0.4)
+
+    server = root / "scripts" / "toki_server.py"
+    if not server.is_file():
+        alert(f"Missing scripts/toki_server.py in:\n{root}", stop=True)
+        return False
+
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    py = python_bin()
+    with LOG.open("a", encoding="utf-8") as logf:
+        logf.write(f"\n==== start {time.strftime('%Y-%m-%d %H:%M:%S')} ====\n")
+        logf.flush()
+        subprocess.Popen(
+            [py, str(server), "--port", str(PORT), "--bind", "127.0.0.1"],
+            cwd=str(root),
+            stdout=logf,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    for _ in range(25):
+        h = api_health()
+        if h and h.get("ok"):
+            if not h.get("sheetsApi"):
+                alert(
+                    "Server is up but Sheets API is off.\n\n"
+                    "Menus need either:\n"
+                    "• secrets/google-service-account.json + sheet shared "
+                    "with that email, and Drive API enabled\n"
+                    "• or sheet General access = Anyone with the link (Viewer)\n\n"
+                    f"See scripts/gsheet_api.md and {LOG}",
+                    stop=False,
+                )
+            return True
+        time.sleep(0.2)
+
+    alert(
+        f"Could not start Toki server on port {PORT}.\nSee {LOG}",
+        stop=True,
+    )
+    return False
+
+
+def _port_in_use(port: int) -> bool:
+    r = subprocess.run(
+        ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
+        capture_output=True,
+        text=True,
+    )
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def _kill_port(port: int) -> None:
+    r = subprocess.run(
+        ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+        capture_output=True,
+        text=True,
+    )
+    for pid in (r.stdout or "").split():
+        try:
+            os.kill(int(pid), 15)
+        except Exception:
+            pass
+
+
+def remote_reachable(base: str) -> bool:
+    url = base.rstrip("/") + "/index.html"
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=5) as res:
+            return 200 <= res.status < 400
+    except Exception:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as res:
+                return 200 <= res.status < 500
+        except urllib.error.HTTPError as e:
+            return e.code != 404
+        except Exception:
+            return False
+
+
+# ── Dialog ──────────────────────────────────────────────────────────────────
 
 def _env_browser() -> str | None:
-    """TOKI_BROWSER override → chrome|firefox|safari, or None if unset."""
     env = os.environ.get("TOKI_BROWSER", "").strip()
     if not env:
         return None
@@ -262,7 +407,6 @@ def _env_browser() -> str | None:
 
 
 def _env_layout() -> str | None:
-    """TOKI_LAYOUT override → tiled|single, or None if unset."""
     env = os.environ.get("TOKI_LAYOUT", "").strip().lower()
     if env in ("single", "one", "preview", "all", "preview-all", "1"):
         return "single"
@@ -271,76 +415,111 @@ def _env_layout() -> str | None:
     return None
 
 
-def prompt_browser_and_layout() -> tuple[str, str] | None:
+def _env_environment() -> str | None:
+    env = os.environ.get("TOKI_ENV", "").strip().lower()
+    if env in ("local", "localhost", "dev", "development"):
+        return "local"
+    if env in ("remote", "prod", "production", "pages", "github", "web"):
+        return "remote"
+    return None
+
+
+def _env_chrome() -> bool | None:
+    env = os.environ.get("TOKI_CHROME", "").strip().lower()
+    if env in ("1", "true", "yes", "on"):
+        return True
+    if env in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
+def prompt_launch_options() -> tuple[str, str, str, bool] | None:
     """
-    One dialog: pick browser + optional single-window preview checkbox.
+    One dialog: browser, environment, single-window, show chrome.
 
-    Returns (browser_key, layout) where layout is "tiled"|"single",
-    or None if cancelled.
-
-    Env skips:
-      TOKI_BROWSER=chrome|firefox|safari
-      TOKI_LAYOUT=tiled|single
-    If both are set, no UI. If only one is set, still show UI for the other
-    (or use defaults: installed Chrome + tiled).
+    Returns (browser_key, layout, env, show_chrome) or None if cancelled.
+    layout: tiled|single   env: local|remote
     """
     env_browser = _env_browser()
     env_layout = _env_layout()
-    # Full non-interactive path
-    if env_browser and env_layout:
-        return env_browser, env_layout
-    # Browser-only env: still need layout (default tiled if also non-interactive
-    # is rare; show combined UI unless both set). If only browser env, use tiled
-    # unless layout env set — if user set TOKI_BROWSER only, open without dialog.
-    if env_browser and not env_layout:
-        # Respect browser skip; layout defaults to tiled unless they set TOKI_LAYOUT
-        return env_browser, "tiled"
-    if env_layout and not env_browser:
-        # Need a browser — fall through to UI with layout pre-applied after
-        pass
+    env_env = _env_environment()
+    env_chrome = _env_chrome()
 
-    # Prefer a default that is actually installed
+    # Fully non-interactive
+    if env_browser and env_layout and env_env is not None and env_chrome is not None:
+        return env_browser, env_layout, env_env, env_chrome
+    if env_browser and env_layout and env_env is not None and env_chrome is None:
+        return env_browser, env_layout, env_env, False
+    if env_browser and env_layout and env_env is None and env_chrome is not None:
+        return env_browser, env_layout, "local", env_chrome
+    if env_browser and env_layout and env_env is None and env_chrome is None:
+        return env_browser, env_layout, "local", False
+
     default_label = "Google Chrome"
     for label, key in BROWSER_CHOICES:
         if browser_installed(key):
             default_label = label
             break
-
-    # Escape default for JS string
     default_js = default_label.replace("\\", "\\\\").replace('"', '\\"')
-    # Pre-check single-window if env already asked for it (browser still needs UI)
-    single_default = "true" if env_layout == "single" else "false"
 
-    # One NSAlert: browser popup + single-window checkbox in accessory view
+    single_default = "true" if env_layout == "single" else "false"
+    chrome_default = "true" if env_chrome is True else "false"
+    env_default = "Remote — GitHub Pages (static)" if env_env == "remote" else "Local — this Mac (Sheets API)"
+    env_default_js = env_default.replace("\\", "\\\\").replace('"', '\\"')
+
+    # One NSAlert: browser + environment + two checkboxes; force focus
     script = f'''
 ObjC.import("AppKit");
 function run() {{
+  var app = $.NSApplication.sharedApplication;
+  try {{
+    app.setActivationPolicy($.NSApplicationActivationPolicyRegular);
+  }} catch (e0) {{}}
+  try {{
+    app.activateIgnoringOtherApps(true);
+  }} catch (e1) {{
+    try {{
+      app.activateIgnoringOtherApps(true);
+    }} catch (e2) {{}}
+  }}
+
   var alert = $.NSAlert.alloc.init;
   alert.setMessageText("Toki Menus");
-  alert.setInformativeText("Choose a browser for the four menu boards.");
+  alert.setInformativeText(
+    "Local uses this Mac (private Sheets API). Remote opens GitHub Pages (static host only)."
+  );
   alert.addButtonWithTitle("Open");
   alert.addButtonWithTitle("Cancel");
 
-  var width = 320;
-  var height = 64;
+  var width = 360;
+  var height = 132;
   var view = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, width, height));
 
-  // Browser popup (top)
-  var popup = $.NSPopUpButton.alloc.initWithFrame($.NSMakeRect(0, 34, width, 26));
+  // Browser
+  var browserPopup = $.NSPopUpButton.alloc.initWithFrame($.NSMakeRect(0, 100, width, 26));
   var browsers = ["Google Chrome", "Firefox", "Safari"];
   for (var i = 0; i < browsers.length; i++) {{
-    popup.addItemWithTitle(browsers[i]);
+    browserPopup.addItemWithTitle(browsers[i]);
   }}
-  popup.selectItemWithTitle("{default_js}");
-  view.addSubview(popup);
+  browserPopup.selectItemWithTitle("{default_js}");
+  view.addSubview(browserPopup);
 
-  // Single-window checkbox (bottom)
-  var box = $.NSButton.alloc.initWithFrame($.NSMakeRect(0, 4, width, 24));
-  try {{
-    box.setButtonType($.NSButtonTypeSwitch);
-  }} catch (e) {{
-    box.setButtonType($.NSSwitchButton);
+  // Environment
+  var envPopup = $.NSPopUpButton.alloc.initWithFrame($.NSMakeRect(0, 68, width, 26));
+  var envs = [
+    "Local — this Mac (Sheets API)",
+    "Remote — GitHub Pages (static)"
+  ];
+  for (var j = 0; j < envs.length; j++) {{
+    envPopup.addItemWithTitle(envs[j]);
   }}
+  envPopup.selectItemWithTitle("{env_default_js}");
+  view.addSubview(envPopup);
+
+  // Single-window checkbox
+  var box = $.NSButton.alloc.initWithFrame($.NSMakeRect(0, 36, width, 24));
+  try {{ box.setButtonType($.NSButtonTypeSwitch); }}
+  catch (e) {{ box.setButtonType($.NSSwitchButton); }}
   box.setTitle("Single window — all boards preview");
   try {{
     box.setState({single_default} ? $.NSControlStateValueOn : $.NSControlStateValueOff);
@@ -349,15 +528,31 @@ function run() {{
   }}
   view.addSubview(box);
 
+  // Show chrome checkbox
+  var chromeBox = $.NSButton.alloc.initWithFrame($.NSMakeRect(0, 8, width, 24));
+  try {{ chromeBox.setButtonType($.NSButtonTypeSwitch); }}
+  catch (e3) {{ chromeBox.setButtonType($.NSSwitchButton); }}
+  chromeBox.setTitle("Show extra info (labels & zoom tips)");
+  try {{
+    chromeBox.setState({chrome_default} ? $.NSControlStateValueOn : $.NSControlStateValueOff);
+  }} catch (e4) {{
+    chromeBox.setState({chrome_default} ? 1 : 0);
+  }}
+  view.addSubview(chromeBox);
+
   alert.setAccessoryView(view);
 
+  // Bring alert to front again right before modal
+  try {{ app.activateIgnoringOtherApps(true); }} catch (e5) {{}}
+
   var resp = alert.runModal;
-  // NSAlertFirstButtonReturn = 1000
   if (Number(resp) !== 1000) return "CANCEL";
 
-  var browser = popup.titleOfSelectedItem.js;
-  var on = Number(box.state) === 1;
-  return browser + "|" + (on ? "single" : "tiled");
+  var browser = browserPopup.titleOfSelectedItem.js;
+  var environment = envPopup.titleOfSelectedItem.js;
+  var singleOn = Number(box.state) === 1;
+  var chromeOn = Number(chromeBox.state) === 1;
+  return browser + "|" + (singleOn ? "single" : "tiled") + "|" + environment + "|" + (chromeOn ? "1" : "0");
 }}
 '''
     r = subprocess.run(
@@ -368,25 +563,29 @@ function run() {{
     out = (r.stdout or "").strip()
     if r.returncode != 0:
         print("prompt UI failed:", (r.stderr or "").strip(), flush=True)
-        # Minimal fallback: browser list only, tiled layout (no second layout dialog)
-        return _prompt_browser_list_only()
+        return _prompt_fallback_list()
 
     if not out or out == "CANCEL":
         return None
 
-    if "|" not in out:
-        # Unexpected — try as browser label alone
+    parts = out.split("|")
+    if len(parts) < 2:
         resolved = resolve_browser(out)
-        return (resolved[0], "tiled") if resolved else None
+        return (resolved[0], "tiled", "local", False) if resolved else None
 
-    label, layout = out.split("|", 1)
-    layout = layout.strip()
+    label = parts[0].strip()
+    layout = parts[1].strip() if len(parts) > 1 else "tiled"
+    env_label = parts[2].strip() if len(parts) > 2 else ""
+    chrome_flag = parts[3].strip() if len(parts) > 3 else "0"
+
     if layout not in ("tiled", "single"):
         layout = "tiled"
+    env = "remote" if env_label.lower().startswith("remote") else "local"
+    show_chrome = chrome_flag in ("1", "true", "yes")
 
     browser_key = None
     for blabel, key in BROWSER_CHOICES:
-        if label.strip() == blabel:
+        if label == blabel:
             browser_key = key
             break
     if not browser_key:
@@ -395,14 +594,21 @@ function run() {{
     if not browser_key:
         return None
 
-    # Env layout wins if only layout was set and UI picked browser
+    # Env overrides win when partially set
     if env_layout:
         layout = env_layout
-    return browser_key, layout
+    if env_env:
+        env = env_env
+    if env_chrome is not None:
+        show_chrome = env_chrome
+    if env_browser:
+        browser_key = env_browser
+
+    return browser_key, layout, env, show_chrome
 
 
-def _prompt_browser_list_only() -> tuple[str, str] | None:
-    """Fallback if AppKit alert fails: list picker, always tiled. Cancel = exit."""
+def _prompt_fallback_list() -> tuple[str, str, str, bool] | None:
+    """Minimal fallback: browser list only, local + tiled + no chrome."""
     default_label = "Google Chrome"
     for label, key in BROWSER_CHOICES:
         if browser_installed(key):
@@ -434,22 +640,18 @@ end try
         return None
     for label, key in BROWSER_CHOICES:
         if choice == label:
-            return key, "tiled"
+            return key, "tiled", "local", False
     resolved = resolve_browser(choice)
-    return (resolved[0], "tiled") if resolved else None
+    return (resolved[0], "tiled", "local", False) if resolved else None
 
 
 def full_bounds_from_quads(quads):
-    """Union of the 2×2 tile quads → full visible monitor rect (x, y, w, h)."""
     x0, y0, _w0, _h0 = quads[0]
     x3, y3, w3, h3 = quads[3]
     return (x0, y0, (x3 + w3) - x0, (y3 + h3) - y0)
 
 
-def open_single_window(
-    family: str, app_name: str, binary: str | None, bounds
-):
-    """Open preview-all.html in one window sized to the monitor under the mouse."""
+def open_single_window(family: str, app_name: str, binary: str | None, bounds):
     x, y, w, h = bounds
     url = PREVIEW_ALL_URL
     print("layout: single window", url, bounds, flush=True)
@@ -482,7 +684,6 @@ def open_single_window(
                 ]
             )
         time.sleep(0.8)
-        # Nudge bounds via AppleScript (Chrome may ignore first size)
         script = f'''
 tell application "{app_name}"
   activate
@@ -509,7 +710,6 @@ end tell
         subprocess.run(["osascript", "-e", script], check=False)
         return
 
-    # Firefox
     if binary:
         subprocess.Popen(
             [binary, "-new-window", url],
@@ -635,10 +835,6 @@ end tell
 
 
 def open_firefox(binary: str | None, quads):
-    """
-    Firefox has weak AppleScript window APIs, so open four windows then
-    place them with System Events (needs Accessibility permission once).
-    """
     for url, _quad in zip(URLS, quads):
         if binary:
             subprocess.Popen(
@@ -661,9 +857,6 @@ def open_firefox(binary: str | None, quads):
         time.sleep(0.5)
 
     time.sleep(1.6)
-
-    # Frontmost window is the last opened (BR). Map reverse: win1→quad4, …
-    # System Events uses {x, y} position and {w, h} size (top-left origin).
     pos_list = ", ".join("{%d, %d}" % (x, y) for x, y, _w, _h in quads)
     size_list = ", ".join("{%d, %d}" % (w, h) for _x, _y, w, h in quads)
     script = f'''
@@ -680,7 +873,6 @@ tell application "System Events"
     set theSizes to {{{size_list}}}
     set n to count of windows
     if n < 4 then
-      -- fewer than 4: place whatever we have, front = last opened
       set startIdx to 5 - n
       repeat with i from 1 to n
         set qi to startIdx + i - 1
@@ -690,7 +882,6 @@ tell application "System Events"
         end try
       end repeat
     else
-      -- windows 1..4 are newest→oldest ≈ quads 4..1
       repeat with i from 1 to 4
         set qi to 5 - i
         try
@@ -710,7 +901,6 @@ end tell
     if r.returncode != 0:
         err = (r.stderr or r.stdout or "").strip()
         print("Firefox tile warning:", err, flush=True)
-        # Still opened the pages; positioning may need Accessibility permission
         if "not allowed" in err.lower() or "assistive" in err.lower():
             alert(
                 "Firefox windows opened, but macOS blocked window tiling.\n\n"
@@ -721,14 +911,59 @@ end tell
 
 
 def main():
+    root = project_root()
+    os.environ.setdefault("TOKI_PROJECT", str(root))
+
+    for f in (
+        "index.html",
+        "index2.html",
+        "index3.html",
+        "index4.html",
+        "preview-all.html",
+        "scripts/toki_server.py",
+    ):
+        if not (root / f).is_file():
+            alert(f"Missing {f} in:\n{root}", stop=True)
+            sys.exit(1)
+
     quads = screen_quads()
     print("Toki Menus tile quads:", quads, flush=True)
 
-    picked = prompt_browser_and_layout()
+    picked = prompt_launch_options()
     if not picked:
         print("cancelled", flush=True)
         sys.exit(0)
-    key, layout = picked
+    key, layout, env, show_chrome = picked
+    print(
+        "choice:",
+        key,
+        "layout=",
+        layout,
+        "env=",
+        env,
+        "chrome=",
+        show_chrome,
+        flush=True,
+    )
+
+    if env == "local":
+        if not ensure_local_server(root):
+            sys.exit(1)
+    else:
+        if not remote_reachable(DEFAULT_REMOTE_BASE):
+            alert(
+                "Remote host is not available (HTTP 404 or unreachable):\n\n"
+                f"{DEFAULT_REMOTE_BASE}\n\n"
+                "GitHub Pages is not automatic after a git push.\n"
+                "• Repo Settings → Pages → deploy from branch main /\n"
+                "• Private repos need GitHub Pro for Pages, or make the repo public\n\n"
+                "Use Environment → Local for private Google Sheets on this Mac.",
+                stop=True,
+            )
+            sys.exit(1)
+
+    set_base_urls(env, show_chrome)
+    print("BASE=", BASE, "PREVIEW=", PREVIEW_ALL_URL, flush=True)
 
     resolved = resolve_browser(key)
     if not resolved:

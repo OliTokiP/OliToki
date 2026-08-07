@@ -6,9 +6,9 @@
   <title>Toki Menus — All Boards Preview</title>
   <style>
     /*
-      Testing wall: all four 1920×1080 boards in one window (2×2).
-      Not a production board — each cell is a live iframe of index / index2–4,
-      scaled with object-fit-style letterboxing to the cell size.
+      Testing wall: all four 1920×1080 boards in one window.
+      Default 2×2; single column when viewport is portrait-tall (≤ 9:16).
+      Chrome (labels / HUD) off unless ?chrome=1
     */
     *,
     *::before,
@@ -37,12 +37,24 @@
       background: #000;
     }
 
+    /* Tall / narrow window → one column (boards 1→4) */
+    @media (max-aspect-ratio: 9/16) {
+      .wall:not(.is-solo) {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 1fr);
+      }
+    }
+
     .cell {
       position: relative;
       overflow: hidden;
       background: #111;
       min-width: 0;
       min-height: 0;
+      cursor: default;
+    }
+
+    body.show-chrome .cell {
       cursor: zoom-in;
     }
 
@@ -55,12 +67,9 @@
       border: 0;
       transform-origin: top left;
       background: #000;
-      /* scale / position set by JS */
-      /* Clicks hit the overlay so solo works without trapping inside the iframe */
       pointer-events: none;
     }
 
-    /* Transparent hit target above the iframe (iframes swallow clicks otherwise) */
     .cell-hit {
       position: absolute;
       inset: 0;
@@ -82,9 +91,13 @@
       letter-spacing: 0.02em;
       pointer-events: none;
       user-select: none;
+      display: none;
     }
 
-    /* Solo: one cell fills the wall; siblings collapse */
+    body.show-chrome .label {
+      display: block;
+    }
+
     .wall.is-solo {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr;
@@ -96,6 +109,10 @@
     }
 
     .wall.is-solo .cell.is-solo-active {
+      cursor: default;
+    }
+
+    body.show-chrome .wall.is-solo .cell.is-solo-active {
       cursor: zoom-out;
     }
 
@@ -111,6 +128,11 @@
       font-size: 10px;
       font-weight: 600;
       pointer-events: none;
+      display: none;
+    }
+
+    body.show-chrome .hud {
+      display: block;
     }
   </style>
 </head>
@@ -119,25 +141,25 @@
     <div class="cell" data-src="index.html" data-name="1 · Bowls">
       <span class="label">1 · Bowls</span>
       <iframe title="Board 1 — Bowls" loading="eager"></iframe>
-      <div class="cell-hit" title="Click to solo · click again for all boards"></div>
+      <div class="cell-hit" title=""></div>
     </div>
     <div class="cell" data-src="index2.html" data-name="2 · Handhelds">
       <span class="label">2 · Handhelds</span>
       <iframe title="Board 2 — Handhelds" loading="eager"></iframe>
-      <div class="cell-hit" title="Click to solo · click again for all boards"></div>
+      <div class="cell-hit" title=""></div>
     </div>
     <div class="cell" data-src="index3.html" data-name="3 · Munchies">
       <span class="label">3 · Munchies</span>
       <iframe title="Board 3 — Munchies" loading="eager"></iframe>
-      <div class="cell-hit" title="Click to solo · click again for all boards"></div>
+      <div class="cell-hit" title=""></div>
     </div>
     <div class="cell" data-src="index4.html" data-name="4 · Drinks">
       <span class="label">4 · Drinks</span>
       <iframe title="Board 4 — Drinks" loading="eager"></iframe>
-      <div class="cell-hit" title="Click to solo · click again for all boards"></div>
+      <div class="cell-hit" title=""></div>
     </div>
   </div>
-  <div class="hud" id="hud">All Boards Preview · click a board to solo · click again to restore</div>
+  <div class="hud" id="hud"></div>
 
   <script>
     (function () {
@@ -145,6 +167,24 @@
       const BOARD_H = 1080;
       const wall = document.getElementById("wall");
       let soloCell = null;
+
+      function chromeEnabled() {
+        try {
+          const q = new URLSearchParams(window.location.search);
+          const c = q.get("chrome");
+          if (c === "1" || c === "true" || c === "yes") return true;
+          if (c === "0" || c === "false" || c === "no") return false;
+        } catch (e) {}
+        return false;
+      }
+
+      const showChrome = chromeEnabled();
+      if (showChrome) {
+        document.body.classList.add("show-chrome");
+        document.querySelectorAll(".cell-hit").forEach(function (el) {
+          el.title = "Click to solo · click again for all boards";
+        });
+      }
 
       function fitCell(cell) {
         const iframe = cell.querySelector("iframe");
@@ -163,7 +203,7 @@
       function fitAll() {
         document.querySelectorAll(".cell").forEach(fitCell);
         const hud = document.getElementById("hud");
-        if (!hud) return;
+        if (!hud || !showChrome) return;
         if (soloCell) {
           const name = soloCell.getAttribute("data-name") || "Board";
           const s = Math.min(
@@ -184,8 +224,12 @@
             cell.clientWidth / BOARD_W,
             cell.clientHeight / BOARD_H
           );
+          const tall =
+            window.innerWidth / window.innerHeight <= 9 / 16;
           hud.textContent =
-            "All Boards Preview · scale " +
+            "All Boards Preview · " +
+            (tall ? "1-column" : "2×2") +
+            " · scale " +
             s.toFixed(3) +
             " · click a board to solo";
         }
@@ -193,7 +237,6 @@
 
       function setSolo(cell) {
         if (soloCell === cell) {
-          // Second click on the solo cell → restore 2×2
           soloCell.classList.remove("is-solo-active");
           soloCell = null;
           wall.classList.remove("is-solo");
@@ -203,7 +246,6 @@
           cell.classList.add("is-solo-active");
           wall.classList.add("is-solo");
         }
-        // Refit after layout settles
         requestAnimationFrame(function () {
           fitAll();
           requestAnimationFrame(fitAll);
@@ -215,7 +257,6 @@
           const src = cell.getAttribute("data-src");
           const iframe = cell.querySelector("iframe");
           if (!src || !iframe) return;
-          // Cache-bust lightly so theme/sheet edits show up on reopen
           const sep = src.indexOf("?") >= 0 ? "&" : "?";
           iframe.src = src + sep + "preview=all&t=" + Date.now();
 
@@ -229,7 +270,6 @@
         });
       }
 
-      // Esc restores full grid when soloing
       window.addEventListener("keydown", function (e) {
         if (e.key === "Escape" && soloCell) {
           setSolo(soloCell);
@@ -237,13 +277,11 @@
       });
 
       window.addEventListener("resize", fitAll);
-      // Load after first layout so scale is correct before boards paint
       requestAnimationFrame(function () {
         fitAll();
         loadFrames();
         requestAnimationFrame(fitAll);
       });
-      // Refit after fonts/boards settle
       window.setTimeout(fitAll, 400);
       window.setTimeout(fitAll, 1200);
     })();
