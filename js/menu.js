@@ -144,12 +144,12 @@
   const BOWLS_COLUMNS = BOARD_COLUMNS;
 
   /** Style & Theme tab (gid 1076652078)
-   * Theme palette (per selectable row):
-   *   A Theme Selector — dropdown of theme names (first non-empty = active)
-   *   B Theme Name | C Main | D Secondary | E Highlight | F Highlight Special
-   * Board-wide (not per theme — first filled value wins):
-   *   G BG Color | H BG Image | I BG Blur (0–1) | J BG Blend Mode |
-   *   K BG Opacity (0–1) | L BG Scroll Speed | M Slideshow Speed
+   * Theme palette ONLY (selected row — Theme Selector in col A):
+   *   A Theme Selector | B Theme Name | C Main | D Secondary |
+   *   E Highlight | F Highlight Special
+   * Board-wide stage BG (always the first data row = sheet row 2, not per theme):
+   *   G2 BG Color | H2 BG Image (dropdown) | I2 BG Blur | J2 BG Blend Mode |
+   *   K2 BG Opacity | L2 BG Scroll Speed | M2 Slideshow Speed
    * N Color Picker labels (reference list for other sheets)
    */
   const STYLE_COLUMNS = {
@@ -167,6 +167,8 @@
     bgScrollSpeed: 11,
     slideshowSpeed: 12,
   };
+  /** Excel row 2 = first data row (index 1 in sheet_to_json header:1 arrays) */
+  const STYLE_BOARD_WIDE_ROW_INDEX = 1;
 
   const DEFAULT_BG_IMAGE = "assets/bgs/galaxy-bg.jpg";
   const BG_IMAGE_FOLDER = "assets/bgs";
@@ -996,33 +998,17 @@
   }
 
   /**
-   * Stage BG image: prefer the *selected theme row*'s BG Image cell (sheet is
-   * filled per theme: Toki Default → none, Ocean Punch → galaxy-bg.jpg).
-   * Only if that cell is blank, fall back to the first board-wide BG row.
-   * Never invent galaxy-bg when the sheet says none/blank.
+   * Stage BG image is board-wide: always Style sheet H2 (first data row),
+   * never the selected theme's H column (themes are A–F only).
    */
-  function resolveStageBgImage(chosen, globalBg, sc) {
-    function rawFrom(entry) {
-      if (!entry || !entry.row) return "";
-      return cell(entry.row, sc.bgImage);
-    }
-    const chosenRaw = rawFrom(chosen);
-    if (String(chosenRaw || "").trim() !== "") {
-      return {
-        raw: chosenRaw,
-        path: parseBgImagePath(chosenRaw),
-        from: "theme:" + (cell(chosen.row, sc.themeName) || "?"),
-      };
-    }
-    const globalRaw = rawFrom(globalBg);
-    if (String(globalRaw || "").trim() !== "") {
-      return {
-        raw: globalRaw,
-        path: parseBgImagePath(globalRaw),
-        from: "globalBg",
-      };
-    }
-    return { raw: "", path: null, from: "default-none" };
+  function resolveStageBgImageFromRows(rows, sc) {
+    const row = rows && rows[STYLE_BOARD_WIDE_ROW_INDEX];
+    const raw = row ? cell(row, sc.bgImage) : "";
+    return {
+      raw: raw,
+      path: parseBgImagePath(raw),
+      from: "H2",
+    };
   }
 
   function parseBgBlendMode(raw) {
@@ -2716,7 +2702,6 @@
 
     const sc = STYLE_COLUMNS;
     const themes = [];
-    let globalBg = null;
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
@@ -2724,20 +2709,7 @@
         continue;
       }
       const excelRow = i + 1;
-
-      if (
-        !globalBg &&
-        (cell(row, sc.bgColor) ||
-          cell(row, sc.bgImage) ||
-          cell(row, sc.bgBlur) ||
-          cell(row, sc.bgOpacity) ||
-          cell(row, sc.bgScrollSpeed) ||
-          cell(row, sc.slideshowSpeed) ||
-          fills["G" + excelRow])
-      ) {
-        globalBg = { row: row, excelRow: excelRow };
-      }
-
+      // Theme catalog = cols A–F only (isStyleThemeRow checks name/colors)
       if (!isStyleThemeRow(row, excelRow, fills)) continue;
       themes.push({ row: row, excelRow: excelRow });
     }
@@ -2767,6 +2739,7 @@
     const er = chosen.excelRow;
     const themeName = String(cell(first, sc.themeName) || "").trim() || null;
 
+    // A–F from selected theme only
     const main = resolveColor(
       cell(first, sc.mainColor),
       fills["C" + er],
@@ -2794,42 +2767,22 @@
       highlightSpecial: highlightSpecial,
     };
 
-    // Color plate / blur / opacity: prefer selected theme, else first global BG row
-    const bgSrc = chosen || globalBg || themes[0];
-    const bgRow = bgSrc.row;
-    const bgEr = bgSrc.excelRow;
+    // G2–M2 board-wide (always first data row — independent of Theme Selector)
+    const boardRow = rows[STYLE_BOARD_WIDE_ROW_INDEX] || first;
+    const boardEr = STYLE_BOARD_WIDE_ROW_INDEX + 1; // excel row 2
 
     const bgColor = parseBgColor(
-      cell(bgRow, sc.bgColor) ||
-        (globalBg ? cell(globalBg.row, sc.bgColor) : ""),
-      fills["G" + bgEr] ||
-        (globalBg ? fills["G" + globalBg.excelRow] : null),
+      cell(boardRow, sc.bgColor),
+      fills["G" + boardEr],
       palette
     );
-    const bgImgResolved = resolveStageBgImage(chosen, globalBg, sc);
+    const bgImgResolved = resolveStageBgImageFromRows(rows, sc);
     const bgImage = bgImgResolved.path;
-    const bgBlur = parseUnit01(
-      cell(bgRow, sc.bgBlur) ||
-        (globalBg ? cell(globalBg.row, sc.bgBlur) : ""),
-      0
-    );
-    const bgBlendMode = parseBgBlendMode(
-      cell(bgRow, sc.bgBlendMode) ||
-        (globalBg ? cell(globalBg.row, sc.bgBlendMode) : "")
-    );
-    const bgOpacity = parseUnit01(
-      cell(bgRow, sc.bgOpacity) ||
-        (globalBg ? cell(globalBg.row, sc.bgOpacity) : ""),
-      1
-    );
-    const bgScrollSpeed = Number(
-      cell(bgRow, sc.bgScrollSpeed) ||
-        (globalBg ? cell(globalBg.row, sc.bgScrollSpeed) : "")
-    );
-    const slideshowSpeed = Number(
-      cell(bgRow, sc.slideshowSpeed) ||
-        (globalBg ? cell(globalBg.row, sc.slideshowSpeed) : "")
-    );
+    const bgBlur = parseUnit01(cell(boardRow, sc.bgBlur), 0);
+    const bgBlendMode = parseBgBlendMode(cell(boardRow, sc.bgBlendMode));
+    const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
+    const bgScrollSpeed = Number(cell(boardRow, sc.bgScrollSpeed));
+    const slideshowSpeed = Number(cell(boardRow, sc.slideshowSpeed));
 
     const theme = {
       themeName: themeName,
