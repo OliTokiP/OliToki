@@ -6058,18 +6058,31 @@
     }
   }
 
+  /**
+   * Fit the fixed 1920×1080 stage into the viewport, letterboxed and centered.
+   * Tall pages (portrait monitors/phones): scale by width, equal bars top/bottom.
+   * Wide pages: scale by height, equal bars left/right.
+   * (Column-stack “vertical wall” logic lives only in preview-all.html.)
+   */
   function scaleStageToWindow() {
+    if (!els.stage) return;
     const sw = window.innerWidth;
     const sh = window.innerHeight;
     if (!sw || !sh) return;
 
-    const s = Math.min(sw / STAGE_W, sh / STAGE_H);
-    const scale = s > 0 ? s : 1;
-    const ox = (sw - STAGE_W * scale) / 2;
-    const oy = (sh - STAGE_H * scale) / 2;
+    const scale = Math.min(sw / STAGE_W, sh / STAGE_H);
+    if (!(scale > 0)) return;
 
+    // Center origin is reliable on tall viewports; top-left + translate can
+    // read as “stuck to the top” on some WebViews.
+    els.stage.style.top = "50%";
+    els.stage.style.left = "50%";
+    els.stage.style.right = "auto";
+    els.stage.style.bottom = "auto";
+    els.stage.style.margin = "0";
+    els.stage.style.transformOrigin = "center center";
     els.stage.style.transform =
-      "translate(" + ox + "px, " + oy + "px) scale(" + scale + ")";
+      "translate(-50%, -50%) scale(" + scale + ")";
   }
 
   function itemsSignature() {

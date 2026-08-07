@@ -42,13 +42,15 @@ body {
 
 #stage {
   position: absolute;
-  top: 0;
-  left: 0;
+  /* JS scaleStageToWindow() recenters with top/left 50% + translate(-50%,-50%) */
+  top: 50%;
+  left: 50%;
   width: var(--stage-w);
   height: var(--stage-h);
   overflow: hidden;
   background: #000;
-  transform-origin: top left;
+  transform-origin: center center;
+  transform: translate(-50%, -50%);
   will-change: transform;
 }
 
