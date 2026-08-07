@@ -8,6 +8,7 @@
  * All Board tabs share the same column schema — fill only what you need:
  *   A Menu Title | B Item | C–E Price 1–3 | F Subtitle | G Description |
  *   H New | I Image | J Include | K Include Protein Box? | L Include Sauces Box?
+ *   M Include Drinks Box? (optional)
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
@@ -15,6 +16,7 @@ window.TOKI_CONFIG = {
   styleThemeGid: "1076652078",
   proteinSheetGid: "1191392779",
   saucesSheetGid: "1780619208",
+  drinksSheetGid: "628145419",
 
   layout: "bowls",
   showHero: true,
@@ -40,6 +42,7 @@ window.TOKI_CONFIG = {
     include: 9,
     includeProteinBox: 10,
     includeSaucesBox: 11,
+    includeDrinksBox: 12,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

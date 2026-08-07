@@ -36,6 +36,7 @@
    * empty Subtitle → no parenthetical; Include Protein/Sauces Box? toggles footers.
    * A Menu Title | B Item | C–E Price 1–3 | F Subtitle | G Description |
    * H New | I Image | J Include | K Include Protein Box? | L Include Sauces Box?
+   * M Include Drinks Box? (optional; default off when missing)
    */
   const BOARD_COLUMNS = {
     title: 0,
@@ -51,6 +52,7 @@
     include: 9,
     includeProteinBox: 10,
     includeSaucesBox: 11,
+    includeDrinksBox: 12,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,
@@ -173,6 +175,9 @@
     saucesTitle: document.getElementById("sauces-title"),
     saucesSubtitle: document.getElementById("sauces-subtitle"),
     saucesBody: document.getElementById("sauces-body"),
+    footerDrinksTitle: document.getElementById("footer-drinks-title"),
+    footerDrinksSubtitle: document.getElementById("footer-drinks-subtitle"),
+    footerDrinksBody: document.getElementById("footer-drinks-body"),
     footerBoxes: document.getElementById("footer-boxes"),
     disclaimer: document.getElementById("disclaimer"),
     announcementTitle: document.getElementById("announcement-title"),
@@ -231,6 +236,16 @@
     bg: null,
     include: true,
     createColumns: false, // default: balanced wrap (legacy sauces)
+    textAlign: "center",
+  };
+  /** Boards 1–3 footer drinks/soda box (shared Drinks sheet; off by default) */
+  let footerDrinksBox = {
+    title: "",
+    subtitle: "",
+    items: [],
+    bg: null,
+    include: false,
+    createColumns: false,
     textAlign: "center",
   };
   let announcementBox = {
@@ -1599,18 +1614,21 @@
       saucesFill = sheetFills[cellRef(c.saucesBoxColor, 2)] || null;
     }
 
-    // Include Protein/Sauces Box? — first non-empty cell in the column (default on)
-    function firstColumnInclude(colIdx) {
-      if (colIdx == null) return true;
+    // Include flags — first non-empty cell in the column
+    function firstColumnInclude(colIdx, defaultVal) {
+      if (colIdx == null) return defaultVal !== false;
+      const def = defaultVal !== false;
       for (let i = 1; i < rows.length; i++) {
         const raw = cell(rows[i], colIdx);
         if (raw === "" || raw == null) continue;
         return parseInclude(raw);
       }
-      return true;
+      return def;
     }
-    const includeProteinBox = firstColumnInclude(c.includeProteinBox);
-    const includeSaucesBox = firstColumnInclude(c.includeSaucesBox);
+    const includeProteinBox = firstColumnInclude(c.includeProteinBox, true);
+    const includeSaucesBox = firstColumnInclude(c.includeSaucesBox, true);
+    // Drinks/soda footer: default OFF when column missing or blank
+    const includeDrinksBox = firstColumnInclude(c.includeDrinksBox, false);
 
     const out = {
       title: String(cell(first, c.title) || ""),
@@ -1630,6 +1648,14 @@
         bgChoice: saucesChoice,
         bgFill: saucesFill,
         include: includeSaucesBox,
+      },
+      footerDrinksBox: {
+        title: "",
+        subtitle: "",
+        items: [],
+        include: includeDrinksBox,
+        createColumns: false,
+        textAlign: "center",
       },
     };
 
@@ -1867,6 +1893,10 @@
     );
     const saucesSurf = boxSurfaceFrom(parsed.saucesBox, parsed.saucesBoxBg);
     const drinkSurf = boxSurfaceFrom(parsed.drinkBox, parsed.drinkBoxBg);
+    const footerDrinksSurf = boxSurfaceFrom(
+      parsed.footerDrinksBox,
+      parsed.footerDrinksBoxBg
+    );
 
     const bgColor =
       normalizeHex(parsed.bgColor) ||
@@ -1927,6 +1957,9 @@
       drinkBoxBg: drinkSurf.color,
       drinkBoxImage: drinkSurf.image,
       drinkBoxText: drinkSurf.text,
+      footerDrinksBoxBg: footerDrinksSurf.color,
+      footerDrinksBoxImage: footerDrinksSurf.image,
+      footerDrinksBoxText: footerDrinksSurf.text,
       drinksOverview:
         parsed.drinksOverview !== undefined
           ? !!parsed.drinksOverview
@@ -1981,6 +2014,33 @@
         "align",
         saucesBox.textAlign
       );
+    }
+    if (parsed.footerDrinksBox) {
+      footerDrinksBox = {
+        title: parsed.footerDrinksBox.title || "",
+        subtitle: parsed.footerDrinksBox.subtitle || "",
+        items: parsed.footerDrinksBox.items || [],
+        bg: footerDrinksSurf.color,
+        bgImage: footerDrinksSurf.image,
+        bgChoice: parsed.footerDrinksBox.bgChoice,
+        bgFill: parsed.footerDrinksBox.bgFill,
+        include: !!parsed.footerDrinksBox.include,
+        createColumns: !!parsed.footerDrinksBox.createColumns,
+        textAlign: parseTextAlign(
+          parsed.footerDrinksBox.textAlign,
+          "center"
+        ),
+      };
+      console.info(
+        "Footer drinks include?",
+        footerDrinksBox.include ? "Yes" : "No",
+        "Create Columns?",
+        footerDrinksBox.createColumns ? "Yes" : "No",
+        "items",
+        (footerDrinksBox.items || []).length
+      );
+    } else {
+      footerDrinksBox.include = false;
     }
     applyHandheldsFooterLayout();
     if (parsed.announcementBox) {
@@ -2214,6 +2274,14 @@
       config.saucesBoxBg,
       config.saucesBoxImage,
       config.saucesBoxText
+    );
+    setBox(
+      "footer-drinks-box",
+      "--footer-drinks-box-bg",
+      "--footer-drinks-box-text",
+      config.footerDrinksBoxBg,
+      config.footerDrinksBoxImage,
+      config.footerDrinksBoxText
     );
     setBox(
       "drink-options-box",
@@ -2869,6 +2937,103 @@
   }
 
   /**
+   * Boards 1–3: load shared Drinks sheet into footer drinks box when
+   * Include Drinks Box? is on. Does not touch Board 4 hero/items path.
+   */
+  async function attachFooterDrinksBox(parsed, boardRows, prefetched) {
+    if (!parsed || isDrinks) return parsed;
+    prefetched = prefetched || {};
+
+    let flagD = !!(parsed.footerDrinksBox && parsed.footerDrinksBox.include);
+    if (boardRows && col.includeDrinksBox != null) {
+      flagD = false;
+      let found = false;
+      for (let i = 1; i < boardRows.length; i++) {
+        const raw = cell(boardRows[i], col.includeDrinksBox);
+        if (raw === "" || raw == null) continue;
+        flagD = parseInclude(raw);
+        found = true;
+        break;
+      }
+      if (!found) flagD = false;
+    }
+
+    if (!flagD) {
+      parsed.footerDrinksBox = Object.assign(
+        {},
+        parsed.footerDrinksBox || {},
+        { items: [], include: false }
+      );
+      return parsed;
+    }
+
+    if (cfg.drinksSheetGid == null || cfg.drinksSheetGid === "") {
+      console.warn(
+        "Include Drinks Box? is on but drinksSheetGid is not set in config"
+      );
+      parsed.footerDrinksBox = Object.assign(
+        {},
+        parsed.footerDrinksBox || {},
+        { include: true, items: (parsed.footerDrinksBox && parsed.footerDrinksBox.items) || [] }
+      );
+      return parsed;
+    }
+
+    try {
+      let fills = {};
+      try {
+        await fetchWorkbookXlsxBuffer(false);
+        fills = await loadSheetFillsByName("Drink");
+      } catch (e) {
+        /* optional */
+      }
+      const rows =
+        prefetched.drinksRows != null
+          ? prefetched.drinksRows
+          : await fetchSheetRows(cfg.drinksSheetGid);
+      if (!rows) throw new Error("no drinks rows");
+      const content = parseDrinksContentSheetRows(rows, fills);
+      const box = content.drinkBox || {};
+      const items = (content.items || [])
+        .filter(function (it) {
+          return it && it.include !== false;
+        })
+        .map(function (it) {
+          return {
+            name: it.name,
+            subtitle: it.subtitle || "",
+          };
+        });
+      parsed.footerDrinksBox = {
+        title: box.title || "",
+        subtitle: box.subtitle || "",
+        items: items,
+        bgChoice: box.bgChoice,
+        bgFill: box.bgFill,
+        createColumns: !!box.createColumns,
+        textAlign: box.textAlign || "center",
+        include: true,
+      };
+      console.info(
+        "Footer drinks sheet:",
+        cfg.drinksSheetGid,
+        "items",
+        items.length,
+        "title",
+        box.title
+      );
+    } catch (err) {
+      console.warn("Could not load footer Drinks sheet:", err);
+      if (!parsed.footerDrinksBox) {
+        parsed.footerDrinksBox = { items: [], include: true };
+      } else {
+        parsed.footerDrinksBox.include = true;
+      }
+    }
+    return parsed;
+  }
+
+  /**
    * Local xlsx: attach Protein/Sauces sheets by name when present.
    */
   function attachSharedProteinSaucesFromWorkbook(parsed, wb) {
@@ -3180,7 +3345,8 @@
     if (cfg.saucesSheetGid != null && cfg.saucesSheetGid !== "") {
       csvJobs.sauces = fetchSheetRows(cfg.saucesSheetGid);
     }
-    if (isDrinks && cfg.drinksSheetGid != null && cfg.drinksSheetGid !== "") {
+    if (cfg.drinksSheetGid != null && cfg.drinksSheetGid !== "") {
+      // Board 4 content and/or boards 1–3 footer drinks box
       csvJobs.drinks = fetchSheetRows(cfg.drinksSheetGid);
     }
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
@@ -3243,9 +3409,15 @@
     }
 
     if (cfg.drinksSheetGid) {
-      parsed = await attachSharedDrinksSheet(parsed, {
-        drinksRows: csv.drinks,
-      });
+      if (isDrinks) {
+        parsed = await attachSharedDrinksSheet(parsed, {
+          drinksRows: csv.drinks,
+        });
+      } else {
+        parsed = await attachFooterDrinksBox(parsed, csv.main, {
+          drinksRows: csv.drinks,
+        });
+      }
     }
 
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
@@ -3424,25 +3596,64 @@
       console.warn("Local protein/sauces sheets unavailable:", err);
     }
 
-    // Dedicated drinks content sheet (not "Drinks Deals") when present
-    if (isDrinks) {
+    // Dedicated drinks content sheet when present
+    try {
+      let drinkFills = {};
       try {
-        let drinkFills = {};
-        try {
-          const drinkMeta = await extractSheetStylesFromXlsx(
-            buf,
-            "Drink Options"
-          );
-          drinkFills = drinkMeta.fills || {};
-        } catch (e) {
-          /* optional */
-        }
-        attachSharedDrinksFromWorkbook(parsed, wb, drinkFills);
-      } catch (err) {
-        console.warn("Local drinks content sheet unavailable:", err);
+        const drinkMeta = await extractSheetStylesFromXlsx(buf, "Drink");
+        drinkFills = drinkMeta.fills || {};
+      } catch (e) {
+        /* optional */
       }
+      if (isDrinks) {
+        attachSharedDrinksFromWorkbook(parsed, wb, drinkFills);
+      } else if (parsed.footerDrinksBox && parsed.footerDrinksBox.include) {
+        attachFooterDrinksFromWorkbook(parsed, wb, drinkFills);
+      }
+    } catch (err) {
+      console.warn("Local drinks content sheet unavailable:", err);
     }
 
+    return parsed;
+  }
+
+  /** Local xlsx → footer drinks box (boards 1–3). */
+  function attachFooterDrinksFromWorkbook(parsed, wb, fills) {
+    if (!parsed || !wb || isDrinks) return parsed;
+    const names = wb.SheetNames || [];
+    const contentName =
+      names.find(function (n) {
+        return /^drinks?$/i.test(String(n).trim());
+      }) ||
+      names.find(function (n) {
+        return /drink/i.test(n) && !/deal/i.test(n) && !/board/i.test(n);
+      });
+    if (!contentName || !wb.Sheets[contentName]) return parsed;
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[contentName], {
+      header: 1,
+      defval: null,
+      raw: true,
+    });
+    const content = parseDrinksContentSheetRows(rows, fills || {});
+    const box = content.drinkBox || {};
+    const items = (content.items || [])
+      .filter(function (it) {
+        return it && it.include !== false;
+      })
+      .map(function (it) {
+        return { name: it.name, subtitle: it.subtitle || "" };
+      });
+    const flag = !!(parsed.footerDrinksBox && parsed.footerDrinksBox.include);
+    parsed.footerDrinksBox = {
+      title: box.title || "",
+      subtitle: box.subtitle || "",
+      items: items,
+      bgChoice: box.bgChoice,
+      bgFill: box.bgFill,
+      createColumns: !!box.createColumns,
+      textAlign: box.textAlign || "center",
+      include: flag,
+    };
     return parsed;
   }
 
@@ -3811,49 +4022,92 @@
   function syncFooterBoxShells() {
     syncInfoBoxShell(document.getElementById("protein-box"));
     syncInfoBoxShell(document.getElementById("sauces-box"));
+    syncInfoBoxShell(document.getElementById("footer-drinks-box"));
   }
 
   /**
-   * Footer protein/sauces layout (boards 1–3) from Include Protein/Sauces Box?:
-   *  both  → default side-by-side geometry
-   *  one   → that box spans the full combined footprint (L38 → R1120)
-   *  none  → hide footer; menu list uses full panel height
+   * Footer layout (boards 1–3) — docs/FOOTER_BOXES.md
+   *  0 → hide strip
+   *  1 → one box 1082px
+   *  2 → left-heavy 768 + 299 (order: protein → sauces → drinks)
+   *  3 → even thirds, 15px gaps
    */
   function applyFooterBoxesLayout() {
     if (!els.footerBoxes) return;
     const showP = proteinBox.include !== false;
     const showS = saucesBox.include !== false;
-    const modes = [
+    const showD = !!footerDrinksBox.include;
+
+    const slots = [
+      { id: "protein-box", show: showP },
+      { id: "sauces-box", show: showS },
+      { id: "footer-drinks-box", show: showD },
+    ];
+    const visible = [];
+    slots.forEach(function (s) {
+      const el = document.getElementById(s.id);
+      if (!el) return;
+      el.hidden = !s.show;
+      el.classList.remove("footer-major", "footer-minor");
+      if (s.show) visible.push(el);
+    });
+
+    const bodyModes = [
+      "footer-none",
+      "footer-one",
+      "footer-two",
+      "footer-three",
       "footer-both",
       "footer-protein-only",
       "footer-sauces-only",
-      "footer-none",
     ];
-    modes.forEach(function (m) {
+    bodyModes.forEach(function (m) {
       document.body.classList.remove(m);
     });
-    let mode = "footer-none";
-    if (showP && showS) mode = "footer-both";
-    else if (showP) mode = "footer-protein-only";
-    else if (showS) mode = "footer-sauces-only";
-    document.body.classList.add(mode);
+    const stripModes = ["footer-one", "footer-two", "footer-three"];
+    stripModes.forEach(function (m) {
+      els.footerBoxes.classList.remove(m);
+    });
 
-    const proteinEl = document.getElementById("protein-box");
-    const saucesEl = document.getElementById("sauces-box");
-    if (proteinEl) proteinEl.hidden = !showP;
-    if (saucesEl) saucesEl.hidden = !showS;
-    if (els.footerBoxes) {
-      els.footerBoxes.hidden = !showP && !showS;
-      if (!showP && !showS) {
-        els.footerBoxes.style.display = "none";
-      } else {
-        els.footerBoxes.style.display = "";
-      }
+    const n = visible.length;
+    let mode = "footer-none";
+    if (n === 1) mode = "footer-one";
+    else if (n === 2) mode = "footer-two";
+    else if (n >= 3) mode = "footer-three";
+
+    document.body.classList.add(mode);
+    if (n > 0) els.footerBoxes.classList.add(mode);
+
+    // Legacy aliases for any leftover CSS
+    if (n === 2 && showP && showS && !showD) {
+      document.body.classList.add("footer-both");
+    } else if (n === 1 && showP) {
+      document.body.classList.add("footer-protein-only");
+    } else if (n === 1 && showS) {
+      document.body.classList.add("footer-sauces-only");
     }
-    // After CSS width changes, rebuild shells so 4px borders stay 4px
-    void (els.footerBoxes && els.footerBoxes.offsetWidth);
+
+    if (n === 2) {
+      visible[0].classList.add("footer-major");
+      visible[1].classList.add("footer-minor");
+    }
+
+    const any = n > 0;
+    els.footerBoxes.hidden = !any;
+    els.footerBoxes.style.display = any ? "" : "none";
+
+    void els.footerBoxes.offsetWidth;
     syncFooterBoxShells();
-    console.info("Footer boxes:", mode, "protein", showP, "sauces", showS);
+    console.info(
+      "Footer boxes:",
+      mode,
+      "protein",
+      showP,
+      "sauces",
+      showS,
+      "drinks",
+      showD
+    );
   }
 
   /** @deprecated use applyFooterBoxesLayout */
@@ -3994,6 +4248,52 @@
             itemClass: "sauce-item wrap-item",
             sepClass: "sauce-sep wrap-sep",
             breakClass: "sauce-line-break wrap-line-break",
+            sepText: " · ",
+            getText: function (it) {
+              return it.name;
+            },
+          });
+        }
+      }
+    }
+
+    if (els.footerDrinksTitle) {
+      els.footerDrinksTitle.textContent = footerDrinksBox.title || "";
+    }
+    if (els.footerDrinksSubtitle) {
+      els.footerDrinksSubtitle.textContent = footerDrinksBox.subtitle || "";
+    }
+    if (els.footerDrinksBody) {
+      els.footerDrinksBody.innerHTML = "";
+      els.footerDrinksBody.style.setProperty("--box-scale", "1");
+      setBoxLayoutMode(els.footerDrinksBody, !!footerDrinksBox.createColumns);
+      setBoxTextAlign(els.footerDrinksBody, footerDrinksBox.textAlign);
+      if (footerDrinksBox.include) {
+        const list = footerDrinksBox.items || [];
+        if (footerDrinksBox.createColumns) {
+          list.forEach(function (it) {
+            const row = document.createElement("div");
+            row.className = "footer-drink-col-item box-col-item";
+            const label = document.createElement("span");
+            label.className = "footer-drink-col-label";
+            label.textContent = it.name;
+            row.appendChild(label);
+            els.footerDrinksBody.appendChild(row);
+          });
+        } else {
+          const lines = balanceItemsIntoLines(
+            list.map(function (it) {
+              return { label: String(it.name || ""), name: it.name };
+            }),
+            balanceOptsFromBox(els.footerDrinksBody, {
+              sepText: " · ",
+              maxLines: 8,
+            })
+          );
+          appendBalancedWrapItems(els.footerDrinksBody, lines, {
+            itemClass: "footer-drink-item wrap-item",
+            sepClass: "footer-drink-sep wrap-sep",
+            breakClass: "footer-drink-line-break wrap-line-break",
             sepText: " · ",
             getText: function (it) {
               return it.name;
@@ -4486,23 +4786,40 @@
       }
     }
 
-    if (saucesBox.include === false || !els.saucesBody) return;
+    if (saucesBox.include !== false && els.saucesBody) {
+      if (saucesBox.createColumns) {
+        fitColumnBox(els.saucesBody, {
+          rowSelector: ".box-col-item, .sauce-col-item",
+          label: "Sauces",
+          minColPx: 140,
+        });
+      } else {
+        fitWrapBox(els.saucesBody, {
+          sepSelector: ".sauce-sep, .wrap-sep",
+          forceBreakSelector: ".sauce-force-break",
+          lineBreakClass: "sauce-line-break",
+          forceBreakClass: "sauce-force-break",
+          itemClass: "sauce-item",
+        });
+      }
+    }
 
-    if (saucesBox.createColumns) {
-      fitColumnBox(els.saucesBody, {
-        rowSelector: ".box-col-item, .sauce-col-item",
-        label: "Sauces",
-        // Sauces box is only ~299px when sharing the footer
-        minColPx: 140,
-      });
-    } else {
-      fitWrapBox(els.saucesBody, {
-        sepSelector: ".sauce-sep, .wrap-sep",
-        forceBreakSelector: ".sauce-force-break",
-        lineBreakClass: "sauce-line-break",
-        forceBreakClass: "sauce-force-break",
-        itemClass: "sauce-item",
-      });
+    if (footerDrinksBox.include && els.footerDrinksBody) {
+      if (footerDrinksBox.createColumns) {
+        fitColumnBox(els.footerDrinksBody, {
+          rowSelector: ".box-col-item, .footer-drink-col-item",
+          label: "FooterDrinks",
+          minColPx: 120,
+        });
+      } else {
+        fitWrapBox(els.footerDrinksBody, {
+          sepSelector: ".footer-drink-sep, .wrap-sep",
+          forceBreakSelector: ".footer-drink-force-break",
+          lineBreakClass: "footer-drink-line-break",
+          forceBreakClass: "footer-drink-force-break",
+          itemClass: "footer-drink-item",
+        });
+      }
     }
   }
 
@@ -4585,10 +4902,11 @@
     conf = conf || {};
     const forceSel = conf.forceBreakSelector || ".wrap-force-break";
     const sepSel = conf.sepSelector || ".wrap-sep";
-    const isSauces = el.id === "sauces-body";
-    const minS = isSauces ? 0.45 : 0.5;
-    const maxS = isSauces ? 2.4 : 2.2;
-    const shrink = isSauces ? 0.995 : 0.97;
+    const isDenseFooter =
+      el.id === "sauces-body" || el.id === "footer-drinks-body";
+    const minS = isDenseFooter ? 0.45 : 0.5;
+    const maxS = isDenseFooter ? 2.4 : 2.2;
+    const shrink = isDenseFooter ? 0.995 : 0.97;
 
     function resetSeps() {
       el.querySelectorAll(forceSel).forEach(function (n) {

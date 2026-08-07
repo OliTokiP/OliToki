@@ -13,6 +13,7 @@ window.TOKI_CONFIG = {
   styleThemeGid: "1076652078",
   proteinSheetGid: "1191392779",
   saucesSheetGid: "1780619208",
+  drinksSheetGid: "628145419",
 
   layout: "handhelds",
   showHero: true,
@@ -38,6 +39,7 @@ window.TOKI_CONFIG = {
     include: 9,
     includeProteinBox: 10,
     includeSaucesBox: 11,
+    includeDrinksBox: 12,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

@@ -446,12 +446,9 @@ body {
   text-rendering: geometricPrecision;
 }
 
-/* ========== Boards 1–3: optional Protein / Sauces footer ==========
-   Box geometry from Handhelds Mockup.png @1920:
-   Protein: L38 T863 R806 B1060 (768×197)
-   Sauces:  L821 T863 R1120 B1060 (299×197)
-   Combined span (one box only): L38 → R1120 = 1082×197
-   Include flags on each board sheet toggle visibility + list height.
+/* ========== Boards 1–3: footer boxes (Protein / Sauces / Drinks) ==========
+   Strip: L38 T863 · 1082×197 · gap 15px (docs/FOOTER_BOXES.md)
+   1 box → 1082 | 2 boxes → 768 + 299 (left-heavy) | 3 → even thirds
 */
 .board-handhelds #menu-list {
   /* Midpoint between previous spacings (was 617/12, then 624/4) */
@@ -461,7 +458,14 @@ body {
   width: 1100px;
 }
 
-/* When either footer box is shown, shorten the items list above them */
+/* Any footer box shown → shorten the items list above the strip */
+.board-bowls.footer-one #menu-list,
+.board-bowls.footer-two #menu-list,
+.board-bowls.footer-three #menu-list,
+.board-munchies.footer-one #menu-list,
+.board-munchies.footer-two #menu-list,
+.board-munchies.footer-three #menu-list,
+/* legacy class names still set during transition */
 .board-bowls.footer-both #menu-list,
 .board-bowls.footer-protein-only #menu-list,
 .board-bowls.footer-sauces-only #menu-list,
@@ -472,7 +476,7 @@ body {
   padding-bottom: 8px;
 }
 
-/* Both footer boxes off → menu list fills the panel (Bowls default look) */
+/* Footer off → menu list fills the panel */
 .board-handhelds.footer-none #menu-list,
 .board-bowls.footer-none #menu-list,
 .board-munchies.footer-none #menu-list {
@@ -540,34 +544,46 @@ body {
   display: none;
 }
 
+/*
+  Footer strip (boards 1–3): flex row at mockup footprint.
+  docs/FOOTER_BOXES.md — gap 15; one=1082; two=768+299; three=even.
+*/
 .board-handhelds #footer-boxes,
 .board-bowls #footer-boxes,
 .board-munchies #footer-boxes {
-  display: block;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 15px;
   position: absolute;
   z-index: 4;
-  left: 0;
-  top: 0;
-  width: 1920px;
-  height: 1080px;
+  left: 38px;
+  top: 863px;
+  width: 1082px;
+  height: 197px;
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 /*
-  Info boxes (mockup-measured):
+  Info boxes:
   - White outer shell (outline + header fill)
   - Black body inset: 4px side/bottom border, header band 64px from top
-  Protein: 38,863 768×197 | Sauces: 821,863 299×197
 */
 .info-box {
-  position: absolute;
+  position: relative;
   box-sizing: border-box;
   overflow: hidden;
   font-family: "Roboto", sans-serif;
   font-weight: 700;
-  /* Stack: SVG shell under text layers */
   display: flex;
   flex-direction: column;
+  height: 197px;
+  min-width: 0;
+}
+
+.info-box[hidden] {
+  display: none !important;
 }
 
 .info-box-shell {
@@ -580,40 +596,45 @@ body {
   pointer-events: none;
 }
 
+/* Default two-box mockup sizes (overridden by footer-one / three / major-minor) */
 #protein-box {
-  left: 38px;
-  top: 863px;
+  flex: 0 0 768px;
   width: 768px;
-  height: 197px;
 }
 
 #sauces-box {
-  left: 821px;
-  top: 863px;
+  flex: 0 0 299px;
   width: 299px;
-  height: 197px;
 }
 
-/* One footer box only → inherit the full combined footprint (L38–R1120) */
-.board-handhelds.footer-protein-only #protein-box,
-.board-handhelds.footer-sauces-only #sauces-box,
-.board-bowls.footer-protein-only #protein-box,
-.board-bowls.footer-sauces-only #sauces-box,
-.board-munchies.footer-protein-only #protein-box,
-.board-munchies.footer-sauces-only #sauces-box {
-  left: 38px;
-  width: 1082px; /* 1120 − 38 */
-  top: 863px;
-  height: 197px;
+#footer-drinks-box {
+  flex: 0 0 299px;
+  width: 299px;
 }
 
-.board-handhelds.footer-protein-only #sauces-box,
-.board-handhelds.footer-sauces-only #protein-box,
-.board-bowls.footer-protein-only #sauces-box,
-.board-bowls.footer-sauces-only #protein-box,
-.board-munchies.footer-protein-only #sauces-box,
-.board-munchies.footer-sauces-only #protein-box {
-  display: none !important;
+/* One visible box → full strip */
+#footer-boxes.footer-one .info-box:not([hidden]) {
+  flex: 1 1 auto;
+  width: 1082px;
+  max-width: 1082px;
+}
+
+/* Two boxes: leftmost major 768, rightmost minor 299 (JS sets classes) */
+#footer-boxes.footer-two .info-box.footer-major {
+  flex: 0 0 768px;
+  width: 768px;
+}
+
+#footer-boxes.footer-two .info-box.footer-minor {
+  flex: 0 0 299px;
+  width: 299px;
+}
+
+/* Three boxes: equal thirds (1052 / 3 after two 15px gaps) */
+#footer-boxes.footer-three .info-box:not([hidden]) {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
 }
 
 /* White header band — sits in top 64px (includes visual top border).
@@ -634,6 +655,10 @@ body {
   fill: var(--sauces-box-bg, var(--main-color));
 }
 
+#footer-drinks-box .shell-body {
+  fill: var(--footer-drinks-box-bg, var(--main-color));
+}
+
 /* When image pattern is applied, JS sets inline fill; keep solid vars as fallback */
 
 #protein-box .info-box-body {
@@ -642,6 +667,10 @@ body {
 
 #sauces-box .info-box-body {
   color: var(--sauces-box-text, var(--secondary-color));
+}
+
+#footer-drinks-box .info-box-body {
+  color: var(--footer-drinks-box-text, var(--secondary-color));
 }
 
 /* Image box bodies: fill painted via SVG <pattern> in JS (shell-body rect).
@@ -714,7 +743,8 @@ body {
 
 /* ----- Columns mode (protein default; sauces/drinks when Yes) ----- */
 #protein-box .info-box-body.layout-columns,
-#sauces-box .info-box-body.layout-columns {
+#sauces-box .info-box-body.layout-columns,
+#footer-drinks-box .info-box-body.layout-columns {
   --protein-cols: 2;
   --box-cols: 2;
   display: grid;
@@ -783,7 +813,8 @@ body {
 
 /* ----- Wrap mode (sauces default; protein/drinks when No) ----- */
 #protein-box .info-box-body.layout-wrap,
-#sauces-box .info-box-body.layout-wrap {
+#sauces-box .info-box-body.layout-wrap,
+#footer-drinks-box .info-box-body.layout-wrap {
   display: flex;
   flex-wrap: wrap;
   align-content: space-evenly;
@@ -796,6 +827,7 @@ body {
 /* Text Align dropdown (Left / Center / Right) — columns + wrap */
 #protein-box .info-box-body.align-left,
 #sauces-box .info-box-body.align-left,
+#footer-drinks-box .info-box-body.align-left,
 #drink-options-box .drinks-box-body.align-left {
   text-align: left;
   justify-content: flex-start;
@@ -804,6 +836,7 @@ body {
 
 #protein-box .info-box-body.align-center,
 #sauces-box .info-box-body.align-center,
+#footer-drinks-box .info-box-body.align-center,
 #drink-options-box .drinks-box-body.align-center {
   text-align: center;
   justify-content: center;
@@ -812,6 +845,7 @@ body {
 
 #protein-box .info-box-body.align-right,
 #sauces-box .info-box-body.align-right,
+#footer-drinks-box .info-box-body.align-right,
 #drink-options-box .drinks-box-body.align-right {
   text-align: right;
   justify-content: flex-end;
@@ -825,6 +859,9 @@ body {
 #sauces-box .info-box-body.layout-columns.align-left .box-col-item,
 #sauces-box .info-box-body.layout-columns.align-center .box-col-item,
 #sauces-box .info-box-body.layout-columns.align-right .box-col-item,
+#footer-drinks-box .info-box-body.layout-columns.align-left .box-col-item,
+#footer-drinks-box .info-box-body.layout-columns.align-center .box-col-item,
+#footer-drinks-box .info-box-body.layout-columns.align-right .box-col-item,
 #drink-options-box .drinks-box-body.layout-columns.align-left .box-col-item,
 #drink-options-box .drinks-box-body.layout-columns.align-center .box-col-item,
 #drink-options-box .drinks-box-body.layout-columns.align-right .box-col-item {
@@ -841,11 +878,11 @@ body {
 }
 
 /*
-  Sauces wrap — match footer-verify / sauces-verify density:
-  ~4 lines, midspan ≈ 28–30px, type ~24px, body well filled.
-  Tighter leading/padding lets fitWrapBox reach scale ~0.75 (was ~0.59 → 18px).
+  Sauces + footer drinks wrap — match footer-verify density.
+  Tighter leading/padding lets fitWrapBox reach ~24px type.
 */
-#sauces-box .info-box-body.layout-wrap {
+#sauces-box .info-box-body.layout-wrap,
+#footer-drinks-box .info-box-body.layout-wrap {
   font-family: "Roboto Condensed", "Roboto", sans-serif;
   font-weight: 700;
   font-size: calc(32px * var(--box-scale));
@@ -855,8 +892,16 @@ body {
   letter-spacing: -0.015em;
 }
 
+#footer-drinks-box .info-box-body.layout-columns {
+  font-family: "Roboto Condensed", "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: calc(30px * var(--box-scale));
+  padding: 10px 12px 12px;
+}
+
 #protein-box .protein-wrap-item,
-#sauces-box .sauce-item {
+#sauces-box .sauce-item,
+#footer-drinks-box .footer-drink-item {
   display: inline-block;
   white-space: nowrap;
   color: inherit;
@@ -875,7 +920,8 @@ body {
 }
 
 #protein-box .protein-wrap-sep,
-#sauces-box .sauce-sep {
+#sauces-box .sauce-sep,
+#footer-drinks-box .footer-drink-sep {
   display: inline-block;
   white-space: pre;
   color: inherit;
@@ -895,6 +941,8 @@ body {
 #protein-box .protein-line-break,
 #sauces-box .sauce-force-break,
 #sauces-box .sauce-line-break,
+#footer-drinks-box .footer-drink-force-break,
+#footer-drinks-box .footer-drink-line-break,
 .wrap-force-break,
 .wrap-line-break {
   flex: 1 0 100%;
