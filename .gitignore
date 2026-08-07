@@ -34,3 +34,6 @@ backups/sheet-snapshots/Menu-sheet-*.zip
 *.swp
 .idea/
 .vscode/
+
+# Huge design masters (over GitHub 100MB limit)
+*.psd
