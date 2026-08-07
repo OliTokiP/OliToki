@@ -169,6 +169,19 @@
 
   <script>
     (function () {
+      const TAG = "[TokiMenu preview-all]";
+      function log(){ console.log.apply(console, [TAG].concat([].slice.call(arguments))); }
+      function info(){ console.info.apply(console, [TAG].concat([].slice.call(arguments))); }
+      function warn(){ console.warn.apply(console, [TAG].concat([].slice.call(arguments))); }
+      function err(){ console.error.apply(console, [TAG].concat([].slice.call(arguments))); }
+      window.addEventListener("error", function(e){
+        err("uncaught", e.message, e.filename+":"+e.lineno);
+      });
+      window.addEventListener("unhandledrejection", function(e){
+        err("unhandledrejection", e.reason);
+      });
+      info("boot", location.href);
+
       const BOARD_W = 1920;
       const BOARD_H = 1080;
       const wall = document.getElementById("wall");
@@ -259,17 +272,33 @@
       }
 
       function loadFrames() {
-        document.querySelectorAll(".cell").forEach(function (cell) {
+        const cells = document.querySelectorAll(".cell");
+        info("loading", cells.length, "board iframes");
+        cells.forEach(function (cell, i) {
           const src = cell.getAttribute("data-src");
           const iframe = cell.querySelector("iframe");
-          if (!src || !iframe) return;
+          const name = cell.getAttribute("data-name") || src;
+          if (!src || !iframe) {
+            warn("cell missing src/iframe", name);
+            return;
+          }
           const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          iframe.src = src + sep + "preview=all&t=" + Date.now();
+          const url = src + sep + "preview=all&t=" + Date.now();
+          iframe.addEventListener("load", function () {
+            info("iframe loaded", name, url);
+            fitCell(cell);
+          }, { once: true });
+          iframe.addEventListener("error", function () {
+            err("iframe error", name, url);
+          }, { once: true });
+          log("iframe src set", name, "→", url);
+          iframe.src = url;
 
           const hit = cell.querySelector(".cell-hit");
           if (hit) {
             hit.addEventListener("click", function (e) {
               e.preventDefault();
+              info("solo", name);
               setSolo(cell);
             });
           }

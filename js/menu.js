@@ -11,6 +11,58 @@
 (function () {
   "use strict";
 
+  // ---------- diagnostics (Safari Web Inspector / desktop consoles) ----------
+  const _cfg0 =
+    typeof window !== "undefined" && window.TOKI_CONFIG
+      ? window.TOKI_CONFIG
+      : {};
+  const LOG_TAG =
+    "[TokiMenu " +
+    (_cfg0.layout || "board") +
+    (typeof location !== "undefined" && location.pathname
+      ? " " + location.pathname.split("/").pop()
+      : "") +
+    "]";
+
+  function tokiLog() {
+    var a = [LOG_TAG].concat([].slice.call(arguments));
+    console.log.apply(console, a);
+  }
+  function tokiInfo() {
+    var a = [LOG_TAG].concat([].slice.call(arguments));
+    console.info.apply(console, a);
+  }
+  function tokiWarn() {
+    var a = [LOG_TAG].concat([].slice.call(arguments));
+    console.warn.apply(console, a);
+  }
+  function tokiError() {
+    var a = [LOG_TAG].concat([].slice.call(arguments));
+    console.error.apply(console, a);
+  }
+
+  window.addEventListener("error", function (e) {
+    tokiError(
+      "uncaught",
+      e.message,
+      e.filename ? e.filename + ":" + e.lineno + ":" + e.colno : "",
+      e.error || ""
+    );
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    tokiError("unhandledrejection", e.reason);
+  });
+
+  tokiInfo(
+    "boot",
+    "dataSource=",
+    typeof window.TOKI_DATA_SOURCE !== "undefined"
+      ? window.TOKI_DATA_SOURCE
+      : "(unset)",
+    "href=",
+    typeof location !== "undefined" ? location.href : ""
+  );
+
   const STAGE_W = 1920;
   const STAGE_H = 1080;
   const CUTOUT_LEFT = 1114;
@@ -200,11 +252,12 @@
     secondaryColor: "#ffffff",
     // Stage BG: color plate always on; image optional on top with FX
     bgColor: "#000000",
-    bgImage: DEFAULT_BG_IMAGE, // null = color only
+    // null until Style sheet says otherwise — do not preload galaxy-bg
+    bgImage: null,
     bgBlur: 0, // 0–1 (0 = filter:none, 1 = BG_BLUR_MAX_PX)
     bgBlendMode: "normal",
     bgOpacity: 1, // 0–1 image opacity only
-    bgMode: "image", // legacy alias: "image" if bgImage set, else "solid"
+    bgMode: "solid", // legacy alias: "image" if bgImage set, else "solid"
     bgSolid: null, // legacy alias of bgColor
     bgScrollSpeed: 1,
     slideshowSpeed: 3,
@@ -934,9 +987,10 @@
   function parseBgChoice(raw, cellFill, theme) {
     const s = String(raw == null ? "" : raw).trim();
     if (!s) {
+      // Blank → color-only (no galaxy fetch)
       return {
-        bgMode: "image",
-        bgImage: DEFAULT_BG_IMAGE,
+        bgMode: "solid",
+        bgImage: null,
         bgSolid: null,
         bgColor: null,
       };
@@ -950,7 +1004,7 @@
       const path = parseBgImagePath(token);
       return {
         bgMode: "image",
-        bgImage: path || DEFAULT_BG_IMAGE,
+        bgImage: path || null,
         bgSolid: null,
         bgColor: null,
       };
@@ -966,9 +1020,10 @@
       };
     }
 
+    // Unknown token — solid plate, do not force galaxy download
     return {
-      bgMode: "image",
-      bgImage: DEFAULT_BG_IMAGE,
+      bgMode: "solid",
+      bgImage: null,
       bgSolid: null,
       bgColor: null,
     };
@@ -1012,6 +1067,8 @@
     galaxy.style.setProperty("--bg-image-opacity", String(opacity01));
     galaxy.style.setProperty("--bg-image-blend", blend);
 
+    // Only assign img.src when we actually need a background image.
+    // HTML has no src so galaxy-bg is not downloaded for solid themes.
     [els.galaxyA, els.galaxyB].forEach((el) => {
       if (!el) return;
       if (!imagePath) {
@@ -1020,10 +1077,17 @@
         el.style.opacity = "0";
         el.style.filter = "";
         el.style.mixBlendMode = "";
+        if (el.getAttribute("src")) {
+          el.removeAttribute("src");
+          tokiLog("bg image cleared (solid / unused)");
+        }
         return;
       }
       el.hidden = false;
-      if (el.getAttribute("src") !== imagePath) el.src = imagePath;
+      if (el.getAttribute("src") !== imagePath) {
+        tokiLog("bg image load", imagePath);
+        el.src = imagePath;
+      }
     });
 
     if (
@@ -1942,7 +2006,8 @@
     } else if (parsed.bgMode === "solid") {
       bgImage = null;
     } else {
-      bgImage = config.bgImage || DEFAULT_BG_IMAGE;
+      // No theme image key → keep current (often null); never force galaxy
+      bgImage = config.bgImage || null;
     }
     const bgBlur = parseUnit01(
       parsed.bgBlur != null ? parsed.bgBlur : config.bgBlur,
@@ -2404,19 +2469,22 @@
       const res = await fetch("/api/health", { cache: "no-store" });
       if (!res.ok) {
         _sheetsApiProxy = false;
+        tokiInfo(
+          "sheets proxy: no (/api/health " + res.status + ") → public export"
+        );
         return false;
       }
       const j = await res.json();
       _sheetsApiProxy = !!(j && j.sheetsApi);
       if (_sheetsApiProxy) {
-        console.info(
-          "TokiMenu sheets via local API proxy (private sheet OK)",
-          j.email || ""
-        );
+        tokiInfo("sheets proxy: yes", j.email || "");
+      } else {
+        tokiInfo("sheets proxy: health ok but sheetsApi false → public export");
       }
       return _sheetsApiProxy;
     } catch (e) {
       _sheetsApiProxy = false;
+      tokiInfo("sheets proxy: unreachable → public export", String(e && e.message || e));
       return false;
     }
   }
@@ -2673,7 +2741,7 @@
       bgScrollSpeed: Number.isFinite(bgScrollSpeed) ? bgScrollSpeed : 1,
       slideshowSpeed: Number.isFinite(slideshowSpeed) ? slideshowSpeed : 3,
     };
-    console.info(
+    tokiInfo(
       "Style theme:",
       theme.themeName || "(unnamed)",
       "main",
@@ -3423,7 +3491,7 @@
     const csv = {};
     csvSettled.forEach(function (r) {
       if (r.err) {
-        console.warn("CSV fetch failed (" + r.key + "):", r.err);
+        tokiWarn("CSV fetch failed (" + r.key + "):", r.err);
       }
       csv[r.key] = r.rows;
     });
@@ -3499,7 +3567,7 @@
     const ms =
       (typeof performance !== "undefined" ? performance.now() : Date.now()) -
       t0;
-    console.info(
+    tokiInfo(
       "Google load finished in",
       Math.round(ms) + "ms",
       opts.soft ? "(soft)" : "(cold)",
@@ -5857,7 +5925,7 @@
       // until TTL expires — avoids multi-second full exports every refresh.
       const source = await loadMenu({ soft: true });
       if (itemsSignature() === prev) return;
-      console.info("TokiMenu refreshed from", source);
+      tokiInfo("refreshed from", source);
       const pause =
         new URLSearchParams(window.location.search).get("pause") === "1";
       stopSlideshow();
@@ -5873,7 +5941,7 @@
       setActive(Math.min(prevIndex, maxIdx), true);
       if (!pause) startSlideshow();
     } catch (err) {
-      console.warn("Refresh failed:", err);
+      tokiWarn("refresh failed", err);
     }
   }
 
@@ -5927,10 +5995,17 @@
     });
 
     try {
+      tokiInfo("loadMenu start");
       const source = await loadMenu();
-      console.info("TokiMenu loaded from", source, "layout=" + (cfg.layout || "bowls"));
+      tokiInfo(
+        "loaded from",
+        source,
+        "layout=" + (cfg.layout || "bowls"),
+        "items=" + (items && items.length),
+        "bgImage=" + (config.bgImage || "(none)")
+      );
     } catch (err) {
-      console.error(err);
+      tokiError("loadMenu failed", err);
       els.title.textContent = "Menu unavailable";
       startGalaxyScroll();
       return;
