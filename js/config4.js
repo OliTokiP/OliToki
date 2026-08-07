@@ -32,11 +32,14 @@ window.TOKI_CONFIG = {
    * A title | B include stripes | C stripe1 | D stripe2 |
    * E Announcement Title | F Announcement Subtitle | G Announcement Text |
    * H Announcement Box Color | I Announcement Speed (seconds; inherit blanks) |
-   * J–T legacy drink columns (ignored when drinksSheetGid loads successfully)
+   * J Text Align (Left/Center/Right; inherit blanks) |
+   * K Shout (1/0; inherit blanks — max scale + earthquake shake) |
+   * L–… legacy drink columns (ignored when drinksSheetGid loads successfully)
    *
    * Each non-empty G cell is one message-board slide.
-   * Blank E/I inherit previous title/speed; blank F clears subtitle.
-   * Text align / rich bold-color live in the G cell itself (Sheets formatting).
+   * Blank E/I/J/K inherit previous title/speed/align/shout; blank F clears subtitle
+   * only when E sets a new title (married title/subtitle).
+   * Rich bold-color live in the G cell itself (Sheets formatting).
    */
   columns: {
     title: 0,
@@ -48,18 +51,20 @@ window.TOKI_CONFIG = {
     announcementCopy: 6,
     announcementColor: 7,
     announcementSpeed: 8,
+    announcementTextAlign: 9,
+    announcementShout: 10,
     // Legacy fallback if drinks sheet fails to load:
-    drinkBoxTitle: 9,
-    drinkBoxSubtitle: 10,
-    drinkBoxColor: 11,
-    drinksOverview: 12,
-    overviewImage: 13,
-    drinksIndividual: 14,
-    item: 15,
-    subtitle: 16,
-    isNew: 17,
-    image: 18,
-    include: 19,
+    drinkBoxTitle: 11,
+    drinkBoxSubtitle: 12,
+    drinkBoxColor: 13,
+    drinksOverview: 14,
+    overviewImage: 15,
+    drinksIndividual: 16,
+    item: 17,
+    subtitle: 18,
+    isNew: 19,
+    image: 20,
+    include: 21,
     price: null,
     description: null,
     bgScrollSpeed: null,

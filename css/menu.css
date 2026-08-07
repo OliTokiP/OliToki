@@ -884,6 +884,34 @@ body {
   justify-items: end;
 }
 
+/* Announcement body: column flex — stay vertically centered; align horizontally */
+#announcement-box .drinks-box-body.align-left {
+  text-align: left;
+  justify-content: center;
+  align-items: flex-start;
+}
+#announcement-box .drinks-box-body.align-center {
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+}
+#announcement-box .drinks-box-body.align-right {
+  text-align: right;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+/* Announcement header follows Text Align */
+#announcement-box .drinks-box-header.align-left {
+  justify-content: flex-start;
+}
+#announcement-box .drinks-box-header.align-center {
+  justify-content: center;
+}
+#announcement-box .drinks-box-header.align-right {
+  justify-content: flex-end;
+}
+
 /* Column cells: stretch full slot width so text-align left/center/right works */
 #protein-box .info-box-body.layout-columns.align-left .box-col-item,
 #protein-box .info-box-body.layout-columns.align-center .box-col-item,
@@ -1296,6 +1324,63 @@ body {
 #announcement-box .drinks-box-subtitle.ann-fading,
 #announcement-box .drinks-box-body.ann-fading {
   opacity: 0;
+}
+
+/* Shout: max-scale type + cartoon earthquake shake (body only, shell stays put) */
+@keyframes ann-shout-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  10% {
+    transform: translate(-3px, 2px) rotate(-0.6deg);
+  }
+  20% {
+    transform: translate(4px, -2px) rotate(0.7deg);
+  }
+  30% {
+    transform: translate(-2px, -3px) rotate(0.4deg);
+  }
+  40% {
+    transform: translate(3px, 1px) rotate(-0.5deg);
+  }
+  50% {
+    transform: translate(-4px, 2px) rotate(0.55deg);
+  }
+  60% {
+    transform: translate(2px, -1px) rotate(-0.35deg);
+  }
+  70% {
+    transform: translate(-1px, 3px) rotate(0.45deg);
+  }
+  80% {
+    transform: translate(3px, -2px) rotate(-0.5deg);
+  }
+  90% {
+    transform: translate(-2px, 1px) rotate(0.3deg);
+  }
+}
+
+#announcement-box.is-shout .drinks-box-body,
+#announcement-box .drinks-box-body.is-shout {
+  animation: ann-shout-shake 0.42s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Slightly calmer on multi-board wall (Fire Stick FPS) */
+body.preview-wall #announcement-box.is-shout .drinks-box-body,
+body.preview-wall #announcement-box .drinks-box-body.is-shout {
+  animation-duration: 0.55s;
+  animation-timing-function: ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #announcement-box.is-shout .drinks-box-body,
+  #announcement-box .drinks-box-body.is-shout {
+    animation: none;
+    will-change: auto;
+  }
 }
 
 /* Drink options: Create Columns? → grid; else balanced wrap */

@@ -342,7 +342,7 @@
   let announcementBox = {
     title: "",
     subtitle: "",
-    /** @type {Array<{title,subtitle,text,speedSec,color,bold,italic,runs}>} */
+    /** @type {Array<{title,subtitle,text,speedSec,textAlign,shout,color,bold,italic,runs}>} */
     messages: [],
     lines: [], // legacy alias during render of active message body lines
     bg: null,
@@ -1911,6 +1911,8 @@
     let lastTitle = "";
     let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
+    let lastAlign = "center";
+    let lastShout = false;
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -1949,11 +1951,29 @@
           c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
           lastSpeed
         );
+        // J Text Align: blank inherits previous (default center)
+        let textAlign = lastAlign;
+        if (c.announcementTextAlign != null) {
+          const rawAlign = cell(row, c.announcementTextAlign);
+          if (rawAlign != null && String(rawAlign).trim() !== "") {
+            textAlign = parseTextAlign(rawAlign, lastAlign);
+          }
+        }
+        // K Shout: blank inherits previous (default off)
+        let shout = lastShout;
+        if (c.announcementShout != null) {
+          const rawShout = cell(row, c.announcementShout);
+          if (rawShout != null && String(rawShout).trim() !== "") {
+            shout = parseYesNo(rawShout, false);
+          }
+        }
         messages.push({
           title: title,
           subtitle: subtitle,
           text: String(copyText).trim(),
           speedSec: speed,
+          textAlign: textAlign,
+          shout: !!shout,
           // Cell-level font only used when no rich runs (see paintAnnouncementBody)
           color: announcementFontColor(font.color),
           bold: !!font.bold,
@@ -1961,6 +1981,8 @@
           runs: runs,
         });
         lastSpeed = speed;
+        lastAlign = textAlign;
+        lastShout = !!shout;
       }
 
       const name = cell(row, c.item);
@@ -4285,11 +4307,17 @@
   function setAnnouncementMessage(index, opts) {
     opts = opts || {};
     const msgs = announcementBox.messages || [];
+    const annShell = document.getElementById("announcement-box");
     if (!msgs.length) {
       announcementIndex = 0;
       if (els.announcementTitle) els.announcementTitle.textContent = "";
       if (els.announcementSubtitle) els.announcementSubtitle.textContent = "";
       if (els.announcementBody) els.announcementBody.innerHTML = "";
+      if (annShell) annShell.classList.remove("is-shout");
+      if (els.announcementBody) {
+        els.announcementBody.classList.remove("is-shout");
+        setBoxTextAlign(els.announcementBody, "center");
+      }
       return;
     }
     const i = ((index % msgs.length) + msgs.length) % msgs.length;
@@ -4322,7 +4350,27 @@
       announcementBox.subtitle = msg.subtitle || "";
     }
 
+    function applyAlignAndShout() {
+      const align = parseTextAlign(msg.textAlign, "center");
+      const shoutOn = !!msg.shout;
+      setBoxTextAlign(els.announcementBody, align);
+      // Header follows body align for visual unity
+      const header = annShell
+        ? annShell.querySelector(".drinks-box-header")
+        : null;
+      if (header) {
+        header.classList.remove("align-left", "align-center", "align-right");
+        header.classList.add("align-" + align);
+        header.setAttribute("data-align", align);
+      }
+      if (annShell) annShell.classList.toggle("is-shout", shoutOn);
+      if (els.announcementBody) {
+        els.announcementBody.classList.toggle("is-shout", shoutOn);
+      }
+    }
+
     function applyBody() {
+      applyAlignAndShout();
       paintAnnouncementBody(msg, annBodyText);
       announcementBox.lines = String(msg.text || "")
         .split(/\n/)
@@ -4540,19 +4588,36 @@
   }
 
   function fitDrinksBoxes() {
-    // Announcement: prior scaling (cap ~1.55); balance via padding, not huge type
+    // Announcement: tasteful cap ~1.55, unless current message is Shout → max fill
     const annLines = els.announcementBody
       ? els.announcementBody.querySelectorAll(".announcement-line").length
       : 0;
+    const msgs = announcementBox.messages || [];
+    const curMsg = msgs[announcementIndex] || msgs[0] || null;
+    const isShout = !!(curMsg && curMsg.shout);
     if (els.announcementBody) {
       els.announcementBody.classList.toggle("many-lines", annLines >= 4);
+      els.announcementBody.classList.toggle("is-shout", isShout);
       els.announcementBody.dataset.lineCount = String(annLines);
     }
-    const annMin =
-      annLines >= 6 ? 0.2 : annLines >= 4 ? 0.26 : annLines >= 3 ? 0.34 : 0.45;
-    fitBoxScale(els.announcementBody, annMin, 1.55, {
-      checkChildWidth: false,
-    });
+    const annShell = document.getElementById("announcement-box");
+    if (annShell) annShell.classList.toggle("is-shout", isShout);
+
+    if (isShout) {
+      // Override tasteful limits: fill the box as large as overflow allows
+      const shoutMin =
+        annLines >= 6 ? 0.25 : annLines >= 4 ? 0.35 : annLines >= 3 ? 0.45 : 0.55;
+      fitBoxScale(els.announcementBody, shoutMin, 3.2, {
+        checkChildWidth: true,
+        shrinkFactor: 0.99,
+      });
+    } else {
+      const annMin =
+        annLines >= 6 ? 0.2 : annLines >= 4 ? 0.26 : annLines >= 3 ? 0.34 : 0.45;
+      fitBoxScale(els.announcementBody, annMin, 1.55, {
+        checkChildWidth: false,
+      });
+    }
     if (!els.drinkBoxBody) return;
 
     if (drinkBox.createColumns) {
