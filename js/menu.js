@@ -2587,6 +2587,22 @@
     return publicSheetCsvUrl(gid);
   }
 
+  /**
+   * Fingerprint of sheet CSV payloads — soft refresh skips re-render when equal.
+   * Not cryptographic; only change detection.
+   */
+  function fingerprintSheetPayload(parts) {
+    const s = JSON.stringify(parts);
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) + h) ^ s.charCodeAt(i);
+    }
+    return (h >>> 0).toString(16) + ":" + s.length;
+  }
+
+  /** Last successful soft/cold load fingerprint (null until first good load). */
+  let _lastDataFingerprint = null;
+
   async function fetchSheetRows(gid) {
     const useProxy = await detectSheetsApiProxy();
     let url;
@@ -2600,7 +2616,16 @@
       url = publicSheetCsvUrl(gid);
       if (!url) throw new Error("No googleSheetId in config");
     }
-    const res = await fetch(url, { cache: "no-store", mode: "cors" });
+    let res;
+    try {
+      res = await fetch(url, { cache: "no-store", mode: "cors" });
+    } catch (netErr) {
+      // Offline / DNS / CORS network failure — do not treat as empty sheet
+      throw new Error(
+        "Sheet network error (keeping last menu): " +
+          (netErr && netErr.message ? netErr.message : String(netErr))
+      );
+    }
     if (!res.ok) {
       throw new Error(
         "Sheet fetch failed (" +
@@ -3571,8 +3596,45 @@
       csv[r.key] = r.rows;
     });
 
+    // Soft refresh: any missing tab ⇒ abort (keep last good UI; no partial apply)
+    if (opts.soft) {
+      const failed = csvSettled.filter(function (r) {
+        return r.err;
+      });
+      if (failed.length) {
+        throw (
+          failed[0].err ||
+          new Error("soft refresh: sheet fetch incomplete (offline?)")
+        );
+      }
+    }
+
     if (!csv.main) {
-      throw new Error("Board sheet CSV failed to load");
+      const mainFail = csvSettled.filter(function (r) {
+        return r.key === "main" && r.err;
+      })[0];
+      throw (
+        (mainFail && mainFail.err) ||
+        new Error("Board sheet CSV failed to load")
+      );
+    }
+
+    // Change detection for soft refresh (and baseline for next soft)
+    const dataFingerprint = fingerprintSheetPayload({
+      main: csv.main,
+      protein: csv.protein || null,
+      sauces: csv.sauces || null,
+      drinks: csv.drinks || null,
+      style: csv.style || null,
+    });
+    if (
+      opts.soft &&
+      _lastDataFingerprint != null &&
+      dataFingerprint === _lastDataFingerprint
+    ) {
+      tokiInfo("refresh: sheet unchanged — skip re-render");
+      const unchanged = { __tokiUnchanged: true, _fingerprint: dataFingerprint };
+      return unchanged;
     }
 
     await xlsxWarm;
@@ -3651,8 +3713,10 @@
       "Google load finished in",
       Math.round(ms) + "ms",
       opts.soft ? "(soft)" : "(cold)",
-      "csv=" + csvKeys.join("+")
+      "csv=" + csvKeys.join("+"),
+      "fp=" + dataFingerprint
     );
+    parsed._fingerprint = dataFingerprint;
     return parsed;
   }
 
@@ -3869,26 +3933,62 @@
 
   /**
    * @param {object} [opts]
-   * @param {boolean} [opts.soft] soft reload path (reuse xlsx cache)
+   * @param {boolean} [opts.soft] soft reload — never fall back to embedded/xlsx
+   *   (offline must keep last good menu on screen)
+   * @returns {Promise<string>} dataSource id, or "unchanged" when soft + no sheet delta
    */
   async function loadMenu(opts) {
     opts = opts || {};
     const errors = [];
     const mode = resolvedDataSource();
+    const soft = !!opts.soft;
 
-    // —— Local Menu.xlsx first when switch is "local" ——
+    // —— Soft refresh: only live sources; throw on failure (caller keeps UI) ——
+    if (soft) {
+      if (mode === "local") {
+        const parsed = await loadMenuFromXlsx();
+        const fp = fingerprintSheetPayload(parsed);
+        if (_lastDataFingerprint != null && fp === _lastDataFingerprint) {
+          tokiInfo("refresh: local xlsx unchanged");
+          return "unchanged";
+        }
+        applyParsedMenu(parsed);
+        _lastDataFingerprint = fp;
+        dataSource = "xlsx-local";
+        return dataSource;
+      }
+      if (!(cfg.googleSheetId || "").trim()) {
+        throw new Error("soft refresh: no Google sheet configured");
+      }
+      const parsed = await loadMenuFromGoogleSheet({
+        soft: true,
+        forceXlsxRefresh: !!opts.forceXlsxRefresh,
+      });
+      if (parsed && parsed.__tokiUnchanged) {
+        return "unchanged";
+      }
+      const fp = parsed._fingerprint || null;
+      if (parsed._fingerprint) delete parsed._fingerprint;
+      applyParsedMenu(parsed);
+      if (fp) _lastDataFingerprint = fp;
+      dataSource = "google-sheet";
+      tokiInfo("refresh: applied sheet changes", "fp=" + (fp || "?"));
+      return dataSource;
+    }
+
+    // —— Cold load: Local Menu.xlsx first when switch is "local" ——
     if (mode === "local") {
       try {
-        applyParsedMenu(await loadMenuFromXlsx());
+        const parsed = await loadMenuFromXlsx();
+        applyParsedMenu(parsed);
+        _lastDataFingerprint = fingerprintSheetPayload(parsed);
         dataSource = "xlsx-local";
-        console.info(
-          "TokiMenu data source: LOCAL (" + localXlsxPath() + ")"
-        );
+        tokiInfo("TokiMenu data source: LOCAL (" + localXlsxPath() + ")");
         return dataSource;
       } catch (err) {
         errors.push("local xlsx: " + (err.message || err));
-        console.warn(errors[errors.length - 1]);
-        // fall through to google / fallbacks so boards aren't stuck blank
+        tokiWarn(errors[errors.length - 1]);
+        // fall through to google / fallbacks so first paint isn't stuck blank
       }
     }
 
@@ -3896,23 +3996,24 @@
     if ((cfg.googleSheetId || "").trim()) {
       try {
         const parsed = await loadMenuFromGoogleSheet({
-          soft: !!opts.soft,
+          soft: false,
           forceXlsxRefresh: !!opts.forceXlsxRefresh,
         });
+        if (parsed._fingerprint) {
+          _lastDataFingerprint = parsed._fingerprint;
+          delete parsed._fingerprint;
+        }
         applyParsedMenu(parsed);
         dataSource = "google-sheet";
-        console.info(
-          "TokiMenu data source: GOOGLE SHEET",
-          opts.soft ? "(soft refresh)" : ""
-        );
+        tokiInfo("TokiMenu data source: GOOGLE SHEET");
         return dataSource;
       } catch (err) {
         errors.push("Google Sheet: " + (err.message || err));
-        console.warn(errors[errors.length - 1]);
+        tokiWarn(errors[errors.length - 1]);
       }
     }
 
-    // —— Fallbacks ——
+    // —— Fallbacks (cold load only) ——
     const fallbacks = cfg.fallbacks || ["xlsx", "embedded"];
     for (const fb of fallbacks) {
       try {
@@ -3928,7 +4029,7 @@
         }
       } catch (err) {
         errors.push(fb + ": " + (err.message || err));
-        console.warn(errors[errors.length - 1]);
+        tokiWarn(errors[errors.length - 1]);
       }
     }
 
@@ -6018,13 +6119,12 @@
   }
 
   async function softReload() {
-    const prev = itemsSignature();
     const prevIndex = activeIndex;
     try {
-      // Soft: re-fetch CSVs in parallel; reuse workbook xlsx (fills/fonts)
-      // until TTL expires — avoids multi-second full exports every refresh.
+      // Soft: re-fetch CSVs only. No embedded/xlsx fallback if offline.
+      // Unchanged fingerprint → skip re-render. Network error → keep last UI.
       const source = await loadMenu({ soft: true });
-      if (itemsSignature() === prev) return;
+      if (source === "unchanged") return;
       tokiInfo("refreshed from", source);
       const pause =
         new URLSearchParams(window.location.search).get("pause") === "1";
@@ -6041,7 +6141,8 @@
       setActive(Math.min(prevIndex, maxIdx), true);
       if (!pause) startSlideshow();
     } catch (err) {
-      tokiWarn("refresh failed", err);
+      // Offline / incomplete fetch: leave slideshow + items as-is
+      tokiWarn("refresh: keeping last good menu —", err && err.message ? err.message : err);
     }
   }
 
