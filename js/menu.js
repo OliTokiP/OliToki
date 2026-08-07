@@ -1534,8 +1534,25 @@
               if (pn === "rPr") {
                 for (const rp of part.children || []) {
                   const rn = xmlLocal(rp.tagName);
-                  if (rn === "b") bold = true;
-                  if (rn === "i") italic = true;
+                  // Google/Excel: <b/> or <b val="1"/> = bold; <b val="0"/> = not bold
+                  if (rn === "b") {
+                    const bv = rp.getAttribute("val");
+                    bold =
+                      bv == null ||
+                      bv === "" ||
+                      bv === "1" ||
+                      bv === "true" ||
+                      bv === "on";
+                  }
+                  if (rn === "i") {
+                    const iv = rp.getAttribute("val");
+                    italic =
+                      iv == null ||
+                      iv === "" ||
+                      iv === "1" ||
+                      iv === "true" ||
+                      iv === "on";
+                  }
                   if (rn === "color") col = parseXlsxRgb(rp);
                 }
               }
@@ -1873,8 +1890,9 @@
     const c = columnMap || col;
     // Walk every data row by original CSV index so Excel row numbers stay aligned
     // with xlsx styles (G2, G3, …). Each non-empty Announcement Text (G) is one
-    // message-board slide. Blank E/I inherit previous title/speed; blank F
-    // clears subtitle (does not inherit). Text align lives in the cell itself.
+    // message-board slide. Title+subtitle are married: blank E inherits both
+    // previous title and subtitle; new E takes F as subtitle (blank F clears).
+    // Blank I inherits previous speed. Rich bold/color live in G runs.
     const dataRows = rows.slice(1);
     if (
       !dataRows.some(
@@ -1891,6 +1909,7 @@
     const parsedItems = [];
     const messages = [];
     let lastTitle = "";
+    let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -1908,12 +1927,24 @@
           c.announcementTitle != null
             ? String(cell(row, c.announcementTitle) || "").trim()
             : "";
-        // Blank subtitle = cleared for this message (do not inherit previous)
-        const subtitle =
+        const rawSub =
           c.announcementSubtitle != null
             ? String(cell(row, c.announcementSubtitle) || "").trim()
             : "";
-        const title = rawTitle || lastTitle;
+        // Title + subtitle are married:
+        // - new title → subtitle = F (blank F clears subtitle)
+        // - blank title → inherit previous title AND subtitle
+        let title;
+        let subtitle;
+        if (rawTitle) {
+          title = rawTitle;
+          subtitle = rawSub;
+          lastTitle = title;
+          lastSubtitle = subtitle;
+        } else {
+          title = lastTitle;
+          subtitle = lastSubtitle;
+        }
         const speed = parseAnnouncementSpeed(
           c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
           lastSpeed
@@ -1929,7 +1960,6 @@
           italic: !!font.italic,
           runs: runs,
         });
-        if (rawTitle) lastTitle = rawTitle;
         lastSpeed = speed;
       }
 
@@ -4510,39 +4540,17 @@
   }
 
   function fitDrinksBoxes() {
-    // Announcement: short messages get larger type; long multi-line stay tight.
+    // Announcement: prior scaling (cap ~1.55); balance via padding, not huge type
     const annLines = els.announcementBody
       ? els.announcementBody.querySelectorAll(".announcement-line").length
       : 0;
-    let annChars = 0;
     if (els.announcementBody) {
       els.announcementBody.classList.toggle("many-lines", annLines >= 4);
       els.announcementBody.dataset.lineCount = String(annLines);
-      annChars = (els.announcementBody.textContent || "").replace(
-        /\s+/g,
-        " "
-      ).trim().length;
     }
-    // Happy medium: short copy can grow; dense copy still scales down to fit
-    let annMax = 1.55;
-    let annMin = 0.45;
-    if (annLines <= 1 && annChars < 90) {
-      annMax = 2.05;
-      annMin = 0.55;
-    } else if (annLines <= 2 && annChars < 140) {
-      annMax = 1.85;
-      annMin = 0.48;
-    } else if (annLines <= 3) {
-      annMax = 1.65;
-      annMin = 0.38;
-    } else if (annLines >= 6) {
-      annMax = 1.35;
-      annMin = 0.2;
-    } else if (annLines >= 4) {
-      annMax = 1.45;
-      annMin = 0.26;
-    }
-    fitBoxScale(els.announcementBody, annMin, annMax, {
+    const annMin =
+      annLines >= 6 ? 0.2 : annLines >= 4 ? 0.26 : annLines >= 3 ? 0.34 : 0.45;
+    fitBoxScale(els.announcementBody, annMin, 1.55, {
       checkChildWidth: false,
     });
     if (!els.drinkBoxBody) return;

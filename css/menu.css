@@ -1232,7 +1232,8 @@ body {
    text from --announcement-body-text (Main vs Secondary by contrast; JS sets).
    --box-scale shrinks as more F-column lines are added (fitDrinksBoxes). */
 #announcement-box .drinks-box-body {
-  padding: 18px 28px 22px;
+  /* Extra side padding so type sits farther from box edges */
+  padding: 20px 40px 24px;
   color: var(--announcement-body-text, var(--secondary-color));
   font-size: calc(36px * var(--box-scale));
   line-height: 1.22;
@@ -1248,8 +1249,7 @@ body {
 #announcement-box .drinks-box-body.many-lines {
   gap: calc(6px * var(--box-scale));
   line-height: 1.15;
-  padding-top: 12px;
-  padding-bottom: 14px;
+  padding: 14px 40px 16px;
 }
 
 /* Announcement copy: weight/color from Google Sheet fonts (xlsx).
