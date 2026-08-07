@@ -30,8 +30,12 @@ window.TOKI_CONFIG = {
   /**
    * Board tab (announcement + chrome only once drinksSheetGid is set):
    * A title | B include stripes | C stripe1 | D stripe2 |
-   * E ann title | F ann subtitle | G ann copy | H ann color |
-   * I–S legacy drink columns (ignored when drinksSheetGid loads successfully)
+   * E Announcement Title | F Announcement Subtitle | G Announcement Text |
+   * H Announcement Box Color | I Announcement Speed (seconds; inherit blanks) |
+   * J–T legacy drink columns (ignored when drinksSheetGid loads successfully)
+   *
+   * Each non-empty G cell is one message-board slide. Blank E/F/I inherit the
+   * previous message’s resolved title/subtitle/speed.
    */
   columns: {
     title: 0,
@@ -42,18 +46,19 @@ window.TOKI_CONFIG = {
     announcementSubtitle: 5,
     announcementCopy: 6,
     announcementColor: 7,
+    announcementSpeed: 8,
     // Legacy fallback if drinks sheet fails to load:
-    drinkBoxTitle: 8,
-    drinkBoxSubtitle: 9,
-    drinkBoxColor: 10,
-    drinksOverview: 11,
-    overviewImage: 12,
-    drinksIndividual: 13,
-    item: 14,
-    subtitle: 15,
-    isNew: 16,
-    image: 17,
-    include: 18,
+    drinkBoxTitle: 9,
+    drinkBoxSubtitle: 10,
+    drinkBoxColor: 11,
+    drinksOverview: 12,
+    overviewImage: 13,
+    drinksIndividual: 14,
+    item: 15,
+    subtitle: 16,
+    isNew: 17,
+    image: 18,
+    include: 19,
     price: null,
     description: null,
     bgScrollSpeed: null,

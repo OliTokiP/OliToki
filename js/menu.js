@@ -342,9 +342,13 @@
   let announcementBox = {
     title: "",
     subtitle: "",
-    lines: [], // { text, fill } — fill optional; default text = contrast pick
+    /** @type {Array<{title,subtitle,text,speedSec,color,bold,italic,runs}>} */
+    messages: [],
+    lines: [], // legacy alias during render of active message body lines
     bg: null,
   };
+  let announcementIndex = 0;
+  let announcementTimer = null;
   let drinkBox = {
     title: "",
     subtitle: "",
@@ -1850,11 +1854,20 @@
     return out;
   }
 
+  function parseAnnouncementSpeed(raw, fallback) {
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fallback;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return n;
+  }
+
   function parsedDrinksFromRows(rows, columnMap) {
     const c = columnMap || col;
     // Walk every data row by original CSV index so Excel row numbers stay aligned
-    // with xlsx styles (F2, F3, F4, …). Collect ALL non-empty Announcement Copy
-    // cells — not limited to two lines and not tied to drink-item rows.
+    // with xlsx styles (G2, G3, …). Each non-empty Announcement Text (G) is one
+    // message-board slide; blank E/F/I inherit previous resolved values.
     const dataRows = rows.slice(1);
     if (
       !dataRows.some(
@@ -1869,7 +1882,10 @@
         (r) => r && r.some((v) => v != null && String(v).trim() !== "")
       ) || dataRows[0];
     const parsedItems = [];
-    const copyLines = [];
+    const messages = [];
+    let lastTitle = "";
+    let lastSubtitle = "";
+    let lastSpeed = Number(config.slideshowSpeed) || 4;
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -1878,20 +1894,37 @@
       const excelRow = i + 2;
 
       const copyText = cell(row, c.announcementCopy);
-      if (copyText) {
+      if (copyText != null && String(copyText).trim() !== "") {
         const ref = cellRef(c.announcementCopy, excelRow);
         const font = sheetFonts[ref] || {};
         const runs = sheetRich[ref] || null;
-        copyLines.push({
+        const rawTitle =
+          c.announcementTitle != null
+            ? String(cell(row, c.announcementTitle) || "").trim()
+            : "";
+        const rawSub =
+          c.announcementSubtitle != null
+            ? String(cell(row, c.announcementSubtitle) || "").trim()
+            : "";
+        const title = rawTitle || lastTitle;
+        const subtitle = rawSub || lastSubtitle;
+        const speed = parseAnnouncementSpeed(
+          c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
+          lastSpeed
+        );
+        messages.push({
+          title: title,
+          subtitle: subtitle,
           text: String(copyText).trim(),
-          // Font color from sheet (not fill). Blank / hyperlink leftovers
-          // (black or link blue after unlinking) → contrast default at render.
+          speedSec: speed,
           color: announcementFontColor(font.color),
           bold: !!font.bold,
           italic: !!font.italic,
-          // Rich-text runs when Google stores mixed formatting in one cell
           runs: runs,
         });
+        lastTitle = title;
+        lastSubtitle = subtitle;
+        lastSpeed = speed;
       }
 
       const name = cell(row, c.item);
@@ -1952,6 +1985,7 @@
         ? parseInclude(cell(first, c.includeStripes))
         : true;
 
+    const firstMsg = messages[0] || null;
     return {
       title: String(cell(first, c.title) || ""),
       items: parsedItems,
@@ -1961,9 +1995,21 @@
       stripeColor2Choice: stripe2Choice,
       stripeColor2Fill: s2Fill,
       announcementBox: {
-        title: String(cell(first, c.announcementTitle) || "").trim(),
-        subtitle: String(cell(first, c.announcementSubtitle) || "").trim(),
-        lines: copyLines,
+        title: firstMsg ? firstMsg.title : "",
+        subtitle: firstMsg ? firstMsg.subtitle : "",
+        messages: messages,
+        // legacy lines for any leftover callers: body lines of first message
+        lines: firstMsg
+          ? firstMsg.text.split(/\n/).map(function (t) {
+              return {
+                text: t,
+                color: firstMsg.color,
+                bold: firstMsg.bold,
+                italic: firstMsg.italic,
+                runs: null,
+              };
+            })
+          : [],
         bgChoice: annChoice,
         bgFill: annFill,
       },
@@ -2219,9 +2265,13 @@
     }
     applyHandheldsFooterLayout();
     if (parsed.announcementBox) {
+      const msgs = Array.isArray(parsed.announcementBox.messages)
+        ? parsed.announcementBox.messages
+        : [];
       announcementBox = {
         title: parsed.announcementBox.title || "",
         subtitle: parsed.announcementBox.subtitle || "",
+        messages: msgs,
         lines: Array.isArray(parsed.announcementBox.lines)
           ? parsed.announcementBox.lines
           : [],
@@ -2230,6 +2280,7 @@
         bgChoice: parsed.announcementBox.bgChoice,
         bgFill: parsed.announcementBox.bgFill,
       };
+      if (announcementIndex >= msgs.length) announcementIndex = 0;
     }
     if (parsed.drinkBox) {
       drinkBox = {
@@ -4089,71 +4140,234 @@
     fitMenuText();
   }
 
-  function renderDrinksBoxes() {
-    if (els.announcementTitle) {
-      els.announcementTitle.textContent = announcementBox.title || "";
-    }
-    if (els.announcementSubtitle) {
-      els.announcementSubtitle.textContent = announcementBox.subtitle || "";
+  /**
+   * Paint announcement body from one message (text may include \n → multi-line).
+   * When runs exist on the whole cell, use them on a single block; else split lines.
+   */
+  function paintAnnouncementBody(msg, annBodyText) {
+    if (!els.announcementBody) return;
+    els.announcementBody.innerHTML = "";
+    els.announcementBody.style.setProperty("--box-scale", "1");
+    els.announcementBody.style.color = annBodyText;
+    const lineBold = !!(msg && msg.bold);
+    const lineItalic = !!(msg && msg.italic);
+    const lineColor =
+      announcementFontColor(msg && msg.color) || annBodyText;
+
+    if (msg && msg.runs && msg.runs.length) {
+      const p = document.createElement("p");
+      p.className = "announcement-line";
+      p.classList.toggle("is-bold", lineBold);
+      p.classList.toggle("is-italic", lineItalic);
+      p.style.color = lineColor;
+      p.style.fontWeight = lineBold ? "700" : "400";
+      p.style.fontStyle = lineItalic ? "italic" : "normal";
+      msg.runs.forEach(function (run) {
+        const span = document.createElement("span");
+        span.className = "announcement-run";
+        span.textContent = run.text || "";
+        const runBold = run.bold != null ? !!run.bold : lineBold;
+        const runItalic = run.italic != null ? !!run.italic : lineItalic;
+        span.style.fontWeight = runBold ? "700" : "400";
+        span.style.fontStyle = runItalic ? "italic" : "normal";
+        span.style.color = announcementFontColor(run.color) || lineColor;
+        p.appendChild(span);
+      });
+      els.announcementBody.appendChild(p);
+      return;
     }
 
+    const chunks = String((msg && msg.text) || "").split(/\n/);
+    chunks.forEach(function (t) {
+      const p = document.createElement("p");
+      p.className = "announcement-line";
+      p.classList.toggle("is-bold", lineBold);
+      p.classList.toggle("is-italic", lineItalic);
+      p.style.color = lineColor;
+      p.style.fontWeight = lineBold ? "700" : "400";
+      p.style.fontStyle = lineItalic ? "italic" : "normal";
+      p.textContent = t;
+      els.announcementBody.appendChild(p);
+    });
+  }
+
+  /**
+   * Show announcement message at index.
+   * @param {number} index
+   * @param {object} [opts]
+   * @param {boolean} [opts.instant] skip fades (first paint / soft rebuild)
+   * @param {object|null} [opts.prev] previous message for selective title/subtitle fade
+   */
+  function setAnnouncementMessage(index, opts) {
+    opts = opts || {};
+    const msgs = announcementBox.messages || [];
+    if (!msgs.length) {
+      announcementIndex = 0;
+      if (els.announcementTitle) els.announcementTitle.textContent = "";
+      if (els.announcementSubtitle) els.announcementSubtitle.textContent = "";
+      if (els.announcementBody) els.announcementBody.innerHTML = "";
+      return;
+    }
+    const i = ((index % msgs.length) + msgs.length) % msgs.length;
+    const msg = msgs[i];
+    const prev = opts.prev || null;
+    const instant = !!opts.instant;
+    const annBodyText =
+      config.announcementBodyText ||
+      pickContrastingThemeColor(
+        announcementBox.bg ||
+          config.announcementBg ||
+          config.mainColor ||
+          "#000000",
+        config.mainColor,
+        config.secondaryColor
+      );
+
+    const titleChanged = !prev || prev.title !== msg.title;
+    const subChanged = !prev || prev.subtitle !== msg.subtitle;
+    const FADE_MS = 350;
+
+    function applyTitleSub() {
+      if (els.announcementTitle && (instant || titleChanged || !prev)) {
+        els.announcementTitle.textContent = msg.title || "";
+      }
+      if (els.announcementSubtitle && (instant || subChanged || !prev)) {
+        els.announcementSubtitle.textContent = msg.subtitle || "";
+      }
+      announcementBox.title = msg.title || "";
+      announcementBox.subtitle = msg.subtitle || "";
+    }
+
+    function applyBody() {
+      paintAnnouncementBody(msg, annBodyText);
+      announcementBox.lines = String(msg.text || "")
+        .split(/\n/)
+        .map(function (t) {
+          return {
+            text: t,
+            color: msg.color,
+            bold: msg.bold,
+            italic: msg.italic,
+            runs: null,
+          };
+        });
+      if (typeof fitDrinksBoxes === "function") {
+        try {
+          fitDrinksBoxes();
+        } catch (e) {
+          /* fit may run before drink box ready */
+        }
+      }
+    }
+
+    function fadeEl(el, doFade, onHidden) {
+      if (!el) {
+        if (onHidden) onHidden();
+        return;
+      }
+      if (instant || !doFade) {
+        el.classList.remove("ann-fading");
+        if (onHidden) onHidden();
+        el.classList.remove("ann-fading");
+        return;
+      }
+      el.classList.add("ann-fading");
+      window.setTimeout(function () {
+        if (onHidden) onHidden();
+        // next frame: fade back in
+        requestAnimationFrame(function () {
+          el.classList.remove("ann-fading");
+        });
+      }, FADE_MS);
+    }
+
+    // Title / subtitle: only fade when resolved string changes
+    fadeEl(els.announcementTitle, titleChanged && !instant, function () {
+      if (els.announcementTitle && (instant || titleChanged || !prev)) {
+        els.announcementTitle.textContent = msg.title || "";
+      }
+    });
+    fadeEl(els.announcementSubtitle, subChanged && !instant, function () {
+      if (els.announcementSubtitle && (instant || subChanged || !prev)) {
+        els.announcementSubtitle.textContent = msg.subtitle || "";
+      }
+    });
+    // Body always transitions (except instant first paint)
+    fadeEl(els.announcementBody, !instant, function () {
+      applyBody();
+    });
+
+    if (instant) {
+      applyTitleSub();
+      applyBody();
+      if (els.announcementTitle) els.announcementTitle.classList.remove("ann-fading");
+      if (els.announcementSubtitle)
+        els.announcementSubtitle.classList.remove("ann-fading");
+      if (els.announcementBody) els.announcementBody.classList.remove("ann-fading");
+    }
+
+    announcementIndex = i;
+    announcementBox.title = msg.title || "";
+    announcementBox.subtitle = msg.subtitle || "";
+  }
+
+  function stopAnnouncementSlideshow() {
+    if (announcementTimer) {
+      clearTimeout(announcementTimer);
+      announcementTimer = null;
+    }
+  }
+
+  function scheduleNextAnnouncement() {
+    stopAnnouncementSlideshow();
+    const msgs = announcementBox.messages || [];
+    if (msgs.length <= 1) return;
+    if (
+      new URLSearchParams(window.location.search || "").get("pause") === "1"
+    ) {
+      return;
+    }
+    const cur = msgs[announcementIndex] || msgs[0];
+    const sec = Math.max(0.5, Number(cur.speedSec) || 4);
+    announcementTimer = window.setTimeout(function () {
+      const prev = msgs[announcementIndex];
+      setAnnouncementMessage(announcementIndex + 1, { prev: prev });
+      scheduleNextAnnouncement();
+    }, sec * 1000);
+  }
+
+  function startAnnouncementSlideshow() {
+    stopAnnouncementSlideshow();
+    const msgs = announcementBox.messages || [];
+    if (!msgs.length) return;
+    setAnnouncementMessage(announcementIndex, { instant: true });
+    scheduleNextAnnouncement();
+    tokiInfo(
+      "announcement board",
+      msgs.length,
+      "messages; first speed",
+      (msgs[0] && msgs[0].speedSec) || "?"
+    );
+  }
+
+  function renderDrinksBoxes() {
     const annBg =
       announcementBox.bg ||
       config.announcementBg ||
       config.mainColor ||
       "#000000";
-    const annBodyText =
-      config.announcementBodyText ||
-      pickContrastingThemeColor(
-        annBg,
-        config.mainColor,
-        config.secondaryColor
-      );
 
-    if (els.announcementBody) {
-      els.announcementBody.innerHTML = "";
-      els.announcementBody.style.setProperty("--box-scale", "1");
-      els.announcementBody.style.color = annBodyText;
-      (announcementBox.lines || []).forEach((line) => {
-        const p = document.createElement("p");
-        p.className = "announcement-line";
-        const lineBold = !!line.bold;
-        const lineItalic = !!line.italic;
-        // Sheet font color (intentional) or board contrast — never link leftovers
-        const lineColor =
-          announcementFontColor(line.color) || annBodyText;
-
-        p.classList.toggle("is-bold", lineBold);
-        p.classList.toggle("is-italic", lineItalic);
-        p.style.color = lineColor;
-        p.style.fontWeight = lineBold ? "700" : "400";
-        p.style.fontStyle = lineItalic ? "italic" : "normal";
-
-        if (line.runs && line.runs.length) {
-          // Mixed formatting within the cell. Intentional run colors (e.g. orange
-          // emphasis) apply; hyperlink leftovers (default black / link blue on
-          // unlinked URLs like OliToki.com) are stripped → inherit lineColor.
-          line.runs.forEach((run) => {
-            const span = document.createElement("span");
-            span.className = "announcement-run";
-            span.textContent = run.text || "";
-            const runBold = run.bold != null ? !!run.bold : lineBold;
-            const runItalic = run.italic != null ? !!run.italic : lineItalic;
-            span.style.fontWeight = runBold ? "700" : "400";
-            span.style.fontStyle = runItalic ? "italic" : "normal";
-            span.style.color =
-              announcementFontColor(run.color) || lineColor;
-            p.appendChild(span);
-          });
-        } else {
-          p.textContent = line.text || "";
-        }
-
-        els.announcementBody.appendChild(p);
-      });
-    }
     if (els.announcementBodyRect) {
       els.announcementBodyRect.style.fill = annBg;
+    }
+
+    // Message board: show current (or first) announcement slide
+    if ((announcementBox.messages || []).length) {
+      setAnnouncementMessage(announcementIndex, { instant: true });
+    } else {
+      if (els.announcementTitle) els.announcementTitle.textContent = "";
+      if (els.announcementSubtitle) els.announcementSubtitle.textContent = "";
+      if (els.announcementBody) els.announcementBody.innerHTML = "";
     }
 
     if (els.drinkBoxTitle) {
@@ -6142,6 +6356,7 @@
       const pause =
         new URLSearchParams(window.location.search).get("pause") === "1";
       stopSlideshow();
+      stopAnnouncementSlideshow();
       renderTitle();
       renderList();
       renderFooterBoxes(); // includes fitFooterBoxes()
@@ -6152,7 +6367,10 @@
         ? Math.max(0, slides.length - 1)
         : Math.max(0, items.length - 1);
       setActive(Math.min(prevIndex, maxIdx), true);
-      if (!pause) startSlideshow();
+      if (!pause) {
+        startSlideshow();
+        if (isDrinks) startAnnouncementSlideshow();
+      }
     } catch (err) {
       // Offline / incomplete fetch: leave slideshow + items as-is
       tokiWarn("refresh: keeping last good menu —", err && err.message ? err.message : err);
@@ -6280,6 +6498,10 @@
 
     if (params.get("pause") !== "1") {
       startSlideshow();
+      if (isDrinks) startAnnouncementSlideshow();
+    } else if (isDrinks) {
+      // Still paint first message when paused
+      setAnnouncementMessage(announcementIndex, { instant: true });
     }
     startGalaxyScroll();
     startAutoRefresh();

@@ -1285,6 +1285,19 @@ body {
   font-size: 1.05em;
 }
 
+/* Message-board fades: title/subtitle only when text changes; body always */
+#announcement-box .drinks-box-title,
+#announcement-box .drinks-box-subtitle,
+#announcement-box .drinks-box-body {
+  transition: opacity 0.35s ease;
+}
+
+#announcement-box .drinks-box-title.ann-fading,
+#announcement-box .drinks-box-subtitle.ann-fading,
+#announcement-box .drinks-box-body.ann-fading {
+  opacity: 0;
+}
+
 /* Drink options: Create Columns? → grid; else balanced wrap */
 #drink-options-box .drinks-box-body {
   padding: 14px 22px 16px;
