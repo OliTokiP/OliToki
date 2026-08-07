@@ -1,0 +1,101 @@
+TokiMenu — Git howto
+====================
+
+Repo location
+  /Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenu
+
+Baseline commit (first commit after Dropbox restore)
+  Branch: main
+  Commit: a50b4d8
+  Message: Baseline: working TokiMenu boards with private Sheets API
+
+What is NOT in git (see .gitignore)
+  secrets/          service account keys
+  *.json            except package.json / tsconfig.json if added later
+  *.zip             e.g. tokimenu.zip backups
+  __pycache__/, .DS_Store, debug HTML (_dbg*.html), logs
+
+
+Day-to-day
+----------
+
+  cd "/Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenu"
+
+  git status
+      Show changed / new / deleted files
+
+  git add -A
+  git commit -m "short description of what changed"
+      Save a checkpoint
+
+  git log --oneline -10
+      Recent history
+
+  git diff
+      Unstaged code changes (text files)
+
+
+Undo / restore
+--------------
+
+  git restore .
+      Discard uncommitted changes to tracked files
+      (or: git checkout -- .)
+
+  git restore path/to/file
+      Discard changes to one file only
+
+  git reset --hard a50b4d8
+      Hard reset to the baseline commit
+      WARNING: destroys uncommitted work and commits after that point
+      on this branch. Prefer a new branch for experiments.
+
+  git switch -c experiment-name
+      New branch for risky work (keep main clean)
+
+
+Push to GitHub (optional)
+-------------------------
+
+  1. Create a new EMPTY private repo on GitHub (no README).
+
+  2. Wire remote and push:
+
+       git remote add origin https://github.com/YOUR_USER/TokiMenu.git
+       # or SSH: git remote add origin git@github.com:YOUR_USER/TokiMenu.git
+
+       git push -u origin main
+
+  If GitHub CLI is installed and logged in:
+
+       gh repo create TokiMenu --private --source=. --remote=origin --push
+
+
+Sheets are not in git
+---------------------
+
+  Google Sheet content lives in Drive, not in this repo.
+
+  For a true full restore later:
+    - Code: git checkout / reset
+    - Sheet: Drive version history, OR File → Download → .xlsx
+      saved under backups/ and committed (e.g. backups/sheet-YYYYMMDD.xlsx)
+
+  Service account key stays only in secrets/ (never commit).
+
+
+Dropbox + git
+-------------
+
+  Fine for solo use. Avoid editing the same files from two machines
+  without committing first. Do not share one .git folder among multiple
+  people via Dropbox.
+
+
+Quick “save point” recipe
+-------------------------
+
+  cd "/Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenu"
+  git status
+  git add -A
+  git commit -m "describe what you just finished"
