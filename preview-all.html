@@ -7,7 +7,9 @@
   <style>
     /*
       Testing wall: all four 1920×1080 boards in one window.
-      Default 2×2; single column when viewport is portrait-tall (≤ 9:16).
+      Default 2×2; single column when viewport is portrait or square
+      (height ≥ width — covers vertical monitors e.g. 1440×2560 even with
+      menu bar / browser chrome shrinking the usable height past a strict 9:16).
       Chrome (labels / HUD) off unless ?chrome=1
     */
     *,
@@ -37,8 +39,12 @@
       background: #000;
     }
 
-    /* Tall / narrow window → one column (boards 1→4) */
-    @media (max-aspect-ratio: 9/16) {
+    /*
+      Portrait or square → one column (boards 1→4).
+      9:16 was too strict: 1440×2560 with OS/browser chrome often sits
+      just above 9:16 and stayed 2×2. 1/1 = any height ≥ width.
+    */
+    @media (max-aspect-ratio: 1/1) {
       .wall:not(.is-solo) {
         grid-template-columns: 1fr;
         grid-template-rows: repeat(4, 1fr);
@@ -225,7 +231,7 @@
             cell.clientHeight / BOARD_H
           );
           const tall =
-            window.innerWidth / window.innerHeight <= 9 / 16;
+            window.innerWidth / window.innerHeight <= 1;
           hud.textContent =
             "All Boards Preview · " +
             (tall ? "1-column" : "2×2") +

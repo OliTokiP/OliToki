@@ -91,7 +91,8 @@ Open Toki Menus — Environment
     Single window — all boards preview (preview-all.html)
     Show extra info — board labels + zoom tips (default off)
 
-  Tall preview windows (aspect ≤ 9:16) stack the four boards in one column.
+  Portrait / square preview windows (height ≥ width) stack the four boards
+  in one column — e.g. a 1440×2560 vertical monitor.
 
 
 Toki Git Commit (app)
