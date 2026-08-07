@@ -905,13 +905,12 @@ body {
 }
 
 /*
-  Sauces in footer-major (~768px, protein off): slightly larger base so the
-  wide slot can land ~34–36px type with fuller 2-line packs (see pack score
-  width-fill term in balanceItemsIntoLines).
+  Sauces in footer-major (~768px, protein off): modest base bump so 2-line
+  packs land ~34–38px (not huge) with full row fill.
 */
 #sauces-box.footer-major .info-box-body.layout-wrap {
-  font-size: calc(36px * var(--box-scale));
-  line-height: 1.08;
+  font-size: calc(34px * var(--box-scale));
+  line-height: 1.1;
   padding: 8px 14px 10px;
   row-gap: calc(4px * var(--box-scale));
 }

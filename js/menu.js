@@ -5091,8 +5091,15 @@
             }
             if (natural > child.clientWidth + 1) return false;
           } else if (child.classList.contains("wrap-line-row")) {
-            // Planned wrap line: scrollWidth > clientWidth when nowrap overflows
-            if (child.scrollWidth > el.clientWidth + 1) return false;
+            // Sum children — flex scrollWidth can lie when justify is end/center
+            let natural = 0;
+            Array.prototype.forEach.call(child.children, function (ch) {
+              natural += ch.offsetWidth;
+            });
+            if (natural < 1) {
+              natural = child.scrollWidth;
+            }
+            if (natural > el.clientWidth + 1) return false;
           } else if (child.offsetWidth > el.clientWidth + 1) {
             return false;
           }
