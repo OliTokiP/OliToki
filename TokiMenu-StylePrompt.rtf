@@ -1,0 +1,36 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww28260\viewh23600\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 We are now going to make a feature where the look of the entire menu can easily be changed by the user.\
+\
+We are using #gid=1076652078 for this feature.\
+\
+Take a look at it.\
+\
+You\'92ll see some new columns:\
+\
+Main Color and Secondary Color.\
+\
+Currently, we have a number of things set to white, and a number of things set to black.\
+\
+We want Main Color to determine Header Text, Logo, and the main color of our background vector, as well as the background of the Protein Options and Sauces boxes.\
+\
+We want Secondary Color to determine the FILL color of the Headers, as well as the majority of text, IE the menu items, drinks, etc.\
+\
+Basically, anything that\'92s currently WHITE should be tied to the value in Secondary Color now, and anything that\'92s currently BLACK should be tied to the value in Main Color now.\
+\
+Additionally, now things like \'93Stripe Color 1\'94 and Announcement Box Color should be treated as OVERRIDE controls. The default behavior should be this: If an OVERRIDE is blank, it inherits the appropriate color, Main or Secondary.\
+\
+This means specifically, Stripe Color 1 should get Main Color (black), Strip Color 2 should get Secondary Color (white.)\
+\
+Announcement Box Color should get a black background, just like every other box, and this should also be tied to aforementioned blank OVERRIDE behavior. I will add override controls for the other boxes later, for now let\'92s just do these.\
+\
+You\'92ll also notice that I\'92ve moved Highlight Color, New Highlight Color, BG Scroll Speed and Slideshow Speed to the new page in Google Sheets. Reconnect and patch all existing logic please.\
+\
+(PS: This is where things get tricky - in its current style guide, when the background of a box is set to Black, the text is White (primary, secondary,) but for the specific Announcements Box, when the background was Yellow, the text got the Primary Color, Black. I think this looks great, since Black pops out on Yellow. Once we have the theming behavior down, I\'92d like to make it so that the program intelligently decides whether Primary or Secondary would stand out more, based on the OVERRIDE COLOR, but we should get there later. For now, let\'92s focus on everything except the PS.)\
+\
+Before you execute, please let me know any questions you need help with. }

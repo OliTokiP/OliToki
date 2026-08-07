@@ -1,0 +1,1299 @@
+/* TokiMenu — fixed 1920×1080 digital menu board */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 700;
+}
+
+:root {
+  /* Theme (Style sheet): Main was black, Secondary was white */
+  --main-color: #000000;
+  --secondary-color: #ffffff;
+  --highlight: #26bbcb;
+  --highlight-special: #fff900;
+  --highlight-new: var(--highlight-special); /* legacy alias */
+  --stripe-1: var(--main-color);
+  --stripe-2: var(--secondary-color);
+  --announcement-bg: var(--main-color);
+  --menu-scale: 1;
+  --stage-w: 1920px;
+  --stage-h: 1080px;
+  /* Frame geometry at 1920×1080 (frame asset is 3840×2160) */
+  --header-h: 234px;
+  --panel-right: 1114px;
+  /* Calibrated against Menu Mockup No BG.png */
+  --list-pad-x: 28px;
+  --list-pad-top: 16px;
+  --list-pad-bottom: 20px;
+}
+
+#stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  overflow: hidden;
+  background: #000;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+/* ---------- Layer 1: stage background ----------
+   Always: solid plate on #galaxy (BG Color).
+   Optional: scrolling images on top with blur / opacity / mix-blend-mode.
+   .is-solid = color only (no image). .has-blur = filter active (not blur(0)).
+*/
+#galaxy {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #000000;
+  /* Isolate so image blend modes only mix with this plate, not the frame */
+  isolation: isolate;
+  --bg-image-blur: none;
+  --bg-image-opacity: 1;
+  --bg-image-blend: normal;
+}
+
+#galaxy.is-solid .galaxy-layer {
+  display: none !important;
+}
+
+.galaxy-layer {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 120%;
+  width: auto;
+  min-width: 120%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center center;
+  transform: translate3d(0, -50%, 0);
+  opacity: 0;
+  filter: var(--bg-image-blur, none);
+  mix-blend-mode: var(--bg-image-blend, normal);
+  will-change: transform, opacity;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Only promote filter compositing when blur is actually on */
+#galaxy.has-blur .galaxy-layer {
+  will-change: transform, opacity, filter;
+}
+
+.galaxy-layer.active {
+  /* Peak opacity set inline by JS (respects BG Opacity 0–1) */
+  opacity: var(--bg-image-opacity, 1);
+}
+
+.galaxy-layer.fading-in {
+  transition: opacity 1.2s ease-in-out;
+}
+
+.galaxy-layer.fading-out {
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+
+/* ---------- Layer 2: frame (inline SVG vectors) ---------- */
+#frame {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+#frame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Frame: Secondary = header fill, Main = panel body */
+#frame .frame-header {
+  fill: var(--secondary-color);
+}
+
+#frame .frame-panel {
+  fill: var(--main-color);
+}
+
+/* ---------- Layer 3: logo (inline SVG — stroke/eyes use Main Color) ----------
+   Template-matched to mockup: ~156×202 at (758, 16).
+*/
+#logo {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  left: 758px;
+  width: 156px;
+  height: 202px;
+  pointer-events: none;
+  user-select: none;
+  overflow: visible;
+}
+
+#logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#logo .logo-outline {
+  fill: none;
+  stroke: var(--main-color);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 6px;
+}
+
+#logo .logo-eye {
+  fill: var(--main-color);
+}
+
+/* ---------- Title ----------
+   Mockup ink starts ~x 142–147; two lines ~77–80px tall
+*/
+#menu-title {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  left: 140px;
+  width: 600px;
+  height: calc(var(--header-h) - 28px);
+  color: var(--main-color);
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: 104px;
+  line-height: 0.92;
+  letter-spacing: -0.025em;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-line;
+}
+
+/* ---------- Allergy disclaimer (top-right, over galaxy / hero) ----------
+   Color: --disclaimer-color from JS (Main vs Secondary by contrast on BG). */
+#disclaimer {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  right: 28px;
+  /* Wide enough for each sentence on one line at 16px Condensed Light */
+  max-width: 720px;
+  width: max-content;
+  margin: 0;
+  color: var(--disclaimer-color, #ffffff);
+  font-family: "Roboto Condensed", "Roboto", sans-serif;
+  font-weight: 300;
+  font-size: 16px;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- Menu list ----------
+   Larger type to fill the black panel (mockup name ~34–40px, desc ~22px)
+*/
+#menu-list {
+  position: absolute;
+  z-index: 4;
+  top: var(--header-h);
+  left: 0;
+  width: var(--panel-right);
+  height: calc(var(--stage-h) - var(--header-h));
+  padding: var(--list-pad-top) 48px var(--list-pad-bottom) var(--list-pad-x);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* JS sets center when the list is shorter than the panel; else flex-start */
+  justify-content: flex-start;
+  /* Gap scales with type so fewer items still look even, without overflowing */
+  gap: calc(12px * var(--menu-scale));
+  pointer-events: none;
+}
+
+.menu-item {
+  color: var(--secondary-color);
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  transition: color 0.28s ease;
+  flex-shrink: 0;
+}
+
+.menu-item.active {
+  color: var(--item-highlight, var(--highlight));
+}
+
+.menu-item .item-line {
+  font-size: calc(40px * var(--menu-scale));
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  /* One line only — fitMenuText shrinks --menu-scale for the longest name */
+  white-space: nowrap;
+}
+
+.menu-item .item-desc {
+  margin-top: calc(2px * var(--menu-scale));
+  font-size: calc(22px * var(--menu-scale));
+  line-height: 1.28;
+  letter-spacing: 0;
+  max-width: 1020px;
+}
+
+/*
+  Munchies typography (from PS mockup ratios):
+  item name ~12.84pt, prices + parenthetical subtitles ~9.14pt
+  → price/sub = 9.14/12.84 ≈ 0.712 of name size
+  Tighter vertical gaps so type can scale larger with 14 items.
+*/
+.board-munchies #menu-list {
+  height: calc(var(--stage-h) - var(--header-h));
+  width: var(--panel-right);
+  gap: calc(5px * var(--menu-scale));
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.board-munchies .menu-item .item-line {
+  /* Base name size; fitMenuText scales --menu-scale to fill panel */
+  font-size: calc(38px * var(--menu-scale));
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.board-munchies .item-name {
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: 1em;
+}
+
+/* Subtitles + prices: smaller than name (PS 9.14 / 12.84) */
+.board-munchies .item-paren-sub,
+.board-munchies .item-prices {
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: 0.712em;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Layer 4: hero food image ----------
+   All menu photos are 1500×1000 (transparent). Sized/positioned so the
+   plate matches Menu Mockup.png on the 1920×1080 stage.
+*/
+#hero-wrap {
+  position: absolute;
+  z-index: 5;
+  left: 870px;
+  top: 133px;
+  width: 1305px;
+  height: 870px;
+  pointer-events: none;
+}
+
+#hero {
+  display: block;
+  width: 1305px;
+  height: 870px;
+  object-fit: fill; /* 1500×1000 → same 3:2 aspect */
+  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  user-select: none;
+}
+
+#hero.visible {
+  opacity: 1;
+}
+
+/* ---------- Layer 5: new sticker ----------
+   Same size + bottom on every board (drinks only overrides horizontal/rotate).
+   Assets are 1024² with transparent padding; bottom is shared so Y matches.
+
+   Stack:
+     1) Sticker-Shadow.png — plain, no blend
+     2) Sticker-Body.png — gold sticker, no text (hue-tinted by Special Highlight)
+     3) CSS “New!” — Roboto Black, white, -7.25° (matched to new-sticker.png)
+   Body group is isolated so hue does not tint shadow or the label.
+*/
+#new-sticker {
+  position: absolute;
+  z-index: 6;
+  right: -52px;
+  bottom: -74px;
+  width: 560px;
+  aspect-ratio: 1 / 1;
+  /* 1em = sticker width → label font-size scales with board */
+  font-size: 560px;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transform: rotate(-12deg);
+  transform-origin: center center;
+  /* Match #hero fade so New! and photo appear/disappear in lockstep */
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+#new-sticker.visible {
+  opacity: 1;
+  transform: rotate(-12deg);
+}
+
+#new-sticker .new-sticker-shadow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Gold body + hue plate only (isolated) */
+#new-sticker .new-sticker-body {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  isolation: isolate;
+}
+
+#new-sticker .new-sticker-body-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  position: relative;
+  z-index: 0;
+  color: transparent;
+}
+
+#new-sticker .new-sticker-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-color: var(--highlight-special, #fff900);
+  mix-blend-mode: hue;
+  pointer-events: none;
+  -webkit-mask-image: url("../assets/Sticker-Body.png");
+  mask-image: url("../assets/Sticker-Body.png");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+}
+
+/*
+  “New!” placement vs new-sticker.png (1024 canvas):
+  text center ≈ (492, 554) → 48.05% × 54.1%
+  glyph width ≈ 591px → font-size ≈ 144px at 560 display = 0.25714em
+  surface tilt ≈ -7.25° (user); measured edge ≈ -6.5°
+  Final translateX is along the sticker axis (right on sticker =
+  right + slightly up on the board after the -7.25° rotate).
+*/
+#new-sticker .new-sticker-label {
+  position: absolute;
+  z-index: 2;
+  left: 48.05%;
+  top: 54.1%;
+  transform: translate(-50%, -50%) rotate(-7.25deg) translateX(12px);
+  transform-origin: center center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 0.25714em; /* ~144px when wrapper is 560px */
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  /* Slight soft edge like the painted original */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+/* ========== Boards 1–3: optional Protein / Sauces footer ==========
+   Box geometry from Handhelds Mockup.png @1920:
+   Protein: L38 T863 R806 B1060 (768×197)
+   Sauces:  L821 T863 R1120 B1060 (299×197)
+   Combined span (one box only): L38 → R1120 = 1082×197
+   Include flags on each board sheet toggle visibility + list height.
+*/
+.board-handhelds #menu-list {
+  /* Midpoint between previous spacings (was 617/12, then 624/4) */
+  height: 620px;
+  padding-top: 14px;
+  padding-bottom: 8px;
+  width: 1100px;
+}
+
+/* When either footer box is shown, shorten the items list above them */
+.board-bowls.footer-both #menu-list,
+.board-bowls.footer-protein-only #menu-list,
+.board-bowls.footer-sauces-only #menu-list,
+.board-munchies.footer-both #menu-list,
+.board-munchies.footer-protein-only #menu-list,
+.board-munchies.footer-sauces-only #menu-list {
+  height: 620px;
+  padding-bottom: 8px;
+}
+
+/* Both footer boxes off → menu list fills the panel (Bowls default look) */
+.board-handhelds.footer-none #menu-list,
+.board-bowls.footer-none #menu-list,
+.board-munchies.footer-none #menu-list {
+  height: calc(var(--stage-h) - var(--header-h));
+  padding-top: var(--list-pad-top);
+  padding-bottom: var(--list-pad-bottom);
+}
+
+.board-handhelds.footer-none #footer-boxes,
+.board-bowls.footer-none #footer-boxes,
+.board-munchies.footer-none #footer-boxes {
+  display: none !important;
+}
+
+/*
+  Auto 2-column mode for Bowls + Handhelds + Munchies (JS adds .cols-2 when
+  2-col wins the scale bake-off). Column-major: left top→bottom, then right.
+  --menu-col-rows = ceil(itemCount / 2), set by fitMenuText.
+*/
+#menu-list.cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--menu-col-rows, 8), auto);
+  /* Wider gutter so left text never kisses the right column */
+  column-gap: calc(40px * var(--menu-scale));
+  row-gap: calc(10px * var(--menu-scale));
+  align-content: start;
+  /* flex gap doesn't apply; clear confusion */
+  gap: unset;
+}
+
+/* Munchies rows are single-line — tighter vertical rhythm in 2-col */
+.board-munchies #menu-list.cols-2 {
+  row-gap: calc(6px * var(--menu-scale));
+  column-gap: calc(36px * var(--menu-scale));
+}
+
+#menu-list.cols-2 .menu-item {
+  min-width: 0; /* grid children default to min-content; allow shrink */
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Soft inner inset so long wraps stay clear of the gutter */
+  padding-right: calc(6px * var(--menu-scale));
+  overflow: hidden; /* last resort if a glyph still pokes out */
+}
+
+#menu-list.cols-2 .menu-item .item-desc {
+  max-width: 100%;
+  /* Break long tokens instead of spilling into col 2.
+     hyphens: auto needs html[lang] (boards set lang="en"). */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+/* Munchies title lines are nowrap; ensure they can't paint into the gutter */
+.board-munchies #menu-list.cols-2 .menu-item .item-line {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#footer-boxes {
+  display: none;
+}
+
+.board-handhelds #footer-boxes,
+.board-bowls #footer-boxes,
+.board-munchies #footer-boxes {
+  display: block;
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+}
+
+/*
+  Info boxes (mockup-measured):
+  - White outer shell (outline + header fill)
+  - Black body inset: 4px side/bottom border, header band 64px from top
+  Protein: 38,863 768×197 | Sauces: 821,863 299×197
+*/
+.info-box {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  /* Stack: SVG shell under text layers */
+  display: flex;
+  flex-direction: column;
+}
+
+.info-box-shell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+#protein-box {
+  left: 38px;
+  top: 863px;
+  width: 768px;
+  height: 197px;
+}
+
+#sauces-box {
+  left: 821px;
+  top: 863px;
+  width: 299px;
+  height: 197px;
+}
+
+/* One footer box only → inherit the full combined footprint (L38–R1120) */
+.board-handhelds.footer-protein-only #protein-box,
+.board-handhelds.footer-sauces-only #sauces-box,
+.board-bowls.footer-protein-only #protein-box,
+.board-bowls.footer-sauces-only #sauces-box,
+.board-munchies.footer-protein-only #protein-box,
+.board-munchies.footer-sauces-only #sauces-box {
+  left: 38px;
+  width: 1082px; /* 1120 − 38 */
+  top: 863px;
+  height: 197px;
+}
+
+.board-handhelds.footer-protein-only #sauces-box,
+.board-handhelds.footer-sauces-only #protein-box,
+.board-bowls.footer-protein-only #sauces-box,
+.board-bowls.footer-sauces-only #protein-box,
+.board-munchies.footer-protein-only #sauces-box,
+.board-munchies.footer-sauces-only #protein-box {
+  display: none !important;
+}
+
+/* White header band — sits in top 64px (includes visual top border).
+   Title sizes fixed to mockup (not dynamic): cap height ~35px → ~48–50px Roboto Bold. */
+.info-box-shell .shell-outer {
+  fill: var(--secondary-color);
+}
+
+.info-box-shell .shell-body {
+  fill: var(--main-color);
+}
+
+#protein-box .shell-body {
+  fill: var(--protein-box-bg, var(--main-color));
+}
+
+#sauces-box .shell-body {
+  fill: var(--sauces-box-bg, var(--main-color));
+}
+
+/* When image pattern is applied, JS sets inline fill; keep solid vars as fallback */
+
+#protein-box .info-box-body {
+  color: var(--protein-box-text, var(--secondary-color));
+}
+
+#sauces-box .info-box-body {
+  color: var(--sauces-box-text, var(--secondary-color));
+}
+
+/* Image box bodies: fill painted via SVG <pattern> in JS (shell-body rect).
+   Text uses --*-box-text (Secondary for dark galaxy photos). */
+.info-box.has-image-bg .info-box-body,
+.drinks-box.has-image-bg .drinks-box-body {
+  /* light scrim so white type stays legible on bright photo areas */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+}
+
+.info-box-header {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  align-content: center;
+  gap: 10px;
+  padding: 8px 18px 0;
+  color: var(--main-color);
+  line-height: 1;
+}
+
+#sauces-box .info-box-header {
+  padding: 8px 14px 0;
+}
+
+.info-box-title {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--main-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ~75% of companion title (48px → 36px) — Protein Options, Sauces, etc. */
+.info-box-subtitle {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--main-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+#sauces-box .info-box-title {
+  font-size: 48px;
+}
+
+/* Body fill = Main; type = Secondary. --box-scale filled by fitFooterBoxes(). */
+.info-box-body {
+  --box-scale: 1;
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  color: var(--secondary-color);
+  padding: 12px 18px 14px;
+  overflow: hidden;
+}
+
+/*
+  Footer boxes: Create Columns? toggle
+  .layout-columns → 1–4 col grid bake-off (--box-cols / --protein-cols)
+  .layout-wrap    → balanced flex wrap (character/pixel even rows)
+*/
+
+/* ----- Columns mode (protein default; sauces/drinks when Yes) ----- */
+#protein-box .info-box-body.layout-columns,
+#sauces-box .info-box-body.layout-columns {
+  --protein-cols: 2;
+  --box-cols: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--box-cols, var(--protein-cols)), 1fr);
+  column-gap: calc(16px * var(--box-scale));
+  row-gap: calc(4px * var(--box-scale));
+  align-content: space-evenly;
+  justify-items: stretch;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+#protein-box .info-box-body.layout-columns {
+  font-size: calc(34px * var(--box-scale));
+  padding: 8px 14px 10px;
+}
+
+#sauces-box .info-box-body.layout-columns {
+  font-family: "Roboto Condensed", "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: calc(30px * var(--box-scale));
+  padding: 10px 12px 12px;
+}
+
+#protein-box .info-box-body.layout-columns .protein-row,
+#protein-box .info-box-body.layout-columns .box-col-item,
+#sauces-box .info-box-body.layout-columns .box-col-item,
+#sauces-box .info-box-body.layout-columns .sauce-col-item {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  color: inherit;
+  text-align: inherit;
+  min-width: 0;
+  min-height: max-content;
+  line-height: inherit;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  grid-column: auto;
+}
+
+#protein-box .protein-name {
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+}
+
+#protein-box .protein-price {
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
+}
+
+/*
+  Lone last cell spans full width — protein only (price rows look better).
+  Sauces/drinks keep the orphan in its grid cell. text-align inherits sheet.
+*/
+#protein-box .info-box-body.layout-columns[data-cols="2"] .box-col-item:last-child:nth-child(odd),
+#protein-box .info-box-body.layout-columns[data-cols="3"] .box-col-item:last-child:nth-child(3n + 1),
+#protein-box .info-box-body.layout-columns[data-cols="4"] .box-col-item:last-child:nth-child(4n + 1) {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  width: 100%;
+  text-align: inherit;
+}
+
+/* ----- Wrap mode (sauces default; protein/drinks when No) ----- */
+#protein-box .info-box-body.layout-wrap,
+#sauces-box .info-box-body.layout-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: space-evenly;
+  align-items: baseline;
+  column-gap: 0;
+  row-gap: calc(6px * var(--box-scale));
+  letter-spacing: -0.01em;
+}
+
+/* Text Align dropdown (Left / Center / Right) — columns + wrap */
+#protein-box .info-box-body.align-left,
+#sauces-box .info-box-body.align-left,
+#drink-options-box .drinks-box-body.align-left {
+  text-align: left;
+  justify-content: flex-start;
+  justify-items: start;
+}
+
+#protein-box .info-box-body.align-center,
+#sauces-box .info-box-body.align-center,
+#drink-options-box .drinks-box-body.align-center {
+  text-align: center;
+  justify-content: center;
+  justify-items: center;
+}
+
+#protein-box .info-box-body.align-right,
+#sauces-box .info-box-body.align-right,
+#drink-options-box .drinks-box-body.align-right {
+  text-align: right;
+  justify-content: flex-end;
+  justify-items: end;
+}
+
+/* Column cells: stretch full slot width so text-align left/center/right works */
+#protein-box .info-box-body.layout-columns.align-left .box-col-item,
+#protein-box .info-box-body.layout-columns.align-center .box-col-item,
+#protein-box .info-box-body.layout-columns.align-right .box-col-item,
+#sauces-box .info-box-body.layout-columns.align-left .box-col-item,
+#sauces-box .info-box-body.layout-columns.align-center .box-col-item,
+#sauces-box .info-box-body.layout-columns.align-right .box-col-item,
+#drink-options-box .drinks-box-body.layout-columns.align-left .box-col-item,
+#drink-options-box .drinks-box-body.layout-columns.align-center .box-col-item,
+#drink-options-box .drinks-box-body.layout-columns.align-right .box-col-item {
+  justify-self: stretch;
+  width: 100%;
+}
+
+#protein-box .info-box-body.layout-wrap {
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: calc(30px * var(--box-scale));
+  line-height: 1.25;
+  padding: 8px 14px 10px;
+}
+
+#sauces-box .info-box-body.layout-wrap {
+  font-family: "Roboto Condensed", "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: calc(30px * var(--box-scale));
+  line-height: 1.25;
+  padding: 10px 12px 12px;
+}
+
+#protein-box .protein-wrap-item,
+#sauces-box .sauce-item {
+  display: inline-block;
+  white-space: nowrap;
+  color: inherit;
+  font-family: inherit;
+  font-weight: 700;
+  max-width: 100%;
+}
+
+/* Wrap mode: keep name bold / price regular (match column mode) */
+#protein-box .protein-wrap-item .protein-name {
+  font-weight: 700;
+}
+
+#protein-box .protein-wrap-item .protein-price {
+  font-weight: 400;
+}
+
+#protein-box .protein-wrap-sep,
+#sauces-box .sauce-sep {
+  display: inline-block;
+  white-space: pre;
+  color: inherit;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+/* Sauces column cells: label fills cell for width measure */
+#sauces-box .sauce-col-item .sauce-col-label {
+  display: inline-block;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+/* Planned / emergency flex line breaks */
+#protein-box .protein-force-break,
+#protein-box .protein-line-break,
+#sauces-box .sauce-force-break,
+#sauces-box .sauce-line-break,
+.wrap-force-break,
+.wrap-line-break {
+  flex: 1 0 100%;
+  width: 100%;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ========== Board 4: Drinks & Deals ==========
+   Mirrored frame (panel on right). Galaxy + hero on left.
+   Frame mirror: white 1920,0→848.1,0→829.7,234→1920,234
+                 black 1920,234→829.7,234→763.5,1080→1920,1080
+*/
+.board-drinks {
+  --drinks-panel-left: 830px;
+  --stripe-width: 93px;
+  --stripe-period: 186px; /* 93 + 93 */
+  /* PS measures from vertical (0° = upright poles); CSS rotate is from
+     horizontal bands → 90° − 38.5° = 51.5°. Sign keeps the mockup lean. */
+  --stripe-angle: -51.5deg;
+}
+
+/* Top-right of left hero frame; same top as boards 1–3 (18px). */
+.board-drinks #disclaimer {
+  display: block;
+  top: 18px;
+  right: auto;
+  left: 0;
+  width: var(--drinks-panel-left, 830px);
+  max-width: none;
+  box-sizing: border-box;
+  padding: 0 28px 0 16px;
+  text-align: right;
+}
+
+.board-drinks #menu-list {
+  display: none;
+}
+
+/* Title: single line, vertically centered in right-side white header (Mockup 4).
+   Left edge aligns with announcement / drink boxes (912px). */
+.board-drinks #menu-title {
+  left: 912px;
+  width: 780px;
+  top: 0;
+  height: var(--header-h);
+  font-size: 96px;
+  line-height: 1;
+  justify-content: flex-start;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* Logo: top-right of white header (mirror of left-board placement).
+   Same aspect lock as base: 148 × (1299/1000) ≈ 192 */
+.board-drinks #logo {
+  left: auto;
+  right: 36px;
+  top: 12px;
+  width: 148px;
+  height: 192px;
+}
+
+/* Pinstripes masked to black panel, slow scroll.
+   Spec: each band 93px wide, angle 38.5°.
+   Built as horizontal 93px bands then rotated — browsers AA rotated
+   edges much better than diagonal repeating-linear-gradient stops.
+   Soft ~1px stop blend adds a little extra smoothing on the color boundary.
+*/
+/* Stripes layer — only on drinks board when Include Stripes ≠ 0 */
+#stripes {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.board-drinks:not(.stripes-off) #stripes {
+  display: block;
+  /* Match mirrored black panel polygon */
+  clip-path: polygon(
+    1920px 234px,
+    829.7px 234px,
+    763.5px 1080px,
+    1920px 1080px
+  );
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.board-drinks.stripes-off #stripes {
+  display: none !important;
+}
+
+.board-drinks #stripes-track {
+  position: absolute;
+  /* Oversized so rotation + scroll never show the tile edges */
+  width: 320%;
+  height: 320%;
+  left: -110%;
+  top: -110%;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--stripe-1) 0,
+    var(--stripe-1) calc(var(--stripe-width) - 0.6px),
+    var(--stripe-2) calc(var(--stripe-width) + 0.6px),
+    var(--stripe-2) calc(var(--stripe-period) - 0.6px),
+    var(--stripe-1) calc(var(--stripe-period) + 0.6px)
+  );
+  background-size: 100% var(--stripe-period);
+  opacity: 0.92;
+  transform-origin: center center;
+  will-change: transform;
+  animation-name: drinks-stripe-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-duration: 6s;
+}
+
+@keyframes drinks-stripe-scroll {
+  from {
+    transform: rotate(var(--stripe-angle)) translate3d(0, 0, 0);
+  }
+  to {
+    /* One full black+white period along the band normal */
+    transform: rotate(var(--stripe-angle)) translate3d(0, var(--stripe-period), 0);
+  }
+}
+
+/* Content boxes on the right panel */
+#drinks-boxes {
+  display: none;
+}
+
+.board-drinks #drinks-boxes {
+  display: block;
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+}
+
+.drinks-box {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+}
+
+.drinks-box-shell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Measured from Drinks Mockup 3 @1920×1080 */
+#announcement-box {
+  left: 912px;
+  top: 290px;
+  width: 976px;
+  height: 452px;
+}
+
+#drink-options-box {
+  left: 912px;
+  top: 780px;
+  width: 976px;
+  height: 250px;
+}
+
+.drinks-box-shell .shell-outer {
+  fill: var(--secondary-color);
+}
+
+.drinks-box-shell .shell-body {
+  fill: var(--drink-box-bg, var(--main-color));
+}
+
+.drinks-box-shell .shell-body-announcement {
+  fill: var(--announcement-bg, var(--main-color));
+}
+
+.drinks-box-header {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 22px 0;
+  color: var(--main-color);
+  line-height: 1;
+}
+
+/* Match Protein Options / Sauces header type (info-box-*) */
+.drinks-box-title {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--main-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ~75% of companion title (48px → 36px), same as .info-box-subtitle */
+.drinks-box-subtitle {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--main-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.drinks-box-body {
+  --box-scale: 1;
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Announcement body — bg from --announcement-bg (Main or override);
+   text from --announcement-body-text (Main vs Secondary by contrast; JS sets).
+   --box-scale shrinks as more F-column lines are added (fitDrinksBoxes). */
+#announcement-box .drinks-box-body {
+  padding: 18px 28px 22px;
+  color: var(--announcement-body-text, var(--secondary-color));
+  font-size: calc(36px * var(--box-scale));
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(10px * var(--box-scale));
+  overflow: hidden;
+}
+
+/* Tighter packing when many announcement lines */
+#announcement-box .drinks-box-body.many-lines {
+  gap: calc(6px * var(--box-scale));
+  line-height: 1.15;
+  padding-top: 12px;
+  padding-bottom: 14px;
+}
+
+/* Announcement copy: weight/color from Google Sheet fonts (xlsx).
+   Bold → Roboto 700; not bold → Roboto 400. Color → font color or contrast default. */
+#announcement-box .announcement-line {
+  margin: 0;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 400;
+}
+
+#announcement-box .announcement-line.is-bold {
+  font-weight: 700;
+}
+
+#announcement-box .announcement-line.is-italic {
+  font-style: italic;
+}
+
+#announcement-box .announcement-run {
+  font-family: inherit;
+  /* Never inherit browser/link blues — announcement color is set by JS */
+  color: inherit;
+}
+
+/* Guard if any anchor ever appears in announcement copy */
+#announcement-box a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* First line slightly larger only when there aren't many lines */
+#announcement-box .drinks-box-body:not(.many-lines) .announcement-line:first-child {
+  font-size: 1.05em;
+}
+
+/* Drink options: Create Columns? → grid; else balanced wrap */
+#drink-options-box .drinks-box-body {
+  padding: 14px 22px 16px;
+  color: var(--drink-box-text, var(--secondary-color));
+  font-size: calc(34px * var(--box-scale));
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+}
+
+#drink-options-box .drinks-box-body.layout-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: baseline;
+  column-gap: 0;
+  row-gap: calc(8px * var(--box-scale));
+}
+
+#drink-options-box .drinks-box-body.layout-columns {
+  --box-cols: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--box-cols), 1fr);
+  column-gap: calc(16px * var(--box-scale));
+  row-gap: calc(6px * var(--box-scale));
+  align-content: center;
+  justify-items: stretch;
+}
+
+#drink-options-box .drink-item {
+  display: inline-block;
+  white-space: nowrap;
+  color: inherit;
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  transition: color 0.28s ease;
+  max-width: 100%;
+  font-size: 1em;
+  text-align: inherit;
+}
+
+#drink-options-box .drinks-box-body.layout-columns .drink-item,
+#drink-options-box .drinks-box-body.layout-columns .box-col-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: inherit;
+  min-height: max-content;
+  overflow: hidden;
+  grid-column: auto;
+}
+
+#drink-options-box .drink-item-name {
+  font-size: 1em;
+}
+
+/* Drink Box Item Subtitle — 75% of item name */
+#drink-options-box .drink-item-sub {
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+#drink-options-box .drink-item.active {
+  color: var(--item-highlight, var(--highlight));
+}
+
+#drink-options-box .drink-sep {
+  display: inline-block;
+  white-space: pre;
+  color: inherit;
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+}
+
+/* Planned / emergency line breaks from balanced wrap packing */
+#drink-options-box .drink-force-break,
+#drink-options-box .drink-line-break {
+  flex: 1 0 100%;
+  width: 100%;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Hero on the left over galaxy (mirror of boards 1–3) */
+.board-drinks #hero-wrap {
+  left: -255px;
+  top: 133px;
+  width: 1305px;
+  height: 870px;
+  z-index: 5;
+}
+
+.board-drinks #hero {
+  width: 1305px;
+  height: 870px;
+}
+
+/* NEW sticker — same size/bottom/rotate as other boards; only X position differs */
+.board-drinks #new-sticker {
+  right: auto;
+  left: 400px;
+  top: auto;
+}

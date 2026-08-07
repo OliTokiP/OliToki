@@ -1,0 +1,40 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh10980\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Part 4, possibly the hardest one.\
+\
+I have provided a number of mockups for you, and I\'92ll explain what each is for in detail.\
+\
+First, let\'92s go over what Index4 has in common with the others;\
+\
+Very little. It has the scrolling galaxy bg, and it should inherit the logic from the first page, but it is on the left side of the screen this time.\
+\
+Differences;\
+\
+First, the images should work as follows: First, we display all of the drinks as one big hero image. Then, we highlight each individual drink and display its individual hero image.\
+\
+Second, the background frame is on the right side now. Copy the exact angles and sizes.\
+\
+Third, as mentioned before, the galaxy bg should be on the left this time.\
+\
+Outline:\
+\
+The drinks menu screen is driven by tab 4 of our google sheet (gid=1962117802).\
+\
+I\'92ve adjusted the columns in the spreadsheet to match the layout of the new page. \
+\
+There are checks for Drinks Overview and Drinks Individual. I\'92ve described how these functions should work. Putting 0 in these columns should disable the behavior, IE if Drinks Overview is set to 1 and Drinks Individual is set to 0, it should permanently display the \'93DrinksAll\'94 image, and not do a slideshow with the others. IE if Drinks Overview is set to 0 and Drinks Individual to 1, it should never show the overview image and it should cycle through the individual images.\
+\
+Here\'92s how it should function.\
+\
+1. The left side should display the hero image of the drinks in front of the galaxy bg (which inherits motion from the first page of the google sheet). I should first show Overview, and then the individual drinks, highlighting each image \
+\
+2. The right side should have two boxes, one for announcements and one for drinks. These are driven by Announcement Box Title, Subtitle, and Copy, as well as Drink Box Title, Subtitle and Drink Box Item. This is where it gets a little more complicated; I want to drive the formatting with the formatting in the google sheet, IE if it\'92s bold in the sheet, use Roboto Bold, if it\'92s Red in the sheet, make the text red on the site. \
+\
+3. The right side should have two color vector pinstripes that are masked to the background vector and scroll at a nice slow pace forever, slightly slower than the galaxy BG, 75% of its speed or so. The stripes colors should be determined by the FILL COLORS of the Stripe Color 1 and Stripe Color 2 columns. (If you\'92d like to create an override behavior, I\'92d prefer it prioritize any hex codes that are typed in, and then default to the actual cell fill color if it\'92s empty.)\
+\
+I believe that\'92s all. Before you fully continue, please generate a paste-able \'93Drinks Individual Image\'94 csv column based on the order in the google sheet and the context of the images. Also, as always, please get clarification on anything that isn\'92t completely obvious before you start programming this.}

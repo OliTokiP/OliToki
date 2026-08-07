@@ -1,0 +1,32 @@
+# Google service account keys — never commit
+secrets/
+*.json
+!package.json
+!tsconfig.json
+
+# Local / OS
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs & local server noise
+*.log
+/tmp/
+.toki-*.log
+
+# Debug HTML droppings
+_index*.html
+_dbg*.html
+_d*.html
+_i*.html
+
+# Full-folder zip backups (keep outside repo or untracked)
+tokimenu.zip
+*.zip
+
+# Editor / OS
+*.swp
+.idea/
+.vscode/
