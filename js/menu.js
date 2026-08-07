@@ -934,7 +934,10 @@
   }
 
   function parseBgImagePath(raw) {
-    const s = String(raw == null ? "" : raw).trim();
+    const s = String(raw == null ? "" : raw)
+      .trim()
+      // strip zero-width / BOM junk from Sheets
+      .replace(/[\u200b-\u200d\ufeff]/g, "");
     if (!s) return null;
     const token = s
       .split(/[,;|]/)[0]
@@ -942,7 +945,18 @@
       .replace(/^["']|["']$/g, "");
     if (!token) return null;
     const low = token.toLowerCase();
-    if (low === "none" || low === "off" || low === "0" || low === "false") {
+    // Explicit solid / no bitmap (Style sheet uses "none")
+    if (
+      low === "none" ||
+      low === "off" ||
+      low === "0" ||
+      low === "false" ||
+      low === "no" ||
+      low === "solid" ||
+      low === "n/a" ||
+      low === "-" ||
+      low === "—"
+    ) {
       return null;
     }
     if (!/\.(jpe?g|png|webp|gif)$/i.test(low) && low.indexOf("/") === -1) {
@@ -951,6 +965,36 @@
     const file = token.replace(/^\/+/, "");
     if (file.indexOf("assets/") === 0 || file.indexOf("/") !== -1) return file;
     return BG_IMAGE_FOLDER + "/" + file;
+  }
+
+  /**
+   * Stage BG image: prefer the *selected theme row*'s BG Image cell (sheet is
+   * filled per theme: Toki Default → none, Ocean Punch → galaxy-bg.jpg).
+   * Only if that cell is blank, fall back to the first board-wide BG row.
+   * Never invent galaxy-bg when the sheet says none/blank.
+   */
+  function resolveStageBgImage(chosen, globalBg, sc) {
+    function rawFrom(entry) {
+      if (!entry || !entry.row) return "";
+      return cell(entry.row, sc.bgImage);
+    }
+    const chosenRaw = rawFrom(chosen);
+    if (String(chosenRaw || "").trim() !== "") {
+      return {
+        raw: chosenRaw,
+        path: parseBgImagePath(chosenRaw),
+        from: "theme:" + (cell(chosen.row, sc.themeName) || "?"),
+      };
+    }
+    const globalRaw = rawFrom(globalBg);
+    if (String(globalRaw || "").trim() !== "") {
+      return {
+        raw: globalRaw,
+        path: parseBgImagePath(globalRaw),
+        from: "globalBg",
+      };
+    }
+    return { raw: "", path: null, from: "default-none" };
   }
 
   function parseBgBlendMode(raw) {
@@ -2709,21 +2753,42 @@
       highlightSpecial: highlightSpecial,
     };
 
-    const bgSrc = globalBg || themes[0];
+    // Color plate / blur / opacity: prefer selected theme, else first global BG row
+    const bgSrc = chosen || globalBg || themes[0];
     const bgRow = bgSrc.row;
     const bgEr = bgSrc.excelRow;
 
     const bgColor = parseBgColor(
-      cell(bgRow, sc.bgColor),
-      fills["G" + bgEr],
+      cell(bgRow, sc.bgColor) ||
+        (globalBg ? cell(globalBg.row, sc.bgColor) : ""),
+      fills["G" + bgEr] ||
+        (globalBg ? fills["G" + globalBg.excelRow] : null),
       palette
     );
-    const bgImage = parseBgImagePath(cell(bgRow, sc.bgImage));
-    const bgBlur = parseUnit01(cell(bgRow, sc.bgBlur), 0);
-    const bgBlendMode = parseBgBlendMode(cell(bgRow, sc.bgBlendMode));
-    const bgOpacity = parseUnit01(cell(bgRow, sc.bgOpacity), 1);
-    const bgScrollSpeed = Number(cell(bgRow, sc.bgScrollSpeed));
-    const slideshowSpeed = Number(cell(bgRow, sc.slideshowSpeed));
+    const bgImgResolved = resolveStageBgImage(chosen, globalBg, sc);
+    const bgImage = bgImgResolved.path;
+    const bgBlur = parseUnit01(
+      cell(bgRow, sc.bgBlur) ||
+        (globalBg ? cell(globalBg.row, sc.bgBlur) : ""),
+      0
+    );
+    const bgBlendMode = parseBgBlendMode(
+      cell(bgRow, sc.bgBlendMode) ||
+        (globalBg ? cell(globalBg.row, sc.bgBlendMode) : "")
+    );
+    const bgOpacity = parseUnit01(
+      cell(bgRow, sc.bgOpacity) ||
+        (globalBg ? cell(globalBg.row, sc.bgOpacity) : ""),
+      1
+    );
+    const bgScrollSpeed = Number(
+      cell(bgRow, sc.bgScrollSpeed) ||
+        (globalBg ? cell(globalBg.row, sc.bgScrollSpeed) : "")
+    );
+    const slideshowSpeed = Number(
+      cell(bgRow, sc.slideshowSpeed) ||
+        (globalBg ? cell(globalBg.row, sc.slideshowSpeed) : "")
+    );
 
     const theme = {
       themeName: themeName,
@@ -2750,8 +2815,12 @@
       theme.secondaryColor,
       "bgColor",
       theme.bgColor,
-      "bgImage",
-      theme.bgImage || "(none)",
+      "bgImage raw=",
+      JSON.stringify(bgImgResolved.raw),
+      "from",
+      bgImgResolved.from,
+      "→",
+      theme.bgImage || "(none — not loading galaxy)",
       "blur",
       theme.bgBlur,
       "opacity",
