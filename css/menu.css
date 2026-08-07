@@ -1408,8 +1408,10 @@ body.preview-wall #galaxy {
   isolation: auto;
 }
 
-/* Hero drop-shadow kept (same as solo) — re-enabled for visual fidelity.
-   If Fire Stick stutters, reinstate: body.preview-wall #hero { filter: none; } */
+/* Multi-board wall: no hero drop-shadow — multi-pass filter kills Fire Stick FPS */
+body.preview-wall #hero {
+  filter: none;
+}
 
 body.preview-wall .galaxy-layer {
   will-change: auto;
