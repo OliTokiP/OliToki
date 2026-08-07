@@ -2719,9 +2719,9 @@
 
   /**
    * Board-tab fills/fonts/rich text (announcement copy colors, stripe fills, …).
-   * Drinks layout: chrome lives on "Announcements" (or legacy "Drinks Deals"),
-   * NOT the dedicated "Drinks" items sheet — matching "Drinks" would pull the
-   * wrong tab and drop intentional G-sheet font colors (e.g. orange Halloween).
+   * Drinks layout: chrome lives on "Board 4" (renamed from Announcements /
+   * Drinks Deals). NOT the dedicated "Drinks" items sheet — matching "Drinks"
+   * would pull the wrong tab and drop intentional G-sheet font colors.
    * One xlsx buffer; try name candidates without re-downloading.
    */
   async function loadBoardSheetStyles() {
@@ -2729,6 +2729,7 @@
     if (!isDrinks) return { fills: {}, fonts: {}, rich: {} };
 
     const candidates = [
+      "Board 4",
       "Announcements",
       "Drinks Deals",
       "Deals",
@@ -3512,8 +3513,9 @@
         if (isHandhelds) {
           meta = await extractSheetStylesFromXlsx(buf, "Handhelds");
         } else {
-          // Prefer Announcements over "Drinks" (items sheet)
+          // Prefer Board 4 / Announcements over "Drinks" (items sheet)
           const localMatches = [
+            "Board 4",
             "Announcements",
             "Drinks Deals",
             "Deals",

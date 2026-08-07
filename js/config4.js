@@ -1,6 +1,6 @@
 /**
  * TokiMenu — Board 4 (Drinks & Deals)
- * Google Sheet tab: "4 - Drinks Deals" (gid=1962117802)
+ * Google Sheet tab: "Board 4" (gid=1962117802; legacy names: Announcements / Drinks Deals)
  *
  * Theme / speeds / highlights from Style tab.
  * Announcement + stripes: this board tab.
