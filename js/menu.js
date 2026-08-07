@@ -4046,13 +4046,45 @@
   // ---------- balanced wrap packing (sauces, sodas, …) ----------
 
   let _measureCanvas = null;
+  let _measureProbe = null;
 
+  /**
+   * Measure text width for packing. Prefer a DOM probe (matches Roboto
+   * Condensed + letter-spacing); canvas is a fallback only.
+   * Canvas alone under/over-estimates seps and condensed glyphs enough to
+   * plan lines that flex-wrap, which crushes --box-scale via height.
+   */
   function measureTextPx(text, font) {
+    const str = String(text || "");
+    const fontStr =
+      font || "700 30px Roboto Condensed, Roboto, sans-serif";
+    try {
+      if (!_measureProbe) {
+        _measureProbe = document.createElement("span");
+        _measureProbe.setAttribute("aria-hidden", "true");
+        _measureProbe.style.cssText =
+          "position:absolute;left:-99999px;top:0;white-space:nowrap;" +
+          "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;";
+        document.body.appendChild(_measureProbe);
+      }
+      _measureProbe.style.font = fontStr;
+      // Match sauces wrap tracking when font mentions Condensed
+      if (/condensed/i.test(fontStr)) {
+        _measureProbe.style.letterSpacing = "-0.015em";
+      } else {
+        _measureProbe.style.letterSpacing = "normal";
+      }
+      _measureProbe.textContent = str;
+      const w = _measureProbe.offsetWidth;
+      if (w > 0) return w;
+    } catch (err) {
+      /* fall through to canvas */
+    }
     if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
     const ctx = _measureCanvas.getContext("2d");
-    if (!ctx) return String(text || "").length * 10;
-    ctx.font = font || "700 30px Roboto Condensed, Roboto, sans-serif";
-    return ctx.measureText(String(text || "")).width;
+    if (!ctx) return str.length * 10;
+    ctx.font = fontStr;
+    return ctx.measureText(str).width;
   }
 
   function parsePadXY(cs) {
@@ -4075,6 +4107,8 @@
         ? parseFloat(cs.lineHeight)
         : fontSize * 1.25;
     const rowGap = parseFloat(cs.rowGap) || 0;
+    // Small safety so planned lines don't flex-wrap after seps/rounding
+    const innerW = Math.max(1, (el.clientWidth || 0) - pad.x);
     return Object.assign(
       {
         font:
@@ -4084,7 +4118,7 @@
           cs.fontSize +
           " " +
           cs.fontFamily,
-        containerWidth: Math.max(1, (el.clientWidth || 0) - pad.x),
+        containerWidth: Math.max(1, innerW * 0.98),
         containerHeight: Math.max(1, (el.clientHeight || 0) - pad.y),
         lineHeight: lineHeight + rowGap,
         maxLines: 8,
@@ -4543,12 +4577,18 @@
 
   /**
    * Balanced wrap layout: fit type, then clean middots at line breaks.
+   * Sauces use a higher max scale + gentler shrink so dense packing (see
+   * footer-verify) is not undercut by the global 0.97 fudge.
    */
   function fitWrapBox(el, conf) {
     if (!el || !el.children || !el.children.length) return;
     conf = conf || {};
     const forceSel = conf.forceBreakSelector || ".wrap-force-break";
     const sepSel = conf.sepSelector || ".wrap-sep";
+    const isSauces = el.id === "sauces-body";
+    const minS = isSauces ? 0.45 : 0.5;
+    const maxS = isSauces ? 2.4 : 2.2;
+    const shrink = isSauces ? 0.995 : 0.97;
 
     function resetSeps() {
       el.querySelectorAll(forceSel).forEach(function (n) {
@@ -4560,10 +4600,16 @@
     }
 
     resetSeps();
-    fitBoxScale(el, 0.5, 2.2, { checkChildWidth: true });
+    fitBoxScale(el, minS, maxS, {
+      checkChildWidth: true,
+      shrinkFactor: shrink,
+    });
     hideWrapSepsAtLineBreaks(el, conf);
     resetSeps();
-    fitBoxScale(el, 0.5, 2.2, { checkChildWidth: true });
+    fitBoxScale(el, minS, maxS, {
+      checkChildWidth: true,
+      shrinkFactor: shrink,
+    });
     hideWrapSepsAtLineBreaks(el, conf);
   }
 
@@ -4668,7 +4714,11 @@
       }
     }
 
-    best = Math.max(minS, best * 0.97);
+    const shrink =
+      opts.shrinkFactor != null && isFinite(opts.shrinkFactor)
+        ? opts.shrinkFactor
+        : 0.97;
+    best = Math.max(minS, best * shrink);
     let guard = 0;
     while (!fits(best) && best > minS && guard < 40) {
       best -= 0.015;

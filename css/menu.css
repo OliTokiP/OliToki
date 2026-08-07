@@ -840,12 +840,19 @@ body {
   padding: 8px 14px 10px;
 }
 
+/*
+  Sauces wrap — match footer-verify / sauces-verify density:
+  ~4 lines, midspan ≈ 28–30px, type ~24px, body well filled.
+  Tighter leading/padding lets fitWrapBox reach scale ~0.75 (was ~0.59 → 18px).
+*/
 #sauces-box .info-box-body.layout-wrap {
   font-family: "Roboto Condensed", "Roboto", sans-serif;
   font-weight: 700;
-  font-size: calc(30px * var(--box-scale));
-  line-height: 1.25;
-  padding: 10px 12px 12px;
+  font-size: calc(32px * var(--box-scale));
+  line-height: 1.1;
+  padding: 6px 10px 8px;
+  row-gap: calc(2px * var(--box-scale));
+  letter-spacing: -0.015em;
 }
 
 #protein-box .protein-wrap-item,
