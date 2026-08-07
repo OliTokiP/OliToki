@@ -88,78 +88,7 @@
     slideshowSpeed: 12,
   };
 
-  /**
-   * Galaxy full file is ~9MB / 3600×2400 — fine on desktop menus, kills
-   * iPhone (decoded bitmap ~35MB × 2 layers). Prefer sized variants.
-   */
-  const GALAXY_BG_FULL = "assets/bgs/galaxy-bg.jpg";
-  const GALAXY_BG_SM = "assets/bgs/galaxy-bg-sm.jpg";
-  const GALAXY_BG_XS = "assets/bgs/galaxy-bg-xs.jpg";
-
-  /** True inside preview-all wall (or ?lite=1) — must stay cheap; ×4 on phones. */
-  function isLiteEmbed() {
-    try {
-      if (window.TOKI_LITE === true) return true;
-      const q = new URLSearchParams(window.location.search || "");
-      if (q.get("lite") === "1" || q.get("lite") === "true") return true;
-      if (q.get("preview") === "all") return true;
-    } catch (e) {}
-    return false;
-  }
-
-  function isConstrainedClient() {
-    try {
-      if (window.TOKI_FORCE_FULL_BG === true) return false;
-      if (window.TOKI_FORCE_LIGHT_BG === true) return true;
-      // Phones / small tablets
-      if (/iPhone|iPod|Android.+Mobile|webOS|Mobile/i.test(
-        navigator.userAgent || ""
-      )) {
-        return true;
-      }
-      if (navigator.deviceMemory && navigator.deviceMemory > 0 && navigator.deviceMemory <= 4) {
-        return true;
-      }
-      if (navigator.connection && navigator.connection.saveData) return true;
-      if (window.matchMedia && window.matchMedia("(max-width: 900px)").matches) {
-        return true;
-      }
-    } catch (e) {}
-    return false;
-  }
-
-  /** Lite wall embed and/or phone — use cheap assets & skip heavy work. */
-  function isLightClient() {
-    return isLiteEmbed() || isConstrainedClient();
-  }
-
-  /** Pick a galaxy asset that won't OOM (esp. 4× iframes on iPhone). */
-  function resolveBgImagePath(path) {
-    if (!path) return path;
-    const s = String(path);
-    // Only rewrite our stock galaxy files (sheet may point at custom BGs later)
-    if (s.indexOf("galaxy-bg") === -1) return s;
-    if (isLiteEmbed()) return GALAXY_BG_XS;
-    if (isConstrainedClient()) {
-      try {
-        if (
-          (navigator.deviceMemory && navigator.deviceMemory <= 3) ||
-          (window.matchMedia &&
-            window.matchMedia("(max-width: 430px)").matches)
-        ) {
-          return GALAXY_BG_XS;
-        }
-      } catch (e) {}
-      return GALAXY_BG_SM;
-    }
-    // Desktop / TV stage is 1920×1080 — sm is enough (full 3600× is waste)
-    if (s.indexOf("galaxy-bg-xs") !== -1 || s.indexOf("galaxy-bg-sm") !== -1) {
-      return s;
-    }
-    return GALAXY_BG_SM;
-  }
-
-  const DEFAULT_BG_IMAGE = resolveBgImagePath(GALAXY_BG_SM);
+  const DEFAULT_BG_IMAGE = "assets/bgs/galaxy-bg.jpg";
   const BG_IMAGE_FOLDER = "assets/bgs";
   /** Blur 1.0 → this many CSS px (0 = filter disabled entirely). */
   const BG_BLUR_MAX_PX = 40;
@@ -1061,21 +990,18 @@
       normalizeHex(config.bgColor) ||
       normalizeHex(config.bgSolid) ||
       main;
-    const imagePath = resolveBgImagePath(config.bgImage || null);
+    const imagePath = config.bgImage || null;
     const blur01 = parseUnit01(config.bgBlur, 0);
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blend = parseBgBlendMode(config.bgBlendMode);
-    const lightClient = isLightClient();
 
     // Color plate always under the image
     galaxy.style.backgroundColor = plate;
     galaxy.classList.toggle("has-image", !!imagePath);
     galaxy.classList.toggle("is-solid", !imagePath);
-    galaxy.classList.toggle("is-light-client", lightClient);
 
     // Blur: 0 → filter disabled (not blur(0)); 1 → BG_BLUR_MAX_PX
-    // Skip heavy CSS blur on phones (extra offscreen buffers)
-    if (blur01 <= 0 || lightClient) {
+    if (blur01 <= 0) {
       galaxy.style.setProperty("--bg-image-blur", "none");
       galaxy.classList.remove("has-blur");
     } else {
@@ -1086,18 +1012,7 @@
     galaxy.style.setProperty("--bg-image-opacity", String(opacity01));
     galaxy.style.setProperty("--bg-image-blend", blend);
 
-    // Mobile: one layer only (dual 3600px galaxies ≈ OOM on iPhone)
-    const layerEls = lightClient
-      ? [els.galaxyA]
-      : [els.galaxyA, els.galaxyB];
-    if (lightClient && els.galaxyB) {
-      els.galaxyB.hidden = true;
-      els.galaxyB.removeAttribute("src");
-      els.galaxyB.classList.remove("active", "fading-in", "fading-out");
-      els.galaxyB.style.opacity = "0";
-    }
-
-    layerEls.forEach((el) => {
+    [els.galaxyA, els.galaxyB].forEach((el) => {
       if (!el) return;
       if (!imagePath) {
         el.hidden = true;
@@ -3462,13 +3377,10 @@
       typeof performance !== "undefined" ? performance.now() : Date.now();
     if (opts.forceXlsxRefresh) invalidateWorkbookXlsxCache();
 
-    // xlsx + SheetJS inflate is heavy; skip on phones and lite wall embeds
-    // (typed theme hex / CSV still work). Full boards on desktop keep fills.
     const needXlsx =
-      !isLightClient() &&
-      (isDrinks ||
-        isHandhelds ||
-        !!(cfg.proteinSheetGid || cfg.saucesSheetGid || cfg.styleThemeGid));
+      isDrinks ||
+      isHandhelds ||
+      !!(cfg.proteinSheetGid || cfg.saucesSheetGid || cfg.styleThemeGid);
 
     // Overlap one workbook download with all CSV hops
     const xlsxWarm = needXlsx
@@ -5689,16 +5601,7 @@
     applyStageBackground();
     // Color-only (no image): no pan/crossfade loop
     if (!config.bgImage) return;
-    if (!els.galaxyA) return;
-    // Phones / lite wall: single static layer (no dual-buffer scroll)
-    if (isLightClient() || !els.galaxyB || els.galaxyB.hidden) {
-      if (els.galaxyA) {
-        els.galaxyA.classList.add("active");
-        els.galaxyA.style.opacity = String(bgImageOpacityPeak());
-        els.galaxyA.style.transform = "translate3d(0, -50%, 0)";
-      }
-      return;
-    }
+    if (!els.galaxyA || !els.galaxyB) return;
     if (galaxyStarted) return; // idempotent — softReload must not re-enter
     galaxyStarted = true;
 
@@ -5976,8 +5879,6 @@
 
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
-    // Wall embeds: 4 boards refreshing in lockstep is harsh; open solo for live
-    if (isLiteEmbed()) return;
     const sec = Number(cfg.refreshSeconds) || 0;
     if (sec <= 0) return;
     // Refresh for google + local xlsx; skip only pure embedded offline

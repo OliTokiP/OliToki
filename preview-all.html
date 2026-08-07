@@ -258,19 +258,14 @@
         });
       }
 
-      /**
-       * Load all four boards (still the whole point of this page).
-       * Each iframe gets lite=1: tiny galaxy, one layer, no xlsx, no auto-refresh.
-       * Full boards ×4 crash iPhone (9MB galaxy decoded ~35MB ×2 layers ×4).
-       * Sequential start so decode spikes don't land at once.
-       */
       function loadFrames() {
-        const cells = Array.prototype.slice.call(
-          document.querySelectorAll(".cell")
-        );
-        const t = Date.now();
+        document.querySelectorAll(".cell").forEach(function (cell) {
+          const src = cell.getAttribute("data-src");
+          const iframe = cell.querySelector("iframe");
+          if (!src || !iframe) return;
+          const sep = src.indexOf("?") >= 0 ? "&" : "?";
+          iframe.src = src + sep + "preview=all&t=" + Date.now();
 
-        cells.forEach(function (cell) {
           const hit = cell.querySelector(".cell-hit");
           if (hit) {
             hit.addEventListener("click", function (e) {
@@ -279,43 +274,6 @@
             });
           }
         });
-
-        let i = 0;
-        function loadNext() {
-          if (i >= cells.length) {
-            fitAll();
-            return;
-          }
-          const cell = cells[i];
-          const src = cell.getAttribute("data-src");
-          const iframe = cell.querySelector("iframe");
-          const idx = i;
-          i++;
-          if (!src || !iframe) {
-            loadNext();
-            return;
-          }
-          const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          let done = false;
-          function advance() {
-            if (done) return;
-            done = true;
-            fitCell(cell);
-            window.setTimeout(loadNext, 120);
-          }
-          iframe.addEventListener("load", advance, { once: true });
-          iframe.addEventListener("error", advance, { once: true });
-          iframe.src =
-            src +
-            sep +
-            "preview=all&lite=1&pause=1&t=" +
-            t +
-            "-" +
-            (idx + 1);
-          // If load never fires, don't block the remaining boards
-          window.setTimeout(advance, 15000);
-        }
-        loadNext();
       }
 
       window.addEventListener("keydown", function (e) {
