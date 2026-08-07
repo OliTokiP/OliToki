@@ -1355,6 +1355,10 @@
   }
 
   async function fetchWorkbookXlsxBuffer(forceRefresh) {
+    // Wall: never download/parse full xlsx (×4 boards = Stick stutter)
+    if (isPreviewWall()) {
+      throw new Error("preview-wall: xlsx disabled");
+    }
     const id = (cfg.googleSheetId || "").trim();
     if (!id) throw new Error("No googleSheetId in config");
     const now = Date.now();
@@ -2872,6 +2876,10 @@
    * Styles for one sheet name from the cached workbook xlsx (single download).
    */
   async function loadSheetStylesByName(sheetNameMatch) {
+    // Wall: no cell-fill/font xlsx work (matches needXlsx skip)
+    if (isPreviewWall()) {
+      return { fills: {}, fonts: {}, rich: {} };
+    }
     const id = (cfg.googleSheetId || "").trim();
     if (!id) return { fills: {}, fonts: {}, rich: {} };
     const cacheKey = String(sheetNameMatch || "").toLowerCase();
@@ -3567,20 +3575,25 @@
 
     await xlsxWarm;
 
-    // Cell fills + fonts (drinks announcement colors, handheld fills)
-    if (isDrinks || isHandhelds) {
+    // Cell fills + fonts (drinks announcement colors, handheld fills).
+    // Must stay gated with needXlsx — wall mode previously still called this
+    // and pulled full xlsx via loadBoardSheetStyles (Fix 1).
+    if (!isPreviewWall() && (isDrinks || isHandhelds)) {
       try {
         const meta = await loadBoardSheetStyles();
         sheetFills = meta.fills || {};
         sheetFonts = meta.fonts || {};
         sheetRich = meta.rich || {};
       } catch (err) {
-        console.warn("Could not load sheet styles (typed hex still works):", err);
+        tokiWarn("Could not load sheet styles (typed hex still works):", err);
         sheetFills = {};
         sheetFonts = {};
         sheetRich = {};
       }
     } else {
+      if (isPreviewWall() && (isDrinks || isHandhelds)) {
+        tokiInfo("sheet styles skipped (preview-wall)");
+      }
       sheetFills = {};
       sheetFonts = {};
       sheetRich = {};
@@ -6030,13 +6043,20 @@
     }
   }
 
+  /** 0–3 board index in the 4-up wall (from ?wall=); 0 if solo. */
+  function wallBoardIndex() {
+    try {
+      const n = parseInt(
+        new URLSearchParams(location.search || "").get("wall"),
+        10
+      );
+      if (Number.isFinite(n) && n >= 0 && n <= 3) return n;
+    } catch (e) {}
+    return 0;
+  }
+
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
-    // Four boards refreshing in lockstep thrash low-end WebViews
-    if (isPreviewWall()) {
-      tokiInfo("auto-refresh off (preview-wall)");
-      return;
-    }
     const sec = Number(cfg.refreshSeconds) || 0;
     if (sec <= 0) return;
     // Refresh for google + local xlsx; skip only pure embedded offline
@@ -6047,7 +6067,28 @@
     ) {
       return;
     }
-    refreshTimer = setInterval(softReload, sec * 1000);
+    const arm = function () {
+      refreshTimer = setInterval(softReload, sec * 1000);
+    };
+    // Wall: stagger first tick so all four boards don't refetch in the same
+    // frame every 30s (Fix 2). Interval stays refreshSeconds after that.
+    if (isPreviewWall()) {
+      const delayMs = wallBoardIndex() * 7000;
+      tokiInfo(
+        "auto-refresh wall stagger",
+        wallBoardIndex(),
+        "delayMs=",
+        delayMs,
+        "intervalSec=",
+        sec
+      );
+      window.setTimeout(function () {
+        softReload();
+        arm();
+      }, delayMs);
+      return;
+    }
+    arm();
   }
 
   // ---------- boot ----------

@@ -325,11 +325,13 @@
             return;
           }
           const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          // preview=all → lean GPU path; slideshow stays ON (item + hero cycle)
+          // preview=all → lean GPU path; wall=N staggers soft-refresh timers
           const url =
             src +
             sep +
-            "preview=all&t=" +
+            "preview=all&wall=" +
+            idx +
+            "&t=" +
             t +
             "-" +
             (idx + 1);
