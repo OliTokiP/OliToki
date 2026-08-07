@@ -6,11 +6,10 @@
   <title>Toki Menus — All Boards Preview</title>
   <style>
     /*
-      Testing wall: all four 1920×1080 boards in one window.
-      Default 2×2; single column when viewport is portrait or square
-      (height ≥ width — covers vertical monitors e.g. 1440×2560 even with
-      menu bar / browser chrome shrinking the usable height past a strict 9:16).
-      Chrome (labels / HUD) off unless ?chrome=1
+      4-up wall for Fire Stick / TV / multi-board.
+      - One shared stage BG (image or plate) behind all boards
+      - Iframes at half design res (960×540), scaled up to cells (Fix 4)
+      - Boards run ?preview=all (transparent galaxy, lean path)
     */
     *,
     *::before,
@@ -27,9 +26,54 @@
       overflow: hidden;
       background: #0a0a0a;
       font-family: system-ui, -apple-system, sans-serif;
-      /* Lock viewport — fewer global layout thrash passes on Stick/WebView */
       position: fixed;
       inset: 0;
+    }
+
+    /* Single shared background (vertical fit = height fills, crop sides) */
+    #wall-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      background: #000;
+      pointer-events: none;
+    }
+
+    #wall-bg-plate {
+      position: absolute;
+      inset: 0;
+      background: #000;
+    }
+
+    #wall-bg-img {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      height: 100%;
+      width: auto;
+      min-width: 100%;
+      max-width: none;
+      transform: translateX(-50%);
+      object-fit: cover;
+      object-position: center center;
+      /* slow pan for life without 4× galaxy rAF */
+      animation: wall-bg-drift 80s linear infinite alternate;
+      will-change: transform;
+      display: none;
+    }
+
+    #wall-bg.has-image #wall-bg-img {
+      display: block;
+    }
+
+    @keyframes wall-bg-drift {
+      from {
+        transform: translateX(-50%) translate3d(0, 0, 0);
+      }
+      to {
+        transform: translateX(-52%) translate3d(0, 0, 0);
+      }
     }
 
     .wall {
@@ -39,17 +83,12 @@
       width: 100vw;
       height: 100vh;
       gap: 3px;
-      background: #000;
-      /* Isolate wall geometry from the rest of the page */
+      background: transparent;
       contain: strict;
       position: relative;
+      z-index: 1;
     }
 
-    /*
-      Portrait or square → one column (boards 1→4).
-      9:16 was too strict: 1440×2560 with OS/browser chrome often sits
-      just above 9:16 and stayed 2×2. 1/1 = any height ≥ width.
-    */
     @media (max-aspect-ratio: 1/1) {
       .wall:not(.is-solo) {
         grid-template-columns: 1fr;
@@ -60,14 +99,10 @@
     .cell {
       position: relative;
       overflow: hidden;
-      background: #111;
+      background: transparent;
       min-width: 0;
       min-height: 0;
       cursor: default;
-      /*
-        Each board is independent: layout/paint inside one cell should not
-        invalidate siblings (Fire Stick / low-RAM WebViews).
-      */
       contain: layout style paint size;
     }
 
@@ -75,16 +110,22 @@
       cursor: zoom-in;
     }
 
+    /*
+      Fix 4: paint boards at half design res (960×540), then CSS-scale up
+      into the cell. Still 16:9 layout math inside; ~4× fewer pixels painted.
+    */
     .cell iframe {
       position: absolute;
       top: 0;
       left: 0;
-      width: 1920px;
-      height: 1080px;
+      width: 960px;
+      height: 540px;
       border: 0;
       transform-origin: top left;
-      background: #000;
+      background: transparent;
       pointer-events: none;
+      /* allow wall BG to show through transparent board chrome */
+      color-scheme: normal;
     }
 
     .cell-hit {
@@ -154,25 +195,30 @@
   </style>
 </head>
 <body>
+  <div id="wall-bg" aria-hidden="true">
+    <div id="wall-bg-plate"></div>
+    <img id="wall-bg-img" alt="" draggable="false" />
+  </div>
+
   <div class="wall" id="wall">
     <div class="cell" data-src="index.html" data-name="1 · Bowls">
       <span class="label">1 · Bowls</span>
-      <iframe title="Board 1 — Bowls" loading="eager"></iframe>
+      <iframe title="Board 1 — Bowls" loading="eager" allowtransparency="true"></iframe>
       <div class="cell-hit" title=""></div>
     </div>
     <div class="cell" data-src="index2.html" data-name="2 · Handhelds">
       <span class="label">2 · Handhelds</span>
-      <iframe title="Board 2 — Handhelds" loading="eager"></iframe>
+      <iframe title="Board 2 — Handhelds" loading="eager" allowtransparency="true"></iframe>
       <div class="cell-hit" title=""></div>
     </div>
     <div class="cell" data-src="index3.html" data-name="3 · Munchies">
       <span class="label">3 · Munchies</span>
-      <iframe title="Board 3 — Munchies" loading="eager"></iframe>
+      <iframe title="Board 3 — Munchies" loading="eager" allowtransparency="true"></iframe>
       <div class="cell-hit" title=""></div>
     </div>
     <div class="cell" data-src="index4.html" data-name="4 · Drinks">
       <span class="label">4 · Drinks</span>
-      <iframe title="Board 4 — Drinks" loading="eager"></iframe>
+      <iframe title="Board 4 — Drinks" loading="eager" allowtransparency="true"></iframe>
       <div class="cell-hit" title=""></div>
     </div>
   </div>
@@ -181,22 +227,38 @@
   <script>
     (function () {
       const TAG = "[TokiMenu preview-all]";
-      function log(){ console.log.apply(console, [TAG].concat([].slice.call(arguments))); }
-      function info(){ console.info.apply(console, [TAG].concat([].slice.call(arguments))); }
-      function warn(){ console.warn.apply(console, [TAG].concat([].slice.call(arguments))); }
-      function err(){ console.error.apply(console, [TAG].concat([].slice.call(arguments))); }
-      window.addEventListener("error", function(e){
-        err("uncaught", e.message, e.filename+":"+e.lineno);
+      function log() {
+        console.log.apply(console, [TAG].concat([].slice.call(arguments)));
+      }
+      function info() {
+        console.info.apply(console, [TAG].concat([].slice.call(arguments)));
+      }
+      function warn() {
+        console.warn.apply(console, [TAG].concat([].slice.call(arguments)));
+      }
+      function err() {
+        console.error.apply(console, [TAG].concat([].slice.call(arguments)));
+      }
+      window.addEventListener("error", function (e) {
+        err("uncaught", e.message, e.filename + ":" + e.lineno);
       });
-      window.addEventListener("unhandledrejection", function(e){
+      window.addEventListener("unhandledrejection", function (e) {
         err("unhandledrejection", e.reason);
       });
       info("boot", location.href);
 
-      const BOARD_W = 1920;
-      const BOARD_H = 1080;
+      // Half of design stage — Fix 4 (iframe paint budget)
+      const BOARD_W = 960;
+      const BOARD_H = 540;
       const wall = document.getElementById("wall");
+      const wallBg = document.getElementById("wall-bg");
+      const wallBgPlate = document.getElementById("wall-bg-plate");
+      const wallBgImg = document.getElementById("wall-bg-img");
       let soloCell = null;
+
+      // Same spreadsheet as js/config*.js (Style H2 = board-wide BG Image)
+      const SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10";
+      const STYLE_GID = "1076652078";
 
       function chromeEnabled() {
         try {
@@ -216,6 +278,154 @@
         });
       }
 
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let field = "";
+        let i = 0;
+        let inQuotes = false;
+        const s = String(text || "").replace(/^\uFEFF/, "");
+        while (i < s.length) {
+          const c = s.charAt(i);
+          if (inQuotes) {
+            if (c === '"') {
+              if (s.charAt(i + 1) === '"') {
+                field += '"';
+                i += 2;
+                continue;
+              }
+              inQuotes = false;
+              i++;
+              continue;
+            }
+            field += c;
+            i++;
+            continue;
+          }
+          if (c === '"') {
+            inQuotes = true;
+            i++;
+            continue;
+          }
+          if (c === ",") {
+            row.push(field);
+            field = "";
+            i++;
+            continue;
+          }
+          if (c === "\n" || c === "\r") {
+            if (c === "\r" && s.charAt(i + 1) === "\n") i++;
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = "";
+            i++;
+            continue;
+          }
+          field += c;
+          i++;
+        }
+        if (field.length || row.length) {
+          row.push(field);
+          rows.push(row);
+        }
+        return rows;
+      }
+
+      function parseBgImagePath(raw) {
+        const t = String(raw == null ? "" : raw)
+          .trim()
+          .replace(/[\u200b-\u200d\ufeff]/g, "");
+        if (!t) return null;
+        const low = t.toLowerCase();
+        if (
+          low === "none" ||
+          low === "off" ||
+          low === "0" ||
+          low === "false" ||
+          low === "no" ||
+          low === "solid" ||
+          low === "n/a" ||
+          low === "-"
+        ) {
+          return null;
+        }
+        if (!/\.(jpe?g|png|webp|gif)$/i.test(low) && low.indexOf("/") === -1) {
+          return null;
+        }
+        if (t.indexOf("assets/") === 0 || t.indexOf("/") !== -1) return t;
+        return "assets/bgs/" + t.replace(/^\/+/, "");
+      }
+
+      function wallFriendlyBg(path) {
+        if (!path) return path;
+        if (path.indexOf("galaxy-bg") === -1) return path;
+        if (path.indexOf("-sm") !== -1 || path.indexOf("-xs") !== -1) return path;
+        return "assets/bgs/galaxy-bg-sm.jpg";
+      }
+
+      async function loadSharedBackground() {
+        const urls = [
+          "/api/sheets/csv?gid=" +
+            encodeURIComponent(STYLE_GID) +
+            "&t=" +
+            Date.now(),
+          "https://docs.google.com/spreadsheets/d/" +
+            encodeURIComponent(SHEET_ID) +
+            "/export?format=csv&gid=" +
+            encodeURIComponent(STYLE_GID) +
+            "&cachebust=" +
+            Date.now(),
+        ];
+        let text = null;
+        for (let u = 0; u < urls.length; u++) {
+          try {
+            const res = await fetch(urls[u], { cache: "no-store", mode: "cors" });
+            if (!res.ok) continue;
+            const t = await res.text();
+            if (/^\s*</.test(t)) continue;
+            text = t;
+            info("style csv via", u === 0 ? "proxy" : "public export");
+            break;
+          } catch (e) {
+            warn("style fetch fail", urls[u], e);
+          }
+        }
+        if (!text) {
+          warn("no style sheet — solid black shared BG");
+          return;
+        }
+        const rows = parseCsv(text);
+        // Row 0 header, row 1 = Excel row 2 → G=bgColor H=bgImage
+        const data = rows[1] || [];
+        const bgColorRaw = data[6] || "";
+        const bgImageRaw = data[7] || "";
+        let path = parseBgImagePath(bgImageRaw);
+        path = wallFriendlyBg(path);
+
+        // Plate: hex or simple theme labels; else black
+        let plate = "#000000";
+        const cr = String(bgColorRaw || "").trim();
+        if (/^#?[0-9a-f]{3,8}$/i.test(cr)) {
+          plate = cr.charAt(0) === "#" ? cr : "#" + cr;
+        } else if (/secondary/i.test(cr)) {
+          plate = "#ffffff";
+        } else if (/main/i.test(cr)) {
+          plate = "#000000";
+        }
+
+        wallBgPlate.style.background = plate;
+        if (path) {
+          wallBg.classList.add("has-image");
+          wallBgImg.src = path;
+          info("shared wall BG image", path, "plate", plate, "raw H2", bgImageRaw);
+        } else {
+          wallBg.classList.remove("has-image");
+          wallBgImg.removeAttribute("src");
+          info("shared wall BG solid only", plate, "raw H2", JSON.stringify(bgImageRaw));
+        }
+      }
+
       function fitCell(cell) {
         const iframe = cell.querySelector("iframe");
         if (!iframe) return;
@@ -225,6 +435,8 @@
         const scale = Math.min(cw / BOARD_W, ch / BOARD_H);
         const w = BOARD_W * scale;
         const h = BOARD_H * scale;
+        iframe.style.width = BOARD_W + "px";
+        iframe.style.height = BOARD_H + "px";
         iframe.style.transform = "scale(" + scale + ")";
         iframe.style.left = Math.round((cw - w) / 2) + "px";
         iframe.style.top = Math.round((ch - h) / 2) + "px";
@@ -241,11 +453,7 @@
             soloCell.clientHeight / BOARD_H
           );
           hud.textContent =
-            "Solo · " +
-            name +
-            " · scale " +
-            s.toFixed(3) +
-            " · click again for all boards";
+            "Solo · " + name + " · scale " + s.toFixed(3) + " · half-res · click again";
           return;
         }
         const cell = document.querySelector(".cell");
@@ -254,14 +462,12 @@
             cell.clientWidth / BOARD_W,
             cell.clientHeight / BOARD_H
           );
-          const tall =
-            window.innerWidth / window.innerHeight <= 1;
+          const tall = window.innerWidth / window.innerHeight <= 1;
           hud.textContent =
-            "All Boards Preview · " +
-            (tall ? "1-column" : "2×2") +
-            " · scale " +
-            s.toFixed(3) +
-            " · click a board to solo";
+            "All Boards · " +
+            (tall ? "1-col" : "2×2") +
+            " · half-res · shared BG · scale " +
+            s.toFixed(3);
         }
       }
 
@@ -282,17 +488,18 @@
         });
       }
 
-      /**
-       * Load all four boards (product requirement).
-       * Sequential start reduces peak RAM; each iframe gets preview=all so
-       * menu.js uses the lean wall path (single BG layer, no xlsx thrash).
-       */
       function loadFrames() {
         const cells = Array.prototype.slice.call(
           document.querySelectorAll(".cell")
         );
         const t = Date.now();
-        info("loading", cells.length, "board iframes (sequential, preview-wall)");
+        info(
+          "loading",
+          cells.length,
+          "boards @",
+          BOARD_W + "×" + BOARD_H,
+          "shared BG"
+        );
 
         cells.forEach(function (cell) {
           const hit = cell.querySelector(".cell-hit");
@@ -325,7 +532,6 @@
             return;
           }
           const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          // preview=all → lean GPU path; wall=N staggers soft-refresh timers
           const url =
             src +
             sep +
@@ -342,14 +548,22 @@
             fitCell(cell);
             window.setTimeout(loadNext, 150);
           }
-          iframe.addEventListener("load", function () {
-            info("iframe loaded", name);
-            advance();
-          }, { once: true });
-          iframe.addEventListener("error", function () {
-            err("iframe error", name, url);
-            advance();
-          }, { once: true });
+          iframe.addEventListener(
+            "load",
+            function () {
+              info("iframe loaded", name);
+              advance();
+            },
+            { once: true }
+          );
+          iframe.addEventListener(
+            "error",
+            function () {
+              err("iframe error", name, url);
+              advance();
+            },
+            { once: true }
+          );
           log("iframe src set", name, "→", url);
           iframe.src = url;
           window.setTimeout(advance, 20000);
@@ -358,16 +572,16 @@
       }
 
       window.addEventListener("keydown", function (e) {
-        if (e.key === "Escape" && soloCell) {
-          setSolo(soloCell);
-        }
+        if (e.key === "Escape" && soloCell) setSolo(soloCell);
       });
-
       window.addEventListener("resize", fitAll);
-      requestAnimationFrame(function () {
-        fitAll();
-        loadFrames();
-        requestAnimationFrame(fitAll);
+
+      loadSharedBackground().finally(function () {
+        requestAnimationFrame(function () {
+          fitAll();
+          loadFrames();
+          requestAnimationFrame(fitAll);
+        });
       });
       window.setTimeout(fitAll, 400);
       window.setTimeout(fitAll, 1200);
