@@ -1393,3 +1393,39 @@ body {
   left: 400px;
   top: auto;
 }
+
+/* ==========================================================================
+   Multi-board wall embeds (?preview=all → body.preview-wall)
+   Cut GPU compositing / VRAM cost for Fire Stick & phone WebViews.
+   Solo boards (no preview=all) keep full effects.
+   ========================================================================== */
+body.preview-wall #hero {
+  /* Soft drop-shadow is a multi-pass filter — expensive ×4 */
+  filter: none;
+}
+
+body.preview-wall .galaxy-layer {
+  will-change: auto;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+}
+
+body.preview-wall #galaxy {
+  /* Don't isolate an extra stacking context for blend math */
+  isolation: auto;
+}
+
+body.preview-wall #galaxy.has-blur .galaxy-layer {
+  will-change: auto;
+}
+
+body.preview-wall #stripes-track {
+  will-change: auto;
+  /* Still animate, but avoid permanent layer promotion thrash */
+  animation-duration: 12s;
+}
+
+body.preview-wall #new-sticker,
+body.preview-wall #new-sticker * {
+  filter: none;
+}

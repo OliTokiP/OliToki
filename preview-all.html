@@ -27,6 +27,9 @@
       overflow: hidden;
       background: #0a0a0a;
       font-family: system-ui, -apple-system, sans-serif;
+      /* Lock viewport — fewer global layout thrash passes on Stick/WebView */
+      position: fixed;
+      inset: 0;
     }
 
     .wall {
@@ -37,6 +40,9 @@
       height: 100vh;
       gap: 3px;
       background: #000;
+      /* Isolate wall geometry from the rest of the page */
+      contain: strict;
+      position: relative;
     }
 
     /*
@@ -58,6 +64,11 @@
       min-width: 0;
       min-height: 0;
       cursor: default;
+      /*
+        Each board is independent: layout/paint inside one cell should not
+        invalidate siblings (Fire Stick / low-RAM WebViews).
+      */
+      contain: layout style paint size;
     }
 
     body.show-chrome .cell {
@@ -271,30 +282,21 @@
         });
       }
 
+      /**
+       * Load all four boards (product requirement).
+       * Sequential start reduces peak RAM; each iframe gets preview=all so
+       * menu.js uses the lean wall path (single BG layer, no xlsx thrash).
+       */
       function loadFrames() {
-        const cells = document.querySelectorAll(".cell");
-        info("loading", cells.length, "board iframes");
-        cells.forEach(function (cell, i) {
-          const src = cell.getAttribute("data-src");
-          const iframe = cell.querySelector("iframe");
-          const name = cell.getAttribute("data-name") || src;
-          if (!src || !iframe) {
-            warn("cell missing src/iframe", name);
-            return;
-          }
-          const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          const url = src + sep + "preview=all&t=" + Date.now();
-          iframe.addEventListener("load", function () {
-            info("iframe loaded", name, url);
-            fitCell(cell);
-          }, { once: true });
-          iframe.addEventListener("error", function () {
-            err("iframe error", name, url);
-          }, { once: true });
-          log("iframe src set", name, "→", url);
-          iframe.src = url;
+        const cells = Array.prototype.slice.call(
+          document.querySelectorAll(".cell")
+        );
+        const t = Date.now();
+        info("loading", cells.length, "board iframes (sequential, preview-wall)");
 
+        cells.forEach(function (cell) {
           const hit = cell.querySelector(".cell-hit");
+          const name = cell.getAttribute("data-name") || "";
           if (hit) {
             hit.addEventListener("click", function (e) {
               e.preventDefault();
@@ -303,6 +305,54 @@
             });
           }
         });
+
+        let i = 0;
+        function loadNext() {
+          if (i >= cells.length) {
+            fitAll();
+            info("all iframes started");
+            return;
+          }
+          const cell = cells[i];
+          const src = cell.getAttribute("data-src");
+          const iframe = cell.querySelector("iframe");
+          const name = cell.getAttribute("data-name") || src;
+          const idx = i;
+          i++;
+          if (!src || !iframe) {
+            warn("cell missing src/iframe", name);
+            loadNext();
+            return;
+          }
+          const sep = src.indexOf("?") >= 0 ? "&" : "?";
+          // pause=1: no slideshow thrash ×4 on weak GPUs
+          const url =
+            src +
+            sep +
+            "preview=all&pause=1&t=" +
+            t +
+            "-" +
+            (idx + 1);
+          let done = false;
+          function advance() {
+            if (done) return;
+            done = true;
+            fitCell(cell);
+            window.setTimeout(loadNext, 150);
+          }
+          iframe.addEventListener("load", function () {
+            info("iframe loaded", name);
+            advance();
+          }, { once: true });
+          iframe.addEventListener("error", function () {
+            err("iframe error", name, url);
+            advance();
+          }, { once: true });
+          log("iframe src set", name, "→", url);
+          iframe.src = url;
+          window.setTimeout(advance, 20000);
+        }
+        loadNext();
       }
 
       window.addEventListener("keydown", function (e) {

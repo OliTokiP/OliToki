@@ -63,6 +63,34 @@
     typeof location !== "undefined" ? location.href : ""
   );
 
+  /**
+   * True when embedded in preview-all.html (or ?preview=all).
+   * Four full boards kill Fire Stick / phone WebViews — use a leaner path
+   * that keeps the design, not 4× dual-galaxy + xlsx + blur + refresh.
+   * Solo boards (no preview=all) stay full quality.
+   */
+  function isPreviewWall() {
+    try {
+      const q = new URLSearchParams(
+        typeof location !== "undefined" ? location.search : ""
+      );
+      return q.get("preview") === "all";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Prefer stage-sized galaxy in the wall (not 3600× masters ×4). */
+  function wallFriendlyBgPath(path) {
+    if (!path || !isPreviewWall()) return path;
+    const s = String(path);
+    if (s.indexOf("galaxy-bg") === -1) return path;
+    if (s.indexOf("galaxy-bg-sm") !== -1 || s.indexOf("galaxy-bg-xs") !== -1) {
+      return s;
+    }
+    return "assets/bgs/galaxy-bg-sm.jpg";
+  }
+
   const STAGE_W = 1920;
   const STAGE_H = 1080;
   const CUTOUT_LEFT = 1114;
@@ -1084,15 +1112,18 @@
     const galaxy = document.getElementById("galaxy");
     if (!galaxy) return;
 
+    const wall = isPreviewWall();
     const main = config.mainColor || "#000000";
     const plate =
       normalizeHex(config.bgColor) ||
       normalizeHex(config.bgSolid) ||
       main;
-    const imagePath = config.bgImage || null;
-    const blur01 = parseUnit01(config.bgBlur, 0);
+    let imagePath = config.bgImage || null;
+    if (imagePath) imagePath = wallFriendlyBgPath(imagePath);
+    // Multi-board wall: no CSS blur / blend (VRAM / compositing)
+    const blur01 = wall ? 0 : parseUnit01(config.bgBlur, 0);
     const opacity01 = parseUnit01(config.bgOpacity, 1);
-    const blend = parseBgBlendMode(config.bgBlendMode);
+    const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
 
     // Color plate always under the image
     galaxy.style.backgroundColor = plate;
@@ -1111,9 +1142,19 @@
     galaxy.style.setProperty("--bg-image-opacity", String(opacity01));
     galaxy.style.setProperty("--bg-image-blend", blend);
 
+    // Wall: one layer only. Solo: both for pan crossfade.
+    const layerEls = wall ? [els.galaxyA] : [els.galaxyA, els.galaxyB];
+    if (wall && els.galaxyB) {
+      els.galaxyB.hidden = true;
+      els.galaxyB.classList.remove("active", "fading-in", "fading-out");
+      els.galaxyB.style.opacity = "0";
+      if (els.galaxyB.getAttribute("src")) {
+        els.galaxyB.removeAttribute("src");
+      }
+    }
+
     // Only assign img.src when we actually need a background image.
-    // HTML has no src so galaxy-bg is not downloaded for solid themes.
-    [els.galaxyA, els.galaxyB].forEach((el) => {
+    layerEls.forEach((el) => {
       if (!el) return;
       if (!imagePath) {
         el.hidden = true;
@@ -1129,7 +1170,7 @@
       }
       el.hidden = false;
       if (el.getAttribute("src") !== imagePath) {
-        tokiLog("bg image load", imagePath);
+        tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
         el.src = imagePath;
       }
     });
@@ -1138,7 +1179,7 @@
       imagePath &&
       els.galaxyA &&
       !els.galaxyA.classList.contains("active") &&
-      !(els.galaxyB && els.galaxyB.classList.contains("active"))
+      !(els.galaxyB && !wall && els.galaxyB.classList.contains("active"))
     ) {
       els.galaxyA.classList.add("active");
       els.galaxyA.style.opacity = String(opacity01);
@@ -3514,10 +3555,12 @@
       typeof performance !== "undefined" ? performance.now() : Date.now();
     if (opts.forceXlsxRefresh) invalidateWorkbookXlsxCache();
 
+    // Wall embeds: skip full xlsx/SheetJS inflate (×4 kills low-RAM WebViews)
     const needXlsx =
-      isDrinks ||
-      isHandhelds ||
-      !!(cfg.proteinSheetGid || cfg.saucesSheetGid || cfg.styleThemeGid);
+      !isPreviewWall() &&
+      (isDrinks ||
+        isHandhelds ||
+        !!(cfg.proteinSheetGid || cfg.saucesSheetGid || cfg.styleThemeGid));
 
     // Overlap one workbook download with all CSV hops
     const xlsxWarm = needXlsx
@@ -5738,7 +5781,15 @@
     applyStageBackground();
     // Color-only (no image): no pan/crossfade loop
     if (!config.bgImage) return;
-    if (!els.galaxyA || !els.galaxyB) return;
+    if (!els.galaxyA) return;
+    // Multi-board wall: static single layer (no dual-buffer rAF pan)
+    if (isPreviewWall() || !els.galaxyB || els.galaxyB.hidden) {
+      els.galaxyA.classList.add("active");
+      els.galaxyA.style.opacity = String(bgImageOpacityPeak());
+      els.galaxyA.style.transform = "translate3d(0, -50%, 0)";
+      tokiInfo("galaxy: static single layer (preview-wall or one-layer)");
+      return;
+    }
     if (galaxyStarted) return; // idempotent — softReload must not re-enter
     galaxyStarted = true;
 
@@ -6016,6 +6067,11 @@
 
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
+    // Four boards refreshing in lockstep thrash low-end WebViews
+    if (isPreviewWall()) {
+      tokiInfo("auto-refresh off (preview-wall)");
+      return;
+    }
     const sec = Number(cfg.refreshSeconds) || 0;
     if (sec <= 0) return;
     // Refresh for google + local xlsx; skip only pure embedded offline
@@ -6032,6 +6088,10 @@
   // ---------- boot ----------
 
   async function init() {
+    if (isPreviewWall()) {
+      document.body.classList.add("preview-wall");
+      tokiInfo("preview-wall mode: lean GPU path for multi-board");
+    }
     if (isBowls) {
       document.body.classList.add("board-bowls");
     }
