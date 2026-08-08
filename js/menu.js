@@ -6615,13 +6615,91 @@
     };
   }
 
+  /** Encore freezes free galaxy pan (BG attaches to scaffold when collage is up). */
+  function encoreLocksBgScroll() {
+    return config.presentationMode === "encore";
+  }
+
+  function setEncoreScaffoldBgActive(on) {
+    const galaxy = document.getElementById("galaxy");
+    if (!galaxy) return;
+    galaxy.classList.toggle("encore-scaffold-bg", !!on);
+  }
+
+  /**
+   * Encore + BG Image: pin a stage-aligned #galaxy clone under the lattice
+   * so Ken Burns scales plates + backdrop as one camera move. NONE → skip.
+   * Stack matches free galaxy: color plate + image (blur / opacity / blend).
+   */
+  function appendEncoreScaffoldBg(rig) {
+    if (!rig || !encoreLocksBgScroll()) return false;
+    let imagePath = config.bgImage || null;
+    if (!imagePath) return false;
+    imagePath = wallFriendlyBgPath(imagePath);
+
+    const wall = isPreviewWall();
+    const main = config.mainColor || "#000000";
+    const plate =
+      normalizeHex(config.bgColor) ||
+      normalizeHex(config.bgSolid) ||
+      main;
+    const opacity01 = parseUnit01(config.bgOpacity, 1);
+    const blur01 = wall ? 0 : parseUnit01(config.bgBlur, 0);
+    const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
+
+    const wrap = document.createElement("div");
+    wrap.className = "family-portrait-bg";
+    wrap.setAttribute("aria-hidden", "true");
+    // Same CSS vars as #galaxy so mix-blend-mode hits the local plate
+    wrap.style.setProperty("--bg-image-opacity", String(opacity01));
+    wrap.style.setProperty("--bg-image-blend", blend || "normal");
+    if (blur01 <= 0) {
+      wrap.style.setProperty("--bg-image-blur", "none");
+    } else {
+      wrap.style.setProperty(
+        "--bg-image-blur",
+        "blur(" + (blur01 * BG_BLUR_MAX_PX).toFixed(2) + "px)"
+      );
+    }
+
+    const plateEl = document.createElement("div");
+    plateEl.className = "family-portrait-bg-plate";
+    plateEl.style.backgroundColor = plate;
+    wrap.appendChild(plateEl);
+
+    const img = document.createElement("img");
+    img.className = "family-portrait-bg-img";
+    img.alt = "";
+    img.draggable = false;
+    img.src = imagePath;
+    // Handoff current pan pose so the freeze doesn’t jump
+    if (els.galaxyA && els.galaxyA.style.transform) {
+      img.style.transform = els.galaxyA.style.transform;
+    }
+    wrap.appendChild(img);
+
+    // Behind plates + veil
+    if (rig.firstChild) rig.insertBefore(wrap, rig.firstChild);
+    else rig.appendChild(wrap);
+
+    setEncoreScaffoldBgActive(true);
+    tokiInfo(
+      "encore scaffold BG attached",
+      imagePath,
+      "blend",
+      blend || "normal"
+    );
+    return true;
+  }
+
   function hideFamilyPortrait() {
     const stage = els.familyPortrait;
     if (!stage) return;
     clearPortraitSpotlight();
-    stage.classList.remove("visible", "is-dimmed");
+    stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
     stage.hidden = true;
     stage.setAttribute("aria-hidden", "true");
+    setEncoreScaffoldBgActive(false);
     _portraitRenderKey = "";
   }
 
@@ -6655,11 +6733,16 @@
   }
 
   function ensureFamilyPortrait(portraitItems) {
-    const key = (portraitItems || [])
-      .map(function (it) {
-        return (it && it.name) + "\0" + (it && it.image) + "\0" + !!it.isNew;
-      })
-      .join("|");
+    const key =
+      (config.presentationMode || "slideshow") +
+      "\0" +
+      (config.bgImage || "") +
+      "\0" +
+      (portraitItems || [])
+        .map(function (it) {
+          return (it && it.name) + "\0" + (it && it.image) + "\0" + !!it.isNew;
+        })
+        .join("|");
     if (key === _portraitRenderKey && els.familyPortrait && els.familyPortrait.children.length) {
       return;
     }
@@ -6672,12 +6755,20 @@
     if (!stage) return;
     stage.innerHTML = "";
     stage.style.setProperty("--encore-zoom", "1");
+    stage.style.setProperty(
+      "--portrait-stage-left",
+      PORTRAIT_STAGE_LEFT + "px"
+    );
+    setEncoreScaffoldBgActive(false);
 
-    // Rig holds plates + veil so Ken Burns scale keeps the hole on the plate.
-    // Plates (z=1) under veil (z=2); plate z-index stays inside plates layer.
+    // Rig holds optional BG + plates + veil so Ken Burns keeps them locked.
+    // Stack: bg (z=0) · plates (z=1) · veil (z=2).
     const rig = document.createElement("div");
     rig.className = "family-portrait-rig";
     stage.appendChild(rig);
+
+    // Encore + BG Image: attach image to scaffold (overrides free galaxy scroll)
+    appendEncoreScaffoldBg(rig);
 
     const plates = document.createElement("div");
     plates.className = "family-portrait-plates";
@@ -7443,9 +7534,11 @@
       lastTs = ts;
       if (dt === 0) return;
 
-      const speed =
-        BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
-      // 0 = don't scroll (Style → BG Scroll Speed)
+      // Encore: freeze free galaxy pan (BG is on the scaffold when collage is up)
+      const speed = encoreLocksBgScroll()
+        ? 0
+        : BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
+      // 0 = don't scroll (Style → BG Scroll Speed, or Encore override)
       if (speed <= 0) {
         // Still finish an in-flight crossfade so opacity doesn't stick mid-blend
         if (fading && !singleLayer && layers.length > 1 && ts >= fadeUntil) {

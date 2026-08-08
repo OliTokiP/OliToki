@@ -95,6 +95,13 @@ body {
   display: none !important;
 }
 
+/* Encore + collage: image lives on the portrait rig; hide free galaxy layers
+   (solid plate stays). Saves pan RAF work and locks BG to Ken Burns zoom. */
+#galaxy.encore-scaffold-bg .galaxy-layer {
+  opacity: 0 !important;
+  transition: none !important;
+}
+
 .galaxy-layer {
   position: absolute;
   top: 50%;
@@ -392,8 +399,8 @@ body {
 }
 
 /*
-  Ken Burns rig: plates + veil scale together so the spotlight hole stays
-  glued to the lattice point. Origin = --encore-hole-x/y (set per bow in JS).
+  Ken Burns rig: plates + veil (+ optional BG) scale together so the spotlight
+  hole stays glued to the lattice point. Origin = --encore-hole-x/y (per bow).
   Stage clips; rig zooms inside.
   Push-in: long ease-out. Pull-out (.is-zoom-out): same duration/easing as
   the veil fade so origin can retarget under the blackout (no snap).
@@ -410,6 +417,55 @@ body {
 #family-portrait-stage.is-zoom-out .family-portrait-rig {
   /* Match .family-portrait-veil opacity fade */
   transition: transform var(--dur-slow) var(--ease-fade);
+}
+
+/*
+  Encore scaffold BG: full 1920×1080 stack aligned to #stage, offset under the
+  lattice. Child of the rig → scales with Ken Burns.
+  Same recipe as #galaxy: color plate + image with mix-blend-mode (isolation
+  so blend hits the plate, not the frame / menu list).
+  --portrait-stage-left matches JS PORTRAIT_CUTOUT_X0 (frame cutout at y=0).
+*/
+#family-portrait-stage .family-portrait-bg {
+  position: absolute;
+  left: calc(-1 * var(--portrait-stage-left, 1071.9px));
+  top: 0;
+  width: var(--stage-w, 1920px);
+  height: var(--stage-h, 1080px);
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  --bg-image-blur: none;
+  --bg-image-opacity: 1;
+  --bg-image-blend: normal;
+}
+
+#family-portrait-stage .family-portrait-bg-plate {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: #000;
+}
+
+/* Match .galaxy-layer cover (static — no pan; scroll overridden in Encore) */
+#family-portrait-stage .family-portrait-bg-img {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 1;
+  height: 120%;
+  width: auto;
+  min-width: 120%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center center;
+  transform: translate3d(0, -50%, 0);
+  opacity: var(--bg-image-opacity, 1);
+  filter: var(--bg-image-blur, none);
+  mix-blend-mode: var(--bg-image-blend, normal);
+  user-select: none;
+  pointer-events: none;
 }
 
 /* All plates live in this layer so their z-index can never beat the veil */
