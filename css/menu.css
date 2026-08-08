@@ -38,6 +38,21 @@ body {
   --list-pad-x: 28px;
   --list-pad-top: 16px;
   --list-pad-bottom: 20px;
+
+  /*
+    Motion tokens — single place to polish all fades / transitions.
+    CSS has no shared “ease” registry beyond custom properties; JS galaxy
+    crossfade mirrors --ease-fade (see setOpacity in menu.js).
+  */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* Material-ish in-out */
+  --ease-fade: cubic-bezier(0.4, 0, 0.2, 1); /* opacity crossfades */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* reveals / settle */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1); /* exits */
+  --dur-instant: 0.28s; /* list highlight color */
+  --dur-fast: 0.35s; /* announcement body */
+  --dur-mid: 0.45s; /* hero / sticker / portrait show */
+  --dur-slow: 1.05s; /* encore veil */
+  --dur-crossfade: 1.2s; /* galaxy dual-layer */
 }
 
 #stage {
@@ -107,12 +122,12 @@ body {
 }
 
 .galaxy-layer.fading-in {
-  transition: opacity 1.2s ease-in-out;
+  transition: opacity var(--dur-crossfade) var(--ease-fade);
 }
 
 .galaxy-layer.fading-out {
   opacity: 0;
-  transition: opacity 1.2s ease-in-out;
+  transition: opacity var(--dur-crossfade) var(--ease-fade);
 }
 
 /* ---------- Layer 2: frame (inline SVG vectors) ---------- */
@@ -256,7 +271,7 @@ body {
   color: var(--secondary-color);
   font-family: "Roboto", sans-serif;
   font-weight: 700;
-  transition: color 0.28s ease;
+  transition: color var(--dur-instant) var(--ease-standard);
   flex-shrink: 0;
 }
 
@@ -338,7 +353,7 @@ body {
   object-fit: fill; /* 1500×1000 → same 3:2 aspect */
   filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
   opacity: 0;
-  transition: opacity 0.45s ease;
+  transition: opacity var(--dur-mid) var(--ease-fade);
   user-select: none;
 }
 
@@ -365,7 +380,7 @@ body {
   pointer-events: none;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 0.45s ease;
+  transition: opacity var(--dur-mid) var(--ease-fade);
   /* Trapezoid: full top, inset left edge at bottom (~84.6/848.1 ≈ 9.98%) */
   clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
   -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
@@ -433,7 +448,7 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   z-index: 2;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 1.05s ease-in-out;
+  transition: opacity var(--dur-slow) var(--ease-fade);
   mix-blend-mode: multiply;
   /* Force own compositor layer above filtered/blended plates */
   transform: translateZ(0);
@@ -507,7 +522,9 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   transform: rotate(-12deg);
   transform-origin: center center;
   /* Match #hero fade so New! and photo appear/disappear in lockstep */
-  transition: opacity 0.45s ease, transform 0.45s ease;
+  transition:
+    opacity var(--dur-mid) var(--ease-fade),
+    transform var(--dur-mid) var(--ease-out);
 }
 
 #new-sticker.visible {
@@ -1464,7 +1481,7 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
 #announcement-box .drinks-box-title,
 #announcement-box .drinks-box-subtitle,
 #announcement-box .drinks-box-body {
-  transition: opacity 0.35s ease;
+  transition: opacity var(--dur-fast) var(--ease-fade);
 }
 
 #announcement-box .drinks-box-title.ann-fading,
@@ -1644,7 +1661,7 @@ body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line
   color: inherit;
   font-family: "Roboto", sans-serif;
   font-weight: 700;
-  transition: color 0.28s ease;
+  transition: color var(--dur-instant) var(--ease-standard);
   max-width: 100%;
   font-size: 1em;
   text-align: inherit;

@@ -319,7 +319,7 @@ Always paint **BG Color** on `#galaxy`. Optional image layer:
 | BG Blur | 0–1 → 0–40px CSS blur |
 | BG Blend Mode | normal, overlay, lighten, color-burn, soft-light, luminosity |
 | BG Opacity | 0–1 (image only) |
-| BG Scroll Speed | multiplies base ~28 px/s dual-layer scroll |
+| BG Scroll Speed | multiplies base ~28 px/s dual-layer scroll; **0 = freeze** (no pan, stripes paused) |
 
 Galaxy uses dual images for crossfade loops (`FADE_DURATION_MS = 1200`).
 

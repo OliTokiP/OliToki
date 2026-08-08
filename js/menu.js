@@ -2036,7 +2036,7 @@
 
     // Speeds / colors only when those columns exist on this sheet
     if (c.bgScrollSpeed != null) {
-      out.bgScrollSpeed = Number(cell(first, c.bgScrollSpeed)) || 1;
+      out.bgScrollSpeed = parseBgScrollSpeed(cell(first, c.bgScrollSpeed), 1);
     }
     if (c.slideshowSpeed != null) {
       out.slideshowSpeed = parseSlideshowSpeed(
@@ -2399,7 +2399,12 @@
       bgOpacity: bgOpacity,
       bgMode: bgImage ? "image" : "solid",
       bgSolid: bgColor,
-      bgScrollSpeed: Number(parsed.bgScrollSpeed) || config.bgScrollSpeed || 1,
+      bgScrollSpeed: parseBgScrollSpeed(
+        parsed.bgScrollSpeed != null
+          ? parsed.bgScrollSpeed
+          : config.bgScrollSpeed,
+        1
+      ),
       slideshowSpeed: parseSlideshowSpeed(
         parsed.slideshowSpeed != null
           ? parsed.slideshowSpeed
@@ -2625,11 +2630,18 @@
 
   /**
    * Bowls / list boards: Family Portrait + Presentation Mode.
-   * Portrait members: name + include + image (all three).
+   * Portrait cast: name + include + image (all three).
    *
-   * Slideshow + portrait: collage overview, then individual heroes.
-   * Encore + portrait: collage always on; each step highlights list + spotlight.
-   * Encore without portrait: fall back to normal per-item heroes.
+   * Slideshow + Family Portrait ON: collage overview, then individual heroes.
+   * Slideshow + Family Portrait OFF: empty slides → default per-item heroes.
+   *
+   * Encore always uses the collage when a cast exists (Encore overrides FP off
+   * for the visual — you still see all plates). Family Portrait only controls
+   * whether Encore starts with a neutral lineup beat:
+   *   FP ON  + Encore → lineup (no highlight), then each bow + spotlight
+   *   FP OFF + Encore → skip lineup; jump straight into first bow (presentation
+   *                     already begun — first item highlighted + spotlit)
+   * Encore with no cast images → fall through to list/hero bows (no collage).
    */
   function buildBoardSlides() {
     slides = [];
@@ -2637,33 +2649,63 @@
       return !!(it && it.name && it.include !== false && it.image);
     });
     const mode = config.presentationMode === "encore" ? "encore" : "slideshow";
-    const portraitOn = !!config.familyPortrait && portraitItems.length > 0;
+    const hasCast = portraitItems.length > 0;
+    // Slideshow-only gate for the collage overview
+    const portraitOn = !!config.familyPortrait && hasCast;
+    // Encore: collage whenever cast exists (FP flag only gates the lineup beat)
+    const encoreLineup = !!config.familyPortrait;
 
-    if (portraitOn && mode === "encore") {
-      // Curtain call: full cast first (no spotlight), then each bow
-      slides.push({
-        type: "portrait",
-        items: portraitItems,
-        itemIndex: -1,
-        isNew: false,
-        image: null,
-      });
-      portraitItems.forEach(function (it) {
-        const itemIndex = items.indexOf(it);
+    if (mode === "encore") {
+      if (hasCast) {
+        if (encoreLineup) {
+          // Full cast first (no spotlight), then each bow
+          slides.push({
+            type: "portrait",
+            items: portraitItems,
+            itemIndex: -1,
+            isNew: false,
+            image: null,
+          });
+        }
+        portraitItems.forEach(function (it) {
+          const itemIndex = items.indexOf(it);
+          slides.push({
+            type: "encore",
+            items: portraitItems,
+            itemIndex: itemIndex,
+            image: it.image,
+            isNew: !!it.isNew,
+            withPortrait: true,
+          });
+        });
+        tokiInfo(
+          "encore slides",
+          slides.length,
+          encoreLineup
+            ? "(1 lineup +"
+            : "(no lineup, FP off — straight into",
+          portraitItems.length,
+          "bows, collage on)"
+        );
+        return;
+      }
+
+      // No cast images: list/hero bows only (still Encore, not Slideshow mode)
+      items.forEach(function (it, i) {
+        if (!it || it.include === false || !it.name) return;
         slides.push({
           type: "encore",
-          items: portraitItems,
-          itemIndex: itemIndex,
-          image: it.image,
+          items: null,
+          itemIndex: i,
+          image: it.image || null,
           isNew: !!it.isNew,
+          withPortrait: false,
         });
       });
       tokiInfo(
         "encore slides",
         slides.length,
-        "(1 lineup +",
-        portraitItems.length,
-        "bows)"
+        "(no cast images — list/hero bows)"
       );
       return;
     }
@@ -2911,10 +2953,13 @@
     }
     // One full period = black 93px + white 93px (CSS --stripe-period)
     const periodPx = 186;
-    const speed =
-      BASE_SCROLL_PX_PER_SEC *
-      (config.bgScrollSpeed || 1) *
-      STRIPE_SPEED_FACTOR;
+    const mult = parseBgScrollSpeed(config.bgScrollSpeed, 1);
+    // 0 = freeze stripes (same meaning as BG Scroll Speed on the galaxy)
+    if (mult <= 0) {
+      els.stripesTrack.style.animationPlayState = "paused";
+      return;
+    }
+    const speed = BASE_SCROLL_PX_PER_SEC * mult * STRIPE_SPEED_FACTOR;
     const duration = Math.max(0.5, periodPx / Math.max(0.01, speed));
     els.stripesTrack.style.animationDuration = duration + "s";
     els.stripesTrack.style.animationPlayState = "running";
@@ -3201,7 +3246,7 @@
     const bgBlur = parseUnit01(cell(boardRow, sc.bgBlur), 0);
     const bgBlendMode = parseBgBlendMode(cell(boardRow, sc.bgBlendMode));
     const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
-    const bgScrollSpeed = Number(cell(boardRow, sc.bgScrollSpeed));
+    const bgScrollSpeed = parseBgScrollSpeed(cell(boardRow, sc.bgScrollSpeed), 1);
     const slideshowSpeed = parseSlideshowSpeed(
       cell(boardRow, sc.slideshowSpeed),
       3
@@ -3224,7 +3269,7 @@
       bgOpacity: bgOpacity,
       bgMode: bgImage ? "image" : "solid",
       bgSolid: bgColor,
-      bgScrollSpeed: Number.isFinite(bgScrollSpeed) ? bgScrollSpeed : 1,
+      bgScrollSpeed: bgScrollSpeed,
       slideshowSpeed: slideshowSpeed,
       showVersion: !!showVersion,
     };
@@ -6879,15 +6924,51 @@
       return;
     }
 
-    // Encore bow: portrait stays; list highlight + soft spotlight after blackout
+    // Encore bow:
+    //   withPortrait → collage stays; soft spotlight after blackout
+    //   (Encore keeps collage even when Family Portrait flag is 0)
+    //   without cast → list highlight + individual hero
     if (slide.type === "encore") {
-      if (cfg.showHero !== false) {
-        showFamilyPortrait(slide.items, instant);
-        setPortraitSpotlight(slide.itemIndex, { instant: !!instant });
+      const usePortrait =
+        slide.withPortrait !== false &&
+        slide.items &&
+        slide.items.length > 0;
+
+      if (usePortrait) {
+        if (cfg.showHero !== false) {
+          showFamilyPortrait(slide.items, instant);
+          setPortraitSpotlight(slide.itemIndex, { instant: !!instant });
+        }
+        // Board New! off during collage (per-item stickers live in portrait)
+        if (cfg.showSticker !== false) {
+          updateSticker({ isNew: false }, instant);
+        } else if (els.sticker) {
+          els.sticker.classList.remove("visible");
+          els.sticker.hidden = true;
+        }
+        return;
       }
-      // Board New! sticker off during collage (per-item stickers in portrait)
+
+      // Portrait off: hero presentation with list highlight already applied above
+      hideFamilyPortrait();
+      clearPortraitSpotlight();
+      const item = items[slide.itemIndex] || {
+        image: slide.image,
+        isNew: !!slide.isNew,
+      };
+      if (cfg.showHero !== false) {
+        if (item.image) {
+          updateHero(item, instant);
+        } else if (els.hero) {
+          els.hero.classList.remove("visible");
+          els.hero.hidden = true;
+        }
+      } else if (els.hero) {
+        els.hero.classList.remove("visible");
+        els.hero.hidden = true;
+      }
       if (cfg.showSticker !== false) {
-        updateSticker({ isNew: false }, instant);
+        updateSticker(item, instant);
       } else if (els.sticker) {
         els.sticker.classList.remove("visible");
         els.sticker.hidden = true;
@@ -7075,6 +7156,23 @@
     return Math.max(0, n);
   }
 
+  /**
+   * Style "BG Scroll Speed" (multiplier; column L). Same zero-safe rule:
+   *   0 or negative → freeze galaxy pan + stripe scroll
+   *   blank / invalid → fallback (usually 1)
+   * Do not use `n || fallback` — that treats 0 as missing.
+   */
+  function parseBgScrollSpeed(raw, fallback) {
+    const fb =
+      fallback != null && Number.isFinite(Number(fallback))
+        ? Math.max(0, Number(fallback))
+        : 1;
+    if (raw === undefined || raw === null || raw === "") return fb;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return fb;
+    return Math.max(0, n);
+  }
+
   /** Board "Presentation Mode" dropdown: Slideshow | Encore */
   function parsePresentationMode(raw, fallback) {
     const fb = fallback === "encore" ? "encore" : "slideshow";
@@ -7189,7 +7287,8 @@
       if (isDrinks) {
         // Crossfade before the photo's left edge enters the stage.
         // Leave headroom for the ~1.2s crossfade (still drifts +dx).
-        const speed = BASE_SCROLL_PX_PER_SEC * (config.bgScrollSpeed || 1);
+        const speed =
+          BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
         const fadeDrift = speed * (FADE_DURATION_MS / 1000) + 24;
         return -Math.max(48, fadeDrift);
       }
@@ -7203,7 +7302,9 @@
 
     function setOpacity(el, value, withTransition) {
       if (withTransition) {
-        el.style.transition = "opacity " + FADE_DURATION_MS + "ms ease-in-out";
+        // Match CSS --ease-fade / galaxy-layer crossfade
+        el.style.transition =
+          "opacity " + FADE_DURATION_MS + "ms cubic-bezier(0.4, 0, 0.2, 1)";
       } else {
         el.style.transition = "none";
       }
@@ -7308,7 +7409,16 @@
       lastTs = ts;
       if (dt === 0) return;
 
-      const speed = BASE_SCROLL_PX_PER_SEC * (config.bgScrollSpeed || 1);
+      const speed =
+        BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
+      // 0 = don't scroll (Style → BG Scroll Speed)
+      if (speed <= 0) {
+        // Still finish an in-flight crossfade so opacity doesn't stick mid-blend
+        if (fading && !singleLayer && layers.length > 1 && ts >= fadeUntil) {
+          finishCrossfade();
+        }
+        return;
+      }
       const dx = speed * dt;
 
       // Keep both layers moving in lockstep during a crossfade so the blend
