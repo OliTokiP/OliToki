@@ -983,7 +983,7 @@
     return window.__tokiBuildInfoPromise;
   }
 
-  /** Show Version=1 → disclaimer slot becomes commit hash + date/time. */
+  /** Show Version=1 → disclaimer slot becomes commit subject + hash + date. */
   function applyDisclaimerContent() {
     if (!els.disclaimer) return;
     if (cfg.showDisclaimer === false) {
@@ -1008,13 +1008,17 @@
       }
       const hash = info.hash || "unknown";
       const date = info.date || "";
-      // Replace allergy copy entirely with build identity
-      els.disclaimer.textContent = date
-        ? hash + " · " + date
-        : hash;
+      const subject = String(info.subject || "").trim();
+      // Prepend latest commit message so we can confirm the live build at a glance
+      const parts = [];
+      if (subject) parts.push(subject);
+      parts.push(hash);
+      if (date) parts.push(date);
+      els.disclaimer.textContent = parts.join(" · ");
       els.disclaimer.title = [
         info.hashFull || hash,
-        info.subject || "",
+        subject || "",
+        date || "",
         "source: " + (info.source || ""),
       ]
         .filter(Boolean)
@@ -7233,10 +7237,10 @@
       /* ignore */
     }
 
-    // Spotlight hole tracks scaled plate size: open diameter ≈ plate width
-    // (radius = half of 1500×scale). CSS extends the soft rim to 1.5×.
+    // Spotlight hole tracks scaled plate size (slightly tighter than half-width)
+    // CSS extends soft rim to ~1.85× this radius.
     const plateW = PORTRAIT_IMG_W * layout.scale;
-    const holeR = Math.max(80, plateW * 0.5);
+    const holeR = Math.max(70, plateW * 0.42);
     stage.style.setProperty("--encore-hole-r", holeR + "px");
 
     portraitItems.forEach(function (it, i) {
