@@ -1446,7 +1446,11 @@ end tell
 
 
 def refresh_build_info(root: Path) -> None:
-    """Write js/build-info.js from current git HEAD (for Local accuracy)."""
+    """Write js/build-info.js from current git HEAD (for Local accuracy).
+
+    Hash/date always track HEAD. Subject skips auto
+    ``chore: update build-info.js`` commits so Show Version shows real work.
+    """
     try:
         r = subprocess.run(
             [
@@ -1465,13 +1469,30 @@ def refresh_build_info(root: Path) -> None:
             return
         lines = (r.stdout or "").strip().split("\n")
         full, short, date, subj = (lines + ["", "", "", ""])[:4]
+        # Prefer last non-chore subject (build-info auto-commit is noise)
+        meaningful = subj or ""
+        r2 = subprocess.run(
+            ["git", "-C", str(root), "log", "-12", "--format=%s"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if r2.returncode == 0:
+            for line in (r2.stdout or "").splitlines():
+                s = line.strip()
+                if not s:
+                    continue
+                if s.lower().startswith("chore: update build-info"):
+                    continue
+                meaningful = s
+                break
         import json
 
         info = {
             "hash": short or "unknown",
             "hashFull": full or "",
             "date": date or "",
-            "subject": subj or "",
+            "subject": meaningful,
             "source": "git",
         }
         out = root / "js" / "build-info.js"
@@ -1482,7 +1503,7 @@ def refresh_build_info(root: Path) -> None:
             + ";\n",
             encoding="utf-8",
         )
-        print("build-info:", short, date, flush=True)
+        print("build-info:", short, meaningful or date, flush=True)
     except Exception as e:
         print("build-info skip:", e, flush=True)
 

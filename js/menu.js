@@ -150,11 +150,11 @@
    * Theme palette ONLY (selected row — Theme Selector in col A):
    *   A Theme Selector | B Theme Name | C Main | D Secondary |
    *   E Highlight | F Highlight Special
-   * Board-wide stage BG (always the first data row = sheet row 2, not per theme):
-   *   G2 BG Color | H2 BG Image (dropdown) | I2 BG Blur | J2 BG Blend Mode |
+   * Board-wide (first data row = sheet row 2, not per theme):
+   *   G2 BG Color | H2 BG Image | I2 BG Blur | J2 BG Blend Mode |
    *   K2 BG Opacity | L2 BG Scroll Speed | M2 Presentation Speed
-   * N Color Picker labels (reference list for other sheets)
-   * O Show Version (1 = commit stamp in disclaimer slot instead of allergy text)
+   *   N Color Picker | O Show Version |
+   *   P Encore Spotlight Type (Hard|Soft) | Q Encore Spotlight Color (Black|Highlight)
    */
   const STYLE_COLUMNS = {
     themeSelector: 0,
@@ -171,9 +171,11 @@
     bgScrollSpeed: 11,
     /** M — Presentation Speed (seconds; 0 = pause). Was “Slideshow Speed”. */
     slideshowSpeed: 12,
-    // N Color Picker (reference list) · O Show Version
+    // N Color Picker · O Show Version · P/Q Encore spotlight
     colorPicker: 13,
     showVersion: 14,
+    encoreSpotlightType: 15,
+    encoreSpotlightColor: 16,
   };
   /** Excel row 2 = first data row (index 1 in sheet_to_json header:1 arrays) */
   const STYLE_BOARD_WIDE_ROW_INDEX = 1;
@@ -325,6 +327,10 @@
      * On by default; wire to a Style sheet column later.
      */
     slideshowKenBurns: true,
+    /** Style P: "hard" | "soft" — Encore spotlight shape */
+    encoreSpotlightType: "hard",
+    /** Style Q: "black" | "highlight" — veil color (highlight = item highlight) */
+    encoreSpotlightColor: "black",
   };
   let items = [];
   let proteinBox = {
@@ -769,6 +775,47 @@
     applyBoxChrome();
     applyDisclaimerContent();
     applyDisclaimerColor();
+    applyEncoreSpotlightChrome(null);
+  }
+
+  /**
+   * Style → Encore Spotlight Type/Color classes + --encore-veil-color.
+   * @param {{isNew?: boolean}|null} [item] active bow item (for Highlight color)
+   */
+  function applyEncoreSpotlightChrome(item) {
+    const stage = els.familyPortrait;
+    if (!stage) return;
+    const type =
+      config.encoreSpotlightType === "soft" ? "soft" : "hard";
+    const colorMode =
+      config.encoreSpotlightColor === "highlight" ? "highlight" : "black";
+
+    stage.classList.toggle("encore-spot-hard", type === "hard");
+    stage.classList.toggle("encore-spot-soft", type === "soft");
+    stage.classList.toggle(
+      "encore-spot-color-highlight",
+      colorMode === "highlight"
+    );
+    stage.classList.toggle("encore-spot-color-black", colorMode === "black");
+
+    let veilColor = "#000000";
+    if (colorMode === "highlight") {
+      veilColor =
+        item && item.isNew
+          ? config.highlightSpecial || config.highlight || "#fff900"
+          : config.highlight || "#26bbcb";
+      veilColor = normalizeHex(veilColor) || veilColor || "#26bbcb";
+    }
+    // Set on stage (inherits into veil). Do not set a conflicting default on .veil.
+    stage.style.setProperty("--encore-veil-color", veilColor);
+    tokiInfo(
+      "encore spotlight",
+      type,
+      colorMode,
+      "veil",
+      veilColor,
+      item && item.isNew ? "(special)" : ""
+    );
   }
 
   /**
@@ -2475,6 +2522,18 @@
         parsed.slideshowKenBurns !== undefined
           ? !!parsed.slideshowKenBurns
           : config.slideshowKenBurns !== false,
+      encoreSpotlightType: parseEncoreSpotlightType(
+        parsed.encoreSpotlightType != null
+          ? parsed.encoreSpotlightType
+          : config.encoreSpotlightType,
+        "hard"
+      ),
+      encoreSpotlightColor: parseEncoreSpotlightColor(
+        parsed.encoreSpotlightColor != null
+          ? parsed.encoreSpotlightColor
+          : config.encoreSpotlightColor,
+        "black"
+      ),
     };
 
     if (parsed.proteinBox) {
@@ -3269,6 +3328,18 @@
       sc.showVersion != null
         ? parseYesNo(cell(boardRow, sc.showVersion), false)
         : false;
+    const encoreSpotlightType = parseEncoreSpotlightType(
+      sc.encoreSpotlightType != null
+        ? cell(boardRow, sc.encoreSpotlightType)
+        : "",
+      "hard"
+    );
+    const encoreSpotlightColor = parseEncoreSpotlightColor(
+      sc.encoreSpotlightColor != null
+        ? cell(boardRow, sc.encoreSpotlightColor)
+        : "",
+      "black"
+    );
 
     const theme = {
       themeName: themeName,
@@ -3286,6 +3357,8 @@
       bgScrollSpeed: bgScrollSpeed,
       slideshowSpeed: slideshowSpeed,
       showVersion: !!showVersion,
+      encoreSpotlightType: encoreSpotlightType,
+      encoreSpotlightColor: encoreSpotlightColor,
     };
     tokiInfo(
       "Style theme:",
@@ -3307,7 +3380,10 @@
       "opacity",
       theme.bgOpacity,
       "blend",
-      theme.bgBlendMode
+      theme.bgBlendMode,
+      "encoreSpot",
+      theme.encoreSpotlightType,
+      theme.encoreSpotlightColor
     );
     return theme;
   }
@@ -3328,6 +3404,8 @@
     parsed.bgScrollSpeed = theme.bgScrollSpeed;
     parsed.slideshowSpeed = theme.slideshowSpeed;
     parsed.showVersion = !!theme.showVersion;
+    parsed.encoreSpotlightType = theme.encoreSpotlightType;
+    parsed.encoreSpotlightColor = theme.encoreSpotlightColor;
     return parsed;
   }
 
@@ -6714,42 +6792,13 @@
     return zoomTo;
   }
 
-  /** 0 = pure lattice point, 1 = plane center — keeps edge bows from showing BG margin. */
-  function readEncoreOriginCenterBias(stage) {
-    let bias = 0.28;
-    try {
-      const el = stage || els.familyPortrait || document.documentElement;
-      const raw = getComputedStyle(el)
-        .getPropertyValue("--encore-origin-center-bias")
-        .trim();
-      const n = parseFloat(raw);
-      if (Number.isFinite(n)) bias = Math.max(0, Math.min(1, n));
-    } catch (e) {
-      /* keep default */
-    }
-    return bias;
-  }
-
   /**
-   * TEMP: hard-circle spotlight QA (pure black outside, origin = lattice).
-   * Set false + restore CSS production gradient (see menu.css veil comment).
-   */
-  const ENCORE_SPOTLIGHT_QA = true;
-
-  /**
-   * Ken Burns origin + spotlight hole: lattice point eased toward plane center
-   * so higher zoom still frames cleanly (edges don’t reveal BG).
-   * QA mode: bias forced to 0 so the circle sits exactly on the item lattice.
+   * Spotlight hole + Ken Burns origin: always the item lattice point (no bias).
    */
   function setEncoreZoomOrigin(stage, latticeX, latticeY) {
     if (!stage) return;
-    const bias = ENCORE_SPOTLIGHT_QA ? 0 : readEncoreOriginCenterBias(stage);
-    const cx = PORTRAIT_STAGE_W * 0.5;
-    const cy = PORTRAIT_STAGE_H * 0.5;
-    const hx = latticeX + (cx - latticeX) * bias;
-    const hy = latticeY + (cy - latticeY) * bias;
-    stage.style.setProperty("--encore-hole-x", hx + "px");
-    stage.style.setProperty("--encore-hole-y", hy + "px");
+    stage.style.setProperty("--encore-hole-x", latticeX + "px");
+    stage.style.setProperty("--encore-hole-y", latticeY + "px");
   }
 
   function readCssDurationMs(el, prop, fallbackMs) {
@@ -7320,6 +7369,32 @@
   const ENCORE_FIRST_BOW_MS = 120;
   let _encoreSpotTimer = null;
 
+  /** Encore-only: list highlight tracks camera (off on zoom-out, on on zoom-in). */
+  function clearEncoreListHighlight() {
+    if (!els.list) return;
+    els.list.querySelectorAll(".menu-item").forEach(function (node) {
+      node.classList.remove("active");
+      node.style.removeProperty("--item-highlight");
+    });
+  }
+
+  function setEncoreListHighlight(itemIndex) {
+    if (!els.list || itemIndex == null || itemIndex < 0) return;
+    const item = items[itemIndex];
+    els.list.querySelectorAll(".menu-item").forEach(function (node, i) {
+      const on = i === itemIndex;
+      node.classList.toggle("active", on);
+      if (on && item) {
+        const color = item.isNew
+          ? config.highlightSpecial || config.highlight
+          : config.highlight;
+        node.style.setProperty("--item-highlight", color);
+      } else {
+        node.style.removeProperty("--item-highlight");
+      }
+    });
+  }
+
   /**
    * Ease Ken Burns back to 1× on the same clock as the veil fade
    * (.is-zoom-out → --dur-slow). Origin retarget happens after blackout.
@@ -7341,13 +7416,15 @@
     }
     stage.classList.remove("is-dimmed");
     easePortraitZoomOut(stage);
+    if (config.presentationMode === "encore") {
+      clearEncoreListHighlight();
+    }
   }
 
   /**
    * Encore curtain-call: blackout veil + ease zoom out together, then open a
    * soft hole and Ken Burns push-in toward the bowing plate’s lattice point.
-   * Hole + transform-origin share --encore-hole-x/y (slot left/top).
-   * Pull-out ends with the veil fade; origin swap is hidden under blackout.
+   * List highlight (Encore only): off with zoom-out, on with zoom-in.
    * @param {number} itemIndex
    * @param {{instant?: boolean}} [opts]
    */
@@ -7360,9 +7437,12 @@
       clearTimeout(_encoreSpotTimer);
       _encoreSpotTimer = null;
     }
-    // Fade veil out + ease zoom to 1× on the same duration (--dur-slow)
+    // Fade veil out + ease zoom to 1×; drop list highlight with the pull-back
     stage.classList.remove("is-dimmed");
     easePortraitZoomOut(stage);
+    if (config.presentationMode === "encore") {
+      clearEncoreListHighlight();
+    }
 
     if (itemIndex == null || itemIndex < 0) return;
     if (!items[itemIndex]) return;
@@ -7376,10 +7456,11 @@
       );
       if (!slot) return;
 
-      // Lattice → slightly center-biased origin (scale ~1×; swap under blackout)
+      // Lattice → origin (always pure lattice)
       const lx = parseFloat(slot.style.left) || 0;
       const ly = parseFloat(slot.style.top) || 0;
       setEncoreZoomOrigin(stage, lx, ly);
+      applyEncoreSpotlightChrome(items[itemIndex] || null);
       const zoomTo = readEncoreZoomTo(stage);
       // Long push-in again (drop .is-zoom-out so --dur-encore-zoom applies)
       const rig = stage.querySelector(".family-portrait-rig");
@@ -7388,6 +7469,10 @@
       void stage.offsetWidth;
       stage.classList.add("is-dimmed");
       stage.style.setProperty("--encore-zoom", String(zoomTo));
+      // List highlight arrives with the zoom-in (Encore only)
+      if (config.presentationMode === "encore") {
+        setEncoreListHighlight(itemIndex);
+      }
     }, gap);
   }
 
@@ -7453,8 +7538,18 @@
     const nodes = els.list
       ? els.list.querySelectorAll(".menu-item")
       : [];
+    // Encore collage bows: list highlight is deferred to zoom-in (see
+    // setPortraitSpotlight). Slideshow + non-collage Encore keep immediate.
+    const deferEncoreListHighlight =
+      config.presentationMode === "encore" &&
+      slide.type === "encore" &&
+      slide.withPortrait !== false &&
+      slide.items &&
+      slide.items.length > 0;
+
     nodes.forEach(function (node, i) {
       const on =
+        !deferEncoreListHighlight &&
         (slide.type === "item" || slide.type === "encore") &&
         i === slide.itemIndex;
       node.classList.toggle("active", on);
@@ -7470,6 +7565,10 @@
 
     // Family Portrait overview (Slideshow, or Encore lineup when FP on)
     if (slide.type === "portrait") {
+      // Encore lineup: nothing list-highlighted (between bows / before first)
+      if (config.presentationMode === "encore") {
+        clearEncoreListHighlight();
+      }
       if (cfg.showHero !== false) {
         if (prevType === "encore") {
           // Last Encore bow → lineup: settle only (no center solo re-intro)
@@ -7505,6 +7604,7 @@
         if (cfg.showHero !== false) {
           // Always settle — never center intro on bows (item zoom owns motion)
           showFamilyPortrait(slide.items, instant, { settle: true });
+          // List highlight toggled inside setPortraitSpotlight (zoom in/out)
           setPortraitSpotlight(slide.itemIndex, {
             // Short gap from lineup so first bow doesn’t wait full blackout
             instant: !!instant || prevType === "portrait" || prevType === "",
@@ -7814,6 +7914,32 @@
     const s = String(raw).trim().toLowerCase();
     if (s.indexOf("encore") !== -1) return "encore";
     if (s.indexOf("slide") !== -1) return "slideshow";
+    return fb;
+  }
+
+  /** Style "Encore Spotlight Type": Hard | Soft */
+  function parseEncoreSpotlightType(raw, fallback) {
+    const fb = fallback === "soft" ? "soft" : "hard";
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fb;
+    }
+    const s = String(raw).trim().toLowerCase();
+    if (s.indexOf("soft") !== -1) return "soft";
+    if (s.indexOf("hard") !== -1) return "hard";
+    return fb;
+  }
+
+  /** Style "Encore Spotlight Color": Black | Highlight */
+  function parseEncoreSpotlightColor(raw, fallback) {
+    const fb = fallback === "highlight" ? "highlight" : "black";
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fb;
+    }
+    const s = String(raw).trim().toLowerCase();
+    if (s.indexOf("highlight") !== -1 || s.indexOf("special") !== -1) {
+      return "highlight";
+    }
+    if (s.indexOf("black") !== -1) return "black";
     return fb;
   }
 

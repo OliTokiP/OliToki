@@ -170,6 +170,27 @@ def git_is_dirty() -> bool:
     return bool((r.stdout or "").strip())
 
 
+def _is_build_info_chore_subject(subject: str) -> bool:
+    s = (subject or "").strip().lower()
+    return s.startswith("chore: update build-info")
+
+
+def git_meaningful_subject(max_walk: int = 12) -> str:
+    """
+    Latest commit message that is not the auto build-info stamp commit.
+    Hash still comes from HEAD; subject should describe the real change.
+    """
+    r = run_git(["log", f"-{max_walk}", "--format=%s"], check=False)
+    if r.returncode != 0:
+        return ""
+    for line in (r.stdout or "").splitlines():
+        s = line.strip()
+        if not s or _is_build_info_chore_subject(s):
+            continue
+        return s
+    return ""
+
+
 def write_build_info() -> Path | None:
     """Write js/build-info.js from HEAD so Pages/remote can show the commit stamp."""
     try:
@@ -178,7 +199,9 @@ def write_build_info() -> Path | None:
         r = run_git(["log", "-1", "--format=%ci%n%s"], check=False)
         lines = (r.stdout or "").strip().split("\n") if r.returncode == 0 else []
         date = lines[0] if lines else ""
-        subject = lines[1] if len(lines) > 1 else ""
+        head_subject = lines[1] if len(lines) > 1 else ""
+        # Skip auto "chore: update build-info.js" so Show Version shows real work
+        subject = git_meaningful_subject() or head_subject
         info = {
             "hash": short,
             "hashFull": full,
@@ -504,24 +527,56 @@ def main() -> int:
                 committed = git_commit(msg)
                 if committed:
                     notes.append(f"Committed: {msg}")
-                    # Stamp build-info for Show Version; amend into same commit if dirty
+                    # Stamp build-info and amend into the same commit so HEAD
+                    # subject stays the real message (not "chore: update build-info").
                     bi = write_build_info()
                     if bi and bi.is_file():
-                        run_git(["add", str(bi.relative_to(ROOT))], check=False)
-                        # Second commit if first already closed — keep simple: new tiny commit
+                        rel = str(bi.relative_to(ROOT))
+                        run_git(["add", rel], check=False)
                         if git_is_dirty():
                             try:
                                 run_git(
                                     [
                                         "commit",
-                                        "-m",
-                                        "chore: update build-info.js",
+                                        "--amend",
+                                        "--no-edit",
+                                        "--no-verify",
                                     ],
                                     check=False,
                                 )
-                                notes.append("Updated js/build-info.js")
+                                # Refresh hash after amend (subject unchanged)
+                                bi2 = write_build_info()
+                                if bi2 and git_is_dirty():
+                                    run_git(["add", rel], check=False)
+                                    run_git(
+                                        [
+                                            "commit",
+                                            "--amend",
+                                            "--no-edit",
+                                            "--no-verify",
+                                        ],
+                                        check=False,
+                                    )
+                                notes.append("Updated js/build-info.js (amended)")
                             except Exception:
-                                notes.append("build-info written (commit separately)")
+                                # Fallback: tiny follow-up commit (subject still skipped in stamp)
+                                try:
+                                    run_git(
+                                        [
+                                            "commit",
+                                            "-m",
+                                            "chore: update build-info.js",
+                                        ],
+                                        check=False,
+                                    )
+                                    write_build_info()
+                                    notes.append(
+                                        "Updated js/build-info.js (separate commit)"
+                                    )
+                                except Exception:
+                                    notes.append(
+                                        "build-info written (commit separately)"
+                                    )
                 else:
                     notes.append("Nothing to commit (clean after stage).")
             except Exception as e:

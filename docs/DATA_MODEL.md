@@ -153,9 +153,14 @@ GID `1076652078`
 | K | BG Opacity | 10 | 0–1 |
 | L | BG Scroll Speed | 11 | |
 | M | Presentation Speed | 12 | Seconds (0 = pause) |
-| N | Color Picker labels | — | Reference list for other sheets |
+| N | Color Picker labels | 13 | Reference list for other sheets |
+| O | Show Version | 14 | 1 = commit stamp in disclaimer |
+| P | Encore Spotlight Type | 15 | `Hard` \| `Soft` |
+| Q | Encore Spotlight Color | 16 | `Black` \| `Highlight` (item highlight / special) |
 
 Blend modes allow-list: `normal`, `overlay`, `lighten`, `color-burn`, `soft-light`, `luminosity`.
+
+**Encore spotlight:** Hard = solid fill + crisp hole; Soft = smooth falloff (higher veil opacity). Color Black = `#000` (Soft may use multiply); Highlight = active item’s Highlight / Special color and **always** `mix-blend-mode: normal`.
 
 ---
 

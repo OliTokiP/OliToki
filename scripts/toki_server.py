@@ -269,7 +269,8 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                 return
 
             if path == "/api/build":
-                # Live git stamp for Show Version (Local / toki_server only)
+                # Live git stamp for Show Version (Local / toki_server only).
+                # Hash/date = HEAD; subject skips auto "chore: update build-info.js".
                 info = {
                     "hash": "unknown",
                     "hashFull": "",
@@ -296,11 +297,37 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                     if r.returncode == 0:
                         lines = (r.stdout or "").strip().split("\n")
                         full, short, date, subj = (lines + ["", "", "", ""])[:4]
+                        # Prefer last non-chore message (build-info auto-commits)
+                        subj_r = _sp.run(
+                            [
+                                "git",
+                                "-C",
+                                str(root),
+                                "log",
+                                "-12",
+                                "--format=%s",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        meaningful = subj or ""
+                        if subj_r.returncode == 0:
+                            for line in (subj_r.stdout or "").splitlines():
+                                s = line.strip()
+                                if not s:
+                                    continue
+                                if s.lower().startswith(
+                                    "chore: update build-info"
+                                ):
+                                    continue
+                                meaningful = s
+                                break
                         info = {
                             "hash": short or "unknown",
                             "hashFull": full or "",
                             "date": date or "",
-                            "subject": subj or "",
+                            "subject": meaningful,
                             "source": "git",
                         }
                 except Exception as e:
