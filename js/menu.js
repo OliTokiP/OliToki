@@ -4629,10 +4629,38 @@
     if (annShell) annShell.classList.toggle("is-shout", isShout);
 
     if (isShout) {
-      // Override tasteful limits: fill the box as large as overflow allows
+      // Fill content box height (keep CSS padding); width only clamps if needed
       const shoutMin =
         annLines >= 6 ? 0.25 : annLines >= 4 ? 0.35 : annLines >= 3 ? 0.45 : 0.55;
-      fitBoxScale(els.announcementBody, shoutMin, 3.2, {
+      let shoutMax = 12;
+      const body = els.announcementBody;
+      if (body && body.clientHeight > 0) {
+        body.style.setProperty("--box-scale", "1");
+        void body.offsetHeight;
+        const cs = window.getComputedStyle(body);
+        const padY =
+          (parseFloat(cs.paddingTop) || 0) +
+          (parseFloat(cs.paddingBottom) || 0);
+        const availH = Math.max(1, body.clientHeight - padY);
+        let contentH = 0;
+        const lines = body.querySelectorAll(".announcement-line");
+        for (let li = 0; li < lines.length; li++) {
+          contentH += lines[li].offsetHeight || 0;
+        }
+        if (lines.length > 1) {
+          const gap = parseFloat(cs.rowGap || cs.gap) || 0;
+          contentH += gap * (lines.length - 1);
+        }
+        if (contentH < 1) contentH = 1;
+        // Slight cushion so scrollHeight fit does not clip glyphs
+        shoutMax = Math.min(14, Math.max(shoutMin, (availH / contentH) * 0.99));
+      }
+      // Height-first, then width clamp if a line overflows
+      fitBoxScale(body, shoutMin, shoutMax, {
+        checkChildWidth: false,
+        shrinkFactor: 0.99,
+      });
+      fitBoxScale(body, shoutMin, shoutMax, {
         checkChildWidth: true,
         shrinkFactor: 0.99,
       });

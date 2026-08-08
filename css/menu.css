@@ -1316,8 +1316,13 @@ body {
   opacity: 0;
 }
 
-/* Shout: max-scale type is on (fitDrinksBoxes). Earthquake shake deferred. */
-/* is-shout class still toggled for future shake / styling. */
+/* Shout: height-first max scale (fitDrinksBoxes). Tighter leading fills pad box. */
+#announcement-box.is-shout .drinks-box-body,
+#announcement-box .drinks-box-body.is-shout {
+  line-height: 1.05;
+  gap: calc(4px * var(--box-scale));
+}
+/* Earthquake shake deferred. */
 
 /* Drink options: Create Columns? → grid; else balanced wrap */
 #drink-options-box .drinks-box-body {
