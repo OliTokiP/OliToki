@@ -6671,17 +6671,22 @@
     const stage = els.familyPortrait;
     if (!stage) return;
     stage.innerHTML = "";
+    stage.style.setProperty("--encore-zoom", "1");
 
-    // Plates layer (z=1) + veil sibling (z=2). Plate z-index stays inside
-    // the plates layer and can never paint over the house-lights veil.
+    // Rig holds plates + veil so Ken Burns scale keeps the hole on the plate.
+    // Plates (z=1) under veil (z=2); plate z-index stays inside plates layer.
+    const rig = document.createElement("div");
+    rig.className = "family-portrait-rig";
+    stage.appendChild(rig);
+
     const plates = document.createElement("div");
     plates.className = "family-portrait-plates";
-    stage.appendChild(plates);
+    rig.appendChild(plates);
 
     const veil = document.createElement("div");
     veil.className = "family-portrait-veil";
     veil.setAttribute("aria-hidden", "true");
-    stage.appendChild(veil);
+    rig.appendChild(veil);
 
     const n = portraitItems.length;
     if (!n) return;
@@ -6787,6 +6792,16 @@
   const ENCORE_FIRST_BOW_MS = 120;
   let _encoreSpotTimer = null;
 
+  /**
+   * Ease Ken Burns back to 1× on the same clock as the veil fade
+   * (.is-zoom-out → --dur-slow). Origin retarget happens after blackout.
+   */
+  function easePortraitZoomOut(stage) {
+    if (!stage) return;
+    stage.classList.add("is-zoom-out");
+    stage.style.setProperty("--encore-zoom", "1");
+  }
+
   function clearPortraitSpotlight() {
     const stage = els.familyPortrait;
     if (!stage) return;
@@ -6795,11 +6810,14 @@
       _encoreSpotTimer = null;
     }
     stage.classList.remove("is-dimmed");
+    easePortraitZoomOut(stage);
   }
 
   /**
-   * Encore curtain-call: blackout veil fully, then open a soft hole over the
-   * bowing plate (assets/spotlight.grd–style smooth radial). Hole = lattice point.
+   * Encore curtain-call: blackout veil + ease zoom out together, then open a
+   * soft hole and Ken Burns push-in toward the bowing plate’s lattice point.
+   * Hole + transform-origin share --encore-hole-x/y (slot left/top).
+   * Pull-out ends with the veil fade; origin swap is hidden under blackout.
    * @param {number} itemIndex
    * @param {{instant?: boolean}} [opts]
    */
@@ -6812,8 +6830,9 @@
       clearTimeout(_encoreSpotTimer);
       _encoreSpotTimer = null;
     }
-    // Fade veil out completely before reopening on the next bow
+    // Fade veil out + ease zoom to 1× on the same duration (--dur-slow)
     stage.classList.remove("is-dimmed");
+    easePortraitZoomOut(stage);
 
     if (itemIndex == null || itemIndex < 0) return;
     if (!items[itemIndex]) return;
@@ -6827,13 +6846,28 @@
       );
       if (!slot) return;
 
-      // Hole center = lattice origin (slot left/top are stage-local px)
+      // Lattice origin = hole center = Ken Burns transform-origin
+      // (scale is ~1× here; origin change is hidden under the blackout)
       const hx = parseFloat(slot.style.left) || 0;
       const hy = parseFloat(slot.style.top) || 0;
       stage.style.setProperty("--encore-hole-x", hx + "px");
       stage.style.setProperty("--encore-hole-y", hy + "px");
+      // Peak scale from CSS token (wall uses a gentler --encore-zoom-to)
+      let zoomTo = 1.14;
+      try {
+        const raw = getComputedStyle(stage)
+          .getPropertyValue("--encore-zoom-to")
+          .trim();
+        const n = parseFloat(raw);
+        if (Number.isFinite(n) && n > 1) zoomTo = n;
+      } catch (e) {
+        /* keep default */
+      }
+      // Long push-in again (drop .is-zoom-out so --dur-encore-zoom applies)
+      stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
       stage.classList.add("is-dimmed");
+      stage.style.setProperty("--encore-zoom", String(zoomTo));
     }, gap);
   }
 

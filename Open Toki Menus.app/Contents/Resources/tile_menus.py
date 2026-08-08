@@ -8,6 +8,7 @@ One launch dialog:
   • Show extra info (default off)
   • Hard refresh — cache-bust query on URLs (default on)
   • Private browser — incognito / private window (default on)
+  • Open data sheet — Google Sheet in Chrome (normal window; default off)
 
 Local server runs in a visible Terminal window titled “Toki Menu Server”
 (Ctrl+C or close the window to stop it).
@@ -19,6 +20,7 @@ Skip UI with env:
   TOKI_CHROME=0|1
   TOKI_HARD_REFRESH=0|1
   TOKI_PRIVATE=0|1
+  TOKI_OPEN_SHEET=0|1
   TOKI_BOARDS=1,2,3,4
   TOKI_REMOTE_BASE=https://absrdst.github.io/TokiMenu
   TOKI_PORT=8765
@@ -41,6 +43,13 @@ DEFAULT_REMOTE_BASE = os.environ.get(
     "TOKI_REMOTE_BASE", "https://absrdst.github.io/TokiMenu"
 ).rstrip("/")
 LOG = Path(os.environ.get("TOKI_SERVER_LOG", "/tmp/toki-menu-server.log"))
+
+# Live menu spreadsheet (always open in Chrome, never private)
+DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
+DATA_SHEET_URL = os.environ.get(
+    "TOKI_SHEET_URL",
+    f"https://docs.google.com/spreadsheets/d/{DEFAULT_SHEET_ID}/edit",
+).strip()
 
 # Filled after Environment is chosen
 BASE = f"http://127.0.0.1:{PORT}"
@@ -116,8 +125,7 @@ def set_base_urls(
 
     if boards is None or len(boards) != 4:
         boards = [True, True, True, True]
-    if not any(boards):
-        boards = [True, True, True, True]
+    # Empty boards is allowed (data-sheet-only launch); do not force all on.
 
     bust = f"_toki={int(time.time())}" if hard_refresh else ""
 
@@ -139,7 +147,8 @@ def set_base_urls(
 
     chrome_q = "chrome=1" if show_chrome else "chrome=0"
     board_ids = ",".join(str(i + 1) for i, on in enumerate(boards) if on)
-    boards_q = f"boards={board_ids}" if board_ids else "boards=1,2,3,4"
+    # Empty selection → no board ids (preview-all still defaults its own UI)
+    boards_q = f"boards={board_ids}" if board_ids else "boards="
     PREVIEW_ALL_URL = with_q(f"{BASE}/preview-all.html", chrome_q, boards_q)
 
 
@@ -302,6 +311,47 @@ def resolve_chrome():
     if binary or os.path.isdir("/Applications/Google Chrome.app"):
         return "Google Chrome", binary
     return None
+
+
+def open_data_sheet_in_chrome() -> None:
+    """
+    Open the live Google Sheet in a normal (non-private) Chrome window.
+    Always Chrome — ignores the board browser choice and Private toggle.
+    """
+    url = DATA_SHEET_URL
+    if not url:
+        print("open data sheet: no URL configured", flush=True)
+        return
+
+    chrome = resolve_chrome()
+    if not chrome:
+        # Last resort: system handler (still tries to avoid private flags)
+        print("open data sheet: Chrome not found; using open", flush=True)
+        subprocess.Popen(
+            ["open", url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+
+    app_name, binary = chrome
+    # Never pass --incognito. New normal window so Private board launches
+    # don't force the sheet into an incognito session.
+    if binary:
+        args = [binary, "--new-window", url]
+        print("open data sheet:", " ".join(args), flush=True)
+        subprocess.Popen(
+            args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        print("open data sheet: open -na", app_name, url, flush=True)
+        subprocess.Popen(
+            ["open", "-na", app_name, "--args", "--new-window", url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def resolve_firefox():
@@ -654,6 +704,10 @@ def _env_private() -> bool | None:
     return _env_bool("TOKI_PRIVATE")
 
 
+def _env_open_sheet() -> bool | None:
+    return _env_bool("TOKI_OPEN_SHEET")
+
+
 def _env_boards() -> list[bool] | None:
     raw = os.environ.get("TOKI_BOARDS", "").strip()
     if not raw:
@@ -680,13 +734,14 @@ def _default_launch_opts() -> dict[str, Any]:
         "boards": [True, True, True, True],
         "hard_refresh": True,
         "private": True,
+        "open_sheet": False,
     }
 
 
 def prompt_launch_options() -> dict[str, Any] | None:
     """
     Dedicated Toki Menus window: browser, env, boards, layout, chrome,
-    hard refresh, private.
+    hard refresh, private, open data sheet.
 
     Returns options dict or None if cancelled.
     """
@@ -696,6 +751,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
     env_chrome = _env_chrome()
     env_hard = _env_hard_refresh()
     env_private = _env_private()
+    env_open_sheet = _env_open_sheet()
     env_boards = _env_boards()
 
     # Fully non-interactive when browser + layout forced
@@ -710,6 +766,8 @@ def prompt_launch_options() -> dict[str, Any] | None:
             opts["hard_refresh"] = env_hard
         if env_private is not None:
             opts["private"] = env_private
+        if env_open_sheet is not None:
+            opts["open_sheet"] = env_open_sheet
         if env_boards is not None:
             opts["boards"] = env_boards
         return opts
@@ -725,6 +783,8 @@ def prompt_launch_options() -> dict[str, Any] | None:
     chrome_default = "true" if env_chrome is True else "false"
     hard_default = "false" if env_hard is False else "true"
     private_default = "false" if env_private is False else "true"
+    # Open data sheet: off unless TOKI_OPEN_SHEET=1
+    sheet_default = "true" if env_open_sheet is True else "false"
     boards = env_boards or [True, True, True, True]
     bdefs = ["true" if b else "false" for b in boards]
     env_default = (
@@ -742,6 +802,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         chrome_default,
         hard_default,
         private_default,
+        sheet_default,
         bdefs,
     )
     if out is None:
@@ -758,6 +819,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         env_chrome=env_chrome,
         env_hard=env_hard,
         env_private=env_private,
+        env_open_sheet=env_open_sheet,
         env_boards=env_boards,
     )
 
@@ -769,9 +831,10 @@ def _prompt_nsalert_dialog(
     chrome_default: str,
     hard_default: str,
     private_default: str,
+    sheet_default: str,
     bdefs: list[str],
 ) -> str | None:
-    """NSAlert accessory fallback if dedicated window JSObjC fails."""
+    """NSAlert accessory with launch switches."""
     script = f'''
 ObjC.import("AppKit");
 function makeSwitch(title, x, y, w, on) {{
@@ -809,7 +872,7 @@ function run() {{
   alert.addButtonWithTitle("Cancel");
 
   var width = 380;
-  var height = 250;
+  var height = 278;
   var view = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, width, height));
   var y = height - 28;
 
@@ -844,7 +907,9 @@ function run() {{
   var hardBox = makeSwitch("Hard refresh (cache-bust URLs)", 0, y, width, {hard_default});
   view.addSubview(hardBox); y -= 24;
   var privateBox = makeSwitch("Private browser (incognito)", 0, y, width, {private_default});
-  view.addSubview(privateBox);
+  view.addSubview(privateBox); y -= 24;
+  var sheetBox = makeSwitch("Open data sheet", 0, y, width, {sheet_default});
+  view.addSubview(sheetBox);
 
   alert.setAccessoryView(view);
   try {{ app.activateIgnoringOtherApps(true); }} catch (e3) {{}}
@@ -863,7 +928,8 @@ function run() {{
     (Number(chromeBox.state) === 1 ? "1" : "0") + "|" +
     boardsBits + "|" +
     (Number(hardBox.state) === 1 ? "1" : "0") + "|" +
-    (Number(privateBox.state) === 1 ? "1" : "0");
+    (Number(privateBox.state) === 1 ? "1" : "0") + "|" +
+    (Number(sheetBox.state) === 1 ? "1" : "0");
 }}
 '''
     r = subprocess.run(
@@ -886,6 +952,7 @@ def _parse_launch_result(
     env_chrome: bool | None,
     env_hard: bool | None,
     env_private: bool | None,
+    env_open_sheet: bool | None,
     env_boards: list[bool] | None,
 ) -> dict[str, Any] | None:
     parts = out.split("|")
@@ -904,6 +971,7 @@ def _parse_launch_result(
     boards_bits = parts[4].strip() if len(parts) > 4 else "1111"
     hard_flag = parts[5].strip() if len(parts) > 5 else "1"
     private_flag = parts[6].strip() if len(parts) > 6 else "1"
+    sheet_flag = parts[7].strip() if len(parts) > 7 else "0"
 
     if layout not in ("tiled", "single"):
         layout = "tiled"
@@ -911,13 +979,13 @@ def _parse_launch_result(
     show_chrome = chrome_flag in ("1", "true", "yes")
     hard_refresh = hard_flag in ("1", "true", "yes")
     private = private_flag in ("1", "true", "yes")
+    open_sheet = sheet_flag in ("1", "true", "yes")
 
     boards = [False, False, False, False]
     bits = (boards_bits + "0000")[:4]
     for i, ch in enumerate(bits):
         boards[i] = ch == "1"
-    if not any(boards):
-        boards = [True, True, True, True]
+    # Keep all-off: main() treats that as sheet-only when open_sheet is on
 
     browser_key = None
     for blabel, key in BROWSER_CHOICES:
@@ -940,6 +1008,8 @@ def _parse_launch_result(
         hard_refresh = env_hard
     if env_private is not None:
         private = env_private
+    if env_open_sheet is not None:
+        open_sheet = env_open_sheet
     if env_boards is not None:
         boards = env_boards
     if env_browser:
@@ -953,6 +1023,7 @@ def _parse_launch_result(
         "boards": boards,
         "hard_refresh": hard_refresh,
         "private": private,
+        "open_sheet": open_sheet,
     }
 
 
@@ -1368,6 +1439,7 @@ def main():
     boards = picked["boards"]
     hard_refresh = picked["hard_refresh"]
     private = picked["private"]
+    open_sheet = bool(picked.get("open_sheet"))
     LAUNCH_PRIVATE = private
     LAUNCH_HARD_REFRESH = hard_refresh
 
@@ -1386,8 +1458,31 @@ def main():
         hard_refresh,
         "private=",
         private,
+        "open_sheet=",
+        open_sheet,
         flush=True,
     )
+
+    any_boards = any(boards) if boards else False
+    # Sheet-only: no boards (and not single-window wall) — skip menus/server
+    sheet_only = open_sheet and not any_boards and layout != "single"
+
+    if not any_boards and not open_sheet and layout != "single":
+        alert("Select at least one board, or check Open data sheet.", stop=True)
+        sys.exit(1)
+
+    if sheet_only:
+        print("sheet-only launch — skipping boards and local server", flush=True)
+        try:
+            open_data_sheet_in_chrome()
+        except Exception as err:
+            print("open data sheet failed:", err, flush=True)
+            alert(
+                f"Could not open the data sheet in Chrome.\n\n{err}",
+                stop=True,
+            )
+            sys.exit(1)
+        return
 
     if env == "local":
         refresh_build_info(root)
@@ -1410,6 +1505,7 @@ def main():
     )
 
     if not URLS and layout != "single":
+        # open_sheet alone already handled above; this is boards empty + no sheet
         alert("No boards selected.", stop=True)
         sys.exit(1)
 
@@ -1441,14 +1537,23 @@ def main():
 
     if layout == "single":
         open_single_window(family, app_name, binary, full_bounds_from_quads(quads))
-        return
-
-    if family == "safari":
+    elif family == "safari":
         open_safari(quads)
     elif family == "firefox":
         open_firefox(binary, quads)
     else:
         open_chromium_family(app_name, binary, quads)
+
+    # After boards: optional data sheet in normal Chrome (never private)
+    if open_sheet:
+        try:
+            open_data_sheet_in_chrome()
+        except Exception as err:
+            print("open data sheet failed:", err, flush=True)
+            alert(
+                f"Could not open the data sheet in Chrome.\n\n{err}",
+                stop=False,
+            )
 
 
 if __name__ == "__main__":

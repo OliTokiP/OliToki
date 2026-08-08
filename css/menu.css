@@ -53,6 +53,9 @@ body {
   --dur-mid: 0.45s; /* hero / sticker / portrait show */
   --dur-slow: 1.05s; /* encore veil */
   --dur-crossfade: 1.2s; /* galaxy dual-layer */
+  --dur-encore-zoom: 3.4s; /* Ken Burns push-in per bow */
+  --encore-zoom: 1;
+  --encore-zoom-to: 1.14; /* peak scale toward lattice point */
 }
 
 #stage {
@@ -388,6 +391,27 @@ body {
   isolation: isolate;
 }
 
+/*
+  Ken Burns rig: plates + veil scale together so the spotlight hole stays
+  glued to the lattice point. Origin = --encore-hole-x/y (set per bow in JS).
+  Stage clips; rig zooms inside.
+  Push-in: long ease-out. Pull-out (.is-zoom-out): same duration/easing as
+  the veil fade so origin can retarget under the blackout (no snap).
+*/
+#family-portrait-stage .family-portrait-rig {
+  position: absolute;
+  inset: 0;
+  transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
+  transform: scale(var(--encore-zoom, 1));
+  transition: transform var(--dur-encore-zoom) var(--ease-out);
+  will-change: transform;
+}
+
+#family-portrait-stage.is-zoom-out .family-portrait-rig {
+  /* Match .family-portrait-veil opacity fade */
+  transition: transform var(--dur-slow) var(--ease-fade);
+}
+
 /* All plates live in this layer so their z-index can never beat the veil */
 #family-portrait-stage .family-portrait-plates {
   position: absolute;
@@ -397,6 +421,12 @@ body {
 
 #family-portrait-stage.visible {
   opacity: 1;
+}
+
+/* Wall: gentler push (perf + less crop at half-res) */
+body.preview-wall #family-portrait-stage {
+  --encore-zoom-to: 1.08;
+  --dur-encore-zoom: 2.8s;
 }
 
 #family-portrait-stage.portrait-debug {
