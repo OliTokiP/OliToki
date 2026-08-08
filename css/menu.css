@@ -1316,13 +1316,63 @@ body {
   opacity: 0;
 }
 
-/* Shout: height-first max scale (fitDrinksBoxes). Tighter leading fills pad box. */
+/* Shout: height-first max scale (fitDrinksBoxes). Tighter leading + body shake. */
 #announcement-box.is-shout .drinks-box-body,
 #announcement-box .drinks-box-body.is-shout {
   line-height: 1.05;
   gap: calc(4px * var(--box-scale));
+  animation: ann-shout-shake 0.42s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform;
 }
-/* Earthquake shake deferred. */
+
+@keyframes ann-shout-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  10% {
+    transform: translate(-0.18em, 0.1em) rotate(-1.1deg);
+  }
+  20% {
+    transform: translate(0.2em, -0.09em) rotate(1.2deg);
+  }
+  30% {
+    transform: translate(-0.13em, -0.16em) rotate(0.8deg);
+  }
+  40% {
+    transform: translate(0.16em, 0.07em) rotate(-1deg);
+  }
+  50% {
+    transform: translate(-0.21em, 0.12em) rotate(1.05deg);
+  }
+  60% {
+    transform: translate(0.11em, -0.07em) rotate(-0.7deg);
+  }
+  70% {
+    transform: translate(-0.09em, 0.18em) rotate(0.9deg);
+  }
+  80% {
+    transform: translate(0.18em, -0.11em) rotate(-1deg);
+  }
+  90% {
+    transform: translate(-0.14em, 0.06em) rotate(0.6deg);
+  }
+}
+
+/* Calmer on multi-board wall (Fire Stick FPS) */
+body.preview-wall #announcement-box.is-shout .drinks-box-body,
+body.preview-wall #announcement-box .drinks-box-body.is-shout {
+  animation-duration: 0.55s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #announcement-box.is-shout .drinks-box-body,
+  #announcement-box .drinks-box-body.is-shout {
+    animation: none;
+    will-change: auto;
+  }
+}
 
 /* Drink options: Create Columns? → grid; else balanced wrap */
 #drink-options-box .drinks-box-body {
