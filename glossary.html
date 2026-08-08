@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toki Menu — Boards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: "Roboto", system-ui, sans-serif;
+      font-weight: 700;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2.5rem 1.25rem;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2.5rem;
+      width: 100%;
+      max-width: 28rem;
+      text-align: center;
+    }
+
+    .logo {
+      display: block;
+      width: min(280px, 70vw);
+      height: auto;
+      /* Logo asset is dark-on-transparent; invert for white on black */
+      filter: brightness(0) invert(1);
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.45);
+      margin-top: -1.25rem;
+    }
+
+    nav {
+      width: 100%;
+    }
+
+    ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    a {
+      display: block;
+      padding: 0.95rem 1.25rem;
+      color: #fff;
+      text-decoration: none;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease;
+    }
+
+    a:hover,
+    a:focus-visible {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.55);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    a:active {
+      transform: translateY(0);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    a .num {
+      display: inline-block;
+      min-width: 1.5em;
+      margin-right: 0.35em;
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 900;
+    }
+
+    a.all {
+      margin-top: 0.75rem;
+      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    a.all:hover,
+    a.all:focus-visible {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="assets/logo.svg" alt="Oli Toki" width="280" height="80" draggable="false" />
+    <h1>Menu Boards</h1>
+    <nav aria-label="Boards">
+      <ul>
+        <li>
+          <a href="index.html"><span class="num">1</span> Bowls &amp; Salads</a>
+        </li>
+        <li>
+          <a href="index2.html"><span class="num">2</span> Handhelds</a>
+        </li>
+        <li>
+          <a href="index3.html"><span class="num">3</span> Munchies</a>
+        </li>
+        <li>
+          <a href="index4.html"><span class="num">4</span> Drinks &amp; Deals</a>
+        </li>
+        <li>
+          <a class="all" href="preview-all.html">All four · wall preview</a>
+        </li>
+      </ul>
+    </nav>
+  </main>
+</body>
+</html>
