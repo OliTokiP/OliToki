@@ -6440,8 +6440,9 @@
 
     const cols = best.cols;
     const rows = best.rows;
-    const padY = stageH * 0.05;
-    const padXFrac = 0.06; // of each row’s available width
+    // Keep fill-the-wedge bias; only a hair more margin when sparse
+    const padY = stageH * (n <= 3 ? 0.065 : 0.05);
+    const padXFrac = n <= 3 ? 0.075 : 0.06;
     const innerH = Math.max(1, stageH - 2 * padY);
     const cellH = innerH / rows;
 
@@ -6473,9 +6474,9 @@
         const colIndex = incomplete
           ? Math.floor((cols - inRow) / 2 + k)
           : k;
-        // Even parity → higher z (foreground)
-        const parity = (r + colIndex) % 2;
-        const zIndex = (parity === 0 ? 40 : 20) + placed;
+        // Queue line: lower-right in front, top-left in back
+        // (primary y/down, secondary x/right — no checkerboard)
+        const zIndex = Math.round(y * 1000 + x);
         slots.push({
           x: x,
           y: y,
@@ -6487,16 +6488,19 @@
       }
     }
 
-    // Scale: fill typical cell with overlap so plates can stack
-    const overlap = 1.42;
+    // Still lean fill; sparse n only a touch less aggressive than before
+    const overlap =
+      n <= 2 ? 1.28 : n <= 3 ? 1.32 : n <= 4 ? 1.36 : n <= 6 ? 1.4 : 1.42;
     const refCellW = Number.isFinite(minCellW) ? minCellW : midW / cols;
     let scale = Math.min(
       (refCellW * overlap) / PORTRAIT_IMG_W,
       (cellH * overlap) / PORTRAIT_IMG_H
     );
-    // Density dampen for large n
+    // Density dampen for large n; hair-cut for 2–3 only (~8–12% smaller)
     scale *= Math.min(1.15, 1.05 / Math.sqrt(Math.max(1, n) / 6));
-    scale = Math.max(0.2, Math.min(0.72, scale));
+    if (n <= 2) scale *= 0.9;
+    else if (n <= 3) scale *= 0.93;
+    scale = Math.max(0.2, Math.min(0.7, scale));
 
     return {
       slots: slots,
@@ -6590,7 +6594,44 @@
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
       stage.appendChild(img);
+
+      // New! sticker over each isNew plate (same assets / tint as board sticker)
+      if (it.isNew && cfg.showSticker !== false) {
+        appendPortraitSticker(stage, slot, layout.scale);
+      }
     });
+
+    // Tint any portrait stickers with current Special Highlight
+    applyStickerTint();
+  }
+
+  /**
+   * Mini New! badge for one Family Portrait slot (lower-right of the plate).
+   */
+  function appendPortraitSticker(stage, slot, photoScale) {
+    if (!stage || !slot) return;
+    const el = document.createElement("div");
+    el.className = "family-portrait-sticker";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML =
+      '<img class="new-sticker-shadow" src="assets/Sticker-Shadow.png" alt="" draggable="false" />' +
+      '<div class="new-sticker-body">' +
+      '<img class="new-sticker-body-img" src="assets/Sticker-Body.png" alt="" draggable="false" />' +
+      '<span class="new-sticker-tint"></span>' +
+      "</div>" +
+      '<span class="new-sticker-label">New!</span>';
+
+    // Offset toward lower-right of the scaled plate (1500×1000 native)
+    const ox = 280 * photoScale;
+    const oy = 160 * photoScale;
+    el.style.left = slot.x + ox + "px";
+    el.style.top = slot.y + oy + "px";
+    el.style.zIndex = String((slot.zIndex || 20) + 10);
+    // Sticker base is 560px; keep readable next to reduced food art
+    const stickScale = Math.max(0.16, Math.min(0.4, photoScale * 0.9));
+    el.style.transform =
+      "translate(-50%, -50%) rotate(-12deg) scale(" + stickScale + ")";
+    stage.appendChild(el);
   }
 
   // ---------- slideshow ----------

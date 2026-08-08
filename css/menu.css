@@ -397,9 +397,22 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   filter: none;
 }
 
+/* Mini New! stickers on Family Portrait items (isNew) */
+#family-portrait-stage .family-portrait-sticker {
+  position: absolute;
+  width: 560px;
+  aspect-ratio: 1 / 1;
+  font-size: 560px;
+  pointer-events: none;
+  user-select: none;
+  transform-origin: center center;
+  /* left/top + transform set by JS (slot + plate offset + scale) */
+}
+
 /* ---------- Layer 5: new sticker ----------
    Same size + bottom on every board (drinks only overrides horizontal/rotate).
    Assets are 1024² with transparent padding; bottom is shared so Y matches.
+   Also used under .family-portrait-sticker (shared child selectors).
 
    Stack:
      1) Sticker-Shadow.png — plain, no blend
@@ -443,15 +456,22 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   object-fit: contain;
 }
 
+/* Portrait stickers: keep shadow node out of the cascade (do not re-enable display) */
+#family-portrait-stage .family-portrait-sticker .new-sticker-shadow {
+  display: none !important;
+}
+
 /* Gold body + hue plate only (isolated) */
-#new-sticker .new-sticker-body {
+#new-sticker .new-sticker-body,
+#family-portrait-stage .family-portrait-sticker .new-sticker-body {
   position: absolute;
   inset: 0;
   z-index: 1;
   isolation: isolate;
 }
 
-#new-sticker .new-sticker-body-img {
+#new-sticker .new-sticker-body-img,
+#family-portrait-stage .family-portrait-sticker .new-sticker-body-img {
   display: block;
   width: 100%;
   height: 100%;
@@ -461,7 +481,8 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   color: transparent;
 }
 
-#new-sticker .new-sticker-tint {
+#new-sticker .new-sticker-tint,
+#family-portrait-stage .family-portrait-sticker .new-sticker-tint {
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -490,7 +511,8 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   Final translateX is along the sticker axis (right on sticker =
   right + slightly up on the board after the -7.25° rotate).
 */
-#new-sticker .new-sticker-label {
+#new-sticker .new-sticker-label,
+#family-portrait-stage .family-portrait-sticker .new-sticker-label {
   position: absolute;
   z-index: 2;
   left: 48.05%;
