@@ -551,25 +551,12 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
 
 /*
   Encore house lights: veil IN FRONT of every plate.
-  Matched to assets/spotlight.grd (PS Custom, Smoothness 100%):
-    opacity 0 → 100% with max-smooth interpolation (no linear kinks).
-  CSS has no Smooth/Perceptual gradient modes — we approximate PS Smooth
-  with dense smootherstep-sampled alpha stops (avoids concentric rings).
-  --encore-hole-x/y = lattice px; --encore-hole-r = half scaled plate width.
-  Gradient radius = 1.85× open core (tighter hole than full 2×).
-  Dim = 79% opacity × multiply (+5% from 74%).
-*/
-#family-portrait-stage .family-portrait-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-fade);
-  mix-blend-mode: multiply;
-  /* Force own compositor layer above filtered/blended plates */
-  transform: translateZ(0);
-  /* smootherstep samples; slightly denser mid-ring for a smaller clear core */
+  --encore-hole-x/y = lattice (or center-biased) px; --encore-hole-r = open radius.
+
+  ═══════════════════════════════════════════════════════════════════════════
+  PRODUCTION soft gradient (restore when ENCORE_SPOTLIGHT_QA is done):
+  Paste back into .family-portrait-veil background + is-dimmed opacity/blend.
+
   background: radial-gradient(
     circle calc(var(--encore-hole-r, 160px) * 1.85)
       at var(--encore-hole-x, 50%) var(--encore-hole-y, 50%),
@@ -589,10 +576,37 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
     rgba(0, 0, 0, 0.99) 93%,
     #000 100%
   );
+  mix-blend-mode: multiply;
+  .is-dimmed → opacity: 0.79;
+
+  Also re-enable --encore-origin-center-bias (JS ENCORE_SPOTLIGHT_QA = false).
+  ═══════════════════════════════════════════════════════════════════════════
+*/
+
+/* TEMP QA: pure black outside + hard circular hole (origin QA). Flip off in CSS+JS. */
+#family-portrait-stage .family-portrait-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-fade);
+  /* No multiply — solid black so the circle edge is unambiguous */
+  mix-blend-mode: normal;
+  transform: translateZ(0);
+  /* Hard disc: transparent core, #000 from edge outward (last stop fills rest) */
+  background: radial-gradient(
+    circle var(--encore-hole-r, 160px)
+      at var(--encore-hole-x, 50%) var(--encore-hole-y, 50%),
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 99%,
+    #000 100%
+  );
 }
 
 #family-portrait-stage.is-dimmed .family-portrait-veil {
-  opacity: 0.79;
+  /* Full black for QA (not 0.79 multiply) */
+  opacity: 1;
 }
 
 /* Mini New! stickers on Family Portrait items (isNew) */

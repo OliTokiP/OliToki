@@ -6731,12 +6731,19 @@
   }
 
   /**
+   * TEMP: hard-circle spotlight QA (pure black outside, origin = lattice).
+   * Set false + restore CSS production gradient (see menu.css veil comment).
+   */
+  const ENCORE_SPOTLIGHT_QA = true;
+
+  /**
    * Ken Burns origin + spotlight hole: lattice point eased toward plane center
    * so higher zoom still frames cleanly (edges don’t reveal BG).
+   * QA mode: bias forced to 0 so the circle sits exactly on the item lattice.
    */
   function setEncoreZoomOrigin(stage, latticeX, latticeY) {
     if (!stage) return;
-    const bias = readEncoreOriginCenterBias(stage);
+    const bias = ENCORE_SPOTLIGHT_QA ? 0 : readEncoreOriginCenterBias(stage);
     const cx = PORTRAIT_STAGE_W * 0.5;
     const cy = PORTRAIT_STAGE_H * 0.5;
     const hx = latticeX + (cx - latticeX) * bias;
