@@ -166,7 +166,6 @@
     bgOpacity: 10,
     bgScrollSpeed: 11,
     slideshowSpeed: 12,
-    showVersion: 13,
   };
   /** Excel row 2 = first data row (index 1 in sheet_to_json header:1 arrays) */
   const STYLE_BOARD_WIDE_ROW_INDEX = 1;
@@ -265,7 +264,6 @@
     footerDrinksBody: document.getElementById("footer-drinks-body"),
     footerBoxes: document.getElementById("footer-boxes"),
     disclaimer: document.getElementById("disclaimer"),
-    versionInfo: document.getElementById("version-info"),
     announcementTitle: document.getElementById("announcement-title"),
     announcementSubtitle: document.getElementById("announcement-subtitle"),
     announcementBody: document.getElementById("announcement-body"),
@@ -1506,12 +1504,44 @@
     });
 
     const cellXfs = [];
+    const cellStyleXfs = [];
     for (const el of stylesDoc.getElementsByTagName("*")) {
-      if (xmlLocal(el.tagName) === "cellXfs") {
+      const tag = xmlLocal(el.tagName);
+      if (tag === "cellXfs") {
         for (const xf of el.children || []) {
           if (xmlLocal(xf.tagName) === "xf") cellXfs.push(xf);
         }
       }
+      if (tag === "cellStyleXfs") {
+        for (const xf of el.children || []) {
+          if (xmlLocal(xf.tagName) === "xf") cellStyleXfs.push(xf);
+        }
+      }
+    }
+
+    /** Horizontal align from xf / style chain → "left"|"center"|"right"|null */
+    function xfTextAlign(xf, allowStyleLookup) {
+      if (!xf) return null;
+      for (const ch of xf.children || []) {
+        if (xmlLocal(ch.tagName) !== "alignment") continue;
+        const h = String(ch.getAttribute("horizontal") || "")
+          .trim()
+          .toLowerCase();
+        if (h === "left" || h === "right" || h === "center") return h;
+        if (h === "justify" || h === "distributed" || h === "fill") {
+          return "center";
+        }
+        // "general" / empty → no explicit align
+        return null;
+      }
+      if (allowStyleLookup === false) return null;
+      const apply = xf.getAttribute("applyAlignment");
+      if (apply === "0") return null;
+      const styleId = xf.getAttribute("xfId");
+      if (styleId != null && styleId !== "" && cellStyleXfs[Number(styleId)]) {
+        return xfTextAlign(cellStyleXfs[Number(styleId)], false);
+      }
+      return null;
     }
 
     // Rich text shared strings (index → runs)
@@ -1649,11 +1679,13 @@
           const fillColor = fillColors[fillId];
           if (fillColor) fills[ref] = fillColor;
           const fs = fontStyles[fontId];
-          if (fs) {
+          const align = xfTextAlign(xf, true);
+          if (fs || align) {
             fonts[ref] = {
-              bold: !!fs.bold,
-              italic: !!fs.italic,
-              color: fs.color || null,
+              bold: !!(fs && fs.bold),
+              italic: !!(fs && fs.italic),
+              color: (fs && fs.color) || null,
+              align: align || null,
             };
           }
         }
@@ -1913,7 +1945,6 @@
     let lastTitle = "";
     let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
-    let lastAlign = "center";
     let lastShout = false;
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -1953,15 +1984,9 @@
           c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
           lastSpeed
         );
-        // J Text Align: blank inherits previous (default center)
-        let textAlign = lastAlign;
-        if (c.announcementTextAlign != null) {
-          const rawAlign = cell(row, c.announcementTextAlign);
-          if (rawAlign != null && String(rawAlign).trim() !== "") {
-            textAlign = parseTextAlign(rawAlign, lastAlign);
-          }
-        }
-        // K Shout: blank inherits previous (default off)
+        // Body align from G cell formatting (xlsx); default center — not titles
+        const textAlign = parseTextAlign(font.align, "center");
+        // J Shout: blank inherits previous (default off)
         let shout = lastShout;
         if (c.announcementShout != null) {
           const rawShout = cell(row, c.announcementShout);
@@ -1983,7 +2008,6 @@
           runs: runs,
         });
         lastSpeed = speed;
-        lastAlign = textAlign;
         lastShout = !!shout;
       }
 
@@ -2925,7 +2949,6 @@
     const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
     const bgScrollSpeed = Number(cell(boardRow, sc.bgScrollSpeed));
     const slideshowSpeed = Number(cell(boardRow, sc.slideshowSpeed));
-    const showVersion = parseYesNo(cell(boardRow, sc.showVersion), false);
 
     const theme = {
       themeName: themeName,
@@ -2942,7 +2965,6 @@
       bgSolid: bgColor,
       bgScrollSpeed: Number.isFinite(bgScrollSpeed) ? bgScrollSpeed : 1,
       slideshowSpeed: Number.isFinite(slideshowSpeed) ? slideshowSpeed : 3,
-      showVersion: showVersion,
     };
     tokiInfo(
       "Style theme:",
@@ -2984,7 +3006,6 @@
     parsed.bgSolid = theme.bgSolid;
     parsed.bgScrollSpeed = theme.bgScrollSpeed;
     parsed.slideshowSpeed = theme.slideshowSpeed;
-    parsed.showVersion = theme.showVersion;
     return parsed;
   }
 
@@ -4356,17 +4377,16 @@
     }
 
     function applyAlignAndShout() {
+      // Message body only — titles/header stay default (left cluster)
       const align = parseTextAlign(msg.textAlign, "center");
       const shoutOn = !!msg.shout;
       setBoxTextAlign(els.announcementBody, align);
-      // Header follows body align for visual unity
       const header = annShell
         ? annShell.querySelector(".drinks-box-header")
         : null;
       if (header) {
         header.classList.remove("align-left", "align-center", "align-right");
-        header.classList.add("align-" + align);
-        header.setAttribute("data-align", align);
+        header.removeAttribute("data-align");
       }
       if (annShell) annShell.classList.toggle("is-shout", shoutOn);
       if (els.announcementBody) {
@@ -6606,20 +6626,6 @@
     }
     if (cfg.showDisclaimer === false && els.disclaimer) {
       els.disclaimer.hidden = true;
-    }
-
-    // Version stamp (lower left) — controlled by Style tab "Show Version"
-    if (els.versionInfo) {
-      const showVer = !!(cfg && cfg.showVersion);
-      if (showVer) {
-        els.versionInfo.hidden = false;
-        const now = new Date();
-        const datePart = now.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-        const timePart = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        els.versionInfo.textContent = `${datePart} ${timePart} • local`;
-      } else {
-        els.versionInfo.hidden = true;
-      }
     }
 
     scaleStageToWindow();
