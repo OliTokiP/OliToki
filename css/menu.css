@@ -53,9 +53,13 @@ body {
   --dur-mid: 0.45s; /* hero / sticker / portrait show */
   --dur-slow: 1.05s; /* encore veil */
   --dur-crossfade: 1.2s; /* galaxy dual-layer */
-  --dur-encore-zoom: 3.4s; /* Ken Burns push-in per bow */
+  --dur-encore-zoom: 3.4s; /* Ken Burns push-in per bow / FP reveal */
   --encore-zoom: 1;
   --encore-zoom-to: 1.14; /* peak scale toward lattice point */
+  /* Slideshow hero Ken Burns: max = current size; min ≈ 7% smaller */
+  --hero-zoom: 1;
+  --hero-zoom-min: 0.93;
+  --hero-zoom-max: 1;
 }
 
 #stage {
@@ -363,12 +367,29 @@ body {
   object-fit: fill; /* 1500×1000 → same 3:2 aspect */
   filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
   opacity: 0;
-  transition: opacity var(--dur-mid) var(--ease-fade);
+  /* Ken Burns: fixed center origin; scale via --hero-zoom (never reset on src swap) */
+  transform-origin: center center;
+  transform: scale(var(--hero-zoom, 1));
+  /* Default = pull-out with fade; .is-kb-in uses long ease-out push-in */
+  transition:
+    opacity var(--dur-mid) var(--ease-fade),
+    transform var(--dur-mid) var(--ease-fade);
   user-select: none;
 }
 
 #hero.visible {
   opacity: 1;
+}
+
+#hero.is-kb-in {
+  transition:
+    opacity var(--dur-mid) var(--ease-fade),
+    transform var(--dur-encore-zoom) var(--ease-out);
+}
+
+body.preview-wall #hero {
+  /* Keep wall lean; still allow subtle KB if enabled in JS */
+  filter: none;
 }
 
 /* ---------- Family Portrait (Board 1 collage overview) ----------

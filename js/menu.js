@@ -320,6 +320,11 @@
     familyPortrait: false,
     /** "slideshow" | "encore" — board Presentation Mode column */
     presentationMode: "slideshow",
+    /**
+     * Slideshow hero Ken Burns (zoom 0.93↔1 between items).
+     * On by default; wire to a Style sheet column later.
+     */
+    slideshowKenBurns: true,
   };
   let items = [];
   let proteinBox = {
@@ -2461,6 +2466,11 @@
           : config.presentationMode,
         "slideshow"
       ),
+      // Sheet column later — keep explicit false if already toggled off in-session
+      slideshowKenBurns:
+        parsed.slideshowKenBurns !== undefined
+          ? !!parsed.slideshowKenBurns
+          : config.slideshowKenBurns !== false,
     };
 
     if (parsed.proteinBox) {
@@ -6615,24 +6625,105 @@
     };
   }
 
-  /** Encore freezes free galaxy pan (BG attaches to scaffold when collage is up). */
-  function encoreLocksBgScroll() {
-    return config.presentationMode === "encore";
+  /**
+   * Freeze free galaxy pan while Encore is on, or while the collage owns
+   * the pinned scaffold BG (Family Portrait overview / Encore collage).
+   */
+  function bgScrollFrozen() {
+    if (config.presentationMode === "encore") return true;
+    const galaxy = document.getElementById("galaxy");
+    return !!(galaxy && galaxy.classList.contains("encore-scaffold-bg"));
   }
 
   function setEncoreScaffoldBgActive(on) {
     const galaxy = document.getElementById("galaxy");
     if (!galaxy) return;
     galaxy.classList.toggle("encore-scaffold-bg", !!on);
+    // After unpin: free layers were forced to opacity 0 !important — restore
+    // the active plate so the first hero after FP isn’t on a blank void.
+    if (!on && config.bgImage) {
+      const peak = bgImageOpacityPeak();
+      const a = els.galaxyA;
+      const b = els.galaxyB;
+      if (a && !a.hidden) {
+        const aOn =
+          a.classList.contains("active") ||
+          !(b && !b.hidden && b.classList.contains("active"));
+        if (aOn) {
+          a.classList.add("active");
+          a.style.opacity = String(peak);
+        }
+      }
+      if (b && !b.hidden && b.classList.contains("active")) {
+        b.style.opacity = String(peak);
+      }
+    }
+  }
+
+  function readEncoreZoomTo(stage) {
+    let zoomTo = 1.14;
+    try {
+      const el = stage || els.familyPortrait || document.documentElement;
+      const raw = getComputedStyle(el).getPropertyValue("--encore-zoom-to").trim();
+      const n = parseFloat(raw);
+      if (Number.isFinite(n) && n > 1) zoomTo = n;
+    } catch (e) {
+      /* keep default */
+    }
+    return zoomTo;
+  }
+
+  function readCssDurationMs(el, prop, fallbackMs) {
+    try {
+      const raw = getComputedStyle(el || document.documentElement)
+        .getPropertyValue(prop)
+        .trim();
+      if (!raw) return fallbackMs;
+      if (raw.indexOf("ms") !== -1) {
+        const n = parseFloat(raw);
+        return Number.isFinite(n) ? n : fallbackMs;
+      }
+      const n = parseFloat(raw);
+      return Number.isFinite(n) ? n * 1000 : fallbackMs;
+    } catch (e) {
+      return fallbackMs;
+    }
+  }
+
+  /** Lattice plane center in stage-local px (transform-origin + veil hole). */
+  function setPlaneCenterOrigin(stage) {
+    if (!stage) return;
+    stage.style.setProperty(
+      "--encore-hole-x",
+      PORTRAIT_STAGE_W * 0.5 + "px"
+    );
+    stage.style.setProperty(
+      "--encore-hole-y",
+      PORTRAIT_STAGE_H * 0.5 + "px"
+    );
+  }
+
+  /** Snap scale with no transition (origin changes only safe at ~1× or under cover). */
+  function snapPortraitZoom(stage, scale) {
+    if (!stage) return;
+    const rig = stage.querySelector(".family-portrait-rig");
+    if (rig) {
+      rig.style.transition = "none";
+      stage.style.setProperty("--encore-zoom", String(scale));
+      void rig.offsetWidth;
+      rig.style.transition = "";
+    } else {
+      stage.style.setProperty("--encore-zoom", String(scale));
+    }
   }
 
   /**
-   * Encore + BG Image: pin a stage-aligned #galaxy clone under the lattice
-   * so Ken Burns scales plates + backdrop as one camera move. NONE → skip.
+   * Collage + BG Image: pin a stage-aligned #galaxy clone under the lattice
+   * (Family Portrait overview OR Encore). Slideshow individual heroes: no pin.
    * Stack matches free galaxy: color plate + image (blur / opacity / blend).
    */
-  function appendEncoreScaffoldBg(rig) {
-    if (!rig || !encoreLocksBgScroll()) return false;
+  function appendScaffoldBg(rig) {
+    if (!rig) return false;
     let imagePath = config.bgImage || null;
     if (!imagePath) return false;
     imagePath = wallFriendlyBgPath(imagePath);
@@ -6650,7 +6741,6 @@
     const wrap = document.createElement("div");
     wrap.className = "family-portrait-bg";
     wrap.setAttribute("aria-hidden", "true");
-    // Same CSS vars as #galaxy so mix-blend-mode hits the local plate
     wrap.style.setProperty("--bg-image-opacity", String(opacity01));
     wrap.style.setProperty("--bg-image-blend", blend || "normal");
     if (blur01 <= 0) {
@@ -6672,64 +6762,324 @@
     img.alt = "";
     img.draggable = false;
     img.src = imagePath;
-    // Handoff current pan pose so the freeze doesn’t jump
     if (els.galaxyA && els.galaxyA.style.transform) {
       img.style.transform = els.galaxyA.style.transform;
     }
     wrap.appendChild(img);
 
-    // Behind plates + veil
     if (rig.firstChild) rig.insertBefore(wrap, rig.firstChild);
     else rig.appendChild(wrap);
 
     setEncoreScaffoldBgActive(true);
-    tokiInfo(
-      "encore scaffold BG attached",
-      imagePath,
-      "blend",
-      blend || "normal"
-    );
+    tokiInfo("scaffold BG attached", imagePath, "blend", blend || "normal");
     return true;
   }
 
-  function hideFamilyPortrait() {
+  let _hidePortraitTimer = null;
+  let _portraitIntroTimer = null;
+
+  function finishHideFamilyPortrait() {
     const stage = els.familyPortrait;
+    if (_hidePortraitTimer) {
+      clearTimeout(_hidePortraitTimer);
+      _hidePortraitTimer = null;
+    }
     if (!stage) return;
-    clearPortraitSpotlight();
+    if (_encoreSpotTimer) {
+      clearTimeout(_encoreSpotTimer);
+      _encoreSpotTimer = null;
+    }
     stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
     stage.hidden = true;
     stage.setAttribute("aria-hidden", "true");
+    snapPortraitZoom(stage, 1);
     setEncoreScaffoldBgActive(false);
-    _portraitRenderKey = "";
+    // Keep render key so re-show can reuse DOM; cleared only on full re-render
   }
 
-  function showFamilyPortrait(portraitItems, instant) {
+  /**
+   * Hide collage. Soft path fades opacity (and optional reverse center zoom)
+   * before setting hidden — fixes Slideshow blink.
+   * @param {{instant?: boolean, reverseZoom?: boolean}} [opts]
+   */
+  function hideFamilyPortrait(opts) {
+    opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
-    ensureFamilyPortrait(portraitItems || []);
 
-    if (els.hero) {
-      els.hero.classList.remove("visible");
-      els.hero.hidden = true;
+    if (_hidePortraitTimer) {
+      clearTimeout(_hidePortraitTimer);
+      _hidePortraitTimer = null;
+    }
+    if (_portraitIntroTimer) {
+      clearTimeout(_portraitIntroTimer);
+      _portraitIntroTimer = null;
     }
 
-    const reveal = function () {
-      stage.hidden = false;
-      stage.setAttribute("aria-hidden", "false");
-      requestAnimationFrame(function () {
-        stage.classList.add("visible");
-      });
-    };
-
-    if (instant) {
-      stage.classList.remove("visible");
-      reveal();
+    if (opts.instant || stage.hidden) {
+      finishHideFamilyPortrait();
       return;
     }
-    if (!stage.classList.contains("visible") || stage.hidden) {
-      stage.classList.remove("visible");
-      window.setTimeout(reveal, 200);
+
+    // Unpin free galaxy NOW (not after reverse-zoom timeout). Scaffold keeps
+    // its own BG image copy for the fade/zoom-out; free layers power heroes.
+    // Waiting until finishHide left the first post-FP item with no BG.
+    setEncoreScaffoldBgActive(false);
+
+    // Already fading out — don't restart reverse zoom mid-way
+    const fadingOut = !stage.classList.contains("visible") && !stage.hidden;
+
+    stage.classList.remove("visible");
+
+    if (opts.reverseZoom && !fadingOut) {
+      // Pull camera in toward plane center (Encore peak) while fading
+      if (_encoreSpotTimer) {
+        clearTimeout(_encoreSpotTimer);
+        _encoreSpotTimer = null;
+      }
+      setPlaneCenterOrigin(stage);
+      stage.classList.remove("is-zoom-out");
+      void stage.offsetWidth;
+      stage.classList.add("is-dimmed");
+      stage.style.setProperty(
+        "--encore-zoom",
+        String(readEncoreZoomTo(stage))
+      );
+    } else if (!opts.reverseZoom) {
+      stage.classList.remove("is-dimmed");
+      easePortraitZoomOut(stage);
     }
+
+    const zoomMs = opts.reverseZoom
+      ? readCssDurationMs(stage, "--dur-encore-zoom", 3400)
+      : readCssDurationMs(stage, "--dur-mid", 450);
+    const fadeMs = readCssDurationMs(stage, "--dur-mid", 450);
+    const wait = Math.max(zoomMs, fadeMs) + 40;
+    _hidePortraitTimer = window.setTimeout(finishHideFamilyPortrait, wait);
+  }
+
+  /**
+   * Incoming half of a Slideshow-frame handoff for the collage.
+   * Same clocks as updateHero show(): opacity --dur-mid, scale --dur-encore-zoom.
+   * Starts at Encore peak (center hole) and pulls back to 1×.
+   */
+  function beginPortraitCenterIntro(stage) {
+    if (!stage) return;
+    if (_portraitIntroTimer) {
+      clearTimeout(_portraitIntroTimer);
+      _portraitIntroTimer = null;
+    }
+    if (stage.querySelector(".family-portrait-bg")) {
+      setEncoreScaffoldBgActive(true);
+    }
+    setPlaneCenterOrigin(stage);
+    stage.classList.remove("visible", "is-zoom-out");
+    stage.hidden = false;
+    stage.setAttribute("aria-hidden", "false");
+    snapPortraitZoom(stage, readEncoreZoomTo(stage));
+    stage.classList.add("is-dimmed");
+    // Force opacity 0 so .visible fade-in always plays (loop re-entry)
+    void stage.offsetWidth;
+    stage.style.opacity = "0";
+    void stage.offsetWidth;
+    stage.style.opacity = "";
+
+    requestAnimationFrame(function () {
+      // Match #hero show(): fade in + long ease zoom in the same frame pair
+      stage.classList.add("visible");
+      requestAnimationFrame(function () {
+        const rig = stage.querySelector(".family-portrait-rig");
+        if (rig) {
+          rig.style.transition =
+            "transform var(--dur-encore-zoom) var(--ease-out)";
+        }
+        stage.classList.remove("is-zoom-out");
+        stage.style.setProperty("--encore-zoom", "1");
+        stage.classList.remove("is-dimmed");
+        const zoomMs = readCssDurationMs(stage, "--dur-encore-zoom", 3400);
+        _portraitIntroTimer = window.setTimeout(function () {
+          _portraitIntroTimer = null;
+          if (rig) rig.style.transition = "";
+        }, zoomMs + 40);
+      });
+    });
+  }
+
+  /**
+   * Slideshow last item → Family Portrait: same two-phase timing as
+   * updateHero between adjacent items.
+   *   phase 1: hero fade-out + zoom-out (--dur-mid)
+   *   phase 2: portrait fade-in + zoom peak→1 (opacity mid, scale encore-zoom)
+   */
+  let _portraitHandoffTimer = null;
+  function handoffHeroToPortrait(portraitItems, instant) {
+    const stage = els.familyPortrait;
+    if (!stage) return;
+
+    if (_portraitHandoffTimer) {
+      clearTimeout(_portraitHandoffTimer);
+      _portraitHandoffTimer = null;
+    }
+    if (_hidePortraitTimer) {
+      clearTimeout(_hidePortraitTimer);
+      _hidePortraitTimer = null;
+    }
+    if (_portraitIntroTimer) {
+      clearTimeout(_portraitIntroTimer);
+      _portraitIntroTimer = null;
+    }
+
+    // Reset collage surface so intro can run cleanly
+    stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
+    stage.hidden = true;
+    snapPortraitZoom(stage, 1);
+
+    ensureFamilyPortrait(portraitItems || []);
+
+    if (instant) {
+      if (els.hero) {
+        els.hero.classList.remove("visible", "is-kb-in");
+        els.hero.hidden = true;
+      }
+      stage.hidden = false;
+      stage.setAttribute("aria-hidden", "false");
+      snapPortraitZoom(stage, 1);
+      stage.classList.add("visible");
+      if (stage.querySelector(".family-portrait-bg")) {
+        setEncoreScaffoldBgActive(true);
+      }
+      return;
+    }
+
+    // --- Phase 1: identical to updateHero outgoing ---
+    const img = els.hero;
+    const kb = heroKenBurnsOn();
+    let zoomMin = 0.93;
+    try {
+      if (img) {
+        const mn = parseFloat(
+          getComputedStyle(img).getPropertyValue("--hero-zoom-min").trim()
+        );
+        if (Number.isFinite(mn) && mn > 0 && mn < 1) zoomMin = mn;
+      }
+    } catch (e) {
+      /* default */
+    }
+
+    if (img && !img.hidden) {
+      img.classList.remove("visible");
+      if (kb) setHeroZoom(zoomMin, "out");
+    }
+
+    const gap = kb
+      ? readCssDurationMs(img || document.documentElement, "--dur-mid", 450)
+      : 200;
+
+    // Pre-stage collage at peak (like holding hero at zoomMin before show)
+    setPlaneCenterOrigin(stage);
+    stage.classList.remove("visible");
+    stage.hidden = false;
+    stage.setAttribute("aria-hidden", "false");
+    snapPortraitZoom(stage, readEncoreZoomTo(stage));
+    stage.classList.add("is-dimmed");
+    stage.style.opacity = "0";
+    void stage.offsetWidth;
+    stage.style.opacity = "";
+
+    _portraitHandoffTimer = window.setTimeout(function () {
+      _portraitHandoffTimer = null;
+      if (img && !img.classList.contains("visible")) {
+        img.hidden = true;
+      }
+      // --- Phase 2: identical clocks to updateHero show() ---
+      beginPortraitCenterIntro(stage);
+    }, gap);
+  }
+
+  /**
+   * Show collage.
+   * @param {object[]} portraitItems
+   * @param {boolean} [instant]
+   * @param {{fromEncore?: boolean, settle?: boolean, forceIntro?: boolean}} [opts]
+   *   settle / fromEncore: keep collage, ease to full cast (no center solo intro)
+   *   forceIntro: cold-start center intro (not used for item→portrait handoff)
+   */
+  function showFamilyPortrait(portraitItems, instant, opts) {
+    opts = opts || {};
+    const stage = els.familyPortrait;
+    if (!stage) return;
+
+    if (_portraitHandoffTimer) {
+      clearTimeout(_portraitHandoffTimer);
+      _portraitHandoffTimer = null;
+    }
+    if (_hidePortraitTimer) {
+      clearTimeout(_hidePortraitTimer);
+      _hidePortraitTimer = null;
+      stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
+      stage.hidden = true;
+      snapPortraitZoom(stage, 1);
+    }
+    if (_portraitIntroTimer) {
+      clearTimeout(_portraitIntroTimer);
+      _portraitIntroTimer = null;
+    }
+
+    ensureFamilyPortrait(portraitItems || []);
+
+    const settle = !!(opts.settle || opts.fromEncore) && !opts.forceIntro;
+
+    // Encore bows / encore→lineup: keep collage, ease to 1× (no center solo)
+    if (settle) {
+      if (els.hero) {
+        els.hero.classList.remove("visible", "is-kb-in");
+        els.hero.hidden = true;
+      }
+      stage.hidden = false;
+      stage.setAttribute("aria-hidden", "false");
+      stage.classList.add("visible");
+      if (stage.querySelector(".family-portrait-bg")) {
+        setEncoreScaffoldBgActive(true);
+      }
+      if (!opts.keepDimmed) {
+        stage.classList.remove("is-dimmed");
+        easePortraitZoomOut(stage);
+      }
+      return;
+    }
+
+    if (instant) {
+      if (els.hero) {
+        els.hero.classList.remove("visible", "is-kb-in");
+        els.hero.hidden = true;
+      }
+      stage.hidden = false;
+      stage.setAttribute("aria-hidden", "false");
+      snapPortraitZoom(stage, 1);
+      stage.classList.remove("is-dimmed", "is-zoom-out");
+      stage.classList.add("visible");
+      if (stage.querySelector(".family-portrait-bg")) {
+        setEncoreScaffoldBgActive(true);
+      }
+      return;
+    }
+
+    // Cold start / first portrait: center intro (no prior hero out-phase)
+    if (
+      !opts.forceIntro &&
+      stage.classList.contains("visible") &&
+      !stage.hidden &&
+      !stage.classList.contains("is-dimmed")
+    ) {
+      const z = parseFloat(stage.style.getPropertyValue("--encore-zoom")) || 1;
+      if (z <= 1.02) return;
+    }
+
+    if (els.hero && !els.hero.hidden) {
+      els.hero.classList.remove("visible", "is-kb-in");
+      els.hero.hidden = true;
+    }
+    beginPortraitCenterIntro(stage);
   }
 
   function ensureFamilyPortrait(portraitItems) {
@@ -6767,8 +7117,8 @@
     rig.className = "family-portrait-rig";
     stage.appendChild(rig);
 
-    // Encore + BG Image: attach image to scaffold (overrides free galaxy scroll)
-    appendEncoreScaffoldBg(rig);
+    // Collage + BG Image: pin to scaffold (Slideshow FP overview + Encore)
+    appendScaffoldBg(rig);
 
     const plates = document.createElement("div");
     plates.className = "family-portrait-plates";
@@ -6889,6 +7239,8 @@
    */
   function easePortraitZoomOut(stage) {
     if (!stage) return;
+    const rig = stage.querySelector(".family-portrait-rig");
+    if (rig) rig.style.transition = ""; // CSS .is-zoom-out handles duration
     stage.classList.add("is-zoom-out");
     stage.style.setProperty("--encore-zoom", "1");
   }
@@ -6943,18 +7295,10 @@
       const hy = parseFloat(slot.style.top) || 0;
       stage.style.setProperty("--encore-hole-x", hx + "px");
       stage.style.setProperty("--encore-hole-y", hy + "px");
-      // Peak scale from CSS token (wall uses a gentler --encore-zoom-to)
-      let zoomTo = 1.14;
-      try {
-        const raw = getComputedStyle(stage)
-          .getPropertyValue("--encore-zoom-to")
-          .trim();
-        const n = parseFloat(raw);
-        if (Number.isFinite(n) && n > 1) zoomTo = n;
-      } catch (e) {
-        /* keep default */
-      }
+      const zoomTo = readEncoreZoomTo(stage);
       // Long push-in again (drop .is-zoom-out so --dur-encore-zoom applies)
+      const rig = stage.querySelector(".family-portrait-rig");
+      if (rig) rig.style.transition = "";
       stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
       stage.classList.add("is-dimmed");
@@ -6963,6 +7307,9 @@
   }
 
   // ---------- slideshow ----------
+
+  /** Last board slide type — for seamless FP ↔ Encore / Slideshow handoffs */
+  let _prevBoardSlideType = "";
 
   function usesBoardSlides() {
     return !isDrinks && slides.length > 0;
@@ -7015,6 +7362,8 @@
     if (!slides.length) return;
     activeIndex = ((index % slides.length) + slides.length) % slides.length;
     const slide = slides[activeIndex];
+    const prevType = _prevBoardSlideType;
+    _prevBoardSlideType = slide.type || "";
 
     const nodes = els.list
       ? els.list.querySelectorAll(".menu-item")
@@ -7034,11 +7383,19 @@
       }
     });
 
-    // Family Portrait overview (Slideshow mode): full lineup, no spotlight
+    // Family Portrait overview (Slideshow, or Encore lineup when FP on)
     if (slide.type === "portrait") {
       if (cfg.showHero !== false) {
-        showFamilyPortrait(slide.items, instant);
-        clearPortraitSpotlight();
+        if (prevType === "encore") {
+          // Last Encore bow → lineup: settle only (no center solo re-intro)
+          showFamilyPortrait(slide.items, instant, { fromEncore: true });
+        } else if (prevType === "item" && !instant) {
+          // Last Slideshow item → portrait: same two-phase timing as item→item
+          handoffHeroToPortrait(slide.items, instant);
+        } else {
+          // Cold start (or instant): center intro
+          showFamilyPortrait(slide.items, instant, { forceIntro: !instant });
+        }
       }
       if (cfg.showSticker !== false) {
         updateSticker({ isNew: false }, instant);
@@ -7051,7 +7408,7 @@
 
     // Encore bow:
     //   withPortrait → collage stays; soft spotlight after blackout
-    //   (Encore keeps collage even when Family Portrait flag is 0)
+    //   portrait → first bow: item-centered Encore zoom (not center intro)
     //   without cast → list highlight + individual hero
     if (slide.type === "encore") {
       const usePortrait =
@@ -7061,10 +7418,13 @@
 
       if (usePortrait) {
         if (cfg.showHero !== false) {
-          showFamilyPortrait(slide.items, instant);
-          setPortraitSpotlight(slide.itemIndex, { instant: !!instant });
+          // Always settle — never center intro on bows (item zoom owns motion)
+          showFamilyPortrait(slide.items, instant, { settle: true });
+          setPortraitSpotlight(slide.itemIndex, {
+            // Short gap from lineup so first bow doesn’t wait full blackout
+            instant: !!instant || prevType === "portrait" || prevType === "",
+          });
         }
-        // Board New! off during collage (per-item stickers live in portrait)
         if (cfg.showSticker !== false) {
           updateSticker({ isNew: false }, instant);
         } else if (els.sticker) {
@@ -7074,8 +7434,8 @@
         return;
       }
 
-      // Portrait off: hero presentation with list highlight already applied above
-      hideFamilyPortrait();
+      // No cast: hero presentation
+      hideFamilyPortrait({ instant: !!instant });
       clearPortraitSpotlight();
       const item = items[slide.itemIndex] || {
         image: slide.image,
@@ -7102,7 +7462,11 @@
     }
 
     // Individual item slide (Slideshow mode after overview)
-    hideFamilyPortrait();
+    // Reverse center zoom + fade when leaving Family Portrait
+    hideFamilyPortrait({
+      instant: !!instant,
+      reverseZoom: prevType === "portrait" && !instant,
+    });
     const item = items[slide.itemIndex] || {
       image: slide.image,
       isNew: !!slide.isNew,
@@ -7159,25 +7523,75 @@
     }
   }
 
+  function heroKenBurnsOn() {
+    return config.slideshowKenBurns !== false && !isDrinks;
+  }
+
+  function setHeroZoom(scale, mode) {
+    const img = els.hero;
+    if (!img) return;
+    // mode: "in" = long push | "out" = with fade | "snap"
+    if (mode === "snap") {
+      img.style.transition = "none";
+      img.style.setProperty("--hero-zoom", String(scale));
+      void img.offsetWidth;
+      img.style.transition = "";
+      img.classList.remove("is-kb-in");
+      return;
+    }
+    if (mode === "in") {
+      img.classList.add("is-kb-in");
+    } else {
+      img.classList.remove("is-kb-in");
+    }
+    img.style.setProperty("--hero-zoom", String(scale));
+  }
+
   function updateHero(item, instant) {
     const img = els.hero;
     if (!img) return;
     if (!item || !item.image) {
-      img.classList.remove("visible");
+      img.classList.remove("visible", "is-kb-in");
       img.hidden = true;
       img.removeAttribute("src");
       return;
     }
 
-    const show = () => {
+    const kb = heroKenBurnsOn() && !instant;
+    let zoomMin = 0.93;
+    let zoomMax = 1;
+    try {
+      const mn = parseFloat(
+        getComputedStyle(img).getPropertyValue("--hero-zoom-min").trim()
+      );
+      const mx = parseFloat(
+        getComputedStyle(img).getPropertyValue("--hero-zoom-max").trim()
+      );
+      if (Number.isFinite(mn) && mn > 0 && mn < 1) zoomMin = mn;
+      if (Number.isFinite(mx) && mx >= 1) zoomMax = mx;
+    } catch (e) {
+      /* defaults */
+    }
+
+    const show = function () {
       img.hidden = false;
-      requestAnimationFrame(() => img.classList.add("visible"));
+      // Do not reset scale here — stay at min until push-in
+      requestAnimationFrame(function () {
+        img.classList.add("visible");
+        if (kb) {
+          setHeroZoom(zoomMax, "in");
+        } else {
+          setHeroZoom(zoomMax, "snap");
+        }
+      });
     };
 
-    const applySrc = () => {
-      img.onload = () => show();
-      img.onerror = () => {
-        img.classList.remove("visible");
+    const applySrc = function () {
+      img.onload = function () {
+        show();
+      };
+      img.onerror = function () {
+        img.classList.remove("visible", "is-kb-in");
         img.hidden = true;
         img.removeAttribute("src");
       };
@@ -7185,17 +7599,25 @@
         show();
         return;
       }
+      // Swap while held at zoomMin — no scale snap
       img.src = item.image;
     };
 
     if (instant) {
       img.classList.remove("visible");
+      setHeroZoom(zoomMax, "snap");
       applySrc();
       return;
     }
 
+    // Fade out + (optional) zoom to min; never hard-reset transform on src change
     img.classList.remove("visible");
-    window.setTimeout(applySrc, 200);
+    if (kb) {
+      setHeroZoom(zoomMin, "out");
+    }
+    // Align swap with fade (~dur-mid); KB zoom-out shares that clock
+    const gap = kb ? readCssDurationMs(img, "--dur-mid", 450) : 200;
+    window.setTimeout(applySrc, gap);
   }
 
   /**
@@ -7534,11 +7956,11 @@
       lastTs = ts;
       if (dt === 0) return;
 
-      // Encore: freeze free galaxy pan (BG is on the scaffold when collage is up)
-      const speed = encoreLocksBgScroll()
+      // Encore or scaffold-owned BG: freeze free galaxy pan
+      const speed = bgScrollFrozen()
         ? 0
         : BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
-      // 0 = don't scroll (Style → BG Scroll Speed, or Encore override)
+      // 0 = don't scroll (Style speed, Encore, or collage scaffold pin)
       if (speed <= 0) {
         // Still finish an in-flight crossfade so opacity doesn't stick mid-blend
         if (fading && !singleLayer && layers.length > 1 && ts >= fadeUntil) {
