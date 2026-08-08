@@ -152,7 +152,7 @@ GID `1076652078`
 | J | BG Blend Mode | 9 | See allow-list in menu.js |
 | K | BG Opacity | 10 | 0–1 |
 | L | BG Scroll Speed | 11 | |
-| M | Slideshow Speed | 12 | Seconds-ish |
+| M | Presentation Speed | 12 | Seconds (0 = pause) |
 | N | Color Picker labels | — | Reference list for other sheets |
 
 Blend modes allow-list: `normal`, `overlay`, `lighten`, `color-burn`, `soft-light`, `luminosity`.

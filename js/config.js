@@ -7,8 +7,8 @@
  *
  * Board 1 column schema (Family Portrait inserted at K):
  *   A Menu Title | B Item | C–E Price 1–3 | F Subtitle | G Description |
- *   H New | I Image | J Include | K Family Portrait | L Include Protein Box? |
- *   M Include Sauces Box? | N Include Drinks Box?
+ *   H New | I Image | J Include | K Family Portrait | L Presentation Mode |
+ *   M Include Protein Box? | N Sauces? | O Drinks? | P Descriptions?
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
@@ -41,9 +41,11 @@ window.TOKI_CONFIG = {
     image: 8,
     include: 9,
     familyPortrait: 10,
-    includeProteinBox: 11,
-    includeSaucesBox: 12,
-    includeDrinksBox: 13,
+    presentationMode: 11,
+    includeProteinBox: 12,
+    includeSaucesBox: 13,
+    includeDrinksBox: 14,
+    includeDescriptions: 15,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

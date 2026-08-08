@@ -44,7 +44,7 @@ Shared content sheets today:
 - **4 - Proteins** (footer Box A)
 - **5 - Sauces** (footer Box B)
 - **7 - Drinks** (Board 4 options box)
-- **Style** (theme palette + BG FX + slideshow speed)
+- **Style** (theme palette + BG FX + presentation speed)
 
 **Target naming (hybrid rewrite):** Protein / Sauces / Drinks content tabs become **Box 1 / Box 2 / Box 3** with one column super-set. See [DATA_MODEL.md](./DATA_MODEL.md).
 

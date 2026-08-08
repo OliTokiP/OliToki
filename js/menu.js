@@ -152,7 +152,7 @@
    *   E Highlight | F Highlight Special
    * Board-wide stage BG (always the first data row = sheet row 2, not per theme):
    *   G2 BG Color | H2 BG Image (dropdown) | I2 BG Blur | J2 BG Blend Mode |
-   *   K2 BG Opacity | L2 BG Scroll Speed | M2 Slideshow Speed
+   *   K2 BG Opacity | L2 BG Scroll Speed | M2 Presentation Speed
    * N Color Picker labels (reference list for other sheets)
    * O Show Version (1 = commit stamp in disclaimer slot instead of allergy text)
    */
@@ -169,6 +169,7 @@
     bgBlendMode: 9,
     bgOpacity: 10,
     bgScrollSpeed: 11,
+    /** M — Presentation Speed (seconds; 0 = pause). Was “Slideshow Speed”. */
     slideshowSpeed: 12,
     // N Color Picker (reference list) · O Show Version
     colorPicker: 13,
@@ -317,6 +318,8 @@
     drinksIndividual: true,
     overviewImage: null,
     familyPortrait: false,
+    /** "slideshow" | "encore" — board Presentation Mode column */
+    presentationMode: "slideshow",
   };
   let items = [];
   let proteinBox = {
@@ -1962,8 +1965,18 @@
     const includeSaucesBox = firstColumnInclude(c.includeSaucesBox, true);
     // Drinks/soda footer: default OFF when column missing or blank
     const includeDrinksBox = firstColumnInclude(c.includeDrinksBox, false);
-    // Family Portrait collage overview (Board 1 K): default OFF
+    // Family Portrait collage overview (Board K): default OFF
     const familyPortrait = firstColumnInclude(c.familyPortrait, false);
+    // Presentation Mode (Board L): Slideshow | Encore — default Slideshow
+    let presentationMode = "slideshow";
+    if (c.presentationMode != null) {
+      for (let i = 1; i < rows.length; i++) {
+        const raw = cell(rows[i], c.presentationMode);
+        if (raw === "" || raw == null) continue;
+        presentationMode = parsePresentationMode(raw, "slideshow");
+        break;
+      }
+    }
     // Descriptions: default ON when column missing (legacy boards)
     const includeDescriptions = firstColumnInclude(
       c.includeDescriptions,
@@ -1994,6 +2007,7 @@
       includeDescriptions: includeDescriptions,
       menuColumns: menuColumns,
       familyPortrait: familyPortrait,
+      presentationMode: presentationMode,
       proteinBox: {
         title: proteinTitle,
         subtitle: proteinSubtitle,
@@ -2436,6 +2450,12 @@
         parsed.familyPortrait !== undefined
           ? !!parsed.familyPortrait
           : !!config.familyPortrait,
+      presentationMode: parsePresentationMode(
+        parsed.presentationMode != null
+          ? parsed.presentationMode
+          : config.presentationMode,
+        "slideshow"
+      ),
     };
 
     if (parsed.proteinBox) {
@@ -2604,17 +2624,23 @@
   }
 
   /**
-   * Bowls / list boards: optional Family Portrait overview + individual heroes.
+   * Bowls / list boards: Family Portrait + Presentation Mode.
    * Portrait members: name + include + image (all three).
+   *
+   * Slideshow + portrait: collage overview, then individual heroes.
+   * Encore + portrait: collage always on; each step highlights list + spotlight.
+   * Encore without portrait: fall back to normal per-item heroes.
    */
   function buildBoardSlides() {
     slides = [];
-    if (!config.familyPortrait) return;
-
     const portraitItems = items.filter(function (it) {
       return !!(it && it.name && it.include !== false && it.image);
     });
-    if (portraitItems.length) {
+    const mode = config.presentationMode === "encore" ? "encore" : "slideshow";
+    const portraitOn = !!config.familyPortrait && portraitItems.length > 0;
+
+    if (portraitOn && mode === "encore") {
+      // Curtain call: full cast first (no spotlight), then each bow
       slides.push({
         type: "portrait",
         items: portraitItems,
@@ -2622,23 +2648,55 @@
         isNew: false,
         image: null,
       });
-    }
-    items.forEach(function (it, i) {
-      if (!it.image) return;
-      slides.push({
-        type: "item",
-        itemIndex: i,
-        image: it.image,
-        isNew: !!it.isNew,
+      portraitItems.forEach(function (it) {
+        const itemIndex = items.indexOf(it);
+        slides.push({
+          type: "encore",
+          items: portraitItems,
+          itemIndex: itemIndex,
+          image: it.image,
+          isNew: !!it.isNew,
+        });
       });
-    });
-    tokiInfo(
-      "family portrait slides",
-      slides.length,
-      "portrait items",
-      portraitItems.length
-    );
+      tokiInfo(
+        "encore slides",
+        slides.length,
+        "(1 lineup +",
+        portraitItems.length,
+        "bows)"
+      );
+      return;
+    }
+
+    if (portraitOn) {
+      slides.push({
+        type: "portrait",
+        items: portraitItems,
+        itemIndex: -1,
+        isNew: false,
+        image: null,
+      });
+      items.forEach(function (it, i) {
+        if (!it.image) return;
+        slides.push({
+          type: "item",
+          itemIndex: i,
+          image: it.image,
+          isNew: !!it.isNew,
+        });
+      });
+      tokiInfo(
+        "family portrait slides",
+        slides.length,
+        "portrait items",
+        portraitItems.length,
+        "mode",
+        mode
+      );
+    }
   }
+
+  let _portraitRenderKey = "";
 
   function buildDrinksSlides() {
     slides = [];
@@ -6515,15 +6573,17 @@
   function hideFamilyPortrait() {
     const stage = els.familyPortrait;
     if (!stage) return;
-    stage.classList.remove("visible");
+    clearPortraitSpotlight();
+    stage.classList.remove("visible", "is-dimmed");
     stage.hidden = true;
     stage.setAttribute("aria-hidden", "true");
+    _portraitRenderKey = "";
   }
 
   function showFamilyPortrait(portraitItems, instant) {
     const stage = els.familyPortrait;
     if (!stage) return;
-    renderFamilyPortrait(portraitItems || []);
+    ensureFamilyPortrait(portraitItems || []);
 
     if (els.hero) {
       els.hero.classList.remove("visible");
@@ -6543,14 +6603,35 @@
       reveal();
       return;
     }
-    stage.classList.remove("visible");
-    window.setTimeout(reveal, 200);
+    if (!stage.classList.contains("visible") || stage.hidden) {
+      stage.classList.remove("visible");
+      window.setTimeout(reveal, 200);
+    }
+  }
+
+  function ensureFamilyPortrait(portraitItems) {
+    const key = (portraitItems || [])
+      .map(function (it) {
+        return (it && it.name) + "\0" + (it && it.image) + "\0" + !!it.isNew;
+      })
+      .join("|");
+    if (key === _portraitRenderKey && els.familyPortrait && els.familyPortrait.children.length) {
+      return;
+    }
+    renderFamilyPortrait(portraitItems || []);
+    _portraitRenderKey = key;
   }
 
   function renderFamilyPortrait(portraitItems) {
     const stage = els.familyPortrait;
     if (!stage) return;
     stage.innerHTML = "";
+
+    // Dim veil over collage (opacity animated via .is-dimmed)
+    const dim = document.createElement("div");
+    dim.className = "family-portrait-dim";
+    dim.setAttribute("aria-hidden", "true");
+    stage.appendChild(dim);
 
     const n = portraitItems.length;
     if (!n) return;
@@ -6583,33 +6664,55 @@
     portraitItems.forEach(function (it, i) {
       const slot = layout.slots[i];
       if (!slot || !it.image) return;
+
+      const itemIndex = items.indexOf(it);
+      const wrap = document.createElement("div");
+      wrap.className = "family-portrait-slot";
+      wrap.dataset.itemIndex = String(itemIndex);
+      wrap.dataset.portraitIndex = String(i);
+      wrap.dataset.baseZ = String(slot.zIndex);
+      wrap.style.left = slot.x + "px";
+      wrap.style.top = slot.y + "px";
+      wrap.style.zIndex = String(slot.zIndex);
+
+      // Spotlight sits behind the plate, same origin as the photo
+      const spot = document.createElement("div");
+      spot.className = "family-portrait-spotlight";
+      spot.setAttribute("aria-hidden", "true");
+      const spotScale = layout.scale;
+      // Extra buffer around the plate (soft moon-glow, not a tight ring)
+      spot.style.width = PORTRAIT_IMG_W * spotScale * 1.75 + "px";
+      spot.style.height = PORTRAIT_IMG_H * spotScale * 1.75 + "px";
+
       const img = document.createElement("img");
       img.className = "family-portrait-item";
       img.alt = it.name || "";
       img.draggable = false;
       img.src = it.image;
-      img.style.left = slot.x + "px";
-      img.style.top = slot.y + "px";
-      img.style.zIndex = String(slot.zIndex);
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
-      stage.appendChild(img);
 
-      // New! sticker over each isNew plate (same assets / tint as board sticker)
+      wrap.appendChild(spot);
+      wrap.appendChild(img);
+
+      // New! sticker over each isNew plate (no shadow in portrait CSS)
       if (it.isNew && cfg.showSticker !== false) {
-        appendPortraitSticker(stage, slot, layout.scale);
+        appendPortraitSticker(wrap, layout.scale);
       }
+
+      stage.appendChild(wrap);
     });
 
     // Tint any portrait stickers with current Special Highlight
     applyStickerTint();
+    clearPortraitSpotlight();
   }
 
   /**
-   * Mini New! badge for one Family Portrait slot (lower-right of the plate).
+   * Mini New! badge inside a portrait slot (lower-right of the plate).
    */
-  function appendPortraitSticker(stage, slot, photoScale) {
-    if (!stage || !slot) return;
+  function appendPortraitSticker(slotEl, photoScale) {
+    if (!slotEl) return;
     const el = document.createElement("div");
     el.className = "family-portrait-sticker";
     el.setAttribute("aria-hidden", "true");
@@ -6624,20 +6727,93 @@
     // Offset toward lower-right of the scaled plate (1500×1000 native)
     const ox = 280 * photoScale;
     const oy = 160 * photoScale;
-    el.style.left = slot.x + ox + "px";
-    el.style.top = slot.y + oy + "px";
-    el.style.zIndex = String((slot.zIndex || 20) + 10);
-    // Sticker base is 560px; keep readable next to reduced food art
+    el.style.left = "calc(50% + " + ox + "px)";
+    el.style.top = "calc(50% + " + oy + "px)";
     const stickScale = Math.max(0.16, Math.min(0.4, photoScale * 0.9));
     el.style.transform =
       "translate(-50%, -50%) rotate(-12deg) scale(" + stickScale + ")";
-    stage.appendChild(el);
+    slotEl.appendChild(el);
+  }
+
+  /** Time for dim + spotlight to fully fade out before the next bow */
+  const ENCORE_BLACKOUT_MS = 1100;
+  /** Soft delay before first bow after lineup (instant path) */
+  const ENCORE_FIRST_BOW_MS = 120;
+  let _encoreSpotTimer = null;
+
+  function clearPortraitSpotlight() {
+    const stage = els.familyPortrait;
+    if (!stage) return;
+    if (_encoreSpotTimer) {
+      clearTimeout(_encoreSpotTimer);
+      _encoreSpotTimer = null;
+    }
+    stage.classList.remove("is-dimmed");
+    stage.querySelectorAll(".family-portrait-slot.is-spotlit").forEach(function (el) {
+      el.classList.remove("is-spotlit");
+      el.style.removeProperty("--portrait-spot-color");
+      // Restore queue-line depth
+      if (el.dataset.baseZ != null) {
+        el.style.zIndex = el.dataset.baseZ;
+      }
+    });
+  }
+
+  /**
+   * Encore curtain-call spotlight for items[itemIndex].
+   * Always blackout (fade off) completely, then soft-fade the next light on.
+   * Color = Special Highlight if New, else Highlight.
+   * @param {number} itemIndex
+   * @param {{instant?: boolean}} [opts]
+   */
+  function setPortraitSpotlight(itemIndex, opts) {
+    opts = opts || {};
+    const stage = els.familyPortrait;
+    if (!stage) return;
+
+    // Kill any pending “next bow” and start blackout immediately
+    if (_encoreSpotTimer) {
+      clearTimeout(_encoreSpotTimer);
+      _encoreSpotTimer = null;
+    }
+    // Fade out current spot + dim (CSS transition)
+    stage.classList.remove("is-dimmed");
+    stage.querySelectorAll(".family-portrait-slot.is-spotlit").forEach(function (el) {
+      el.classList.remove("is-spotlit");
+      el.style.removeProperty("--portrait-spot-color");
+      if (el.dataset.baseZ != null) el.style.zIndex = el.dataset.baseZ;
+    });
+
+    if (itemIndex == null || itemIndex < 0) return;
+
+    const item = items[itemIndex];
+    if (!item) return;
+
+    const gap = opts.instant ? ENCORE_FIRST_BOW_MS : ENCORE_BLACKOUT_MS;
+
+    _encoreSpotTimer = window.setTimeout(function () {
+      _encoreSpotTimer = null;
+      const slot = stage.querySelector(
+        '.family-portrait-slot[data-item-index="' + itemIndex + '"]'
+      );
+      if (!slot) return;
+
+      const color = item.isNew
+        ? config.highlightSpecial || config.highlight || "#fff900"
+        : config.highlight || "#26bbcb";
+      slot.style.setProperty("--portrait-spot-color", color);
+      // Force style flush so opacity 0 → 1 always transitions
+      void slot.offsetWidth;
+      slot.classList.add("is-spotlit");
+      slot.style.zIndex = "200";
+      stage.classList.add("is-dimmed");
+    }, gap);
   }
 
   // ---------- slideshow ----------
 
   function usesBoardSlides() {
-    return !isDrinks && config.familyPortrait && slides.length > 0;
+    return !isDrinks && slides.length > 0;
   }
 
   function setActive(index, instant) {
@@ -6692,7 +6868,9 @@
       ? els.list.querySelectorAll(".menu-item")
       : [];
     nodes.forEach(function (node, i) {
-      const on = slide.type === "item" && i === slide.itemIndex;
+      const on =
+        (slide.type === "item" || slide.type === "encore") &&
+        i === slide.itemIndex;
       node.classList.toggle("active", on);
       if (on) {
         const item = items[slide.itemIndex];
@@ -6704,9 +6882,11 @@
       }
     });
 
+    // Family Portrait overview (Slideshow mode): full lineup, no spotlight
     if (slide.type === "portrait") {
       if (cfg.showHero !== false) {
         showFamilyPortrait(slide.items, instant);
+        clearPortraitSpotlight();
       }
       if (cfg.showSticker !== false) {
         updateSticker({ isNew: false }, instant);
@@ -6717,7 +6897,23 @@
       return;
     }
 
-    // Individual item slide
+    // Encore bow: portrait stays; list highlight + soft spotlight after blackout
+    if (slide.type === "encore") {
+      if (cfg.showHero !== false) {
+        showFamilyPortrait(slide.items, instant);
+        setPortraitSpotlight(slide.itemIndex, { instant: !!instant });
+      }
+      // Board New! sticker off during collage (per-item stickers in portrait)
+      if (cfg.showSticker !== false) {
+        updateSticker({ isNew: false }, instant);
+      } else if (els.sticker) {
+        els.sticker.classList.remove("visible");
+        els.sticker.hidden = true;
+      }
+      return;
+    }
+
+    // Individual item slide (Slideshow mode after overview)
     hideFamilyPortrait();
     const item = items[slide.itemIndex] || {
       image: slide.image,
@@ -6881,7 +7077,7 @@
   }
 
   /**
-   * Style "Slideshow Speed" (seconds). 0 / blank handling:
+   * Style "Presentation Speed" (seconds; column M). 0 / blank handling:
    *   0 or negative → pause auto-advance (still show current slide)
    *   blank / invalid → fallback
    * Do not use `n || fallback` — that treats 0 as missing.
@@ -6897,22 +7093,42 @@
     return Math.max(0, n);
   }
 
+  /** Board "Presentation Mode" dropdown: Slideshow | Encore */
+  function parsePresentationMode(raw, fallback) {
+    const fb = fallback === "encore" ? "encore" : "slideshow";
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fb;
+    }
+    const s = String(raw).trim().toLowerCase();
+    if (s.indexOf("encore") !== -1) return "encore";
+    if (s.indexOf("slide") !== -1) return "slideshow";
+    return fb;
+  }
+
   function startSlideshow() {
     if (slideshowTimer) clearInterval(slideshowTimer);
     slideshowTimer = null;
     const count = isDrinks || usesBoardSlides() ? slides.length : items.length;
     if (count <= 1) return;
     const sec = parseSlideshowSpeed(config.slideshowSpeed, 3);
-    // 0 = hold on current slide (Style sheet "stop cycling")
+    // 0 = hold on current slide (Style → Presentation Speed)
     if (sec <= 0) {
-      tokiInfo("slideshow paused (Slideshow Speed =", sec, ")");
+      tokiInfo("presentation paused (Presentation Speed =", sec, ")");
       return;
     }
     const ms = sec * 1000;
     slideshowTimer = setInterval(function () {
       setActive(activeIndex + 1, false);
     }, ms);
-    tokiInfo("slideshow every", sec, "s (", count, "slides)");
+    tokiInfo(
+      "presentation every",
+      sec,
+      "s (",
+      count,
+      "steps, mode=",
+      config.presentationMode || "slideshow",
+      ")"
+    );
   }
 
   function stopSlideshow() {
@@ -7198,6 +7414,7 @@
       individual: config.drinksIndividual,
       overviewImage: config.overviewImage,
       familyPortrait: !!config.familyPortrait,
+      presentationMode: config.presentationMode || "slideshow",
       items: items.map((it) => [
         it.name,
         it.price,
