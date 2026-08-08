@@ -402,10 +402,34 @@ body {
   user-select: none;
   pointer-events: none;
   z-index: 2;
+  /* Glow fades with class (fixed 70px blur — not scaled with plate size) */
+  transition: filter 1.1s ease-in-out;
 }
 
 body.preview-wall #family-portrait-stage .family-portrait-item {
   filter: none;
+}
+
+/*
+  Encore “spotlight” = drop shadow only (design-tool style):
+  distance 0, spread 0, size 70px, 100% opacity, blend pin-light,
+  color = Highlight or Special Highlight.
+*/
+#family-portrait-stage .family-portrait-slot.is-spotlit .family-portrait-item {
+  filter: drop-shadow(
+    0 0 70px var(--portrait-spot-color, var(--highlight, #26bbcb))
+  );
+  mix-blend-mode: pin-light;
+}
+
+body.preview-wall
+  #family-portrait-stage
+  .family-portrait-slot.is-spotlit
+  .family-portrait-item {
+  filter: drop-shadow(
+    0 0 70px var(--portrait-spot-color, var(--highlight, #26bbcb))
+  );
+  mix-blend-mode: pin-light;
 }
 
 /* Dim veil — long soft fade so blackout is readable (~1.1s matches JS gap) */
@@ -424,47 +448,10 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   opacity: 0.28;
 }
 
-/*
-  Encore spotlight — simple moon/soft-glow (behind the plate, same origin).
-  Soft radial + multi-layer box-shadow; no conic streaks.
-  Fade in/out ~1.1s so each bow fully blackouts before the next.
-*/
-#family-portrait-stage .family-portrait-spotlight {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  z-index: 1;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 1.1s ease-in-out;
-  /* Soft luminous disc (moon-glow style) */
-  background: radial-gradient(
-    circle at 50% 50%,
-    rgba(255, 255, 255, 0.55) 0%,
-    var(--portrait-spot-color, var(--highlight, #26bbcb)) 18%,
-    var(--portrait-spot-color, var(--highlight, #26bbcb)) 42%,
-    transparent 72%
-  );
-  /* Large soft bloom — buffer around the plate */
-  box-shadow:
-    0 0 24px 12px var(--portrait-spot-color, var(--highlight, #26bbcb)),
-    0 0 64px 36px var(--portrait-spot-color, var(--highlight, #26bbcb)),
-    0 0 120px 64px var(--portrait-spot-color, var(--highlight, #26bbcb)),
-    0 0 16px 6px rgba(255, 255, 255, 0.35);
-  filter: blur(6px);
-}
-
-#family-portrait-stage .family-portrait-slot.is-spotlit .family-portrait-spotlight {
-  opacity: 0.92;
-}
-
 /* Spotlit plate above the dim veil */
 #family-portrait-stage .family-portrait-slot.is-spotlit {
   z-index: 80 !important;
-}
-/* Mini New! stickers on Family Portrait items (isNew) */
+}/* Mini New! stickers on Family Portrait items (isNew) */
 #family-portrait-stage .family-portrait-sticker {
   position: absolute;
   width: 560px;

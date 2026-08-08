@@ -6675,15 +6675,7 @@
       wrap.style.top = slot.y + "px";
       wrap.style.zIndex = String(slot.zIndex);
 
-      // Spotlight sits behind the plate, same origin as the photo
-      const spot = document.createElement("div");
-      spot.className = "family-portrait-spotlight";
-      spot.setAttribute("aria-hidden", "true");
-      const spotScale = layout.scale;
-      // Extra buffer around the plate (soft moon-glow, not a tight ring)
-      spot.style.width = PORTRAIT_IMG_W * spotScale * 1.75 + "px";
-      spot.style.height = PORTRAIT_IMG_H * spotScale * 1.75 + "px";
-
+      // Encore highlight = drop-shadow on the plate (CSS); no separate glow node
       const img = document.createElement("img");
       img.className = "family-portrait-item";
       img.alt = it.name || "";
@@ -6692,7 +6684,6 @@
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
 
-      wrap.appendChild(spot);
       wrap.appendChild(img);
 
       // New! sticker over each isNew plate (no shadow in portrait CSS)
