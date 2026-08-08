@@ -346,6 +346,57 @@ body {
   opacity: 1;
 }
 
+/* ---------- Family Portrait (Board 1 collage overview) ----------
+   Photo side RIGHT of the frame diagonal cutout (matches #frame SVG):
+     TL (1071.9, 0)  TR (1920, 0)
+     BL (1156.5, 1080) BR (1920, 1080)
+   AABB is left:1071.9 width:~848 height:1080; clip-path is the trapezoid.
+   Lattice in JS uses the same edge math (row-wise left edge along the cutout).
+*/
+#family-portrait-stage {
+  position: absolute;
+  z-index: 5;
+  /* Frame cutout x at y=0 (header polygon right tip) */
+  left: 1071.9px;
+  top: 0;
+  /* 1920 − 1071.9 */
+  width: 848.1px;
+  height: 1080px;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  /* Trapezoid: full top, inset left edge at bottom (~84.6/848.1 ≈ 9.98%) */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
+  -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
+}
+
+#family-portrait-stage.visible {
+  opacity: 1;
+}
+
+#family-portrait-stage.portrait-debug {
+  outline: 2px solid rgba(0, 255, 120, 0.85);
+  outline-offset: -2px;
+  background: rgba(0, 255, 120, 0.06);
+}
+
+#family-portrait-stage .family-portrait-item {
+  position: absolute;
+  /* Native menu photo size; JS applies translate(-50%,-50%) scale(s) */
+  width: 1500px;
+  height: 1000px;
+  object-fit: fill;
+  transform-origin: center center;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+  user-select: none;
+  pointer-events: none;
+}
+
+body.preview-wall #family-portrait-stage .family-portrait-item {
+  filter: none;
+}
+
 /* ---------- Layer 5: new sticker ----------
    Same size + bottom on every board (drinks only overrides horizontal/rotate).
    Assets are 1024² with transparent padding; bottom is shared so Y matches.

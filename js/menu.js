@@ -130,6 +130,9 @@
     isNew: 7,
     image: 8,
     include: 9,
+    // Board 1 inserts Family Portrait at K and shifts box includes +1.
+    // Boards 2–3 keep protein at 10 via their own config.columns.
+    familyPortrait: null,
     includeProteinBox: 10,
     includeSaucesBox: 11,
     includeDrinksBox: 12,
@@ -259,6 +262,7 @@
     list: document.getElementById("menu-list"),
     hero: document.getElementById("hero"),
     heroWrap: document.getElementById("hero-wrap"),
+    familyPortrait: document.getElementById("family-portrait-stage"),
     sticker: document.getElementById("new-sticker"),
     galaxyA: document.getElementById("galaxy-a"),
     galaxyB: document.getElementById("galaxy-b"),
@@ -312,6 +316,7 @@
     drinksOverview: true,
     drinksIndividual: true,
     overviewImage: null,
+    familyPortrait: false,
   };
   let items = [];
   let proteinBox = {
@@ -1957,6 +1962,8 @@
     const includeSaucesBox = firstColumnInclude(c.includeSaucesBox, true);
     // Drinks/soda footer: default OFF when column missing or blank
     const includeDrinksBox = firstColumnInclude(c.includeDrinksBox, false);
+    // Family Portrait collage overview (Board 1 K): default OFF
+    const familyPortrait = firstColumnInclude(c.familyPortrait, false);
     // Descriptions: default ON when column missing (legacy boards)
     const includeDescriptions = firstColumnInclude(
       c.includeDescriptions,
@@ -1986,6 +1993,7 @@
       items: parsedItems,
       includeDescriptions: includeDescriptions,
       menuColumns: menuColumns,
+      familyPortrait: familyPortrait,
       proteinBox: {
         title: proteinTitle,
         subtitle: proteinSubtitle,
@@ -2417,6 +2425,10 @@
         parsed.showVersion !== undefined
           ? !!parsed.showVersion
           : !!config.showVersion,
+      familyPortrait:
+        parsed.familyPortrait !== undefined
+          ? !!parsed.familyPortrait
+          : !!config.familyPortrait,
     };
 
     if (parsed.proteinBox) {
@@ -2580,7 +2592,45 @@
       .filter((it) => it.name && it.include);
 
     if (isDrinks) buildDrinksSlides();
+    else buildBoardSlides();
     applyConfigColors(); // includes applyBoxChrome()
+  }
+
+  /**
+   * Bowls / list boards: optional Family Portrait overview + individual heroes.
+   * Portrait members: name + include + image (all three).
+   */
+  function buildBoardSlides() {
+    slides = [];
+    if (!config.familyPortrait) return;
+
+    const portraitItems = items.filter(function (it) {
+      return !!(it && it.name && it.include !== false && it.image);
+    });
+    if (portraitItems.length) {
+      slides.push({
+        type: "portrait",
+        items: portraitItems,
+        itemIndex: -1,
+        isNew: false,
+        image: null,
+      });
+    }
+    items.forEach(function (it, i) {
+      if (!it.image) return;
+      slides.push({
+        type: "item",
+        itemIndex: i,
+        image: it.image,
+        isNew: !!it.isNew,
+      });
+    });
+    tokiInfo(
+      "family portrait slides",
+      slides.length,
+      "portrait items",
+      portraitItems.length
+    );
   }
 
   function buildDrinksSlides() {
@@ -6306,13 +6356,249 @@
     }
   }
 
+  // ---------- Family Portrait lattice + render ----------
+
+  /**
+   * Photo-side trapezoid from #frame vector (Board 1–3):
+   *   TL (1071.9, 0) → TR (1920, 0) → BR (1920, 1080) → BL (1156.5, 1080)
+   * x_cutout(y) = 1071.925 + 0.078335 * y  (same fit as frame comment)
+   * Stage AABB is left-aligned at TL.x with full height; lattice rows use
+   * the local left edge along the cutout so points sit in the visible wedge.
+   */
+  const PORTRAIT_CUTOUT_X0 = 1071.9;
+  const PORTRAIT_CUTOUT_SLOPE = 0.078335; // dx/dy of frame diagonal
+  const PORTRAIT_STAGE_LEFT = PORTRAIT_CUTOUT_X0;
+  const PORTRAIT_STAGE_W = 1920 - PORTRAIT_CUTOUT_X0; // ~848.1
+  const PORTRAIT_STAGE_H = 1080;
+  const PORTRAIT_IMG_W = 1500;
+  const PORTRAIT_IMG_H = 1000;
+
+  /** Local x of cutout edge inside portrait stage at stage y (0…1080). */
+  function portraitCutoutLocalX(y) {
+    // Global cutout x − stage left = slope * y (since stage left = x0)
+    return PORTRAIT_CUTOUT_SLOPE * Math.max(0, Math.min(PORTRAIT_STAGE_H, y));
+  }
+
+  /**
+   * Choose rows×cols lattice and slot positions for n photos.
+   * Incomplete last row is centered (bottom shortfall).
+   * Coordinates in portrait-stage-local px; origin at photo center.
+   */
+  function buildPortraitLayout(n, stageW, stageH) {
+    stageW = stageW || PORTRAIT_STAGE_W;
+    stageH = stageH || PORTRAIT_STAGE_H;
+    if (n <= 0) {
+      return { slots: [], cols: 0, rows: 0, scale: 1, stageW: stageW, stageH: stageH };
+    }
+
+    // Usable width is narrower at bottom (~764) than top (~848) — use mid width for aspect
+    const midLeft = portraitCutoutLocalX(stageH * 0.5);
+    const midW = Math.max(1, stageW - midLeft);
+    const targetAspect = midW / stageH;
+    const ideal = Math.sqrt(n);
+    let best = null;
+    // Also try padded n' = n..n+3 so e.g. 11 → 12 (3×4) instead of 1×11
+    const candidates = [];
+    for (let nPad = n; nPad <= n + 3; nPad++) {
+      for (let cols = 1; cols <= nPad; cols++) {
+        const rows = Math.ceil(nPad / cols);
+        if (rows * cols < n) continue;
+        candidates.push({ cols: cols, rows: rows, capacity: rows * cols });
+      }
+    }
+    candidates.forEach(function (c) {
+      const cols = c.cols;
+      const rows = c.rows;
+      const empty = cols * rows - n;
+      const latticeAspect = cols / rows;
+      const aspectErr = Math.abs(Math.log((latticeAspect || 1) / targetAspect));
+      const balance = Math.abs(cols - ideal) + Math.abs(rows - ideal);
+      // Prefer near-square, few empties, aspect near wedge; avoid 1×n strips
+      let score =
+        empty * 8 +
+        aspectErr * 3 +
+        balance * 1.4 +
+        Math.abs(rows - cols) * 0.25;
+      if (cols === 1 && n > 3) score += 25;
+      if (rows === 1 && n > 3) score += 18;
+      // Mild prefer taller (more rows) for this tall-ish wedge
+      if (rows >= cols) score -= 0.2;
+      if (!best || score < best.score) {
+        best = { cols: cols, rows: rows, empty: empty, score: score };
+      }
+    });
+
+    const cols = best.cols;
+    const rows = best.rows;
+    const padY = stageH * 0.05;
+    const padXFrac = 0.06; // of each row’s available width
+    const innerH = Math.max(1, stageH - 2 * padY);
+    const cellH = innerH / rows;
+
+    const slots = [];
+    let placed = 0;
+    let minCellW = Infinity;
+    for (let r = 0; r < rows && placed < n; r++) {
+      const remaining = n - placed;
+      const inRow = r === rows - 1 ? remaining : Math.min(cols, remaining);
+      const incomplete = inRow < cols;
+      const y = padY + (r + 0.5) * cellH;
+      // Row band between cutout (left) and screen right (stageW)
+      const xLeftEdge = portraitCutoutLocalX(y);
+      const rowW = Math.max(1, stageW - xLeftEdge);
+      const padX = rowW * padXFrac;
+      const innerW = Math.max(1, rowW - 2 * padX);
+      const cellW = innerW / cols;
+      if (cellW < minCellW) minCellW = cellW;
+
+      for (let k = 0; k < inRow; k++) {
+        let x;
+        if (incomplete) {
+          const blockW = inRow * cellW;
+          const blockLeft = xLeftEdge + padX + (innerW - blockW) / 2;
+          x = blockLeft + (k + 0.5) * cellW;
+        } else {
+          x = xLeftEdge + padX + (k + 0.5) * cellW;
+        }
+        const colIndex = incomplete
+          ? Math.floor((cols - inRow) / 2 + k)
+          : k;
+        // Even parity → higher z (foreground)
+        const parity = (r + colIndex) % 2;
+        const zIndex = (parity === 0 ? 40 : 20) + placed;
+        slots.push({
+          x: x,
+          y: y,
+          row: r,
+          col: colIndex,
+          zIndex: zIndex,
+        });
+        placed++;
+      }
+    }
+
+    // Scale: fill typical cell with overlap so plates can stack
+    const overlap = 1.42;
+    const refCellW = Number.isFinite(minCellW) ? minCellW : midW / cols;
+    let scale = Math.min(
+      (refCellW * overlap) / PORTRAIT_IMG_W,
+      (cellH * overlap) / PORTRAIT_IMG_H
+    );
+    // Density dampen for large n
+    scale *= Math.min(1.15, 1.05 / Math.sqrt(Math.max(1, n) / 6));
+    scale = Math.max(0.2, Math.min(0.72, scale));
+
+    return {
+      slots: slots,
+      cols: cols,
+      rows: rows,
+      scale: scale,
+      stageW: stageW,
+      stageH: stageH,
+    };
+  }
+
+  function hideFamilyPortrait() {
+    const stage = els.familyPortrait;
+    if (!stage) return;
+    stage.classList.remove("visible");
+    stage.hidden = true;
+    stage.setAttribute("aria-hidden", "true");
+  }
+
+  function showFamilyPortrait(portraitItems, instant) {
+    const stage = els.familyPortrait;
+    if (!stage) return;
+    renderFamilyPortrait(portraitItems || []);
+
+    if (els.hero) {
+      els.hero.classList.remove("visible");
+      els.hero.hidden = true;
+    }
+
+    const reveal = function () {
+      stage.hidden = false;
+      stage.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () {
+        stage.classList.add("visible");
+      });
+    };
+
+    if (instant) {
+      stage.classList.remove("visible");
+      reveal();
+      return;
+    }
+    stage.classList.remove("visible");
+    window.setTimeout(reveal, 200);
+  }
+
+  function renderFamilyPortrait(portraitItems) {
+    const stage = els.familyPortrait;
+    if (!stage) return;
+    stage.innerHTML = "";
+
+    const n = portraitItems.length;
+    if (!n) return;
+
+    const layout = buildPortraitLayout(
+      n,
+      PORTRAIT_STAGE_W,
+      PORTRAIT_STAGE_H
+    );
+    tokiInfo(
+      "portrait layout",
+      n,
+      "→",
+      layout.cols + "×" + layout.rows,
+      "scale",
+      layout.scale.toFixed(3)
+    );
+
+    // Debug outline via ?portraitDebug=1
+    try {
+      const q = new URLSearchParams(location.search || "");
+      stage.classList.toggle(
+        "portrait-debug",
+        q.get("portraitDebug") === "1" || q.get("portraitDebug") === "true"
+      );
+    } catch (e) {
+      /* ignore */
+    }
+
+    portraitItems.forEach(function (it, i) {
+      const slot = layout.slots[i];
+      if (!slot || !it.image) return;
+      const img = document.createElement("img");
+      img.className = "family-portrait-item";
+      img.alt = it.name || "";
+      img.draggable = false;
+      img.src = it.image;
+      img.style.left = slot.x + "px";
+      img.style.top = slot.y + "px";
+      img.style.zIndex = String(slot.zIndex);
+      img.style.transform =
+        "translate(-50%, -50%) scale(" + layout.scale + ")";
+      stage.appendChild(img);
+    });
+  }
+
   // ---------- slideshow ----------
+
+  function usesBoardSlides() {
+    return !isDrinks && config.familyPortrait && slides.length > 0;
+  }
 
   function setActive(index, instant) {
     if (isDrinks) {
       setActiveDrinks(index, instant);
       return;
     }
+    if (usesBoardSlides()) {
+      setActiveBoardSlides(index, instant);
+      return;
+    }
+    hideFamilyPortrait();
     if (items.length === 0) return;
     activeIndex = ((index % items.length) + items.length) % items.length;
     const item = items[activeIndex];
@@ -6338,6 +6624,60 @@
       els.hero.hidden = true;
     }
 
+    if (cfg.showSticker !== false) {
+      updateSticker(item, instant);
+    } else if (els.sticker) {
+      els.sticker.classList.remove("visible");
+      els.sticker.hidden = true;
+    }
+  }
+
+  function setActiveBoardSlides(index, instant) {
+    if (!slides.length) return;
+    activeIndex = ((index % slides.length) + slides.length) % slides.length;
+    const slide = slides[activeIndex];
+
+    const nodes = els.list
+      ? els.list.querySelectorAll(".menu-item")
+      : [];
+    nodes.forEach(function (node, i) {
+      const on = slide.type === "item" && i === slide.itemIndex;
+      node.classList.toggle("active", on);
+      if (on) {
+        const item = items[slide.itemIndex];
+        const color =
+          item && item.isNew ? config.highlightSpecial : config.highlight;
+        node.style.setProperty("--item-highlight", color);
+      } else {
+        node.style.removeProperty("--item-highlight");
+      }
+    });
+
+    if (slide.type === "portrait") {
+      if (cfg.showHero !== false) {
+        showFamilyPortrait(slide.items, instant);
+      }
+      if (cfg.showSticker !== false) {
+        updateSticker({ isNew: false }, instant);
+      } else if (els.sticker) {
+        els.sticker.classList.remove("visible");
+        els.sticker.hidden = true;
+      }
+      return;
+    }
+
+    // Individual item slide
+    hideFamilyPortrait();
+    const item = items[slide.itemIndex] || {
+      image: slide.image,
+      isNew: !!slide.isNew,
+    };
+    if (cfg.showHero !== false) {
+      updateHero(item, instant);
+    } else if (els.hero) {
+      els.hero.classList.remove("visible");
+      els.hero.hidden = true;
+    }
     if (cfg.showSticker !== false) {
       updateSticker(item, instant);
     } else if (els.sticker) {
@@ -6435,9 +6775,9 @@
     const wantNew = !!(item && item.isNew);
 
     function stillWantsHidden() {
-      if (isDrinks) {
+      if (isDrinks || usesBoardSlides()) {
         const slide = slides[activeIndex];
-        return !slide || !slide.isNew;
+        return !slide || !slide.isNew || slide.type === "portrait";
       }
       return !items[activeIndex]?.isNew;
     }
@@ -6445,9 +6785,9 @@
     function reveal() {
       // May have been cancelled if user advanced to a non-new slide
       if (!wantNew && stillWantsHidden()) return;
-      if (isDrinks) {
+      if (isDrinks || usesBoardSlides()) {
         const slide = slides[activeIndex];
-        if (!slide || !slide.isNew) return;
+        if (!slide || !slide.isNew || slide.type === "portrait") return;
       } else if (!items[activeIndex]?.isNew) {
         return;
       }
@@ -6491,7 +6831,7 @@
 
   function startSlideshow() {
     if (slideshowTimer) clearInterval(slideshowTimer);
-    const count = isDrinks ? slides.length : items.length;
+    const count = isDrinks || usesBoardSlides() ? slides.length : items.length;
     if (count <= 1) return;
     const ms = Math.max(0.5, config.slideshowSpeed) * 1000;
     slideshowTimer = setInterval(() => {
@@ -6781,6 +7121,7 @@
       overview: config.drinksOverview,
       individual: config.drinksIndividual,
       overviewImage: config.overviewImage,
+      familyPortrait: !!config.familyPortrait,
       items: items.map((it) => [
         it.name,
         it.price,
@@ -6788,6 +7129,7 @@
         it.subtitle,
         it.isNew,
         it.image,
+        it.include,
       ]),
       protein: proteinBox,
       sauces: saucesBox,
@@ -6815,9 +7157,10 @@
       applyStageBackground();
       // Image may be enabled after a color-only load — start pan if needed
       if (config.bgImage) startGalaxyScroll();
-      const maxIdx = isDrinks
-        ? Math.max(0, slides.length - 1)
-        : Math.max(0, items.length - 1);
+      const maxIdx =
+        isDrinks || usesBoardSlides()
+          ? Math.max(0, slides.length - 1)
+          : Math.max(0, items.length - 1);
       setActive(Math.min(prevIndex, maxIdx), true);
       if (!pause) {
         startSlideshow();
