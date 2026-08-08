@@ -6626,18 +6626,28 @@
   }
 
   /**
-   * Freeze free galaxy pan while Encore is on, or while the collage owns
-   * the pinned scaffold BG (Family Portrait overview / Encore collage).
+   * Freeze free galaxy pan while Encore is on, collage is on-screen, or free
+   * layers are hidden under scaffold-pin mode.
    */
   function bgScrollFrozen() {
     if (config.presentationMode === "encore") return true;
+    const stage = els.familyPortrait;
+    if (stage && !stage.hidden && stage.classList.contains("visible")) {
+      return true;
+    }
     const galaxy = document.getElementById("galaxy");
     return !!(galaxy && galaxy.classList.contains("encore-scaffold-bg"));
   }
 
+  let _scaffoldPinTimer = null;
+
   function setEncoreScaffoldBgActive(on) {
     const galaxy = document.getElementById("galaxy");
     if (!galaxy) return;
+    if (_scaffoldPinTimer) {
+      clearTimeout(_scaffoldPinTimer);
+      _scaffoldPinTimer = null;
+    }
     galaxy.classList.toggle("encore-scaffold-bg", !!on);
     // After unpin: free layers were forced to opacity 0 !important — restore
     // the active plate so the first hero after FP isn’t on a blank void.
@@ -6658,6 +6668,33 @@
         b.style.opacity = String(peak);
       }
     }
+  }
+
+  /**
+   * Hide free galaxy only after the collage has fully faded in.
+   * Scaffold already holds its own BG image copy — free layers cover the
+   * gap so we never flash solid BG Color during the handoff.
+   */
+  function scheduleScaffoldPinAfterFadeIn(stage) {
+    if (!stage || !stage.querySelector(".family-portrait-bg")) return;
+    if (_scaffoldPinTimer) {
+      clearTimeout(_scaffoldPinTimer);
+      _scaffoldPinTimer = null;
+    }
+    // Keep free galaxy up until collage opacity settles
+    setEncoreScaffoldBgActive(false);
+    const fadeMs = readCssDurationMs(stage, "--dur-mid", 450);
+    _scaffoldPinTimer = window.setTimeout(function () {
+      _scaffoldPinTimer = null;
+      if (
+        !stage ||
+        stage.hidden ||
+        !stage.classList.contains("visible")
+      ) {
+        return;
+      }
+      setEncoreScaffoldBgActive(true);
+    }, fadeMs + 40);
   }
 
   function readEncoreZoomTo(stage) {
@@ -6824,6 +6861,10 @@
     // Unpin free galaxy NOW (not after reverse-zoom timeout). Scaffold keeps
     // its own BG image copy for the fade/zoom-out; free layers power heroes.
     // Waiting until finishHide left the first post-FP item with no BG.
+    if (_scaffoldPinTimer) {
+      clearTimeout(_scaffoldPinTimer);
+      _scaffoldPinTimer = null;
+    }
     setEncoreScaffoldBgActive(false);
 
     // Already fading out — don't restart reverse zoom mid-way
@@ -6869,9 +6910,8 @@
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
     }
-    if (stage.querySelector(".family-portrait-bg")) {
-      setEncoreScaffoldBgActive(true);
-    }
+    // Free galaxy stays up until fade-in completes (scaffold has its own copy)
+    setEncoreScaffoldBgActive(false);
     setPlaneCenterOrigin(stage);
     stage.classList.remove("visible", "is-zoom-out");
     stage.hidden = false;
@@ -6887,6 +6927,7 @@
     requestAnimationFrame(function () {
       // Match #hero show(): fade in + long ease zoom in the same frame pair
       stage.classList.add("visible");
+      scheduleScaffoldPinAfterFadeIn(stage);
       requestAnimationFrame(function () {
         const rig = stage.querySelector(".family-portrait-rig");
         if (rig) {
@@ -6950,6 +6991,9 @@
       }
       return;
     }
+
+    // Keep free galaxy through hero out-phase (no solid-color flash)
+    setEncoreScaffoldBgActive(false);
 
     // --- Phase 1: identical to updateHero outgoing ---
     const img = els.hero;
@@ -7030,6 +7074,7 @@
     const settle = !!(opts.settle || opts.fromEncore) && !opts.forceIntro;
 
     // Encore bows / encore→lineup: keep collage, ease to 1× (no center solo)
+    // Pin free galaxy immediately — collage is already fully visible in Encore.
     if (settle) {
       if (els.hero) {
         els.hero.classList.remove("visible", "is-kb-in");
