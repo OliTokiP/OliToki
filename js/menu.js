@@ -6698,7 +6698,7 @@
   }
 
   function readEncoreZoomTo(stage) {
-    let zoomTo = 1.14;
+    let zoomTo = 1.24;
     try {
       const el = stage || els.familyPortrait || document.documentElement;
       const raw = getComputedStyle(el).getPropertyValue("--encore-zoom-to").trim();
@@ -6708,6 +6708,37 @@
       /* keep default */
     }
     return zoomTo;
+  }
+
+  /** 0 = pure lattice point, 1 = plane center — keeps edge bows from showing BG margin. */
+  function readEncoreOriginCenterBias(stage) {
+    let bias = 0.28;
+    try {
+      const el = stage || els.familyPortrait || document.documentElement;
+      const raw = getComputedStyle(el)
+        .getPropertyValue("--encore-origin-center-bias")
+        .trim();
+      const n = parseFloat(raw);
+      if (Number.isFinite(n)) bias = Math.max(0, Math.min(1, n));
+    } catch (e) {
+      /* keep default */
+    }
+    return bias;
+  }
+
+  /**
+   * Ken Burns origin + spotlight hole: lattice point eased toward plane center
+   * so higher zoom still frames cleanly (edges don’t reveal BG).
+   */
+  function setEncoreZoomOrigin(stage, latticeX, latticeY) {
+    if (!stage) return;
+    const bias = readEncoreOriginCenterBias(stage);
+    const cx = PORTRAIT_STAGE_W * 0.5;
+    const cy = PORTRAIT_STAGE_H * 0.5;
+    const hx = latticeX + (cx - latticeX) * bias;
+    const hy = latticeY + (cy - latticeY) * bias;
+    stage.style.setProperty("--encore-hole-x", hx + "px");
+    stage.style.setProperty("--encore-hole-y", hy + "px");
   }
 
   function readCssDurationMs(el, prop, fallbackMs) {
@@ -7334,12 +7365,10 @@
       );
       if (!slot) return;
 
-      // Lattice origin = hole center = Ken Burns transform-origin
-      // (scale is ~1× here; origin change is hidden under the blackout)
-      const hx = parseFloat(slot.style.left) || 0;
-      const hy = parseFloat(slot.style.top) || 0;
-      stage.style.setProperty("--encore-hole-x", hx + "px");
-      stage.style.setProperty("--encore-hole-y", hy + "px");
+      // Lattice → slightly center-biased origin (scale ~1×; swap under blackout)
+      const lx = parseFloat(slot.style.left) || 0;
+      const ly = parseFloat(slot.style.top) || 0;
+      setEncoreZoomOrigin(stage, lx, ly);
       const zoomTo = readEncoreZoomTo(stage);
       // Long push-in again (drop .is-zoom-out so --dur-encore-zoom applies)
       const rig = stage.querySelector(".family-portrait-rig");

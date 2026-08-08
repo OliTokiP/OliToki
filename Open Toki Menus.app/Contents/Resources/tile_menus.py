@@ -9,6 +9,7 @@ One launch dialog:
   • Hard refresh — cache-bust query on URLs (default on)
   • Private browser — incognito / private window (default on)
   • Open data sheet — Google Sheet in Chrome (normal window; default off)
+  • Open glossary — glossary.html board index (default off)
 
 Local server runs in a visible Terminal window titled “Toki Menu Server”
 (Ctrl+C or close the window to stop it).
@@ -21,6 +22,7 @@ Skip UI with env:
   TOKI_HARD_REFRESH=0|1
   TOKI_PRIVATE=0|1
   TOKI_OPEN_SHEET=0|1
+  TOKI_OPEN_GLOSSARY=0|1
   TOKI_BOARDS=1,2,3,4
   TOKI_REMOTE_BASE=https://absrdst.github.io/TokiMenu
   TOKI_PORT=8765
@@ -349,6 +351,63 @@ def open_data_sheet_in_chrome() -> None:
         print("open data sheet: open -na", app_name, url, flush=True)
         subprocess.Popen(
             ["open", "-na", app_name, "--args", "--new-window", url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def open_glossary_url(url: str, family: str, app_name: str, binary: str | None) -> None:
+    """Open glossary.html in the selected board browser (respects Private)."""
+    if not url:
+        print("open glossary: no URL", flush=True)
+        return
+    private = LAUNCH_PRIVATE
+    hard = LAUNCH_HARD_REFRESH
+    print("open glossary:", url, "private=", private, flush=True)
+
+    if family == "chrome" or family == "chromium":
+        args = chromium_extra_args(private, hard) + ["--new-window", url]
+        if binary:
+            subprocess.Popen(
+                [binary] + args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(
+                ["open", "-na", app_name, "--args"] + args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        return
+
+    if family == "firefox":
+        ff = firefox_extra_args(private) + [url]
+        if binary:
+            subprocess.Popen(
+                [binary] + ff,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(
+                ["open", "-na", app_name, "--args"] + ff,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        return
+
+    # Safari (and fallback)
+    if private:
+        # Best-effort: open URL; Safari private is not reliably scriptable
+        subprocess.Popen(
+            ["open", "-a", "Safari", url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        subprocess.Popen(
+            ["open", "-a", app_name or "Safari", url],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -708,6 +767,10 @@ def _env_open_sheet() -> bool | None:
     return _env_bool("TOKI_OPEN_SHEET")
 
 
+def _env_open_glossary() -> bool | None:
+    return _env_bool("TOKI_OPEN_GLOSSARY")
+
+
 def _env_boards() -> list[bool] | None:
     raw = os.environ.get("TOKI_BOARDS", "").strip()
     if not raw:
@@ -735,13 +798,14 @@ def _default_launch_opts() -> dict[str, Any]:
         "hard_refresh": True,
         "private": True,
         "open_sheet": False,
+        "open_glossary": False,
     }
 
 
 def prompt_launch_options() -> dict[str, Any] | None:
     """
     Dedicated Toki Menus window: browser, env, boards, layout, chrome,
-    hard refresh, private, open data sheet.
+    hard refresh, private, open data sheet, open glossary.
 
     Returns options dict or None if cancelled.
     """
@@ -752,6 +816,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
     env_hard = _env_hard_refresh()
     env_private = _env_private()
     env_open_sheet = _env_open_sheet()
+    env_open_glossary = _env_open_glossary()
     env_boards = _env_boards()
 
     # Fully non-interactive when browser + layout forced
@@ -768,6 +833,8 @@ def prompt_launch_options() -> dict[str, Any] | None:
             opts["private"] = env_private
         if env_open_sheet is not None:
             opts["open_sheet"] = env_open_sheet
+        if env_open_glossary is not None:
+            opts["open_glossary"] = env_open_glossary
         if env_boards is not None:
             opts["boards"] = env_boards
         return opts
@@ -783,8 +850,9 @@ def prompt_launch_options() -> dict[str, Any] | None:
     chrome_default = "true" if env_chrome is True else "false"
     hard_default = "false" if env_hard is False else "true"
     private_default = "false" if env_private is False else "true"
-    # Open data sheet: off unless TOKI_OPEN_SHEET=1
+    # Open data sheet / glossary: off unless env forces on
     sheet_default = "true" if env_open_sheet is True else "false"
+    glossary_default = "true" if env_open_glossary is True else "false"
     boards = env_boards or [True, True, True, True]
     bdefs = ["true" if b else "false" for b in boards]
     env_default = (
@@ -803,6 +871,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         hard_default,
         private_default,
         sheet_default,
+        glossary_default,
         bdefs,
     )
     if out is None:
@@ -820,6 +889,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         env_hard=env_hard,
         env_private=env_private,
         env_open_sheet=env_open_sheet,
+        env_open_glossary=env_open_glossary,
         env_boards=env_boards,
     )
 
@@ -832,6 +902,7 @@ def _prompt_nsalert_dialog(
     hard_default: str,
     private_default: str,
     sheet_default: str,
+    glossary_default: str,
     bdefs: list[str],
 ) -> str | None:
     """NSAlert accessory with launch switches."""
@@ -872,7 +943,7 @@ function run() {{
   alert.addButtonWithTitle("Cancel");
 
   var width = 380;
-  var height = 278;
+  var height = 302;
   var view = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, width, height));
   var y = height - 28;
 
@@ -909,7 +980,9 @@ function run() {{
   var privateBox = makeSwitch("Private browser (incognito)", 0, y, width, {private_default});
   view.addSubview(privateBox); y -= 24;
   var sheetBox = makeSwitch("Open data sheet", 0, y, width, {sheet_default});
-  view.addSubview(sheetBox);
+  view.addSubview(sheetBox); y -= 24;
+  var glossaryBox = makeSwitch("Open glossary", 0, y, width, {glossary_default});
+  view.addSubview(glossaryBox);
 
   alert.setAccessoryView(view);
   try {{ app.activateIgnoringOtherApps(true); }} catch (e3) {{}}
@@ -929,7 +1002,8 @@ function run() {{
     boardsBits + "|" +
     (Number(hardBox.state) === 1 ? "1" : "0") + "|" +
     (Number(privateBox.state) === 1 ? "1" : "0") + "|" +
-    (Number(sheetBox.state) === 1 ? "1" : "0");
+    (Number(sheetBox.state) === 1 ? "1" : "0") + "|" +
+    (Number(glossaryBox.state) === 1 ? "1" : "0");
 }}
 '''
     r = subprocess.run(
@@ -953,6 +1027,7 @@ def _parse_launch_result(
     env_hard: bool | None,
     env_private: bool | None,
     env_open_sheet: bool | None,
+    env_open_glossary: bool | None,
     env_boards: list[bool] | None,
 ) -> dict[str, Any] | None:
     parts = out.split("|")
@@ -972,6 +1047,7 @@ def _parse_launch_result(
     hard_flag = parts[5].strip() if len(parts) > 5 else "1"
     private_flag = parts[6].strip() if len(parts) > 6 else "1"
     sheet_flag = parts[7].strip() if len(parts) > 7 else "0"
+    glossary_flag = parts[8].strip() if len(parts) > 8 else "0"
 
     if layout not in ("tiled", "single"):
         layout = "tiled"
@@ -980,12 +1056,13 @@ def _parse_launch_result(
     hard_refresh = hard_flag in ("1", "true", "yes")
     private = private_flag in ("1", "true", "yes")
     open_sheet = sheet_flag in ("1", "true", "yes")
+    open_glossary = glossary_flag in ("1", "true", "yes")
 
     boards = [False, False, False, False]
     bits = (boards_bits + "0000")[:4]
     for i, ch in enumerate(bits):
         boards[i] = ch == "1"
-    # Keep all-off: main() treats that as sheet-only when open_sheet is on
+    # Keep all-off: main() treats that as extras-only when sheet/glossary on
 
     browser_key = None
     for blabel, key in BROWSER_CHOICES:
@@ -1010,6 +1087,8 @@ def _parse_launch_result(
         private = env_private
     if env_open_sheet is not None:
         open_sheet = env_open_sheet
+    if env_open_glossary is not None:
+        open_glossary = env_open_glossary
     if env_boards is not None:
         boards = env_boards
     if env_browser:
@@ -1024,6 +1103,7 @@ def _parse_launch_result(
         "hard_refresh": hard_refresh,
         "private": private,
         "open_sheet": open_sheet,
+        "open_glossary": open_glossary,
     }
 
 
@@ -1440,6 +1520,7 @@ def main():
     hard_refresh = picked["hard_refresh"]
     private = picked["private"]
     open_sheet = bool(picked.get("open_sheet"))
+    open_glossary = bool(picked.get("open_glossary"))
     LAUNCH_PRIVATE = private
     LAUNCH_HARD_REFRESH = hard_refresh
 
@@ -1460,18 +1541,27 @@ def main():
         private,
         "open_sheet=",
         open_sheet,
+        "open_glossary=",
+        open_glossary,
         flush=True,
     )
 
     any_boards = any(boards) if boards else False
-    # Sheet-only: no boards (and not single-window wall) — skip menus/server
-    sheet_only = open_sheet and not any_boards and layout != "single"
+    any_extras = open_sheet or open_glossary
+    # Extras-only: no boards (and not single-window wall)
+    extras_only = any_extras and not any_boards and layout != "single"
 
-    if not any_boards and not open_sheet and layout != "single":
-        alert("Select at least one board, or check Open data sheet.", stop=True)
+    if not any_boards and not any_extras and layout != "single":
+        alert(
+            "Select at least one board, or check Open data sheet / Open glossary.",
+            stop=True,
+        )
         sys.exit(1)
 
-    if sheet_only:
+    # Glossary needs the local/remote base; sheet-only does not need the server.
+    needs_menu_server = any_boards or open_glossary or layout == "single"
+
+    if extras_only and not needs_menu_server:
         print("sheet-only launch — skipping boards and local server", flush=True)
         try:
             open_data_sheet_in_chrome()
@@ -1485,11 +1575,12 @@ def main():
         return
 
     if env == "local":
-        refresh_build_info(root)
-        if not ensure_local_server(root):
-            sys.exit(1)
+        if needs_menu_server:
+            refresh_build_info(root)
+            if not ensure_local_server(root):
+                sys.exit(1)
     else:
-        if not remote_reachable(DEFAULT_REMOTE_BASE):
+        if needs_menu_server and not remote_reachable(DEFAULT_REMOTE_BASE):
             alert(remote_unavailable_message(DEFAULT_REMOTE_BASE), stop=True)
             sys.exit(1)
 
@@ -1504,8 +1595,7 @@ def main():
         flush=True,
     )
 
-    if not URLS and layout != "single":
-        # open_sheet alone already handled above; this is boards empty + no sheet
+    if not URLS and layout != "single" and not open_glossary and not open_sheet:
         alert("No boards selected.", stop=True)
         sys.exit(1)
 
@@ -1535,16 +1625,31 @@ def main():
         flush=True,
     )
 
-    if layout == "single":
-        open_single_window(family, app_name, binary, full_bounds_from_quads(quads))
-    elif family == "safari":
-        open_safari(quads)
-    elif family == "firefox":
-        open_firefox(binary, quads)
-    else:
-        open_chromium_family(app_name, binary, quads)
+    if any_boards or layout == "single":
+        if layout == "single":
+            open_single_window(
+                family, app_name, binary, full_bounds_from_quads(quads)
+            )
+        elif family == "safari":
+            open_safari(quads)
+        elif family == "firefox":
+            open_firefox(binary, quads)
+        else:
+            open_chromium_family(app_name, binary, quads)
 
-    # After boards: optional data sheet in normal Chrome (never private)
+    # Optional glossary (same browser / private settings as boards)
+    if open_glossary:
+        bust = f"_toki={int(time.time())}" if hard_refresh else ""
+        gloss = f"{BASE}/glossary.html"
+        if bust:
+            gloss = gloss + "?" + bust
+        try:
+            open_glossary_url(gloss, family, app_name, binary)
+        except Exception as err:
+            print("open glossary failed:", err, flush=True)
+            alert(f"Could not open glossary.\n\n{err}", stop=False)
+
+    # Optional data sheet in normal Chrome (never private)
     if open_sheet:
         try:
             open_data_sheet_in_chrome()

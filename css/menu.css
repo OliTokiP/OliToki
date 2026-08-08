@@ -55,7 +55,14 @@ body {
   --dur-crossfade: 1.2s; /* galaxy dual-layer */
   --dur-encore-zoom: 3.4s; /* Ken Burns push-in per bow / FP reveal */
   --encore-zoom: 1;
-  --encore-zoom-to: 1.14; /* peak scale toward lattice point */
+  /* Peak scale for Encore bows / FP intro (higher = closer push-in) */
+  --encore-zoom-to: 1.24;
+  /*
+    Pull transform-origin this fraction toward the lattice-plane center
+    (0 = pure item lattice point, 1 = dead center). Keeps edge bows from
+    revealing BG margins when zoom is aggressive.
+  */
+  --encore-origin-center-bias: 0.28;
   /* Slideshow hero Ken Burns: max = current size; min ≈ 7% smaller */
   --hero-zoom: 1;
   --hero-zoom-min: 0.93;
@@ -469,19 +476,20 @@ body.preview-wall #hero {
   background-color: #000;
 }
 
-/* Match .galaxy-layer cover (static — no pan; scroll overridden in Encore) */
+/* Match .galaxy-layer cover (static — no pan; scroll overridden in Encore).
+   Sized a bit larger than free galaxy so aggressive Ken Burns still has margin. */
 #family-portrait-stage .family-portrait-bg-img {
   position: absolute;
   top: 50%;
-  left: 0;
+  left: 50%;
   z-index: 1;
-  height: 120%;
+  height: 135%;
   width: auto;
-  min-width: 120%;
+  min-width: 135%;
   max-width: none;
   object-fit: cover;
   object-position: center center;
-  transform: translate3d(0, -50%, 0);
+  transform: translate3d(-50%, -50%, 0);
   opacity: var(--bg-image-opacity, 1);
   filter: var(--bg-image-blur, none);
   mix-blend-mode: var(--bg-image-blend, normal);
@@ -502,7 +510,8 @@ body.preview-wall #hero {
 
 /* Wall: gentler push (perf + less crop at half-res) */
 body.preview-wall #family-portrait-stage {
-  --encore-zoom-to: 1.08;
+  --encore-zoom-to: 1.16;
+  --encore-origin-center-bias: 0.32;
   --dur-encore-zoom: 2.8s;
 }
 
