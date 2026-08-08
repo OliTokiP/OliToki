@@ -33,12 +33,12 @@ window.TOKI_CONFIG = {
    * E Announcement Title | F Announcement Subtitle | G Announcement Text |
    * H Announcement Box Color | I Announcement Speed (seconds; inherit blanks) |
    * J Shout (1/0; inherit blanks — Roboto Black + max fill + text earthquake) |
-   * K Shout Shake Intensity (reserved; ignored — full text shake for now) |
-   * L–… legacy drink columns (ignored when drinksSheetGid loads successfully)
+   * K Shout Shake Intensity (0–1+; inherit blanks; baked baseline = 0.75) |
+   * Legacy drink columns below are unused when drinksSheetGid loads.
    *
    * Each non-empty G cell is one message-board slide.
-   * Blank E/I/J inherit previous title/speed/shout; blank F clears subtitle
-   * only when E sets a new title (married title/subtitle).
+   * Blank E/I/J/K inherit previous title/speed/shout/intensity; blank F clears
+   * subtitle only when E sets a new title (married title/subtitle).
    * Body text align + rich bold-color come from the G cell itself (Sheets formatting).
    * Titles keep default alignment (not driven by G).
    */
@@ -53,18 +53,20 @@ window.TOKI_CONFIG = {
     announcementColor: 7,
     announcementSpeed: 8,
     announcementShout: 9,
-    // Legacy fallback if drinks sheet fails to load:
-    drinkBoxTitle: 10,
-    drinkBoxSubtitle: 11,
-    drinkBoxColor: 12,
-    drinksOverview: 13,
-    overviewImage: 14,
-    drinksIndividual: 15,
-    item: 16,
-    subtitle: 17,
-    isNew: 18,
-    image: 19,
-    include: 20,
+    /** K — rightmost; no column shift needed for announcements */
+    announcementShakeIntensity: 10,
+    // Legacy fallback if drinks sheet fails (drinksSheetGid normally owns drinks):
+    drinkBoxTitle: 11,
+    drinkBoxSubtitle: 12,
+    drinkBoxColor: 13,
+    drinksOverview: 14,
+    overviewImage: 15,
+    drinksIndividual: 16,
+    item: 17,
+    subtitle: 18,
+    isNew: 19,
+    image: 20,
+    include: 21,
     price: null,
     description: null,
     bgScrollSpeed: null,

@@ -1332,14 +1332,15 @@ body {
 }
 
 /*
-  Shout (body.is-shout):
-  - Roboto Black (900)
-  - Extreme vertical type scale (JS fitAnnouncementShout)
-  - Earthquake on each TEXT LINE (not the shell) — em units scale with type
-  - Body keeps overflow:hidden so fit can measure height honestly
-    (overflow:visible + flex center made scrollHeight lie → multi-line blew out)
+  Shout:
+  - is-shout-type → Roboto Black + tight leading (always when Shout=1)
+  - is-shout → line earthquake when intensity > 0
+  - --shout-shake-amp = intensity / 0.75
+      0.75 → 1× (previous look), 1.0 → ~1.33×, 0.5 → ~0.67×, 0 → no shake
 */
+#announcement-box .drinks-box-body.is-shout-type,
 #announcement-box .drinks-box-body.is-shout {
+  --shout-shake-amp: 1;
   font-family: "Roboto", system-ui, sans-serif;
   font-weight: 900;
   line-height: 1.05;
@@ -1349,6 +1350,8 @@ body {
   overflow: hidden;
 }
 
+#announcement-box .drinks-box-body.is-shout-type .announcement-line,
+#announcement-box .drinks-box-body.is-shout-type .announcement-run,
 #announcement-box .drinks-box-body.is-shout .announcement-line,
 #announcement-box .drinks-box-body.is-shout .announcement-run {
   font-family: "Roboto", system-ui, sans-serif;
@@ -1356,62 +1359,99 @@ body {
   font-style: normal !important;
 }
 
+#announcement-box .drinks-box-body.is-shout-type .announcement-line:first-child,
 #announcement-box .drinks-box-body.is-shout .announcement-line:first-child {
   font-size: 1em;
 }
 
+#announcement-box .drinks-box-body.is-shout-type.many-lines,
 #announcement-box .drinks-box-body.is-shout.many-lines {
   gap: calc(4px * var(--box-scale));
   line-height: 1.05;
   padding: 20px 40px 24px;
 }
 
-/* Text quake: lines only (shell stays put). em = tracks huge shout size */
+/* Text quake: lines only. Amp from --shout-shake-amp (sheet K / 0.75) */
 #announcement-box .drinks-box-body.is-shout .announcement-line {
   animation: ann-shout-shake 0.42s ease-in-out infinite;
   transform-origin: center center;
   will-change: transform;
-  /* width 100% so wrap measure stays honest; transform doesn't change layout */
   max-width: 100%;
 }
 
-/* Slight desync on alternating lines = more chaotic cartoon yell */
 #announcement-box .drinks-box-body.is-shout .announcement-line:nth-child(even) {
   animation-delay: -0.14s;
   animation-direction: reverse;
 }
 
+/* Keyframes = previous “0.75” look when --shout-shake-amp is 1 */
 @keyframes ann-shout-shake {
   0%,
   100% {
     transform: translate(0, 0) rotate(0deg);
   }
   10% {
-    transform: translate(-0.09em, 0.05em) rotate(-0.7deg);
+    transform: translate(
+        calc(-0.09em * var(--shout-shake-amp, 1)),
+        calc(0.05em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(-0.7deg * var(--shout-shake-amp, 1)));
   }
   20% {
-    transform: translate(0.1em, -0.04em) rotate(0.8deg);
+    transform: translate(
+        calc(0.1em * var(--shout-shake-amp, 1)),
+        calc(-0.04em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(0.8deg * var(--shout-shake-amp, 1)));
   }
   30% {
-    transform: translate(-0.06em, -0.08em) rotate(0.5deg);
+    transform: translate(
+        calc(-0.06em * var(--shout-shake-amp, 1)),
+        calc(-0.08em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(0.5deg * var(--shout-shake-amp, 1)));
   }
   40% {
-    transform: translate(0.08em, 0.03em) rotate(-0.6deg);
+    transform: translate(
+        calc(0.08em * var(--shout-shake-amp, 1)),
+        calc(0.03em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(-0.6deg * var(--shout-shake-amp, 1)));
   }
   50% {
-    transform: translate(-0.11em, 0.06em) rotate(0.65deg);
+    transform: translate(
+        calc(-0.11em * var(--shout-shake-amp, 1)),
+        calc(0.06em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(0.65deg * var(--shout-shake-amp, 1)));
   }
   60% {
-    transform: translate(0.05em, -0.03em) rotate(-0.4deg);
+    transform: translate(
+        calc(0.05em * var(--shout-shake-amp, 1)),
+        calc(-0.03em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(-0.4deg * var(--shout-shake-amp, 1)));
   }
   70% {
-    transform: translate(-0.04em, 0.09em) rotate(0.55deg);
+    transform: translate(
+        calc(-0.04em * var(--shout-shake-amp, 1)),
+        calc(0.09em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(0.55deg * var(--shout-shake-amp, 1)));
   }
   80% {
-    transform: translate(0.09em, -0.05em) rotate(-0.6deg);
+    transform: translate(
+        calc(0.09em * var(--shout-shake-amp, 1)),
+        calc(-0.05em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(-0.6deg * var(--shout-shake-amp, 1)));
   }
   90% {
-    transform: translate(-0.07em, 0.03em) rotate(0.35deg);
+    transform: translate(
+        calc(-0.07em * var(--shout-shake-amp, 1)),
+        calc(0.03em * var(--shout-shake-amp, 1))
+      )
+      rotate(calc(0.35deg * var(--shout-shake-amp, 1)));
   }
 }
 

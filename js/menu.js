@@ -351,7 +351,7 @@
   let announcementBox = {
     title: "",
     subtitle: "",
-    /** @type {Array<{title,subtitle,text,speedSec,textAlign,shout,color,bold,italic,runs}>} */
+    /** @type {Array<{title,subtitle,text,speedSec,textAlign,shout,shakeIntensity,color,bold,italic,runs}>} */
     messages: [],
     lines: [], // legacy alias during render of active message body lines
     bg: null,
@@ -2064,6 +2064,9 @@
     let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
     let lastShout = false;
+    /** Baseline shake that matched the baked keyframes before intensity column */
+    const DEFAULT_SHAKE_INTENSITY = 0.75;
+    let lastShakeIntensity = DEFAULT_SHAKE_INTENSITY;
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -2112,6 +2115,18 @@
             shout = parseYesNo(rawShout, false);
           }
         }
+        // K Shout Shake Intensity: blank inherits; default 0.75 (= current baked look)
+        let shakeIntensity = lastShakeIntensity;
+        if (c.announcementShakeIntensity != null) {
+          const rawI = cell(row, c.announcementShakeIntensity);
+          if (rawI != null && String(rawI).trim() !== "") {
+            const n = Number(rawI);
+            if (Number.isFinite(n) && n >= 0) {
+              // Clamp silly highs; 0 = no shake, 1 = max (crazier than baseline)
+              shakeIntensity = Math.min(2, n);
+            }
+          }
+        }
         messages.push({
           title: title,
           subtitle: subtitle,
@@ -2119,6 +2134,7 @@
           speedSec: speed,
           textAlign: textAlign,
           shout: !!shout,
+          shakeIntensity: shakeIntensity,
           // Cell-level font only used when no rich runs (see paintAnnouncementBody)
           color: announcementFontColor(font.color),
           bold: !!font.bold,
@@ -2127,6 +2143,7 @@
         });
         lastSpeed = speed;
         lastShout = !!shout;
+        lastShakeIntensity = shakeIntensity;
       }
 
       const name = cell(row, c.item);
@@ -4507,6 +4524,10 @@
       // Message body only — titles/header stay default (left cluster)
       const align = parseTextAlign(msg.textAlign, "center");
       const shoutOn = !!msg.shout;
+      const shakeI =
+        msg.shakeIntensity != null && Number.isFinite(Number(msg.shakeIntensity))
+          ? Number(msg.shakeIntensity)
+          : 0.75;
       setBoxTextAlign(els.announcementBody, align);
       const header = annShell
         ? annShell.querySelector(".drinks-box-header")
@@ -4515,9 +4536,14 @@
         header.classList.remove("align-left", "align-center", "align-right");
         header.removeAttribute("data-align");
       }
-      setAnnouncementShoutClass(shoutOn);
+      setAnnouncementShoutClass(shoutOn, shakeI);
       if (shoutOn) {
-        tokiInfo("announcement shout", (msg.text || "").slice(0, 48));
+        tokiInfo(
+          "announcement shout",
+          (msg.text || "").slice(0, 40),
+          "shake",
+          shakeI
+        );
       }
     }
 
@@ -4742,8 +4768,10 @@
   /**
    * Shout chrome on the announcement body (Black + max fit + line quake).
    * Shell never animates.
+   * @param {boolean} on
+   * @param {number} [intensity] sheet K; 0.75 = previous default amplitude
    */
-  function setAnnouncementShoutClass(on) {
+  function setAnnouncementShoutClass(on, intensity) {
     const shell = document.getElementById("announcement-box");
     const body = els.announcementBody;
     if (shell) {
@@ -4752,9 +4780,24 @@
       shell.style.removeProperty("animation");
     }
     if (!body) return;
-    body.classList.toggle("is-shout", !!on);
-    if (on) body.setAttribute("data-shout", "1");
-    else body.removeAttribute("data-shout");
+    // Keyframes are authored at intensity 0.75. Scale amp so:
+    //   0.75 → 1.0× (current look), 1.0 → ~1.33×, 0.5 → ~0.67×, 0 → off
+    const i =
+      intensity != null && Number.isFinite(Number(intensity))
+        ? Math.max(0, Number(intensity))
+        : 0.75;
+    const amp = i <= 0 ? 0 : i / 0.75;
+    body.style.setProperty("--shout-shake-amp", String(amp));
+    body.classList.toggle("is-shout", !!on && amp > 0);
+    body.classList.toggle("is-shout-type", !!on);
+    if (on) {
+      body.setAttribute("data-shout", "1");
+      body.setAttribute("data-shake", String(i));
+    } else {
+      body.removeAttribute("data-shout");
+      body.removeAttribute("data-shake");
+      body.style.removeProperty("--shout-shake-amp");
+    }
   }
 
   /**
@@ -4764,7 +4807,8 @@
    */
   function fitAnnouncementShout(el) {
     if (!el || !el.children || !el.children.length) return;
-    el.classList.add("is-shout");
+    // Type metrics only while measuring (shake class restored by setAnnouncementShoutClass)
+    el.classList.add("is-shout-type");
     // Honest clip while measuring (CSS also keeps overflow:hidden on shout)
     el.style.overflow = "hidden";
 
@@ -4862,7 +4906,11 @@
       els.announcementBody.classList.toggle("many-lines", annLines >= 4);
       els.announcementBody.dataset.lineCount = String(annLines);
     }
-    setAnnouncementShoutClass(isShout);
+    const shakeI =
+      curMsg && curMsg.shakeIntensity != null
+        ? Number(curMsg.shakeIntensity)
+        : 0.75;
+    setAnnouncementShoutClass(isShout, shakeI);
 
     if (isShout) {
       fitAnnouncementShout(els.announcementBody);
