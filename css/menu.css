@@ -369,6 +369,15 @@ body {
   /* Trapezoid: full top, inset left edge at bottom (~84.6/848.1 ≈ 9.98%) */
   clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
   -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
+  /* Keep plate z-index / filters / blend modes inside this group */
+  isolation: isolate;
+}
+
+/* All plates live in this layer so their z-index can never beat the veil */
+#family-portrait-stage .family-portrait-plates {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 #family-portrait-stage.visible {
@@ -402,8 +411,6 @@ body {
   user-select: none;
   pointer-events: none;
   z-index: 2;
-  /* Glow fades with class (fixed 70px blur — not scaled with plate size) */
-  transition: filter 1.1s ease-in-out;
 }
 
 body.preview-wall #family-portrait-stage .family-portrait-item {
@@ -411,47 +418,54 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
 }
 
 /*
-  Encore “spotlight” = drop shadow only (design-tool style):
-  distance 0, spread 0, size 70px, 100% opacity, blend pin-light,
-  color = Highlight or Special Highlight.
+  Encore house lights: veil IN FRONT of every plate.
+  Matched to assets/spotlight.grd (PS Custom, Smoothness 100%):
+    opacity 0 → 100% with max-smooth interpolation (no linear kinks).
+  CSS has no Smooth/Perceptual gradient modes — we approximate PS Smooth
+  with dense smootherstep-sampled alpha stops (avoids concentric rings).
+  --encore-hole-x/y = lattice px; --encore-hole-r = half scaled plate width.
+  Gradient radius = 2× open core so the falloff is long and gradual.
+  Dim = 74% opacity × multiply.
 */
-#family-portrait-stage .family-portrait-slot.is-spotlit .family-portrait-item {
-  filter: drop-shadow(
-    0 0 70px var(--portrait-spot-color, var(--highlight, #26bbcb))
-  );
-  mix-blend-mode: pin-light;
-}
-
-body.preview-wall
-  #family-portrait-stage
-  .family-portrait-slot.is-spotlit
-  .family-portrait-item {
-  filter: drop-shadow(
-    0 0 70px var(--portrait-spot-color, var(--highlight, #26bbcb))
-  );
-  mix-blend-mode: pin-light;
-}
-
-/* Dim veil — long soft fade so blackout is readable (~1.1s matches JS gap) */
-#family-portrait-stage .family-portrait-dim {
+#family-portrait-stage .family-portrait-veil {
   position: absolute;
   inset: 0;
-  z-index: 50;
-  background: #000;
-  opacity: 0;
+  z-index: 2;
   pointer-events: none;
+  opacity: 0;
   transition: opacity 1.05s ease-in-out;
+  mix-blend-mode: multiply;
+  /* Force own compositor layer above filtered/blended plates */
+  transform: translateZ(0);
+  /* smootherstep samples t³(t(6t−15)+10), t = 0..1 along radius */
+  background: radial-gradient(
+    circle calc(var(--encore-hole-r, 180px) * 2)
+      at var(--encore-hole-x, 50%) var(--encore-hole-y, 50%),
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.002) 6.25%,
+    rgba(0, 0, 0, 0.016) 12.5%,
+    rgba(0, 0, 0, 0.049) 18.75%,
+    rgba(0, 0, 0, 0.104) 25%,
+    rgba(0, 0, 0, 0.18) 31.25%,
+    rgba(0, 0, 0, 0.275) 37.5%,
+    rgba(0, 0, 0, 0.384) 43.75%,
+    rgba(0, 0, 0, 0.5) 50%,
+    rgba(0, 0, 0, 0.616) 56.25%,
+    rgba(0, 0, 0, 0.725) 62.5%,
+    rgba(0, 0, 0, 0.82) 68.75%,
+    rgba(0, 0, 0, 0.897) 75%,
+    rgba(0, 0, 0, 0.951) 81.25%,
+    rgba(0, 0, 0, 0.984) 87.5%,
+    rgba(0, 0, 0, 0.998) 93.75%,
+    #000 100%
+  );
 }
 
-#family-portrait-stage.is-dimmed .family-portrait-dim {
-  /* Stronger than before so the “house lights down” is obvious */
-  opacity: 0.28;
+#family-portrait-stage.is-dimmed .family-portrait-veil {
+  opacity: 0.74;
 }
 
-/* Spotlit plate above the dim veil */
-#family-portrait-stage .family-portrait-slot.is-spotlit {
-  z-index: 80 !important;
-}/* Mini New! stickers on Family Portrait items (isNew) */
+/* Mini New! stickers on Family Portrait items (isNew) */
 #family-portrait-stage .family-portrait-sticker {
   position: absolute;
   width: 560px;

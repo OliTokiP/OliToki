@@ -6532,9 +6532,9 @@
         const colIndex = incomplete
           ? Math.floor((cols - inRow) / 2 + k)
           : k;
-        // Queue line: lower-right in front, top-left in back
-        // (primary y/down, secondary x/right — no checkerboard)
-        const zIndex = Math.round(y * 1000 + x);
+        // Queue line among plates only (lower-right in front). Keep values
+        // small so the front veil (z≈1000) always covers every plate.
+        const zIndex = 10 + r * 20 + colIndex;
         slots.push({
           x: x,
           y: y,
@@ -6627,11 +6627,16 @@
     if (!stage) return;
     stage.innerHTML = "";
 
-    // Dim veil over collage (opacity animated via .is-dimmed)
-    const dim = document.createElement("div");
-    dim.className = "family-portrait-dim";
-    dim.setAttribute("aria-hidden", "true");
-    stage.appendChild(dim);
+    // Plates layer (z=1) + veil sibling (z=2). Plate z-index stays inside
+    // the plates layer and can never paint over the house-lights veil.
+    const plates = document.createElement("div");
+    plates.className = "family-portrait-plates";
+    stage.appendChild(plates);
+
+    const veil = document.createElement("div");
+    veil.className = "family-portrait-veil";
+    veil.setAttribute("aria-hidden", "true");
+    stage.appendChild(veil);
 
     const n = portraitItems.length;
     if (!n) return;
@@ -6661,6 +6666,12 @@
       /* ignore */
     }
 
+    // Spotlight hole tracks scaled plate size: open diameter ≈ plate width
+    // (radius = half of 1500×scale). CSS extends the soft rim to 1.5×.
+    const plateW = PORTRAIT_IMG_W * layout.scale;
+    const holeR = Math.max(80, plateW * 0.5);
+    stage.style.setProperty("--encore-hole-r", holeR + "px");
+
     portraitItems.forEach(function (it, i) {
       const slot = layout.slots[i];
       if (!slot || !it.image) return;
@@ -6675,7 +6686,6 @@
       wrap.style.top = slot.y + "px";
       wrap.style.zIndex = String(slot.zIndex);
 
-      // Encore highlight = drop-shadow on the plate (CSS); no separate glow node
       const img = document.createElement("img");
       img.className = "family-portrait-item";
       img.alt = it.name || "";
@@ -6691,7 +6701,7 @@
         appendPortraitSticker(wrap, layout.scale);
       }
 
-      stage.appendChild(wrap);
+      plates.appendChild(wrap);
     });
 
     // Tint any portrait stickers with current Special Highlight
@@ -6740,20 +6750,11 @@
       _encoreSpotTimer = null;
     }
     stage.classList.remove("is-dimmed");
-    stage.querySelectorAll(".family-portrait-slot.is-spotlit").forEach(function (el) {
-      el.classList.remove("is-spotlit");
-      el.style.removeProperty("--portrait-spot-color");
-      // Restore queue-line depth
-      if (el.dataset.baseZ != null) {
-        el.style.zIndex = el.dataset.baseZ;
-      }
-    });
   }
 
   /**
-   * Encore curtain-call spotlight for items[itemIndex].
-   * Always blackout (fade off) completely, then soft-fade the next light on.
-   * Color = Special Highlight if New, else Highlight.
+   * Encore curtain-call: blackout veil fully, then open a soft hole over the
+   * bowing plate (assets/spotlight.grd–style smooth radial). Hole = lattice point.
    * @param {number} itemIndex
    * @param {{instant?: boolean}} [opts]
    */
@@ -6762,23 +6763,15 @@
     const stage = els.familyPortrait;
     if (!stage) return;
 
-    // Kill any pending “next bow” and start blackout immediately
     if (_encoreSpotTimer) {
       clearTimeout(_encoreSpotTimer);
       _encoreSpotTimer = null;
     }
-    // Fade out current spot + dim (CSS transition)
+    // Fade veil out completely before reopening on the next bow
     stage.classList.remove("is-dimmed");
-    stage.querySelectorAll(".family-portrait-slot.is-spotlit").forEach(function (el) {
-      el.classList.remove("is-spotlit");
-      el.style.removeProperty("--portrait-spot-color");
-      if (el.dataset.baseZ != null) el.style.zIndex = el.dataset.baseZ;
-    });
 
     if (itemIndex == null || itemIndex < 0) return;
-
-    const item = items[itemIndex];
-    if (!item) return;
+    if (!items[itemIndex]) return;
 
     const gap = opts.instant ? ENCORE_FIRST_BOW_MS : ENCORE_BLACKOUT_MS;
 
@@ -6789,14 +6782,12 @@
       );
       if (!slot) return;
 
-      const color = item.isNew
-        ? config.highlightSpecial || config.highlight || "#fff900"
-        : config.highlight || "#26bbcb";
-      slot.style.setProperty("--portrait-spot-color", color);
-      // Force style flush so opacity 0 → 1 always transitions
-      void slot.offsetWidth;
-      slot.classList.add("is-spotlit");
-      slot.style.zIndex = "200";
+      // Hole center = lattice origin (slot left/top are stage-local px)
+      const hx = parseFloat(slot.style.left) || 0;
+      const hy = parseFloat(slot.style.top) || 0;
+      stage.style.setProperty("--encore-hole-x", hx + "px");
+      stage.style.setProperty("--encore-hole-y", hy + "px");
+      void stage.offsetWidth;
       stage.classList.add("is-dimmed");
     }, gap);
   }
