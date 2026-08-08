@@ -221,6 +221,16 @@ body {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
+/* Show Version: commit stamp replaces allergy copy in the same slot */
+#disclaimer.is-version {
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  max-width: min(720px, 52vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- Menu list ----------
    Larger type to fill the black panel (mockup name ~34–40px, desc ~22px)
 */
@@ -342,9 +352,12 @@ body {
 
    Stack:
      1) Sticker-Shadow.png — plain, no blend
-     2) Sticker-Body.png — gold sticker, no text (hue-tinted by Special Highlight)
-     3) CSS “New!” — Roboto Black, white, -7.25° (matched to new-sticker.png)
-   Body group is isolated so hue does not tint shadow or the label.
+     2) Sticker-Body.png — neutral metallic body (no text)
+     3) .new-sticker-tint — Special Highlight color via mix-blend-mode: color
+        (body PNG is gray; "hue" blend does nothing on unsaturated pixels —
+         "color" takes H+S from the theme and keeps the body's luminosity)
+     4) CSS “New!” — Roboto Black, white, -7.25° (matched to new-sticker.png)
+   Body group is isolated so the blend does not tint shadow or the label.
 */
 #new-sticker {
   position: absolute;
@@ -401,8 +414,10 @@ body {
   position: absolute;
   inset: 0;
   z-index: 1;
+  /* Theme Highlight Color (Special) — set as CSS var + inline by applyStickerTint */
   background-color: var(--highlight-special, #fff900);
-  mix-blend-mode: hue;
+  /* "color" = hue+sat from this plate, luminosity from gray Sticker-Body.png */
+  mix-blend-mode: color;
   pointer-events: none;
   -webkit-mask-image: url("../assets/Sticker-Body.png");
   mask-image: url("../assets/Sticker-Body.png");
@@ -412,8 +427,8 @@ body {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
-  -webkit-mask-mode: alpha;
-  mask-mode: alpha;
+  /* alpha from PNG transparency; omit mask-mode (poor support / can blank the plate) */
+  -webkit-mask-composite: source-in;
 }
 
 /*
@@ -1316,8 +1331,100 @@ body {
   opacity: 0;
 }
 
-/* Shout: max-scale type is on (fitDrinksBoxes). Earthquake shake deferred. */
-/* is-shout class still toggled for future shake / styling. */
+/*
+  Shout (body.is-shout):
+  - Roboto Black (900)
+  - Extreme vertical type scale (JS fitAnnouncementShout)
+  - Earthquake on each TEXT LINE (not the shell) — em units scale with type
+  - Body keeps overflow:hidden so fit can measure height honestly
+    (overflow:visible + flex center made scrollHeight lie → multi-line blew out)
+*/
+#announcement-box .drinks-box-body.is-shout {
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  gap: calc(4px * var(--box-scale));
+  /* MUST stay hidden — required for correct multi-line fit */
+  overflow: hidden;
+}
+
+#announcement-box .drinks-box-body.is-shout .announcement-line,
+#announcement-box .drinks-box-body.is-shout .announcement-run {
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 900 !important;
+  font-style: normal !important;
+}
+
+#announcement-box .drinks-box-body.is-shout .announcement-line:first-child {
+  font-size: 1em;
+}
+
+#announcement-box .drinks-box-body.is-shout.many-lines {
+  gap: calc(4px * var(--box-scale));
+  line-height: 1.05;
+  padding: 20px 40px 24px;
+}
+
+/* Text quake: lines only (shell stays put). em = tracks huge shout size */
+#announcement-box .drinks-box-body.is-shout .announcement-line {
+  animation: ann-shout-shake 0.42s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform;
+  /* width 100% so wrap measure stays honest; transform doesn't change layout */
+  max-width: 100%;
+}
+
+/* Slight desync on alternating lines = more chaotic cartoon yell */
+#announcement-box .drinks-box-body.is-shout .announcement-line:nth-child(even) {
+  animation-delay: -0.14s;
+  animation-direction: reverse;
+}
+
+@keyframes ann-shout-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  10% {
+    transform: translate(-0.09em, 0.05em) rotate(-0.7deg);
+  }
+  20% {
+    transform: translate(0.1em, -0.04em) rotate(0.8deg);
+  }
+  30% {
+    transform: translate(-0.06em, -0.08em) rotate(0.5deg);
+  }
+  40% {
+    transform: translate(0.08em, 0.03em) rotate(-0.6deg);
+  }
+  50% {
+    transform: translate(-0.11em, 0.06em) rotate(0.65deg);
+  }
+  60% {
+    transform: translate(0.05em, -0.03em) rotate(-0.4deg);
+  }
+  70% {
+    transform: translate(-0.04em, 0.09em) rotate(0.55deg);
+  }
+  80% {
+    transform: translate(0.09em, -0.05em) rotate(-0.6deg);
+  }
+  90% {
+    transform: translate(-0.07em, 0.03em) rotate(0.35deg);
+  }
+}
+
+body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line {
+  animation-duration: 0.55s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #announcement-box .drinks-box-body.is-shout .announcement-line {
+    animation-duration: 0.7s;
+  }
+}
+
 
 /* Drink options: Create Columns? → grid; else balanced wrap */
 #drink-options-box .drinks-box-body {

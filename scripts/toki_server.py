@@ -268,6 +268,46 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                 )
                 return
 
+            if path == "/api/build":
+                # Live git stamp for Show Version (Local / toki_server only)
+                info = {
+                    "hash": "unknown",
+                    "hashFull": "",
+                    "date": "",
+                    "subject": "",
+                    "source": "api",
+                }
+                try:
+                    import subprocess as _sp
+
+                    r = _sp.run(
+                        [
+                            "git",
+                            "-C",
+                            str(root),
+                            "log",
+                            "-1",
+                            "--format=%H%n%h%n%ci%n%s",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if r.returncode == 0:
+                        lines = (r.stdout or "").strip().split("\n")
+                        full, short, date, subj = (lines + ["", "", "", ""])[:4]
+                        info = {
+                            "hash": short or "unknown",
+                            "hashFull": full or "",
+                            "date": date or "",
+                            "subject": subj or "",
+                            "source": "git",
+                        }
+                except Exception as e:
+                    info["error"] = str(e)
+                self._json(200, info)
+                return
+
             if path == "/api/sheets/csv":
                 if not backend:
                     self._json(

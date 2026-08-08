@@ -151,6 +151,7 @@
    *   G2 BG Color | H2 BG Image (dropdown) | I2 BG Blur | J2 BG Blend Mode |
    *   K2 BG Opacity | L2 BG Scroll Speed | M2 Slideshow Speed
    * N Color Picker labels (reference list for other sheets)
+   * O Show Version (1 = commit stamp in disclaimer slot instead of allergy text)
    */
   const STYLE_COLUMNS = {
     themeSelector: 0,
@@ -166,9 +167,16 @@
     bgOpacity: 10,
     bgScrollSpeed: 11,
     slideshowSpeed: 12,
+    // N Color Picker (reference list) · O Show Version
+    colorPicker: 13,
+    showVersion: 14,
   };
   /** Excel row 2 = first data row (index 1 in sheet_to_json header:1 arrays) */
   const STYLE_BOARD_WIDE_ROW_INDEX = 1;
+  /** Default allergy copy (HTML uses &lt;br /&gt; between lines). */
+  const DEFAULT_DISCLAIMER_HTML =
+    "Before placing your order, please inform us if you have a food allergy.<br />" +
+    "Consuming raw or undercooked food may lead to foodborne illness.";
 
   const DEFAULT_BG_IMAGE = "assets/bgs/galaxy-bg.jpg";
   const BG_IMAGE_FOLDER = "assets/bgs";
@@ -201,6 +209,7 @@
       showHero: true,
       showSticker: true,
       showDisclaimer: true,
+      showVersion: false,
       imageFolder: "food-pics",
       overviewImageDefault: null,
       refreshSeconds: 30,
@@ -741,10 +750,33 @@
     root.style.setProperty("--highlight-special", config.highlightSpecial);
     // Alias for any leftover CSS/rules that still reference the old name
     root.style.setProperty("--highlight-new", config.highlightSpecial);
+    applyStickerTint();
     applyStageBackground();
     // Box overrides + contrast text (all boards that have boxes)
     applyBoxChrome();
+    applyDisclaimerContent();
     applyDisclaimerColor();
+  }
+
+  /**
+   * NEW sticker body tint: paint .new-sticker-tint with Style
+   * "Highlight Color (Special)" so mix-blend-mode:color recolors
+   * the gray Sticker-Body.png (hue blend does nothing on gray).
+   */
+  function applyStickerTint() {
+    const special =
+      normalizeHex(config.highlightSpecial) ||
+      normalizeHex(config.highlight) ||
+      "#fff900";
+    // Keep CSS var in sync even if applyConfigColors order changes
+    document.documentElement.style.setProperty(
+      "--highlight-special",
+      special
+    );
+    const tints = document.querySelectorAll(".new-sticker-tint");
+    for (let i = 0; i < tints.length; i++) {
+      tints[i].style.backgroundColor = special;
+    }
   }
 
   /**
@@ -889,6 +921,92 @@
     ctx.restore();
 
     return averageCanvasHex(ctx, W, H) || plateHex;
+  }
+
+  /**
+   * Resolve git build stamp for Show Version (replaces allergy disclaimer).
+   * Prefers /api/build (local server live git), then window.TOKI_BUILD.
+   */
+  function fetchBuildInfo() {
+    if (window.__tokiBuildInfoPromise) return window.__tokiBuildInfoPromise;
+    window.__tokiBuildInfoPromise = (async function () {
+      try {
+        const res = await fetch("/api/build?t=" + Date.now(), {
+          cache: "no-store",
+        });
+        if (res && res.ok) {
+          const j = await res.json();
+          if (j && (j.hash || j.hashFull)) {
+            return {
+              hash: j.hash || (j.hashFull || "").slice(0, 7),
+              hashFull: j.hashFull || "",
+              date: j.date || "",
+              subject: j.subject || "",
+              source: j.source || "api",
+            };
+          }
+        }
+      } catch (e) {
+        /* remote Pages or offline */
+      }
+      const b = window.TOKI_BUILD || null;
+      if (b && (b.hash || b.hashFull)) {
+        return {
+          hash: b.hash || String(b.hashFull || "").slice(0, 7),
+          hashFull: b.hashFull || "",
+          date: b.date || "",
+          subject: b.subject || "",
+          source: b.source || "static",
+        };
+      }
+      return {
+        hash: "unknown",
+        hashFull: "",
+        date: "",
+        subject: "",
+        source: "missing",
+      };
+    })();
+    return window.__tokiBuildInfoPromise;
+  }
+
+  /** Show Version=1 → disclaimer slot becomes commit hash + date/time. */
+  function applyDisclaimerContent() {
+    if (!els.disclaimer) return;
+    if (cfg.showDisclaimer === false) {
+      els.disclaimer.hidden = true;
+      return;
+    }
+    els.disclaimer.hidden = false;
+    const showVer = !!(config && config.showVersion);
+    if (!showVer) {
+      els.disclaimer.innerHTML = DEFAULT_DISCLAIMER_HTML;
+      els.disclaimer.classList.remove("is-version");
+      return;
+    }
+    els.disclaimer.classList.add("is-version");
+    els.disclaimer.textContent = "…";
+    fetchBuildInfo().then(function (info) {
+      if (!els.disclaimer) return;
+      if (!(config && config.showVersion)) {
+        els.disclaimer.innerHTML = DEFAULT_DISCLAIMER_HTML;
+        els.disclaimer.classList.remove("is-version");
+        return;
+      }
+      const hash = info.hash || "unknown";
+      const date = info.date || "";
+      // Replace allergy copy entirely with build identity
+      els.disclaimer.textContent = date
+        ? hash + " · " + date
+        : hash;
+      els.disclaimer.title = [
+        info.hashFull || hash,
+        info.subject || "",
+        "source: " + (info.source || ""),
+      ]
+        .filter(Boolean)
+        .join("\n");
+    });
   }
 
   function applyDisclaimerColor() {
@@ -2278,6 +2396,10 @@
         parsed.overviewImage !== undefined
           ? parsed.overviewImage
           : config.overviewImage || null,
+      showVersion:
+        parsed.showVersion !== undefined
+          ? !!parsed.showVersion
+          : !!config.showVersion,
     };
 
     if (parsed.proteinBox) {
@@ -2949,6 +3071,10 @@
     const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
     const bgScrollSpeed = Number(cell(boardRow, sc.bgScrollSpeed));
     const slideshowSpeed = Number(cell(boardRow, sc.slideshowSpeed));
+    const showVersion =
+      sc.showVersion != null
+        ? parseYesNo(cell(boardRow, sc.showVersion), false)
+        : false;
 
     const theme = {
       themeName: themeName,
@@ -2965,6 +3091,7 @@
       bgSolid: bgColor,
       bgScrollSpeed: Number.isFinite(bgScrollSpeed) ? bgScrollSpeed : 1,
       slideshowSpeed: Number.isFinite(slideshowSpeed) ? slideshowSpeed : 3,
+      showVersion: !!showVersion,
     };
     tokiInfo(
       "Style theme:",
@@ -3006,6 +3133,7 @@
     parsed.bgSolid = theme.bgSolid;
     parsed.bgScrollSpeed = theme.bgScrollSpeed;
     parsed.slideshowSpeed = theme.slideshowSpeed;
+    parsed.showVersion = !!theme.showVersion;
     return parsed;
   }
 
@@ -4339,9 +4467,8 @@
       if (els.announcementTitle) els.announcementTitle.textContent = "";
       if (els.announcementSubtitle) els.announcementSubtitle.textContent = "";
       if (els.announcementBody) els.announcementBody.innerHTML = "";
-      if (annShell) annShell.classList.remove("is-shout");
+      setAnnouncementShoutClass(false);
       if (els.announcementBody) {
-        els.announcementBody.classList.remove("is-shout");
         setBoxTextAlign(els.announcementBody, "center");
       }
       return;
@@ -4388,9 +4515,9 @@
         header.classList.remove("align-left", "align-center", "align-right");
         header.removeAttribute("data-align");
       }
-      if (annShell) annShell.classList.toggle("is-shout", shoutOn);
-      if (els.announcementBody) {
-        els.announcementBody.classList.toggle("is-shout", shoutOn);
+      setAnnouncementShoutClass(shoutOn);
+      if (shoutOn) {
+        tokiInfo("announcement shout", (msg.text || "").slice(0, 48));
       }
     }
 
@@ -4612,8 +4739,119 @@
     fitDrinksBoxes();
   }
 
+  /**
+   * Shout chrome on the announcement body (Black + max fit + line quake).
+   * Shell never animates.
+   */
+  function setAnnouncementShoutClass(on) {
+    const shell = document.getElementById("announcement-box");
+    const body = els.announcementBody;
+    if (shell) {
+      shell.classList.remove("is-shout");
+      shell.removeAttribute("data-shout");
+      shell.style.removeProperty("animation");
+    }
+    if (!body) return;
+    body.classList.toggle("is-shout", !!on);
+    if (on) body.setAttribute("data-shout", "1");
+    else body.removeAttribute("data-shout");
+  }
+
+  /**
+   * Shout fit: maximize type to fill body height (padding kept).
+   * Measures line boxes + gap directly — flex + justify-content:center makes
+   * scrollHeight unreliable (especially if overflow was ever visible).
+   */
+  function fitAnnouncementShout(el) {
+    if (!el || !el.children || !el.children.length) return;
+    el.classList.add("is-shout");
+    // Honest clip while measuring (CSS also keeps overflow:hidden on shout)
+    el.style.overflow = "hidden";
+
+    const minS = 0.3;
+    const maxS = 20;
+
+    const contentMetrics = function () {
+      const cs = window.getComputedStyle(el);
+      const padX =
+        (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const padY =
+        (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const gap = parseFloat(cs.rowGap || cs.gap) || 0;
+      const contentW = Math.max(1, el.clientWidth - padX);
+      const availH = Math.max(1, el.clientHeight - padY);
+      const lines = el.querySelectorAll(".announcement-line");
+      let contentH = 0;
+      let overflowW = false;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // offsetHeight at current wrap width (allow soft-wrap multi-line)
+        contentH += line.offsetHeight || 0;
+        // Unbreakable overflow only (long word); soft wrap is fine
+        const lineBoxW = Math.max(line.clientWidth || 0, contentW);
+        if (line.scrollWidth > lineBoxW + 2) overflowW = true;
+      }
+      if (lines.length > 1) contentH += gap * (lines.length - 1);
+      return {
+        contentH: contentH || 1,
+        availH: availH,
+        overflowW: overflowW,
+        lineCount: lines.length,
+      };
+    };
+
+    const fits = function (scale) {
+      el.style.setProperty("--box-scale", String(scale));
+      void el.offsetHeight;
+      const m = contentMetrics();
+      // Height first: packed lines must sit inside padding box
+      if (m.contentH > m.availH + 1) return false;
+      // Width: only fail on unbreakable overflow (soft wrap is allowed)
+      if (m.overflowW) return false;
+      return true;
+    };
+
+    let lo = minS;
+    let hi = maxS;
+    let best = minS;
+
+    if (!fits(lo)) {
+      // Even min overflows — walk down a bit
+      let s = lo;
+      while (s > 0.15 && !fits(s)) s -= 0.02;
+      best = Math.max(0.15, s);
+      el.style.setProperty("--box-scale", String(best));
+    } else {
+      for (let i = 0; i < 28; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid)) {
+          best = mid;
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+      // Tiny cushion so multi-line glyphs don't kiss the clip edge
+      best = Math.max(minS, best * 0.99);
+      let guard = 0;
+      while (!fits(best) && best > minS && guard < 40) {
+        best -= 0.02;
+        guard++;
+      }
+      fits(best);
+    }
+
+    el.style.removeProperty("overflow");
+    tokiInfo(
+      "shout fit scale",
+      el.style.getPropertyValue("--box-scale"),
+      "lines",
+      el.querySelectorAll(".announcement-line").length
+    );
+  }
+
   function fitDrinksBoxes() {
-    // Announcement: tasteful cap ~1.55, unless current message is Shout → max fill
+    // Announcement: tasteful cap ~1.55, unless Shout → extreme vertical fill
     const annLines = els.announcementBody
       ? els.announcementBody.querySelectorAll(".announcement-line").length
       : 0;
@@ -4622,20 +4860,12 @@
     const isShout = !!(curMsg && curMsg.shout);
     if (els.announcementBody) {
       els.announcementBody.classList.toggle("many-lines", annLines >= 4);
-      els.announcementBody.classList.toggle("is-shout", isShout);
       els.announcementBody.dataset.lineCount = String(annLines);
     }
-    const annShell = document.getElementById("announcement-box");
-    if (annShell) annShell.classList.toggle("is-shout", isShout);
+    setAnnouncementShoutClass(isShout);
 
     if (isShout) {
-      // Override tasteful limits: fill the box as large as overflow allows
-      const shoutMin =
-        annLines >= 6 ? 0.25 : annLines >= 4 ? 0.35 : annLines >= 3 ? 0.45 : 0.55;
-      fitBoxScale(els.announcementBody, shoutMin, 3.2, {
-        checkChildWidth: true,
-        shrinkFactor: 0.99,
-      });
+      fitAnnouncementShout(els.announcementBody);
     } else {
       const annMin =
         annLines >= 6 ? 0.2 : annLines >= 4 ? 0.26 : annLines >= 3 ? 0.34 : 0.45;
@@ -6627,6 +6857,7 @@
     if (cfg.showDisclaimer === false && els.disclaimer) {
       els.disclaimer.hidden = true;
     }
+    applyDisclaimerContent();
 
     scaleStageToWindow();
     window.addEventListener("resize", () => {

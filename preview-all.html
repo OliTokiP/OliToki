@@ -279,17 +279,46 @@
         });
       }
 
+      function selectedBoardSet() {
+        try {
+          const raw = new URLSearchParams(location.search || "").get("boards");
+          if (!raw) return null;
+          const set = {};
+          raw.split(",").forEach(function (p) {
+            const n = parseInt(String(p).trim(), 10);
+            if (n >= 1 && n <= 4) set[n] = true;
+          });
+          return Object.keys(set).length ? set : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
       function loadFrames() {
-        const cells = Array.prototype.slice.call(
+        const allCells = Array.prototype.slice.call(
           document.querySelectorAll(".cell")
         );
+        const boardSel = selectedBoardSet();
+        if (boardSel) {
+          allCells.forEach(function (cell, idx) {
+            const n = idx + 1;
+            if (!boardSel[n]) {
+              cell.style.display = "none";
+              cell.setAttribute("data-skipped", "1");
+            }
+          });
+        }
+        const cells = allCells.filter(function (c) {
+          return c.getAttribute("data-skipped") !== "1";
+        });
         const t = Date.now();
         info(
           "loading",
           cells.length,
           "boards @",
           BOARD_W + "×" + BOARD_H,
-          "per-board BG"
+          "per-board BG",
+          boardSel ? "filter=" + Object.keys(boardSel).join(",") : "all"
         );
 
         cells.forEach(function (cell) {
@@ -315,7 +344,8 @@
           const src = cell.getAttribute("data-src");
           const iframe = cell.querySelector("iframe");
           const name = cell.getAttribute("data-name") || src;
-          const idx = i;
+          const wallIdx = allCells.indexOf(cell);
+          const idx = wallIdx >= 0 ? wallIdx : i;
           i++;
           if (!src || !iframe) {
             warn("cell missing src/iframe", name);

@@ -32,8 +32,9 @@ window.TOKI_CONFIG = {
    * A title | B include stripes | C stripe1 | D stripe2 |
    * E Announcement Title | F Announcement Subtitle | G Announcement Text |
    * H Announcement Box Color | I Announcement Speed (seconds; inherit blanks) |
-   * J Shout (1/0; inherit blanks — max scale; shake deferred) |
-   * K–… legacy drink columns (ignored when drinksSheetGid loads successfully)
+   * J Shout (1/0; inherit blanks — Roboto Black + max fill + text earthquake) |
+   * K Shout Shake Intensity (reserved; ignored — full text shake for now) |
+   * L–… legacy drink columns (ignored when drinksSheetGid loads successfully)
    *
    * Each non-empty G cell is one message-board slide.
    * Blank E/I/J inherit previous title/speed/shout; blank F clears subtitle
