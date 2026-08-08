@@ -901,6 +901,16 @@ body {
   align-items: flex-end;
 }
 
+/* Announcement header follows Text Align */
+#announcement-box .drinks-box-header.align-left {
+  justify-content: flex-start;
+}
+#announcement-box .drinks-box-header.align-center {
+  justify-content: center;
+}
+#announcement-box .drinks-box-header.align-right {
+  justify-content: flex-end;
+}
 
 /* Column cells: stretch full slot width so text-align left/center/right works */
 #protein-box .info-box-body.layout-columns.align-left .box-col-item,
@@ -1046,31 +1056,6 @@ body {
 
 .board-drinks #menu-list {
   display: none;
-}
-
-/* Version stamp — lower left, same contrast logic as disclaimer for visibility on any BG */
-#version-info {
-  position: absolute;
-  z-index: 4;
-  bottom: 12px;
-  left: 16px;
-  margin: 0;
-  color: var(--disclaimer-color, #ffffff);
-  font-family: "Roboto Condensed", "Roboto", sans-serif;
-  font-weight: 300;
-  font-size: 14px;
-  line-height: 1.2;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  opacity: 0.9;
-}
-
-.board-drinks #version-info {
-  bottom: 10px;
-  left: 12px;
 }
 
 /* Title: single line, vertically centered in right-side white header (Mockup 4).
@@ -1341,54 +1326,53 @@ body {
   opacity: 0;
 }
 
-/* Shout: height-first max scale (fitDrinksBoxes). Tighter leading + body shake. */
-#announcement-box.is-shout .drinks-box-body,
-#announcement-box .drinks-box-body.is-shout {
-  line-height: 1.05;
-  gap: calc(4px * var(--box-scale));
-  animation: ann-shout-shake 0.42s ease-in-out infinite;
-  transform-origin: center center;
-  will-change: transform;
-}
-
+/* Shout: max-scale type + cartoon earthquake shake (body only, shell stays put) */
 @keyframes ann-shout-shake {
   0%,
   100% {
     transform: translate(0, 0) rotate(0deg);
   }
   10% {
-    transform: translate(-0.09em, 0.05em) rotate(-0.7deg);
+    transform: translate(-3px, 2px) rotate(-0.6deg);
   }
   20% {
-    transform: translate(0.1em, -0.04em) rotate(0.8deg);
+    transform: translate(4px, -2px) rotate(0.7deg);
   }
   30% {
-    transform: translate(-0.06em, -0.08em) rotate(0.5deg);
+    transform: translate(-2px, -3px) rotate(0.4deg);
   }
   40% {
-    transform: translate(0.08em, 0.03em) rotate(-0.6deg);
+    transform: translate(3px, 1px) rotate(-0.5deg);
   }
   50% {
-    transform: translate(-0.11em, 0.06em) rotate(0.65deg);
+    transform: translate(-4px, 2px) rotate(0.55deg);
   }
   60% {
-    transform: translate(0.05em, -0.03em) rotate(-0.4deg);
+    transform: translate(2px, -1px) rotate(-0.35deg);
   }
   70% {
-    transform: translate(-0.04em, 0.09em) rotate(0.55deg);
+    transform: translate(-1px, 3px) rotate(0.45deg);
   }
   80% {
-    transform: translate(0.09em, -0.05em) rotate(-0.6deg);
+    transform: translate(3px, -2px) rotate(-0.5deg);
   }
   90% {
-    transform: translate(-0.07em, 0.03em) rotate(0.35deg);
+    transform: translate(-2px, 1px) rotate(0.3deg);
   }
 }
 
-/* Calmer on multi-board wall (Fire Stick FPS) */
+#announcement-box.is-shout .drinks-box-body,
+#announcement-box .drinks-box-body.is-shout {
+  animation: ann-shout-shake 0.42s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Slightly calmer on multi-board wall (Fire Stick FPS) */
 body.preview-wall #announcement-box.is-shout .drinks-box-body,
 body.preview-wall #announcement-box .drinks-box-body.is-shout {
   animation-duration: 0.55s;
+  animation-timing-function: ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

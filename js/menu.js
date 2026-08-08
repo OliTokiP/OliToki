@@ -202,7 +202,6 @@
       showHero: true,
       showSticker: true,
       showDisclaimer: true,
-      showVersion: false,
       imageFolder: "food-pics",
       overviewImageDefault: null,
       refreshSeconds: 30,
@@ -1507,44 +1506,12 @@
     });
 
     const cellXfs = [];
-    const cellStyleXfs = [];
     for (const el of stylesDoc.getElementsByTagName("*")) {
-      const tag = xmlLocal(el.tagName);
-      if (tag === "cellXfs") {
+      if (xmlLocal(el.tagName) === "cellXfs") {
         for (const xf of el.children || []) {
           if (xmlLocal(xf.tagName) === "xf") cellXfs.push(xf);
         }
       }
-      if (tag === "cellStyleXfs") {
-        for (const xf of el.children || []) {
-          if (xmlLocal(xf.tagName) === "xf") cellStyleXfs.push(xf);
-        }
-      }
-    }
-
-    /** Horizontal align from xf / style chain → "left"|"center"|"right"|null */
-    function xfTextAlign(xf, allowStyleLookup) {
-      if (!xf) return null;
-      for (const ch of xf.children || []) {
-        if (xmlLocal(ch.tagName) !== "alignment") continue;
-        const h = String(ch.getAttribute("horizontal") || "")
-          .trim()
-          .toLowerCase();
-        if (h === "left" || h === "right" || h === "center") return h;
-        if (h === "justify" || h === "distributed" || h === "fill") {
-          return "center";
-        }
-        // "general" / empty → no explicit align
-        return null;
-      }
-      if (allowStyleLookup === false) return null;
-      const apply = xf.getAttribute("applyAlignment");
-      if (apply === "0") return null;
-      const styleId = xf.getAttribute("xfId");
-      if (styleId != null && styleId !== "" && cellStyleXfs[Number(styleId)]) {
-        return xfTextAlign(cellStyleXfs[Number(styleId)], false);
-      }
-      return null;
     }
 
     // Rich text shared strings (index → runs)
@@ -1682,13 +1649,11 @@
           const fillColor = fillColors[fillId];
           if (fillColor) fills[ref] = fillColor;
           const fs = fontStyles[fontId];
-          const align = xfTextAlign(xf, true);
-          if (fs || align) {
+          if (fs) {
             fonts[ref] = {
-              bold: !!(fs && fs.bold),
-              italic: !!(fs && fs.italic),
-              color: (fs && fs.color) || null,
-              align: align || null,
+              bold: !!fs.bold,
+              italic: !!fs.italic,
+              color: fs.color || null,
             };
           }
         }
@@ -1948,6 +1913,7 @@
     let lastTitle = "";
     let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
+    let lastAlign = "center";
     let lastShout = false;
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -1987,9 +1953,15 @@
           c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
           lastSpeed
         );
-        // Body align from G cell formatting (xlsx); default center — not titles
-        const textAlign = parseTextAlign(font.align, "center");
-        // J Shout: blank inherits previous (default off)
+        // J Text Align: blank inherits previous (default center)
+        let textAlign = lastAlign;
+        if (c.announcementTextAlign != null) {
+          const rawAlign = cell(row, c.announcementTextAlign);
+          if (rawAlign != null && String(rawAlign).trim() !== "") {
+            textAlign = parseTextAlign(rawAlign, lastAlign);
+          }
+        }
+        // K Shout: blank inherits previous (default off)
         let shout = lastShout;
         if (c.announcementShout != null) {
           const rawShout = cell(row, c.announcementShout);
@@ -2011,6 +1983,7 @@
           runs: runs,
         });
         lastSpeed = speed;
+        lastAlign = textAlign;
         lastShout = !!shout;
       }
 
@@ -4383,16 +4356,17 @@
     }
 
     function applyAlignAndShout() {
-      // Message body only — titles/header stay default (left cluster)
       const align = parseTextAlign(msg.textAlign, "center");
       const shoutOn = !!msg.shout;
       setBoxTextAlign(els.announcementBody, align);
+      // Header follows body align for visual unity
       const header = annShell
         ? annShell.querySelector(".drinks-box-header")
         : null;
       if (header) {
         header.classList.remove("align-left", "align-center", "align-right");
-        header.removeAttribute("data-align");
+        header.classList.add("align-" + align);
+        header.setAttribute("data-align", align);
       }
       if (annShell) annShell.classList.toggle("is-shout", shoutOn);
       if (els.announcementBody) {
@@ -4635,10 +4609,10 @@
     if (annShell) annShell.classList.toggle("is-shout", isShout);
 
     if (isShout) {
-      // Max fill for shout (high cap; binary search finds the actual fit)
+      // Override tasteful limits: fill the box as large as overflow allows
       const shoutMin =
         annLines >= 6 ? 0.25 : annLines >= 4 ? 0.35 : annLines >= 3 ? 0.45 : 0.55;
-      fitBoxScale(els.announcementBody, shoutMin, 5.0, {
+      fitBoxScale(els.announcementBody, shoutMin, 3.2, {
         checkChildWidth: true,
         shrinkFactor: 0.99,
       });
@@ -6634,9 +6608,9 @@
       els.disclaimer.hidden = true;
     }
 
-    // Version stamp (lower left) controlled from Style tab "Show Version" = 1/yes
-    const showVer = !!(parsed && parsed.showVersion) || !!cfg.showVersion;
+    // Version stamp (lower left) — controlled by Style tab "Show Version"
     if (els.versionInfo) {
+      const showVer = !!(cfg && cfg.showVersion);
       if (showVer) {
         els.versionInfo.hidden = false;
         const now = new Date();
