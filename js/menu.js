@@ -166,6 +166,7 @@
     bgOpacity: 10,
     bgScrollSpeed: 11,
     slideshowSpeed: 12,
+    showVersion: 13,
   };
   /** Excel row 2 = first data row (index 1 in sheet_to_json header:1 arrays) */
   const STYLE_BOARD_WIDE_ROW_INDEX = 1;
@@ -201,6 +202,7 @@
       showHero: true,
       showSticker: true,
       showDisclaimer: true,
+      showVersion: false,
       imageFolder: "food-pics",
       overviewImageDefault: null,
       refreshSeconds: 30,
@@ -264,6 +266,7 @@
     footerDrinksBody: document.getElementById("footer-drinks-body"),
     footerBoxes: document.getElementById("footer-boxes"),
     disclaimer: document.getElementById("disclaimer"),
+    versionInfo: document.getElementById("version-info"),
     announcementTitle: document.getElementById("announcement-title"),
     announcementSubtitle: document.getElementById("announcement-subtitle"),
     announcementBody: document.getElementById("announcement-body"),
@@ -2949,6 +2952,7 @@
     const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
     const bgScrollSpeed = Number(cell(boardRow, sc.bgScrollSpeed));
     const slideshowSpeed = Number(cell(boardRow, sc.slideshowSpeed));
+    const showVersion = parseYesNo(cell(boardRow, sc.showVersion), false);
 
     const theme = {
       themeName: themeName,
@@ -2965,6 +2969,7 @@
       bgSolid: bgColor,
       bgScrollSpeed: Number.isFinite(bgScrollSpeed) ? bgScrollSpeed : 1,
       slideshowSpeed: Number.isFinite(slideshowSpeed) ? slideshowSpeed : 3,
+      showVersion: showVersion,
     };
     tokiInfo(
       "Style theme:",
@@ -3006,6 +3011,7 @@
     parsed.bgSolid = theme.bgSolid;
     parsed.bgScrollSpeed = theme.bgScrollSpeed;
     parsed.slideshowSpeed = theme.slideshowSpeed;
+    parsed.showVersion = theme.showVersion;
     return parsed;
   }
 
@@ -4629,38 +4635,10 @@
     if (annShell) annShell.classList.toggle("is-shout", isShout);
 
     if (isShout) {
-      // Fill content box height (keep CSS padding); width only clamps if needed
+      // Max fill for shout (high cap; binary search finds the actual fit)
       const shoutMin =
         annLines >= 6 ? 0.25 : annLines >= 4 ? 0.35 : annLines >= 3 ? 0.45 : 0.55;
-      let shoutMax = 12;
-      const body = els.announcementBody;
-      if (body && body.clientHeight > 0) {
-        body.style.setProperty("--box-scale", "1");
-        void body.offsetHeight;
-        const cs = window.getComputedStyle(body);
-        const padY =
-          (parseFloat(cs.paddingTop) || 0) +
-          (parseFloat(cs.paddingBottom) || 0);
-        const availH = Math.max(1, body.clientHeight - padY);
-        let contentH = 0;
-        const lines = body.querySelectorAll(".announcement-line");
-        for (let li = 0; li < lines.length; li++) {
-          contentH += lines[li].offsetHeight || 0;
-        }
-        if (lines.length > 1) {
-          const gap = parseFloat(cs.rowGap || cs.gap) || 0;
-          contentH += gap * (lines.length - 1);
-        }
-        if (contentH < 1) contentH = 1;
-        // Slight cushion so scrollHeight fit does not clip glyphs
-        shoutMax = Math.min(14, Math.max(shoutMin, (availH / contentH) * 0.99));
-      }
-      // Height-first, then width clamp if a line overflows
-      fitBoxScale(body, shoutMin, shoutMax, {
-        checkChildWidth: false,
-        shrinkFactor: 0.99,
-      });
-      fitBoxScale(body, shoutMin, shoutMax, {
+      fitBoxScale(els.announcementBody, shoutMin, 5.0, {
         checkChildWidth: true,
         shrinkFactor: 0.99,
       });
@@ -6654,6 +6632,20 @@
     }
     if (cfg.showDisclaimer === false && els.disclaimer) {
       els.disclaimer.hidden = true;
+    }
+
+    // Version stamp (lower left) controlled from Style tab "Show Version" = 1/yes
+    const showVer = !!(parsed && parsed.showVersion) || !!cfg.showVersion;
+    if (els.versionInfo) {
+      if (showVer) {
+        els.versionInfo.hidden = false;
+        const now = new Date();
+        const datePart = now.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+        const timePart = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        els.versionInfo.textContent = `${datePart} ${timePart} • local`;
+      } else {
+        els.versionInfo.hidden = true;
+      }
     }
 
     scaleStageToWindow();
