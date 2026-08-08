@@ -5,7 +5,9 @@
  * Theme / speeds / highlights from Style tab.
  * Protein/Sauces content: shared sheets (not this tab).
  *
- * Same column schema as Board 1 / Board 3 — fill only what you need.
+ * Same schema as Board 1 (Family Portrait at K):
+ *   … | J Include | K Family Portrait | L Protein? | M Sauces? | N Drinks? |
+ *   O Include Descriptions? | P Columns?
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
@@ -37,9 +39,12 @@ window.TOKI_CONFIG = {
     isNew: 7,
     image: 8,
     include: 9,
-    includeProteinBox: 10,
-    includeSaucesBox: 11,
-    includeDrinksBox: 12,
+    familyPortrait: 10,
+    includeProteinBox: 11,
+    includeSaucesBox: 12,
+    includeDrinksBox: 13,
+    includeDescriptions: 14,
+    menuColumns: 15,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

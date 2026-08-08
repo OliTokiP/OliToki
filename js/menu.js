@@ -2025,7 +2025,10 @@
       out.bgScrollSpeed = Number(cell(first, c.bgScrollSpeed)) || 1;
     }
     if (c.slideshowSpeed != null) {
-      out.slideshowSpeed = Number(cell(first, c.slideshowSpeed)) || 3;
+      out.slideshowSpeed = parseSlideshowSpeed(
+        cell(first, c.slideshowSpeed),
+        3
+      );
     }
     if (c.highlight != null) {
       out.highlight = cell(first, c.highlight);
@@ -2383,8 +2386,12 @@
       bgMode: bgImage ? "image" : "solid",
       bgSolid: bgColor,
       bgScrollSpeed: Number(parsed.bgScrollSpeed) || config.bgScrollSpeed || 1,
-      slideshowSpeed:
-        Number(parsed.slideshowSpeed) || config.slideshowSpeed || 3,
+      slideshowSpeed: parseSlideshowSpeed(
+        parsed.slideshowSpeed != null
+          ? parsed.slideshowSpeed
+          : config.slideshowSpeed,
+        3
+      ),
       highlight: highlight,
       highlightSpecial: highlightSpecial,
       stripeColor1: stripe1,
@@ -3137,7 +3144,10 @@
     const bgBlendMode = parseBgBlendMode(cell(boardRow, sc.bgBlendMode));
     const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
     const bgScrollSpeed = Number(cell(boardRow, sc.bgScrollSpeed));
-    const slideshowSpeed = Number(cell(boardRow, sc.slideshowSpeed));
+    const slideshowSpeed = parseSlideshowSpeed(
+      cell(boardRow, sc.slideshowSpeed),
+      3
+    );
     const showVersion =
       sc.showVersion != null
         ? parseYesNo(cell(boardRow, sc.showVersion), false)
@@ -3157,7 +3167,7 @@
       bgMode: bgImage ? "image" : "solid",
       bgSolid: bgColor,
       bgScrollSpeed: Number.isFinite(bgScrollSpeed) ? bgScrollSpeed : 1,
-      slideshowSpeed: Number.isFinite(slideshowSpeed) ? slideshowSpeed : 3,
+      slideshowSpeed: slideshowSpeed,
       showVersion: !!showVersion,
     };
     tokiInfo(
@@ -6829,14 +6839,39 @@
     }
   }
 
+  /**
+   * Style "Slideshow Speed" (seconds). 0 / blank handling:
+   *   0 or negative → pause auto-advance (still show current slide)
+   *   blank / invalid → fallback
+   * Do not use `n || fallback` — that treats 0 as missing.
+   */
+  function parseSlideshowSpeed(raw, fallback) {
+    const fb =
+      fallback != null && Number.isFinite(Number(fallback))
+        ? Math.max(0, Number(fallback))
+        : 3;
+    if (raw === undefined || raw === null || raw === "") return fb;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return fb;
+    return Math.max(0, n);
+  }
+
   function startSlideshow() {
     if (slideshowTimer) clearInterval(slideshowTimer);
+    slideshowTimer = null;
     const count = isDrinks || usesBoardSlides() ? slides.length : items.length;
     if (count <= 1) return;
-    const ms = Math.max(0.5, config.slideshowSpeed) * 1000;
-    slideshowTimer = setInterval(() => {
+    const sec = parseSlideshowSpeed(config.slideshowSpeed, 3);
+    // 0 = hold on current slide (Style sheet "stop cycling")
+    if (sec <= 0) {
+      tokiInfo("slideshow paused (Slideshow Speed =", sec, ")");
+      return;
+    }
+    const ms = sec * 1000;
+    slideshowTimer = setInterval(function () {
       setActive(activeIndex + 1, false);
     }, ms);
+    tokiInfo("slideshow every", sec, "s (", count, "slides)");
   }
 
   function stopSlideshow() {
