@@ -12,6 +12,7 @@ window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "1962117802",
   styleThemeGid: "1076652078",
+  debugMenuGid: "1793812854",
   /** Dedicated drink-box content (items, overview, box title/color) */
   drinksSheetGid: "628145419",
 

@@ -25,8 +25,9 @@ TokiMenu is a **local digital menu board system** for restaurants. Boards are fu
 Non-goals (for now):
 
 - Cloud multi-tenant SaaS hosting
-- In-browser menu editing UI (the sheet *is* the CMS)
 - Mobile responsive redesign (boards are fixed stage, scaled to the display)
+
+**Authoring path:** the sheet *is* the CMS for the first handoff. A boss-facing web authoring UI (sheet hidden) is a later goal — see [OWNER_HANDOFF.md](./OWNER_HANDOFF.md).
 
 ---
 
@@ -70,6 +71,11 @@ Shared content sheets today:
 
 ## Related docs
 
+- [OWNER_HANDOFF.md](./OWNER_HANDOFF.md) — boss handoff, Tier A sheet vs Tier B authoring UI
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) — **truth source** for on-screen names (Hero Panel, Plates, …)
+- [PERFORMANCE.md](./PERFORMANCE.md) — feature cost tiers (Encore, blur, wall) + debug kill-switch prompt + console flags
+- [DEBUG_CONSOLE.md](./DEBUG_CONSOLE.md) — how to read TokiMenuDebug output and control via the Debug Menu sheet
+- [SHEET_MIGRATION.md](./SHEET_MIGRATION.md) — revised sheet tabs, percent 0–1 fields, future features
 - [STYLE_GUIDE.md](./STYLE_GUIDE.md) — geometry, boxes, graphics snippets
 - [DATA_MODEL.md](./DATA_MODEL.md) — sheet columns, flags, migration
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — modules, adapters, multi-tenant

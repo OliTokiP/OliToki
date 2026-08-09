@@ -548,6 +548,26 @@
   let slideshowTimer = null;
   let refreshTimer = null;
   let dataSource = "";
+
+  /** Parsed from Debug Menu sheet (when debugMenuGid configured) */
+  let debugConfig = { debugMode: false, features: {} };
+
+  // Transient debug activity flags for accurate "doing work right now" detection
+  let kbZoomActive = false;
+  let refreshInProgress = false;
+
+  // Direct "activation signal" from the real code that turns features on/off.
+  // This is the simple 1/0 the activation sites can just call.
+  // The observer (computeActive) is fallback; live state takes precedence for accuracy.
+  const liveDebugState = {}; // id -> {active: bool, reason: string}
+
+  function setFeatureActive(id, on, reason) {
+    liveDebugState[id] = { active: !!on, reason: reason || (on ? 'activated' : 'deactivated') };
+    // Push the change to the live views immediately
+    if (shouldShowDebugVisuals()) {
+      updateDebugVisuals();
+    }
+  }
   /** Cell fills from xlsx export: { "B2": "#000000", ... } */
   let sheetFills = {};
   /** Cell fonts from xlsx: { "F2": { bold, italic, color } } */
@@ -949,6 +969,20 @@
   function applyEncoreSpotlightChrome(item) {
     const stage = els.familyPortrait;
     if (!stage) return;
+
+    // Spotlight Veil should only be active during Encore.
+    // Guard here so classes are never present outside Encore mode.
+    if (config.presentationMode !== "encore") {
+      stage.classList.remove(
+        "encore-spot-hard",
+        "encore-spot-soft",
+        "encore-spot-color-highlight",
+        "encore-spot-color-black"
+      );
+      stage.style.removeProperty("--encore-veil-color");
+      return;
+    }
+
     const type =
       config.encoreSpotlightType === "soft" ? "soft" : "hard";
     const colorMode =
@@ -1545,6 +1579,8 @@
         els.galaxyA.addEventListener("load", onReady, { once: true });
       }
     }
+
+    updateDebugVisuals();
   }
 
   function parseCsv(text) {
@@ -3610,6 +3646,58 @@
   }
 
   /**
+   * Parse Debug Menu tab.
+   * Structure:
+   *   A1: "Debug Mode"   A2: TRUE/FALSE
+   *   Then "Debug Features"
+   *   Next row: column headers (Performance Console, Version History, ...)
+   *   Next row: values (TRUE/FALSE or 1/0 or checkboxes)
+   *
+   * Only when debugMode && features["Performance Console"] are both true
+   * will the menu automatically emit detailed console flag output.
+   */
+  function parseDebugMenu(rows) {
+    const out = {
+      debugMode: false,
+      features: {},
+    };
+    if (!rows || !rows.length) return out;
+
+    // Debug Mode (vertical label + value)
+    for (let i = 0; i < rows.length - 1; i++) {
+      const label = String(rows[i][0] || "").trim().toLowerCase();
+      if (label === "debug mode") {
+        out.debugMode = parseYesNo(rows[i + 1] ? rows[i + 1][0] : "", false);
+        break;
+      }
+    }
+
+    // Debug Features table (horizontal headers + values row)
+    for (let i = 0; i < rows.length - 2; i++) {
+      const label = String(rows[i][0] || "").trim().toLowerCase();
+      if (label === "debug features") {
+        const headers = rows[i + 1] || [];
+        const values = rows[i + 2] || [];
+        for (let c = 0; c < headers.length; c++) {
+          const name = String(headers[c] || "").trim();
+          if (name) {
+            out.features[name] = parseYesNo(values[c], false);
+          }
+        }
+        break;
+      }
+    }
+    return out;
+  }
+
+  /** True only when both the master Debug Mode and "Performance Console" are enabled in the sheet. */
+  function shouldSendPerformanceConsole() {
+    if (!debugConfig || !debugConfig.debugMode) return false;
+    const pc = debugConfig.features["Performance Console"];
+    return !!pc;
+  }
+
+  /**
    * Styles for one sheet name from the cached workbook xlsx (single download).
    */
   async function loadSheetStylesByName(sheetNameMatch, opts) {
@@ -4289,6 +4377,9 @@
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
       csvJobs.style = fetchSheetRows(cfg.styleThemeGid);
     }
+    if (cfg.debugMenuGid != null && cfg.debugMenuGid !== "") {
+      csvJobs.debug = fetchSheetRows(cfg.debugMenuGid);
+    }
 
     const csvKeys = Object.keys(csvJobs);
     const csvSettled = await Promise.all(
@@ -4425,6 +4516,23 @@
         }
       } catch (err) {
         console.warn("Could not inherit config:", err);
+      }
+    }
+
+    // Debug Menu (master switch + feature toggles)
+    if (cfg.debugMenuGid != null && cfg.debugMenuGid !== "") {
+      try {
+        debugConfig = parseDebugMenu(csv.debug);
+        tokiInfo(
+          "debug menu",
+          "mode=",
+          debugConfig.debugMode,
+          "features=",
+          debugConfig.features
+        );
+      } catch (err) {
+        console.warn("Could not load Debug Menu:", err);
+        debugConfig = { debugMode: false, features: {} };
       }
     }
 
@@ -4695,6 +4803,10 @@
       if (fp) _lastDataFingerprint = fp;
       dataSource = "google-sheet";
       tokiInfo("refresh: applied sheet changes", "fp=" + (fp || "?"));
+      updateDebugVisuals();
+      if (shouldSendPerformanceConsole()) {
+        try { window.TokiMenuDebug && window.TokiMenuDebug.list && window.TokiMenuDebug.list(); } catch (e) {}
+      }
       return dataSource;
     }
 
@@ -7411,6 +7523,7 @@
     }
     renderFamilyPortrait(portraitItems || []);
     _portraitRenderKey = key;
+    updateDebugVisuals();
   }
 
   function renderFamilyPortrait(portraitItems) {
@@ -7913,12 +8026,15 @@
       void img.offsetWidth;
       img.style.transition = "";
       img.classList.remove("is-kb-in");
+      setFeatureActive('kenBurns', false, 'snap');
       return;
     }
     if (mode === "in") {
       img.classList.add("is-kb-in");
+      setFeatureActive('kenBurns', true, 'zoom-in start');
     } else {
       img.classList.remove("is-kb-in");
+      setFeatureActive('kenBurns', false, 'zoom end');
     }
     img.style.setProperty("--hero-zoom", String(scale));
   }
@@ -8168,6 +8284,7 @@
       config.presentationMode || "slideshow",
       ")"
     );
+    updateDebugVisuals();
   }
 
   function stopSlideshow() {
@@ -8175,6 +8292,7 @@
       clearInterval(slideshowTimer);
       slideshowTimer = null;
     }
+    updateDebugVisuals();
   }
 
   // ---------- galaxy ----------
@@ -8294,6 +8412,9 @@
       lastTs = null;
       if (galaxyRaf) cancelAnimationFrame(galaxyRaf);
       galaxyRaf = requestAnimationFrame(tick);
+
+      setFeatureActive('bgDualPan', true, 'pan started');
+      updateDebugVisuals();
     }
 
     // Wait for natural dimensions once; never start two loops
@@ -8487,6 +8608,8 @@
 
   async function softReload() {
     const prevIndex = activeIndex;
+    refreshInProgress = true;
+    setFeatureActive('softRefresh', true, 'refresh work starting');
     try {
       // Soft: re-fetch CSVs only. No embedded/xlsx fallback if offline.
       // Unchanged fingerprint → skip re-render. Network error → keep last UI.
@@ -8515,6 +8638,9 @@
     } catch (err) {
       // Offline / incomplete fetch: leave slideshow + items as-is
       tokiWarn("refresh: keeping last good menu —", err && err.message ? err.message : err);
+    } finally {
+      refreshInProgress = false;
+      setFeatureActive('softRefresh', false, 'refresh work done');
     }
   }
 
@@ -8564,6 +8690,498 @@
       return;
     }
     arm();
+  }
+
+  // ---------- Debug console flag registry (PERFORMANCE.md §7 + sheet gating) ----------
+  // Automatic emission of flag state only happens when the Debug Menu has BOTH
+  // Debug Mode = TRUE and Performance Console = TRUE.
+  // Manual calls to TokiMenuDebug.list() always work for ad-hoc inspection.
+
+  (function setupTokiDebugAPI() {
+    const FEATURE_DEFS = [
+      { id: "encore", label: "Encore", impact: "Very High" },
+      { id: "familyPortrait", label: "Family Portrait", impact: "Very High" },
+      { id: "kenBurns", label: "Ken Burns zoom", impact: "High" },
+      { id: "spotlightVeil", label: "Spotlight Veil", impact: "High" },
+      { id: "scaffoldBg", label: "Scaffold BG", impact: "High" },
+      { id: "heroPlate", label: "Hero Plate", impact: "Medium" },
+      { id: "newSticker", label: "New Sticker", impact: "Low" },
+      { id: "listHighlight", label: "List Highlight", impact: "Low" },
+      { id: "slideshowTimer", label: "Slideshow Timer", impact: "Very Low" },
+      { id: "bgBlur", label: "BG Blur", impact: "High" },
+      { id: "bgDualPan", label: "BG Dual Pan", impact: "High" },
+      { id: "bgBlend", label: "BG Blend Mode", impact: "Medium-High" },
+      { id: "bgWallpaper", label: "BG Wallpaper", impact: "Medium" },
+      { id: "softRefresh", label: "Soft Refresh", impact: "Medium" },
+      { id: "xlsxStyles", label: "XLSX Styles", impact: "High" },
+      { id: "footerBoxes", label: "Footer Boxes", impact: "Low-Medium" },
+      { id: "stripes", label: "Stripes (Board 4)", impact: "Medium" },
+      { id: "versionStamp", label: "Version Stamp", impact: "Very Low" },
+    ];
+
+    const overrides = {}; // id -> boolean forced via console API
+
+    function computeActive(id) {
+      // Wall lean path forces many things off
+      const wall = isPreviewWall();
+
+      try {
+        switch (id) {
+          case "encore":
+            return !wall &&
+              config.presentationMode === "encore" &&
+              !!els.familyPortrait &&
+              !els.familyPortrait.hidden &&
+              els.familyPortrait.children.length > 0;
+
+          case "familyPortrait":
+            return !wall &&
+              !!els.familyPortrait &&
+              !els.familyPortrait.hidden &&
+              els.familyPortrait.children.length > 0;
+
+          case "kenBurns":
+            // True only while a Ken Burns zoom cycle is actually running (transient)
+            if (kbZoomActive) return true;
+            const hero = els.hero;
+            if (hero && hero.classList.contains("is-kb-in")) return true;
+            // For encore the zoom is more sustained during the presentation, but we keep it narrow
+            return false;
+
+          case "spotlightVeil":
+            // Spotlight Veil should ONLY be active when Encore presentation is enabled
+            // and the veil classes are present on the active Encore stage.
+            return !wall &&
+              config.presentationMode === "encore" &&
+              !!els.familyPortrait &&
+              !els.familyPortrait.hidden &&
+              (els.familyPortrait.classList.contains("encore-spot-hard") ||
+                els.familyPortrait.classList.contains("encore-spot-soft"));
+
+          case "scaffoldBg":
+            const gal = document.getElementById("galaxy");
+            return !!(gal && gal.classList.contains("encore-scaffold-bg"));
+
+          case "heroPlate":
+            return !!els.hero && !els.hero.hidden && !!els.hero.src;
+
+          case "newSticker":
+            const sticker = document.getElementById("new-sticker");
+            return !!(sticker && !sticker.hidden);
+
+          case "listHighlight":
+            // Any .highlight or active row in the list
+            const list = els.list;
+            if (!list) return false;
+            return !!list.querySelector(".highlight, [data-active='true']");
+
+          case "slideshowTimer":
+            return !!slideshowTimer;
+
+          case "bgBlur": {
+            const g = document.getElementById("galaxy");
+            return !!(g && g.classList.contains("has-blur"));
+          }
+
+          case "bgDualPan":
+            return !!(typeof galaxyStarted !== "undefined" && galaxyStarted && config.bgImage);
+
+          case "bgBlend": {
+            const g = document.getElementById("galaxy");
+            if (!g || !config.bgImage) return false;
+            const mode = g.style.mixBlendMode || "";
+            return mode && mode !== "normal";
+          }
+
+          case "bgWallpaper":
+            return !!config.bgImage;
+
+          case "softRefresh":
+            // Prefer transient "work in progress" (the actual network/parse cost spike).
+            // Falls back to timer armed if no transient tracked.
+            return refreshInProgress || !!refreshTimer;
+
+          case "xlsxStyles":
+            return Object.keys(sheetFills || {}).length > 0 || Object.keys(sheetRich || {}).length > 0;
+
+          case "footerBoxes":
+            const pb = document.getElementById("protein-box");
+            const sb = document.getElementById("sauces-box");
+            return !!(pb && !pb.hidden) || !!(sb && !sb.hidden);
+
+          case "stripes":
+            const st = document.getElementById("stripes");
+            return !!(st && !st.hidden);
+
+          case "versionStamp":
+            // Version is shown via disclaimer or separate element when config says so
+            return !!config.showVersion;
+
+          default:
+            return false;
+        }
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function getSource(id, active) {
+      if (overrides.hasOwnProperty(id)) return "console";
+      if (isPreviewWall()) return "wall-lean";
+      if (!active && config.presentationMode !== "encore" && (id === "encore" || id === "familyPortrait" || id === "spotlightVeil" || id === "scaffoldBg" || id === "kenBurns")) {
+        return "config";
+      }
+      return "config";
+    }
+
+    function buildFlags() {
+      const flags = {};
+      FEATURE_DEFS.forEach(function (def) {
+        const forced = overrides.hasOwnProperty(def.id) ? overrides[def.id] : null;
+        const live = liveDebugState[def.id];
+        const liveActive = live ? live.active : computeActive(def.id);
+        const active = forced != null ? !!forced : liveActive;
+        const reason = live ? live.reason : '';
+        flags[def.id] = {
+          id: def.id,
+          label: def.label,
+          impact: def.impact,
+          active: active,
+          source: forced != null ? 'console' : (live ? 'live' : getSource(def.id, liveActive)),
+          forced: forced != null,
+          reason: reason,
+        };
+      });
+      return flags;
+    }
+
+    function logFlagChange(id, on) {
+      const state = on ? "ACTIVE" : "INACTIVE";
+      tokiInfo("DEBUG flag", id, state, "(source=console)");
+    }
+
+    const api = {
+      flags: {},
+
+      list() {
+        const flags = buildFlags();
+        const lines = [];
+        lines.push("TokiMenuDebug — feature flags (active = actually doing work)");
+        lines.push("id                  active  impact         source");
+        lines.push("-----------------------------------------------------------");
+        Object.keys(flags).forEach(function (k) {
+          const f = flags[k];
+          const act = f.active ? "YES" : "no ";
+          lines.push(
+            (f.id + "                ").slice(0, 18) +
+              " " +
+              act +
+              "  " +
+              (f.impact + "            ").slice(0, 13) +
+              " " +
+              f.source +
+              (f.forced ? " (forced)" : "")
+          );
+        });
+        // Always allow manual list() from console for inspection
+        console.info(lines.join("\n"));
+        api.flags = flags; // keep last snapshot
+        return flags;
+      },
+
+      get(id) {
+        const flags = buildFlags();
+        return flags[id] || null;
+      },
+
+      set(id, on) {
+        const def = FEATURE_DEFS.find(function (d) { return d.id === id; });
+        if (!def) {
+          tokiWarn("DEBUG unknown flag", id);
+          return false;
+        }
+        overrides[id] = !!on;
+        logFlagChange(id, !!on);
+
+        // Best-effort hard kill / re-enable for expensive continuous effects
+        try {
+          if (id === "bgBlur") {
+            const g = document.getElementById("galaxy");
+            if (g) {
+              if (!on) {
+                g.style.setProperty("--bg-image-blur", "none");
+                g.classList.remove("has-blur");
+              } else {
+                // Let normal apply path restore on next background apply if wanted
+                applyStageBackground();
+              }
+            }
+          }
+          if (id === "bgDualPan" && !on) {
+            if (typeof galaxyRaf !== "undefined" && galaxyRaf) {
+              cancelAnimationFrame(galaxyRaf);
+              galaxyRaf = 0;
+            }
+            // Leave layers as-is; next full re-apply will respect
+          }
+          if ((id === "encore" || id === "familyPortrait") && !on) {
+            const stage = els.familyPortrait;
+            if (stage) {
+              stage.hidden = true;
+              stage.classList.remove("visible");
+              // Do not fully destroy; expensive to rebuild
+            }
+          }
+          if (id === "softRefresh" && !on) {
+            if (refreshTimer) {
+              clearInterval(refreshTimer);
+              refreshTimer = null;
+            }
+          }
+        } catch (e) { /* non-fatal */ }
+
+        updateDebugVisuals();
+        // Re-list if we are allowed to emit
+        if (shouldSendPerformanceConsole()) {
+          api.list();
+        }
+        return true;
+      },
+
+      enable(id) { return api.set(id, true); },
+      disable(id) { return api.set(id, false); },
+
+      reset() {
+        Object.keys(overrides).forEach(function (k) { delete overrides[k]; });
+        tokiInfo("DEBUG flags reset to sheet/config");
+        updateDebugVisuals();
+        if (shouldSendPerformanceConsole()) api.list();
+      },
+
+      snapshot() {
+        return buildFlags();
+      },
+
+      // For the cheaper model / future: cheap change-only heartbeat can be added later
+      watch(ms) {
+        const interval = Number(ms) || 2000;
+        if (window._tokiDebugWatch) clearInterval(window._tokiDebugWatch);
+        let last = JSON.stringify(api.snapshot());
+        window._tokiDebugWatch = setInterval(function () {
+          const cur = JSON.stringify(api.snapshot());
+          if (cur !== last) {
+            last = cur;
+            if (shouldSendPerformanceConsole()) {
+              tokiInfo("DEBUG flags changed");
+              api.list();
+            }
+          }
+        }, interval);
+        tokiInfo("DEBUG watch started every", interval, "ms (emits only when Performance Console enabled)");
+      },
+    };
+
+    // Expose
+    window.TokiMenuDebug = api;
+    window.TOKI_DEBUG = api; // alias
+
+    // If URL requests debug, give one list after init (even if sheet not yet allowing auto)
+    try {
+      const q = new URLSearchParams(location.search || "");
+      if (q.get("tokiDebug") === "1" || q.get("debug") === "1") {
+        // Will list after init completes
+        setTimeout(function () {
+          if (window.TokiMenuDebug) {
+            window.TokiMenuDebug.list();
+            updateDebugVisuals();
+          }
+        }, 800);
+      }
+    } catch (e) {}
+  })();
+
+  // ---------- Hybrid debug visuals (Computed + floating HUD) ----------
+  // Primary live view: CSS custom properties on <html> — inspect <html> in Elements → Computed
+  // Secondary: small floating HUD (collapsible)
+  // Both respect the same gate as console: Debug Mode + Performance Console in sheet.
+
+  let _debugHudEl = null;
+
+  function shouldShowDebugVisuals() {
+    // Show visuals if the official gate is open, or if there are active console overrides
+    // (so you can still use it manually even if sheet gate is off)
+    if (shouldSendPerformanceConsole()) return true;
+    // Check if any overrides are present
+    try {
+      const snap = window.TokiMenuDebug && window.TokiMenuDebug.snapshot && window.TokiMenuDebug.snapshot();
+      if (snap) {
+        return Object.keys(snap).some(function (k) { return snap[k] && snap[k].forced; });
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  // CSS custom properties removed per request (no more debug noise in Elements → Computed)
+  // We now only use the floating debug HUD.
+
+  function ensureDebugHUD() {
+    if (_debugHudEl && document.body.contains(_debugHudEl)) return _debugHudEl;
+
+    _debugHudEl = document.createElement("div");
+    _debugHudEl.id = "toki-debug-hud";
+    _debugHudEl.innerHTML = `
+      <div class="hud-header">
+        <span class="title">Toki Debug</span>
+        <span class="hud-actions">
+          <span class="hud-toggle" title="collapse/expand">−</span>
+          <span class="hud-close" title="hide (until reload)">×</span>
+        </span>
+      </div>
+      <div class="hud-body">
+        <table>
+          <thead>
+            <tr><th>feature</th><th>state</th><th>source</th><th>impact</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    `;
+
+    // Click header to toggle collapse
+    const header = _debugHudEl.querySelector(".hud-header");
+    header.addEventListener("click", function (e) {
+      if (e.target.classList.contains("hud-close")) {
+        _debugHudEl.style.display = "none";
+        return;
+      }
+      _debugHudEl.classList.toggle("hud-collapsed");
+      const toggle = header.querySelector(".hud-toggle");
+      if (toggle) toggle.textContent = _debugHudEl.classList.contains("hud-collapsed") ? "+" : "−";
+    });
+
+    document.body.appendChild(_debugHudEl);
+    return _debugHudEl;
+  }
+
+  function updateDebugHUDContent(flagsObj) {
+    if (!_debugHudEl) return;
+
+    const tbody = _debugHudEl.querySelector("tbody");
+    if (!tbody) return;
+
+    const impactOrder = {
+      'Very High': 1,
+      'High': 2,
+      'Medium-High': 3,
+      'Medium': 4,
+      'Low-Medium': 5,
+      'Low': 6,
+      'Very Low': 7
+    };
+
+    const sorted = Object.keys(flagsObj || {}).map(id => flagsObj[id]).sort((a, b) => {
+      const prioA = impactOrder[a.impact] || 99;
+      const prioB = impactOrder[b.impact] || 99;
+      return prioA - prioB;
+    });
+
+    const rows = sorted.map(function (f) {
+      const stateClass = f.active ? "active" : "inactive";
+      const stateText = f.active ? "active" : "inactive";
+      const src = f.source + (f.forced ? " (forced)" : "") + (f.reason ? " · " + f.reason : "");
+      return `
+        <tr>
+          <td class="flag-id">${f.label || f.id}</td>
+          <td class="flag-state ${stateClass}">${stateText}</td>
+          <td class="flag-source">${src}</td>
+          <td class="flag-impact">${f.impact || ""}</td>
+        </tr>
+      `;
+    }).join("");
+
+    tbody.innerHTML = rows || "<tr><td colspan='4' style='color:#666'>no flags</td></tr>";
+  }
+
+  function updateDebugVisuals() {
+    if (!window.TokiMenuDebug || !window.TokiMenuDebug.snapshot) return;
+
+    const show = shouldShowDebugVisuals();
+    const root = document.documentElement;
+
+    if (!show) {
+      // Clean up if gate closed
+      root.style.removeProperty("--debug-encore"); // representative cleanup
+      if (_debugHudEl) _debugHudEl.style.display = "none";
+      stopVisualsTicker();
+      return;
+    }
+
+    const flags = window.TokiMenuDebug.snapshot();
+
+    // Only the floating debug HUD (no CSS vars on <html>)
+    ensureDebugHUD();
+    if (_debugHudEl) {
+      _debugHudEl.style.display = "block";
+    }
+    updateDebugHUDContent(flags);
+
+    // Start a light ticker so we catch brief transient states (KB zoom, refresh work) in real time
+    startVisualsTicker();
+  }
+
+  let _visualsTicker = null;
+  function startVisualsTicker() {
+    if (_visualsTicker) return;
+    _visualsTicker = setInterval(function () {
+      if (shouldShowDebugVisuals()) {
+        // Re-compute and sync without console spam
+        try {
+          if (window.TokiMenuDebug) {
+            const f = window.TokiMenuDebug.snapshot();
+            if (_debugHudEl) updateDebugHUDContent(f);
+          }
+        } catch (e) {}
+      } else {
+        stopVisualsTicker();
+      }
+    }, 300); // ~3x per second — cheap, only runs while debug visuals gate is open
+  }
+  function stopVisualsTicker() {
+    if (_visualsTicker) {
+      clearInterval(_visualsTicker);
+      _visualsTicker = null;
+    }
+  }
+
+  // Hook the watch to also drive visuals (real-time diff without console spam)
+  const _origWatch = window.TokiMenuDebug && window.TokiMenuDebug.watch;
+  if (typeof _origWatch === "function") {
+    // We already have the impl inside the closure; instead we enhance the watch body below if needed.
+    // For now we'll call update in the interval logic by re-wrapping the exposed watch.
+  }
+
+  // Replace the watch implementation on the api to also update visuals (no console unless gate wants it)
+  if (window.TokiMenuDebug) {
+    const api = window.TokiMenuDebug;
+    const oldWatch = api.watch;
+    api.watch = function (ms) {
+      const interval = Number(ms) || 2000;
+      if (window._tokiDebugWatch) clearInterval(window._tokiDebugWatch);
+      let last = JSON.stringify(api.snapshot());
+      window._tokiDebugWatch = setInterval(function () {
+        const curSnap = api.snapshot();
+        const cur = JSON.stringify(curSnap);
+        if (cur !== last) {
+          last = cur;
+          updateDebugVisuals(); // live update visuals on change
+          if (shouldSendPerformanceConsole()) {
+            tokiInfo("DEBUG flags changed");
+            api.list();
+          }
+        }
+      }, interval);
+      tokiInfo("DEBUG watch started every", interval, "ms (visuals + console when Performance Console enabled)");
+    };
   }
 
   // ---------- boot ----------
@@ -8647,6 +9265,19 @@
     }
     startGalaxyScroll();
     startAutoRefresh();
+
+    // Update hybrid debug visuals (CSS vars in Computed + HUD) when gate is satisfied.
+    // This gives real-time on/off view without console spam.
+    updateDebugVisuals();
+
+    // Legacy console snapshot still available under the same gate
+    if (shouldSendPerformanceConsole()) {
+      try {
+        if (window.TokiMenuDebug && window.TokiMenuDebug.list) {
+          // list() gives the full table in console when wanted
+        }
+      } catch (e) {}
+    }
 
     function refitAll() {
       fitTitle();

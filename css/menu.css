@@ -1900,3 +1900,116 @@ body.preview-wall #stripes-track {
   will-change: auto;
   animation-duration: 12s;
 }
+
+/* ============================================================
+   Debug visuals (hybrid: Computed panel + floating HUD)
+   Only active when Debug Mode + Performance Console are TRUE
+   in the sheet (or forced via ?tokiDebug / console overrides)
+   ============================================================ */
+
+:root {
+  /* Debug feature states appear here when you inspect <html> in Elements → Computed.
+     They update live as features turn on/off. */
+}
+
+/* Floating debug HUD - small, collapsible, non-intrusive */
+#toki-debug-hud {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 2147483647; /* above everything */
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.25;
+  background: rgba(0, 0, 0, 0.88);
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  min-width: 260px;
+  max-width: 320px;
+  overflow: hidden;
+  opacity: 0.95;
+  pointer-events: auto;
+}
+
+#toki-debug-hud.hud-collapsed .hud-body {
+  display: none;
+}
+
+.hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  background: #222;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #444;
+}
+
+.hud-header .title {
+  color: #8ab4f8;
+}
+
+.hud-header .hud-actions {
+  display: flex;
+  gap: 6px;
+  font-size: 8px;
+}
+
+.hud-body {
+  padding: 4px 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+#toki-debug-hud table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#toki-debug-hud td,
+#toki-debug-hud th {
+  padding: 1px 3px;
+  text-align: left;
+  vertical-align: top;
+}
+
+#toki-debug-hud th {
+  color: #888;
+  font-weight: normal;
+  padding-bottom: 2px;
+}
+
+#toki-debug-hud .flag-id {
+  color: #aaa;
+  width: 30%;
+}
+
+#toki-debug-hud .flag-state {
+  width: 15%;
+  font-weight: 600;
+}
+
+#toki-debug-hud .flag-state.active {
+  color: #7cb342;
+}
+
+#toki-debug-hud .flag-state.inactive {
+  color: #888;
+}
+
+#toki-debug-hud .flag-source {
+  color: #777;
+  font-size: 8px;
+  width: 38%;
+}
+
+#toki-debug-hud .flag-impact {
+  color: #555;
+  font-size: 8px;
+  text-align: right;
+  width: 25%;
+}

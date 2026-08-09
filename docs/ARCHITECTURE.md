@@ -72,6 +72,8 @@ Service account email is a **robot identity** for *your software*, not a substit
 
 Working algorithms that **must be ported**, not reinvented: menu scale bake-off, 2-col decision, footer box scale, balanced wrap packing, include-flag parsing, dual-layer galaxy scroll, drinks stripes, sticker/hero coupling.
 
+**Performance cost of major features** (Encore, blur, wall, soft refresh, etc.): see [PERFORMANCE.md](./PERFORMANCE.md).
+
 ---
 
 ## 2. Target architecture (hybrid)

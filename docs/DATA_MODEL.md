@@ -5,6 +5,9 @@ Spreadsheet is the CMS. The browser never holds the service account key; `toki_s
 **OliToki spreadsheet ID (default):**  
 `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
+**Revised tabs (not live yet):** see [SHEET_MIGRATION.md](./SHEET_MIGRATION.md).  
+**On-screen naming:** see [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md).
+
 ---
 
 ## 1. Tabs (live today)

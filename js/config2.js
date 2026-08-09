@@ -13,6 +13,7 @@ window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "1959901693",
   styleThemeGid: "1076652078",
+  debugMenuGid: "1793812854",
   proteinSheetGid: "1191392779",
   saucesSheetGid: "1780619208",
   drinksSheetGid: "628145419",

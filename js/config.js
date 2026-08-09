@@ -3,6 +3,7 @@
  *
  * Sheet tab: "Board 1" (gid=0). Display title lives in Menu Title cell.
  * Theme / speeds / highlights: Style tab (styleThemeGid).
+ * Debug Menu (master + per-feature switches): debugMenuGid.
  * Protein/Sauces content: shared sheets (proteinSheetGid / saucesSheetGid).
  *
  * Board 1 column schema (Family Portrait inserted at K):
@@ -14,6 +15,7 @@ window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "0",
   styleThemeGid: "1076652078",
+  debugMenuGid: "1793812854",
   proteinSheetGid: "1191392779",
   saucesSheetGid: "1780619208",
   drinksSheetGid: "628145419",
