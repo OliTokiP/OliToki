@@ -95,6 +95,92 @@
   }
 
   /**
+   * DEBUG: runtime pixel downsample after load (not CSS scale).
+   *   ?imgScale=0.01  → 1/100 resolution extreme test
+   *   ?imgScale=0.25  → quarter res, etc.
+   *   omit / 0 / 1    → off
+   * Replaces img.src with a tiny canvas data-URL so GPU holds fewer texels.
+   */
+  function debugImgScaleFactor() {
+    try {
+      const q = new URLSearchParams(location.search || "");
+      if (!q.has("imgScale")) return 0;
+      const raw = q.get("imgScale");
+      // bare ?imgScale → extreme 1/100 test
+      if (raw === "" || raw == null) return 0.01;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0 || n >= 1) return 0;
+      return n;
+    } catch (e) {
+      return 0;
+    }
+  }
+  const DEBUG_IMG_SCALE = debugImgScaleFactor();
+  if (DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1) {
+    console.info(
+      "[TokiMenu] DEBUG imgScale=" +
+        DEBUG_IMG_SCALE +
+        " — runtime downsample ON (looks terrible on purpose)"
+    );
+  }
+
+  /**
+   * After full-res decode, redraw at scale and swap src (once per element).
+   * @param {HTMLImageElement} img
+   * @param {function():void} [then] called after downsample (or immediately if skipped)
+   */
+  function maybeDownsampleImg(img, then) {
+    const done = typeof then === "function" ? then : function () {};
+    if (!img || !(DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1)) {
+      done();
+      return;
+    }
+    if (img.dataset.downsampled === "1") {
+      done();
+      return;
+    }
+    const nw = img.naturalWidth || 0;
+    const nh = img.naturalHeight || 0;
+    if (nw < 2 || nh < 2) {
+      done();
+      return;
+    }
+    const w = Math.max(1, Math.round(nw * DEBUG_IMG_SCALE));
+    const h = Math.max(1, Math.round(nh * DEBUG_IMG_SCALE));
+    try {
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      if (!ctx) {
+        done();
+        return;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, 0, 0, w, h);
+      img.dataset.downsampled = "1";
+      // Prefer webp data URL; fall back to png if tainted/unsupported
+      let dataUrl;
+      try {
+        dataUrl = c.toDataURL("image/webp", 0.8);
+        if (!dataUrl || dataUrl.indexOf("image/webp") === -1) {
+          dataUrl = c.toDataURL("image/png");
+        }
+      } catch (e1) {
+        dataUrl = c.toDataURL("image/png");
+      }
+      img.onload = function () {
+        img.onload = null;
+        done();
+      };
+      img.src = dataUrl;
+    } catch (e) {
+      console.warn("downsample failed", e);
+      done();
+    }
+  }
+
+  /**
    * If a .webp 404s, try .png then .jpg (one chain per element).
    * Safe when only one format exists.
    */
@@ -102,6 +188,7 @@
     if (!el || el.dataset.webpFbBound === "1") return;
     el.dataset.webpFbBound = "1";
     el.addEventListener("error", function onRasterError() {
+      if (el.dataset.downsampled === "1") return;
       const src = el.getAttribute("src") || "";
       if (/\.webp$/i.test(src)) {
         el.src = src.replace(/\.webp$/i, ".png");
@@ -1392,7 +1479,19 @@
       attachWebpFallback(el);
       if (el.getAttribute("src") !== imagePath) {
         tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
+        el.dataset.downsampled = "";
+        el.onload = function () {
+          if (el.dataset.downsampled === "1") return;
+          maybeDownsampleImg(el);
+        };
         el.src = imagePath;
+      } else if (
+        DEBUG_IMG_SCALE > 0 &&
+        el.complete &&
+        el.naturalWidth &&
+        el.dataset.downsampled !== "1"
+      ) {
+        maybeDownsampleImg(el);
       }
     });
 
@@ -7366,6 +7465,10 @@
       img.alt = it.name || "";
       img.draggable = false;
       attachWebpFallback(img);
+      img.onload = function onPlateLoad() {
+        if (img.dataset.downsampled === "1") return;
+        maybeDownsampleImg(img);
+      };
       img.src = it.image;
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
@@ -7824,20 +7927,30 @@
       });
     };
 
+    const afterReady = function () {
+      maybeDownsampleImg(img, show);
+    };
+
     const applySrc = function () {
       attachWebpFallback(img);
       img.onload = function () {
-        show();
+        if (img.dataset.downsampled === "1") {
+          show();
+          return;
+        }
+        afterReady();
       };
       if (
         img.getAttribute("src") === item.image &&
         img.complete &&
         img.naturalWidth
       ) {
-        show();
+        if (img.dataset.downsampled === "1") show();
+        else afterReady();
         return;
       }
       // Swap while held at zoomMin — no scale snap (.webp preferred)
+      img.dataset.downsampled = "";
       img.src = item.image;
     };
 
