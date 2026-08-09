@@ -348,9 +348,10 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* ---------- Layer 4: hero food image ----------
-   All menu photos are 1500×1000 (transparent). Sized/positioned so the
-   plate matches Menu Mockup.png on the 1920×1080 stage.
+/* ---------- Layer 4: hero plate object ----------
+   Plate container owns motion (opacity, Ken Burns scale) + one drop-shadow.
+   Children (food img, New! sticker, future multi-size images) inherit motion.
+   Photos are 1500×1000 transparent; sized to match Menu Mockup.png.
 */
 #hero-wrap {
   position: absolute;
@@ -362,34 +363,44 @@ body {
   pointer-events: none;
 }
 
-#hero {
+/* Single animated unit: img + decorations ride this transform/opacity */
+#hero-plate {
+  position: relative;
   display: block;
   width: 1305px;
   height: 870px;
-  object-fit: fill; /* 1500×1000 → same 3:2 aspect */
-  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
   opacity: 0;
-  /* Ken Burns: fixed center origin; scale via --hero-zoom (never reset on src swap) */
   transform-origin: center center;
   transform: scale(var(--hero-zoom, 1));
-  /* Default = pull-out with fade; .is-kb-in uses long ease-out push-in */
+  /* One shadow for the whole plate (not per child image) */
+  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
   transition:
     opacity var(--dur-mid) var(--ease-fade),
     transform var(--dur-mid) var(--ease-fade);
+  pointer-events: none;
   user-select: none;
 }
 
-#hero.visible {
+#hero-plate.visible {
   opacity: 1;
 }
 
-#hero.is-kb-in {
+#hero-plate.is-kb-in {
   transition:
     opacity var(--dur-mid) var(--ease-fade),
     transform var(--dur-encore-zoom) var(--ease-out);
 }
 
-body.preview-wall #hero {
+/* Food image is content only — no independent motion or shadow */
+#hero {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* 1500×1000 → same 3:2 aspect */
+  user-select: none;
+}
+
+body.preview-wall #hero-plate {
   /* Keep wall lean; still allow subtle KB if enabled in JS */
   filter: none;
 }
@@ -515,12 +526,14 @@ body.preview-wall #family-portrait-stage {
   background: rgba(0, 255, 120, 0.06);
 }
 
-/* Slot: origin at lattice point; holds spotlight + plate + optional New! */
+/* Slot = portrait plate object: origin at lattice; holds img + optional New!
+   One drop-shadow on the slot (not per image) — major cost saver with N plates. */
 #family-portrait-stage .family-portrait-slot {
   position: absolute;
   width: 0;
   height: 0;
   pointer-events: none;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
 }
 
 #family-portrait-stage .family-portrait-item {
@@ -532,13 +545,12 @@ body.preview-wall #family-portrait-stage {
   height: 1000px;
   object-fit: fill;
   transform-origin: center center;
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
   user-select: none;
   pointer-events: none;
   z-index: 2;
 }
 
-body.preview-wall #family-portrait-stage .family-portrait-item {
+body.preview-wall #family-portrait-stage .family-portrait-slot {
   filter: none;
 }
 
@@ -638,6 +650,7 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
      4) CSS “New!” — Roboto Black, white, -7.25° (matched to new-sticker.png)
    Body group is isolated so the blend does not tint shadow or the label.
 */
+/* Decoration live inside #hero-plate so they inherit plate motion (scale/opacity). */
 #new-sticker {
   position: absolute;
   z-index: 6;
@@ -652,15 +665,12 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   opacity: 0;
   transform: rotate(-12deg);
   transform-origin: center center;
-  /* Match #hero fade so New! and photo appear/disappear in lockstep */
-  transition:
-    opacity var(--dur-mid) var(--ease-fade),
-    transform var(--dur-mid) var(--ease-out);
+  /* Opacity only — scale/fade of the plate come from #hero-plate */
+  transition: opacity var(--dur-mid) var(--ease-fade);
 }
 
 #new-sticker.visible {
   opacity: 1;
-  transform: rotate(-12deg);
 }
 
 #new-sticker .new-sticker-shadow {
@@ -1855,15 +1865,17 @@ body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line
   z-index: 5;
 }
 
+.board-drinks #hero-plate,
 .board-drinks #hero {
   width: 1305px;
   height: 870px;
 }
 
-/* NEW sticker — same size/bottom/rotate as other boards; only X position differs */
+/* NEW sticker — plate-relative; X differs (hero sits on left on drinks board) */
 .board-drinks #new-sticker {
   right: auto;
-  left: 400px;
+  /* stage left 400 − hero-wrap left (−255) = 655 within plate */
+  left: 655px;
   top: auto;
 }
 
@@ -1881,8 +1893,8 @@ body.preview-wall #galaxy {
   isolation: auto;
 }
 
-/* Multi-board wall: no hero drop-shadow — multi-pass filter kills Fire Stick FPS */
-body.preview-wall #hero {
+/* Multi-board wall: no plate drop-shadow — multi-pass filter kills Fire Stick FPS */
+body.preview-wall #hero-plate {
   filter: none;
 }
 
@@ -1963,6 +1975,20 @@ body.preview-wall #stripes-track {
   padding: 4px 6px;
   max-height: 240px;
   overflow-y: auto;
+}
+
+/* Debug Menu sheet: Full View = TRUE — show entire list with no scroll (Fire Stick).
+   Natural height (stops at last item), no stretching to screen bottom. */
+#toki-debug-hud.hud-full-view {
+  max-width: min(420px, 96vw);
+  max-height: none;
+  height: auto;
+  overflow: visible;
+}
+
+#toki-debug-hud.hud-full-view .hud-body {
+  max-height: none;
+  overflow: visible;
 }
 
 #toki-debug-hud table {

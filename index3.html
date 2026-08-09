@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&family=Roboto+Condensed:wght@300;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/menu.css?v=20260809handoff1" />
+  <link rel="stylesheet" href="css/menu.css?v=20260809plate2" />
 </head>
 <body class="board-munchies">
   <div id="stage">
@@ -75,32 +75,32 @@
     </div>
 
     <div id="hero-wrap">
-      <img id="hero" alt="" draggable="false" hidden />
+      <div id="hero-plate" hidden>
+        <img id="hero" alt="" draggable="false" />
+        <div id="new-sticker" hidden>
+          <img
+            class="new-sticker-shadow"
+            src="assets/stickers/Sticker-Shadow.webp"
+            alt=""
+            draggable="false"
+            aria-hidden="true"
+          />
+          <div class="new-sticker-body">
+            <img
+              class="new-sticker-body-img"
+              src="assets/stickers/Sticker-Body.webp"
+              alt=""
+              draggable="false"
+              aria-hidden="true"
+            />
+            <span class="new-sticker-tint" aria-hidden="true"></span>
+          </div>
+          <span class="new-sticker-label">New!</span>
+        </div>
+      </div>
     </div>
     <!-- Right of frame cutout: Family Portrait collage (same as Board 1–2) -->
     <div id="family-portrait-stage" hidden aria-hidden="true"></div>
-
-    <!-- Layer 5: new sticker — shadow + gold body (hue) + CSS New! -->
-    <div id="new-sticker" hidden>
-      <img
-        class="new-sticker-shadow"
-        src="assets/stickers/Sticker-Shadow.webp"
-        alt=""
-        draggable="false"
-        aria-hidden="true"
-      />
-      <div class="new-sticker-body">
-        <img
-          class="new-sticker-body-img"
-          src="assets/stickers/Sticker-Body.webp"
-          alt=""
-          draggable="false"
-          aria-hidden="true"
-        />
-        <span class="new-sticker-tint" aria-hidden="true"></span>
-      </div>
-      <span class="new-sticker-label">New!</span>
-    </div>
   </div>
 
   <script src="js/data-source.js?v=20260805border1"></script>
@@ -108,6 +108,6 @@
   <script src="js/menu-data.js?v=20260805fix1"></script>
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="js/build-info.js?v=20260808ver1"></script>
-  <script src="js/menu.js?v=20260809handoff1"></script>
+  <script src="js/menu.js?v=20260809plate2"></script>
 </body>
 </html>

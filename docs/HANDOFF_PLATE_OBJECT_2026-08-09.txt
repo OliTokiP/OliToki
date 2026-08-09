@@ -1,0 +1,93 @@
+TokiMenu — handoff note (2026-08-09)
+=====================================
+
+WHAT CHANGED (code)
+-------------------
+1) Slideshow "plate object"
+   - DOM: #hero-wrap > #hero-plate > (#hero img + #new-sticker)
+   - Motion (opacity fade, Ken Burns --hero-zoom scale, .is-kb-in long transition)
+     and drop-shadow live on #hero-plate, NOT on the raw img.
+   - Children of the plate inherit all plate motion by default (sticker, future
+     multi-size images for one menu item, etc.).
+   - JS helpers: heroMotionEl(), hideHeroPlate(), applyPlateSticker(), setHeroZoom
+     targets the plate.
+   - updateHero drives plate show/hide + zoom; sticker is applied as decoration
+     at show() time so it rides the plate fade/zoom (no separate scale sync).
+   - Cache-bust: menu.css / menu.js ?v=20260809plate1 on index.html … index4.html
+
+2) Family Portrait shadow cost
+   - drop-shadow moved from each .family-portrait-item (img) to .family-portrait-slot
+     (one filter per plate slot, not per bitmap). Wall path still filter:none.
+
+3) Debug Menu → Full View
+   - Sheet Debug Features column "Full View" (TRUE/FALSE), under master Debug Mode.
+   - When enabled: #toki-debug-hud gets .hud-full-view — no max-height / no scroll
+     on .hud-body (Fire Stick has no mouse).
+   - Parsed via existing parseDebugMenu features map; isDebugFullView() helper.
+   - Applied in updateDebugVisuals() when the HUD is shown.
+
+FILES TOUCHED
+-------------
+- css/menu.css
+- js/menu.js
+- index.html, index2.html, index3.html, index4.html
+- this handoff file
+
+NOT DONE (future)
+-----------------
+- Multi-image per menu item on one plate (architecture is ready; no sheet schema yet).
+- Unifying portrait slot scale transform onto an inner plate group (sticker already
+  co-located on slot; scale still on the img transform string).
+
+
+PROMPT FOR A CHEAPER MODEL — UPDATE THE DOCS
+============================================
+Copy everything below the line into a cheaper model session with the TokiMenu repo open.
+
+---
+You are updating TokiMenu project docs to match a recent architecture change.
+Do NOT rewrite code. Only edit markdown under docs/ (and Agents.md if needed).
+Keep edits small and accurate. Prefer amending existing sections over new long essays.
+
+Source of truth for this change: docs/HANDOFF_PLATE_OBJECT_2026-08-09.txt
+
+Tasks:
+
+1) docs/ARCHITECTURE.md (or equivalent architecture doc)
+   - Document the slideshow plate object:
+     #hero-wrap > #hero-plate > (#hero + #new-sticker + future decorations).
+   - Plate owns: opacity, Ken Burns scale (--hero-zoom, .is-kb-in), drop-shadow.
+   - Children inherit plate motion; do not re-apply scale on #new-sticker.
+   - Note: enables multi-image-per-item later (all images/decos on one plate).
+   - Family Portrait: .family-portrait-slot is the plate unit; drop-shadow is on
+     the slot, not each .family-portrait-item image (perf).
+
+2) docs/PERFORMANCE.md
+   - Add/adjust: one drop-shadow per plate (hero-plate or portrait slot), not per
+     food bitmap. Portrait used to pay N filters for N images.
+   - Wall preview still disables plate filters.
+   - Debug Full View is display-only (no extra GPU cost beyond larger HUD paint).
+
+3) docs/DEBUG_CONSOLE.md
+   - Document Debug Features column "Full View":
+     When Debug Mode + Full View are TRUE, the floating #toki-debug-hud expands
+     (class hud-full-view) with no body scroll — for Fire Stick / no mouse.
+   - Still requires Performance Console (or existing gate) for HUD visibility
+     as already documented; Full View only changes layout of the HUD when shown.
+   - Update the example Debug Features header row to include Full View.
+
+4) docs/UI_NOMENCLATURE.md or PRODUCT.md (if they mention "hero image" / sticker)
+   - Prefer wording "hero plate" / "plate object" for the animated unit.
+   - New! sticker is a plate decoration, not a peer of the hero for motion.
+
+5) Agents.md (project root)
+   - Under Key Directories / conventions, note plate object pattern and that
+     motion/shadow attach to the plate, not individual images.
+   - Prefer existing helpers: heroMotionEl, hideHeroPlate, applyPlateSticker,
+     setHeroZoom (plate-targeted).
+
+6) Cache-bust note: current UI version query is ?v=20260809plate1 for menu.css/js.
+
+When done, list which files you edited and a 5-line summary of doc deltas only.
+Do not invent sheet columns beyond Full View + existing Debug Menu fields.
+---

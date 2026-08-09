@@ -422,6 +422,7 @@
     title: document.getElementById("menu-title"),
     list: document.getElementById("menu-list"),
     hero: document.getElementById("hero"),
+    heroPlate: document.getElementById("hero-plate"),
     heroWrap: document.getElementById("hero-wrap"),
     familyPortrait: document.getElementById("family-portrait-stage"),
     sticker: document.getElementById("new-sticker"),
@@ -1182,7 +1183,8 @@
   }
 
   /**
-   * Resolve git build stamp for Show Version (replaces allergy disclaimer).
+   * Resolve git build stamp for Show Version.
+   * Version is appended to the Toki Debug HUD header (not the disclaimer).
    * Prefers /api/build (local server live git), then window.TOKI_BUILD.
    */
   function fetchBuildInfo() {
@@ -1228,7 +1230,7 @@
     return window.__tokiBuildInfoPromise;
   }
 
-  /** Show Version=1 → disclaimer slot becomes commit subject + hash + date. */
+  /** Apply the normal allergy disclaimer. Version stamp no longer lives here. */
   function applyDisclaimerContent() {
     if (!els.disclaimer) return;
     if (cfg.showDisclaimer === false) {
@@ -1236,39 +1238,10 @@
       return;
     }
     els.disclaimer.hidden = false;
-    const showVer = !!(config && config.showVersion);
-    if (!showVer) {
-      els.disclaimer.innerHTML = DEFAULT_DISCLAIMER_HTML;
-      els.disclaimer.classList.remove("is-version");
-      return;
-    }
-    els.disclaimer.classList.add("is-version");
-    els.disclaimer.textContent = "…";
-    fetchBuildInfo().then(function (info) {
-      if (!els.disclaimer) return;
-      if (!(config && config.showVersion)) {
-        els.disclaimer.innerHTML = DEFAULT_DISCLAIMER_HTML;
-        els.disclaimer.classList.remove("is-version");
-        return;
-      }
-      const hash = info.hash || "unknown";
-      const date = info.date || "";
-      const subject = String(info.subject || "").trim();
-      // Prepend latest commit message so we can confirm the live build at a glance
-      const parts = [];
-      if (subject) parts.push(subject);
-      parts.push(hash);
-      if (date) parts.push(date);
-      els.disclaimer.textContent = parts.join(" · ");
-      els.disclaimer.title = [
-        info.hashFull || hash,
-        subject || "",
-        date || "",
-        "source: " + (info.source || ""),
-      ]
-        .filter(Boolean)
-        .join("\n");
-    });
+    // Always show the standard disclaimer text.
+    // Version info is now appended only to the Toki Debug HUD header.
+    els.disclaimer.innerHTML = DEFAULT_DISCLAIMER_HTML;
+    els.disclaimer.classList.remove("is-version");
   }
 
   function applyDisclaimerColor() {
@@ -3673,6 +3646,7 @@
     }
 
     // Debug Features table (horizontal headers + values row)
+    // Headers may include: Performance Console, Version History, Full View, ...
     for (let i = 0; i < rows.length - 2; i++) {
       const label = String(rows[i][0] || "").trim().toLowerCase();
       if (label === "debug features") {
@@ -3688,6 +3662,16 @@
       }
     }
     return out;
+  }
+
+  /** Debug Menu → Full View: show entire HUD without scroll (Fire Stick). */
+  function isDebugFullView() {
+    if (!debugConfig || !debugConfig.debugMode) return false;
+    const fv =
+      debugConfig.features["Full View"] ||
+      debugConfig.features["FullView"] ||
+      debugConfig.features["full view"];
+    return !!fv;
   }
 
   /** True only when both the master Debug Mode and "Performance Console" are enabled in the sheet. */
@@ -7384,10 +7368,7 @@
     ensureFamilyPortrait(portraitItems || []);
 
     if (instant) {
-      if (els.hero) {
-        els.hero.classList.remove("visible", "is-kb-in");
-        els.hero.hidden = true;
-      }
+      hideHeroPlate();
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
       snapPortraitZoom(stage, 1);
@@ -7402,13 +7383,13 @@
     setEncoreScaffoldBgActive(false);
 
     // --- Phase 1: identical to updateHero outgoing ---
-    const img = els.hero;
+    const plate = heroMotionEl();
     const kb = heroKenBurnsOn();
     let zoomMin = 0.93;
     try {
-      if (img) {
+      if (plate) {
         const mn = parseFloat(
-          getComputedStyle(img).getPropertyValue("--hero-zoom-min").trim()
+          getComputedStyle(plate).getPropertyValue("--hero-zoom-min").trim()
         );
         if (Number.isFinite(mn) && mn > 0 && mn < 1) zoomMin = mn;
       }
@@ -7416,13 +7397,13 @@
       /* default */
     }
 
-    if (img && !img.hidden) {
-      img.classList.remove("visible");
+    if (plate && !plate.hidden) {
+      plate.classList.remove("visible");
       if (kb) setHeroZoom(zoomMin, "out");
     }
 
     const gap = kb
-      ? readCssDurationMs(img || document.documentElement, "--dur-mid", 450)
+      ? readCssDurationMs(plate || document.documentElement, "--dur-mid", 450)
       : 200;
 
     // Pre-stage collage at peak (like holding hero at zoomMin before show)
@@ -7438,8 +7419,8 @@
 
     _portraitHandoffTimer = window.setTimeout(function () {
       _portraitHandoffTimer = null;
-      if (img && !img.classList.contains("visible")) {
-        img.hidden = true;
+      if (plate && !plate.classList.contains("visible")) {
+        plate.hidden = true;
       }
       // --- Phase 2: identical clocks to updateHero show() ---
       beginPortraitCenterIntro(stage);
@@ -7482,10 +7463,7 @@
     // Encore bows / encore→lineup: keep collage, ease to 1× (no center solo)
     // Pin free galaxy immediately — collage is already fully visible in Encore.
     if (settle) {
-      if (els.hero) {
-        els.hero.classList.remove("visible", "is-kb-in");
-        els.hero.hidden = true;
-      }
+      hideHeroPlate();
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
       stage.classList.add("visible");
@@ -7500,10 +7478,7 @@
     }
 
     if (instant) {
-      if (els.hero) {
-        els.hero.classList.remove("visible", "is-kb-in");
-        els.hero.hidden = true;
-      }
+      hideHeroPlate();
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
       snapPortraitZoom(stage, 1);
@@ -7526,9 +7501,9 @@
       if (z <= 1.02) return;
     }
 
-    if (els.hero && !els.hero.hidden) {
-      els.hero.classList.remove("visible", "is-kb-in");
-      els.hero.hidden = true;
+    const plateEl = heroMotionEl();
+    if (plateEl && !plateEl.hidden) {
+      hideHeroPlate();
     }
     beginPortraitCenterIntro(stage);
   }
@@ -7845,9 +7820,8 @@
 
     if (cfg.showHero !== false) {
       updateHero(item, instant);
-    } else if (els.hero) {
-      els.hero.classList.remove("visible");
-      els.hero.hidden = true;
+    } else {
+      hideHeroPlate();
     }
 
     if (cfg.showSticker !== false) {
@@ -7959,13 +7933,11 @@
       if (cfg.showHero !== false) {
         if (item.image) {
           updateHero(item, instant);
-        } else if (els.hero) {
-          els.hero.classList.remove("visible");
-          els.hero.hidden = true;
+        } else {
+          hideHeroPlate();
         }
-      } else if (els.hero) {
-        els.hero.classList.remove("visible");
-        els.hero.hidden = true;
+      } else {
+        hideHeroPlate();
       }
       if (cfg.showSticker !== false) {
         updateSticker(item, instant);
@@ -7989,9 +7961,8 @@
     };
     if (cfg.showHero !== false) {
       updateHero(item, instant);
-    } else if (els.hero) {
-      els.hero.classList.remove("visible");
-      els.hero.hidden = true;
+    } else {
+      hideHeroPlate();
     }
     if (cfg.showSticker !== false) {
       updateSticker(item, instant);
@@ -8043,36 +8014,77 @@
     return config.slideshowKenBurns !== false && !isDrinks;
   }
 
-  function setHeroZoom(scale, mode) {
+  /** Motion target for the slideshow plate (falls back to img if plate missing). */
+  function heroMotionEl() {
+    return els.heroPlate || els.hero;
+  }
+
+  /**
+   * Hide the plate unit (opacity/scale classes + optional src clear).
+   * Decorations (sticker) live on the plate and hide with it.
+   */
+  function hideHeroPlate(opts) {
+    opts = opts || {};
+    const plate = els.heroPlate;
     const img = els.hero;
-    if (!img) return;
+    if (plate) {
+      plate.classList.remove("visible", "is-kb-in");
+      plate.hidden = true;
+    } else if (img) {
+      img.classList.remove("visible", "is-kb-in");
+      img.hidden = true;
+    }
+    if (opts.clearSrc && img) {
+      img.removeAttribute("src");
+    }
+    if (opts.hideSticker !== false && els.sticker) {
+      els.sticker.classList.remove("visible");
+      els.sticker.hidden = true;
+    }
+  }
+
+  /** Show/hide New! decoration on the plate (no independent motion — plate owns scale/fade). */
+  function applyPlateSticker(wantNew) {
+    if (!els.sticker) return;
+    if (wantNew && config && config.showSticker !== false) {
+      els.sticker.hidden = false;
+      els.sticker.classList.add("visible");
+    } else {
+      els.sticker.classList.remove("visible");
+      els.sticker.hidden = true;
+    }
+  }
+
+  function setHeroZoom(scale, mode) {
+    const el = heroMotionEl();
+    if (!el) return;
     // mode: "in" = long push | "out" = with fade | "snap"
+    // Applied to #hero-plate so all children (img, sticker, future multi-size) inherit.
     if (mode === "snap") {
-      img.style.transition = "none";
-      img.style.setProperty("--hero-zoom", String(scale));
-      void img.offsetWidth;
-      img.style.transition = "";
-      img.classList.remove("is-kb-in");
-      setFeatureActive('kenBurns', false, 'snap');
+      el.style.transition = "none";
+      el.style.setProperty("--hero-zoom", String(scale));
+      void el.offsetWidth;
+      el.style.transition = "";
+      el.classList.remove("is-kb-in");
+      setFeatureActive("kenBurns", false, "snap");
       return;
     }
     if (mode === "in") {
-      img.classList.add("is-kb-in");
-      setFeatureActive('kenBurns', true, 'zoom-in start');
+      el.classList.add("is-kb-in");
+      setFeatureActive("kenBurns", true, "zoom-in start");
     } else {
-      img.classList.remove("is-kb-in");
-      setFeatureActive('kenBurns', false, 'zoom end');
+      el.classList.remove("is-kb-in");
+      setFeatureActive("kenBurns", false, "zoom end");
     }
-    img.style.setProperty("--hero-zoom", String(scale));
+    el.style.setProperty("--hero-zoom", String(scale));
   }
 
   function updateHero(item, instant) {
     const img = els.hero;
-    if (!img) return;
+    const plate = heroMotionEl();
+    if (!img || !plate) return;
     if (!item || !item.image) {
-      img.classList.remove("visible", "is-kb-in");
-      img.hidden = true;
-      img.removeAttribute("src");
+      hideHeroPlate({ clearSrc: true });
       return;
     }
 
@@ -8080,23 +8092,24 @@
     let zoomMin = 0.93;
     let zoomMax = 1;
     try {
-      const mn = parseFloat(
-        getComputedStyle(img).getPropertyValue("--hero-zoom-min").trim()
-      );
-      const mx = parseFloat(
-        getComputedStyle(img).getPropertyValue("--hero-zoom-max").trim()
-      );
+      const cs = getComputedStyle(plate);
+      const mn = parseFloat(cs.getPropertyValue("--hero-zoom-min").trim());
+      const mx = parseFloat(cs.getPropertyValue("--hero-zoom-max").trim());
       if (Number.isFinite(mn) && mn > 0 && mn < 1) zoomMin = mn;
       if (Number.isFinite(mx) && mx >= 1) zoomMax = mx;
     } catch (e) {
       /* defaults */
     }
 
+    const wantSticker = !!(item.isNew && config && config.showSticker !== false);
+
     const show = function () {
-      img.hidden = false;
+      plate.hidden = false;
+      // Sticker is a plate decoration — present before fade-in so it rides opacity+scale
+      applyPlateSticker(wantSticker);
       // Do not reset scale here — stay at min until push-in
       requestAnimationFrame(function () {
-        img.classList.add("visible");
+        plate.classList.add("visible");
         if (kb) {
           setHeroZoom(zoomMax, "in");
         } else {
@@ -8133,31 +8146,28 @@
     };
 
     if (instant) {
-      img.classList.remove("visible");
+      plate.classList.remove("visible");
       setHeroZoom(zoomMax, "snap");
       applySrc();
       return;
     }
 
-    // Fade out + (optional) zoom to min; never hard-reset transform on src change
-    img.classList.remove("visible");
+    // Fade out plate (+ decorations) + optional zoom to min
+    plate.classList.remove("visible");
     if (kb) {
       setHeroZoom(zoomMin, "out");
     }
     // Align swap with fade (~dur-mid); KB zoom-out shares that clock
-    const gap = kb ? readCssDurationMs(img, "--dur-mid", 450) : 200;
+    const gap = kb ? readCssDurationMs(plate, "--dur-mid", 450) : 200;
     window.setTimeout(applySrc, gap);
   }
 
   /**
-   * New sticker fade — same cadence as updateHero:
-   *  fade-out → short gap → unhide at opacity 0 → paint → fade-in.
-   * Instant unhide+visible in one frame skips the CSS transition (pop-in).
+   * Sticker is a plate decoration. Instant / non-hero paths set it here;
+   * animated hero slides apply it in updateHero show() so it rides plate motion.
    */
   function updateSticker(item, instant) {
     if (!els.sticker) return;
-    const FADE_MS = 450; // match #hero / #new-sticker CSS
-    const HERO_GAP_MS = 200; // match updateHero delay before show()
     const wantNew = !!(item && item.isNew);
 
     function stillWantsHidden() {
@@ -8168,50 +8178,15 @@
       return !items[activeIndex]?.isNew;
     }
 
-    function reveal() {
-      // May have been cancelled if user advanced to a non-new slide
-      if (!wantNew && stillWantsHidden()) return;
-      if (isDrinks || usesBoardSlides()) {
-        const slide = slides[activeIndex];
-        if (!slide || !slide.isNew || slide.type === "portrait") return;
-      } else if (!items[activeIndex]?.isNew) {
-        return;
-      }
-
-      els.sticker.hidden = false;
-      els.sticker.classList.remove("visible");
-      // Force a style flush at opacity:0 so transition to .visible is honored
-      void els.sticker.offsetWidth;
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          if (els.sticker && !els.sticker.hidden) {
-            els.sticker.classList.add("visible");
-          }
-        });
-      });
+    if (instant || !els.heroPlate) {
+      applyPlateSticker(wantNew);
+      return;
     }
-
-    if (wantNew) {
-      // Already showing on a New item → leave as-is (no flicker between New slides)
-      if (
-        !instant &&
-        !els.sticker.hidden &&
-        els.sticker.classList.contains("visible")
-      ) {
-        return;
-      }
-      if (instant) {
-        reveal();
-        return;
-      }
-      // Sync with hero: drop opacity first, wait, then fade in
-      els.sticker.classList.remove("visible");
-      window.setTimeout(reveal, HERO_GAP_MS);
-    } else {
-      els.sticker.classList.remove("visible");
-      window.setTimeout(function () {
-        if (stillWantsHidden()) els.sticker.hidden = true;
-      }, FADE_MS);
+    // Non-instant with plate: show() owns sticker state after the fade/src swap.
+    // If leaving New, leave sticker until plate show() clears it (fades with plate).
+    if (!wantNew && stillWantsHidden()) {
+      // Soft clear only if plate is already gone
+      if (els.heroPlate.hidden) applyPlateSticker(false);
     }
   }
 
@@ -8770,8 +8745,8 @@
           case "kenBurns":
             // True only while a Ken Burns zoom cycle is actually running (transient)
             if (kbZoomActive) return true;
-            const hero = els.hero;
-            if (hero && hero.classList.contains("is-kb-in")) return true;
+            const motion = heroMotionEl();
+            if (motion && motion.classList.contains("is-kb-in")) return true;
             // For encore the zoom is more sustained during the presentation, but we keep it narrow
             return false;
 
@@ -8789,8 +8764,15 @@
             const gal = document.getElementById("galaxy");
             return !!(gal && gal.classList.contains("encore-scaffold-bg"));
 
-          case "heroPlate":
-            return !!els.hero && !els.hero.hidden && !!els.hero.src;
+          case "heroPlate": {
+            const plate = heroMotionEl();
+            return !!(
+              plate &&
+              !plate.hidden &&
+              els.hero &&
+              els.hero.src
+            );
+          }
 
           case "newSticker":
             const sticker = document.getElementById("new-sticker");
@@ -8841,7 +8823,7 @@
             return !!(st && !st.hidden);
 
           case "versionStamp":
-            // Version is shown via disclaimer or separate element when config says so
+            // Version stamp is appended to the Toki Debug HUD header (when shown)
             return !!config.showVersion;
 
           default:
@@ -9087,6 +9069,35 @@
     });
 
     document.body.appendChild(_debugHudEl);
+
+    // Append version stamp to header if Show Version enabled in Style.
+    // This is the only place the version appears now (not in disclaimer).
+    if (config && config.showVersion) {
+      const titleEl = _debugHudEl.querySelector(".title");
+      if (titleEl) {
+        fetchBuildInfo().then(function (info) {
+          if (!titleEl || !(config && config.showVersion)) {
+            if (titleEl) titleEl.textContent = "Toki Debug";
+            return;
+          }
+          const hash = info.hash || "unknown";
+          const date = info.date || "";
+          const parts = ["Toki Debug"];
+          if (hash) parts.push(hash);
+          if (date) parts.push(date);
+          titleEl.textContent = parts.join(" · ");
+          titleEl.title = [
+            info.hashFull || hash,
+            info.subject || "",
+            date || "",
+            "source: " + (info.source || ""),
+          ]
+            .filter(Boolean)
+            .join("\n");
+        });
+      }
+    }
+
     return _debugHudEl;
   }
 
@@ -9149,6 +9160,8 @@
     ensureDebugHUD();
     if (_debugHudEl) {
       _debugHudEl.style.display = "block";
+      // Full View (sheet column): expand body, no scroll — for Fire Stick
+      _debugHudEl.classList.toggle("hud-full-view", isDebugFullView());
     }
     updateDebugHUDContent(flags);
 

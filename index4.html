@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&family=Roboto+Condensed:wght@300;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/menu.css?v=20260809handoff1" />
+  <link rel="stylesheet" href="css/menu.css?v=20260809plate2" />
 </head>
 <body class="board-drinks">
   <div id="stage">
@@ -80,31 +80,31 @@
       </div>
     </div>
 
-    <!-- Hero on the left (over galaxy) -->
+    <!-- Plate object on the left (over galaxy); decorations inherit motion -->
     <div id="hero-wrap">
-      <img id="hero" alt="" draggable="false" hidden />
-    </div>
-
-    <!-- Layer 5: new sticker — shadow + gold body (hue) + CSS New! -->
-    <div id="new-sticker" hidden>
-      <img
-        class="new-sticker-shadow"
-        src="assets/stickers/Sticker-Shadow.webp"
-        alt=""
-        draggable="false"
-        aria-hidden="true"
-      />
-      <div class="new-sticker-body">
-        <img
-          class="new-sticker-body-img"
-          src="assets/stickers/Sticker-Body.webp"
-          alt=""
-          draggable="false"
-          aria-hidden="true"
-        />
-        <span class="new-sticker-tint" aria-hidden="true"></span>
+      <div id="hero-plate" hidden>
+        <img id="hero" alt="" draggable="false" />
+        <div id="new-sticker" hidden>
+          <img
+            class="new-sticker-shadow"
+            src="assets/stickers/Sticker-Shadow.webp"
+            alt=""
+            draggable="false"
+            aria-hidden="true"
+          />
+          <div class="new-sticker-body">
+            <img
+              class="new-sticker-body-img"
+              src="assets/stickers/Sticker-Body.webp"
+              alt=""
+              draggable="false"
+              aria-hidden="true"
+            />
+            <span class="new-sticker-tint" aria-hidden="true"></span>
+          </div>
+          <span class="new-sticker-label">New!</span>
+        </div>
       </div>
-      <span class="new-sticker-label">New!</span>
     </div>
   </div>
 
@@ -113,6 +113,6 @@
   <script src="js/menu-data.js?v=20260805fix1"></script>
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="js/build-info.js?v=20260808ver1"></script>
-  <script src="js/menu.js?v=20260809handoff1"></script>
+  <script src="js/menu.js?v=20260809plate2"></script>
 </body>
 </html>
