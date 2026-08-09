@@ -1,24 +1,109 @@
 # TokiMenu — Sheet migration notes
 
-Living notes for the **revised sheet tabs** and the runtime changes they will require.  
-Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until revised tabs go live.
+Living notes for the **revised sheet tabs** and runtime cutovers.  
+Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on Revised.
 
 **Last updated:** 2026-08-09  
 **Spreadsheet:** `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
-| Revised tab | GID | Live counterpart |
-|-------------|-----|------------------|
-| Style and Theme Revised | `183083022` | Style and Theme `1076652078` |
-| Board 1 Revised | `1058015863` | Board 1 `0` |
-| Proteins Revised | `1420775786` | Proteins `1191392779` |
-
-**Status:** Draft schema. Live boards still point at the non-Revised gids. Do not cut over until parsers understand the sectioned layout (and the notes below).
+| Revised tab | GID | Live counterpart | Runtime status |
+|-------------|-----|------------------|----------------|
+| Style and Theme Revised | `183083022` | Style and Theme `1076652078` | **Board 1 live** (`config.js` → this gid) |
+| Board 1 Revised | `1058015863` | Board 1 `0` | Not cut over yet |
+| Proteins Revised | `1420775786` | Proteins `1191392779` | Not cut over yet |
 
 Related:
 
-- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) — **truth source** for on-screen part names (Hero Panel, Plates, …)
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) — on-screen part names
 - [OWNER_HANDOFF.md](./OWNER_HANDOFF.md) — boss Tier A / Tier B strategy
-- [DATA_MODEL.md](./DATA_MODEL.md) — live column map
+- [DATA_MODEL.md](./DATA_MODEL.md) — live (legacy) column map
+- Code: `STYLE_REVISED_*` + `parseStyleThemeFromRows` in `js/menu.js`
+
+---
+
+## 0. How to migrate Style columns (token saver — READ THIS)
+
+**Do not invent structure.** Fetch the tab and map headers → indices.
+
+```bash
+python3 scripts/gsheet_client.py get --json "'Style and Theme Revised'!A1:L5"
+```
+
+### Section pattern (all revised tabs)
+
+Every block is **three layers**, not “header then data”:
+
+| Index (0-based) | Role | Example |
+|-----------------|------|---------|
+| `i` | Section **label** only (often just col A) | `Settings` |
+| `i+1` | Column **headers** | `Theme Selector`, `BG Color`, … |
+| `i+2` | **Data** (Settings = one row; Inventory/Themes = many rows) | `Summer`, `Secondary Color`, … |
+
+Code helper pattern: `findRevisedSectionDataStart(rows, "settings")` → returns `i+2`.
+
+**Wrong:** treat the row after the label as values (that is the header row).  
+**Wrong:** reuse **legacy** `STYLE_COLUMNS` (G–Q flat layout) on the Revised tab.  
+**Right:** use **`STYLE_REVISED_SETTINGS`** / **`STYLE_REVISED_THEME`** maps that match **current** headers.
+
+### When someone inserts a column in Settings
+
+1. Re-fetch row of headers.  
+2. Shift every index **after** the insert in `STYLE_REVISED_SETTINGS`.  
+3. Leave unknown new fields **parsed but not applied** until implemented.  
+4. Smoke-test: theme colors, wallpaper path, blur/opacity %, spotlight type/color.
+
+Example (2026-08): **BG Pattern** inserted at col C → Wallpaper and everything after it moved +1.
+
+### Style Revised — Settings columns (verified live)
+
+One values row under Settings (excel row 3 / 0-based index 2):
+
+| Col | Header | Index | Runtime field | Notes |
+|-----|--------|------:|---------------|--------|
+| A | Theme Selector | 0 | picks Themes Database row | Name match, case-insensitive |
+| B | BG Color | 1 | `bgColor` | Color Picker label / hex / fill |
+| C | BG Pattern | 2 | `bgPattern` | "stripes" | none → stripes using row-6 pattern colors + shared stripe anim |
+| D | BG Wallpaper | 3 | `bgImage` | filename / `none` → no galaxy |
+| E | BG Blur | 4 | `bgBlur` | Percent → 0–1 (`parseUnit01`) |
+| F | BG Blend Mode | 5 | `bgBlendMode` | e.g. `normal` |
+| G | BG Opacity | 6 | `bgOpacity` | Percent → 0–1 |
+| H | BG Scroll Speed | 7 | `bgScrollSpeed` | multiplier |
+| I | Presentation Speed | 8 | `slideshowSpeed` | seconds; `0` = pause |
+| J | Show Github Version | 9 | `showVersion` | checkbox / 0–1 |
+| K | Encore Spotlight Type | 10 | `encoreSpotlightType` | Hard \| Soft |
+| L | Encore Spotlight Color | 11 | `encoreSpotlightColor` | Black \| Highlight |
+
+### Style Revised — Themes Database columns (verified live)
+
+| Col | Header | Index | Runtime field |
+|-----|--------|------:|---------------|
+| A | Theme Name | 0 | `themeName` |
+| B | Main Color | 1 | `mainColor` (text hex **or** cell fill) |
+| C | Secondary Color | 2 | `secondaryColor` |
+| D | Highlight Color | 3 | `highlight` |
+| E | Highlight Color (Special) | 4 | `highlightSpecial` |
+| F+ | Styles Glossary lists | — | **Ignore** for theme application (Wallpaper Options, Blend Modes, Color Picker, Motion Styles, Patterns, …) |
+
+Toki Default may have **empty hex** — fills are the source of truth (`resolveColor` + xlsx fills).
+
+### Style Revised — what broke when we first cut over (lessons)
+
+| Symptom | Cause |
+|---------|--------|
+| All colors black | Used legacy theme cols B–F; Revised theme name is **A**, colors **B–E** |
+| Wallpaper missing | Read old H2 / wrong Settings col after Pattern insert |
+| Spotlight always hard / black | Read old cols P/Q instead of Settings K/L (or shifted J/K) |
+| Blur/opacity wrong | `"100%"` via `Number()` → NaN → defaults (fixed in `parseUnit01`) |
+
+### Percents (implemented)
+
+`parseUnit01` accepts:
+
+- `0`–`1` decimals  
+- strings ending in `%` → divide by 100  
+- bare values &gt; 1 treated as percent (e.g. `100` → 1)
+
+Prefer unformatted `numberValue` when available; CSV/formatted path still works with the rules above.
 
 ---
 
@@ -28,8 +113,8 @@ Revised tabs split each sheet into labeled blocks:
 
 | Block | Role |
 |-------|------|
-| **Settings** | Single control row (board-wide or box-wide) |
-| **Inventory** | One row per menu / box item |
+| **Settings** | Label → headers → **single** control row (board-wide or box-wide) |
+| **Inventory** | Label → headers → one row per menu / box item |
 | **Themes Database** | Theme name + color palette (Style only) |
 | **Styles Glossary** | Dropdown source lists only — not applied per theme row |
 
@@ -53,37 +138,15 @@ Intent:
 
 Same idea for any future 0–1 “amount” knobs (veil strength, dim, etc.). **Not** for discrete flags (Include, New, Show Version) — those stay checkbox / 0–1 boolean.
 
-### Why this matters for code
+### Code
 
-Sheets **formatted** value API often returns the string `"100%"` / `"0%"`, not the number `1` / `0`.
-
-Current `parseUnit01` in `menu.js` does roughly `Number(raw)`. That yields:
-
-| Formatted cell | `Number(...)` | Result today |
-|----------------|---------------|--------------|
-| `"100%"` | `NaN` | Falls back to default (blur → 0, opacity → 1) |
-| `"50%"` | `NaN` | Same problem |
-| `"1"` (number format) | `1` | Works |
-| unformatted `numberValue: 1` | — | Works if we read it |
-
-**Migration rule for loaders:**
-
-1. Prefer **unformatted** number (`numberValue` / `valueRenderOption=UNFORMATTED_VALUE` / xlsx raw) when the column is a 0–1 effect.
-2. If only a string is available, accept:
-   - plain `0`–`1` decimals
-   - percent strings: strip `%`, divide by 100 when absolute value &gt; 1 **or** when the string ends with `%`
-3. Always clamp to `[0, 1]`.
+`parseUnit01` in `js/menu.js` handles formatted `"100%"` / `"20%"` and unformatted `0`–`1`. See §0.
 
 ### Author guidance (Style Settings)
 
 - Format Blur / Opacity cells as **Percent**.
 - Enter `0` for off, `1` for full (Sheets shows `0%` / `100%`).
-- Do not type the characters `100%` as free text if you can avoid it — use a real percent-formatted number so collaborators see a consistent UI.
-
-### Observed (2026-08-09 Style Revised Settings)
-
-Via grid API: Blur and Opacity both `formattedValue=100%`, `numberValue=1`, `numberFormat=PERCENT`.  
-Until the parser migrates, **formatted CSV path will misread these**; unformatted / fill-aware xlsx path can still recover `1`.
+- Prefer real percent-formatted numbers over typing the characters `100%` as free text.
 
 ---
 
@@ -189,15 +252,24 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 
 ---
 
-## 7. Parser / cutover checklist (when ready)
+## 7. Parser / cutover checklist
 
-- [ ] Detect sectioned tabs (Settings / Inventory / Themes Database) vs legacy flat headers
-- [ ] Map Style Settings: Theme Selector, BG Color, BG Wallpaper, Blur, Blend, Opacity, Scroll, Presentation Speed, Show Version, Encore Spotlight Type/Color
-- [ ] Parse Blur / Opacity with **percent-aware** 0–1 logic (§2)
-- [ ] Theme palette: hex text **or** cell fill; Theme Selector matches Themes Database names
+### Style Revised (gid `183083022`)
+
+- [x] Detect Settings / Themes Database sections (label → headers → data)
+- [x] Map Settings columns via `STYLE_REVISED_SETTINGS` (not legacy G–Q)
+- [x] Map Themes Database A–E via `STYLE_REVISED_THEME`
+- [x] Percent-aware `parseUnit01` for Blur / Opacity
+- [x] Theme Selector → Themes Database name match; fills when hex blank
+- [x] Board 1 `config.js` points `styleThemeGid` at Revised
+- [x] Wire **BG Pattern** (col C): parsed in Settings; Pattern Color 1/2 dropdown labels (cols K/L) read from chosen theme row, falling back to Toki Default / row 6 when blank (inheritance for defaults); resolved via `resolveNamedThemeColor` against current theme palette (supports highlight etc.); re-uses stripe anim on `#bg-pattern`
+- [ ] Boards 2–4 configs still use legacy Style gid until ready
+
+### Board / Proteins Revised (not started)
+
 - [ ] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3
 - [ ] Protein Settings + Inventory; ignore or implement New/Image/Include per §6
-- [ ] Point `styleThemeGid` / board gid / `proteinSheetGid` at Revised gids only after smoke test
+- [ ] Point board gid / `proteinSheetGid` at Revised gids only after smoke test
 - [ ] Mirror pattern to remaining boards and Sauces
 - [ ] Update [DATA_MODEL.md](./DATA_MODEL.md) + configs; bump `schemaVersion` when freezing
 

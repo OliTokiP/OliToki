@@ -302,8 +302,9 @@
   /** @deprecated alias — same as BOARD_COLUMNS */
   const BOWLS_COLUMNS = BOARD_COLUMNS;
 
-  /** Style & Theme tab (gid 1076652078)
-   * Theme palette ONLY (selected row — Theme Selector in col A):
+  /**
+   * Legacy Style & Theme tab (gid 1076652078) — flat layout:
+   * Theme palette (selected row — Theme Selector in col A):
    *   A Theme Selector | B Theme Name | C Main | D Secondary |
    *   E Highlight | F Highlight Special
    * Board-wide (first data row = sheet row 2, not per theme):
@@ -333,7 +334,49 @@
     encoreSpotlightType: 15,
     encoreSpotlightColor: 16,
   };
-  /** Excel row 2 = first data row (index 1 in sheet_to_json header:1 arrays) */
+
+  /**
+   * Style and Theme Revised (gid 183083022) — sectioned layout (verified live API).
+   * See docs/SHEET_MIGRATION.md § Style Revised layout.
+   *
+   * Settings (rows: section label → column headers → ONE values row):
+   *   A Theme Selector | B BG Color | C BG Pattern | D BG Wallpaper |
+   *   E BG Blur | F BG Blend Mode | G BG Opacity | H BG Scroll Speed |
+   *   I Presentation Speed | J Show Github Version |
+   *   K Encore Spotlight Type | L Encore Spotlight Color
+   *
+   * Themes Database (rows: section label → headers → theme rows):
+   *   A Theme Name | B Main | C Secondary | D Highlight | E Highlight Special
+   *   (F+ are Styles Glossary lists — ignore for theme application)
+   *
+   * When columns are inserted in Settings, shift every index AFTER the insert.
+   */
+  const STYLE_REVISED_GID = "183083022";
+  const STYLE_REVISED_SETTINGS = {
+    themeSelector: 0,
+    bgColor: 1,
+    bgPattern: 2, // wired (re-uses announcement stripe anim)
+    bgImage: 3, // BG Wallpaper
+    bgBlur: 4,
+    bgBlendMode: 5,
+    bgOpacity: 6,
+    bgScrollSpeed: 7,
+    slideshowSpeed: 8,
+    showVersion: 9,
+    encoreSpotlightType: 10,
+    encoreSpotlightColor: 11,
+  };
+  const STYLE_REVISED_THEME = {
+    themeName: 0,
+    mainColor: 1,
+    secondaryColor: 2,
+    highlight: 3,
+    highlightSpecial: 4,
+    // Pattern Color labels live in row 6 (Themes Database first data row) and per-theme rows
+    patternColor1: 10,
+    patternColor2: 11,
+  };
+  /** Excel row 2 = first data row (index 1) on legacy Style tab */
   const STYLE_BOARD_WIDE_ROW_INDEX = 1;
   /** Default allergy copy (HTML uses &lt;br /&gt; between lines). */
   const DEFAULT_DISCLAIMER_HTML =
@@ -419,6 +462,7 @@
 
   const els = {
     stage: document.getElementById("stage"),
+    galaxy: document.getElementById("galaxy"),
     title: document.getElementById("menu-title"),
     list: document.getElementById("menu-list"),
     hero: document.getElementById("hero"),
@@ -449,6 +493,8 @@
     drinksBoxes: document.getElementById("drinks-boxes"),
     stripes: document.getElementById("stripes"),
     stripesTrack: document.getElementById("stripes-track"),
+    bgPattern: document.getElementById("bg-pattern"),
+    bgPatternTrack: document.getElementById("bg-pattern-track"),
   };
 
   let config = {
@@ -471,6 +517,9 @@
     stripeColor1: "#000000",
     stripeColor2: "#ffffff",
     includeStripes: true,
+    bgPattern: null,
+    patternColor1: "#000000",
+    patternColor2: "#ffffff",
     announcementBg: null, // null → Main after theme apply
     proteinBoxBg: null,
     saucesBoxBg: null,
@@ -956,6 +1005,7 @@
     root.style.setProperty("--highlight-new", config.highlightSpecial);
     applyStickerTint();
     applyStageBackground();
+    applyBgPattern();
     // Box overrides + contrast text (all boards that have boxes)
     applyBoxChrome();
     applyDisclaimerContent();
@@ -1310,13 +1360,24 @@
       });
   }
 
-  /** Clamp sheet 0–1 controls (blur, opacity). Blank → fallback. */
+  /**
+   * Clamp sheet 0–1 controls (blur, opacity). Blank → fallback.
+   * Accepts decimals (0.5), whole 0/1, and percent strings ("100%", "50%").
+   * Revised Style sheet uses Sheets Percent format which often arrives as "100%".
+   */
   function parseUnit01(raw, fallback) {
     if (raw === undefined || raw === null || String(raw).trim() === "") {
       return fallback;
     }
-    const n = Number(raw);
+    let s = String(raw).trim().replace(/,/g, "");
+    const isPct = /%\s*$/.test(s);
+    if (isPct) s = s.replace(/%\s*$/, "").trim();
+    const n = Number(s);
     if (!Number.isFinite(n)) return fallback;
+    // "100%" → 1; bare 100 (without %) also treated as percent if > 1
+    if (isPct || Math.abs(n) > 1) {
+      return Math.max(0, Math.min(1, n / 100));
+    }
     return Math.max(0, Math.min(1, n));
   }
 
@@ -1358,16 +1419,21 @@
   }
 
   /**
-   * Stage BG image is board-wide: always Style sheet H2 (first data row),
-   * never the selected theme's H column (themes are A–F only).
+   * Stage BG image is board-wide (never per-theme).
+   * Legacy: H2. Revised Settings: column C on the Settings values row.
    */
-  function resolveStageBgImageFromRows(rows, sc) {
-    const row = rows && rows[STYLE_BOARD_WIDE_ROW_INDEX];
-    const raw = row ? cell(row, sc.bgImage) : "";
+  function resolveStageBgImageFromRows(rows, sc, boardRowIndex) {
+    const idx =
+      boardRowIndex != null && Number.isFinite(boardRowIndex)
+        ? boardRowIndex
+        : STYLE_BOARD_WIDE_ROW_INDEX;
+    const row = rows && rows[idx];
+    const col = sc && sc.bgImage != null ? sc.bgImage : 7;
+    const raw = row ? cell(row, col) : "";
     return {
       raw: raw,
       path: parseBgImagePath(raw),
-      from: "H2",
+      from: "settings-row " + (idx + 1) + " col " + col,
     };
   }
 
@@ -2587,6 +2653,24 @@
         themeColors
       ) || secondary;
 
+    // BG Pattern colors (from Style Theme row; labels resolve against palette)
+    const patternColor1 =
+      resolveNamedThemeColor(
+        parsed.patternColor1Choice != null
+          ? parsed.patternColor1Choice
+          : "main color",
+        null,
+        themeColors
+      ) || main;
+    const patternColor2 =
+      resolveNamedThemeColor(
+        parsed.patternColor2Choice != null
+          ? parsed.patternColor2Choice
+          : "secondary color",
+        null,
+        themeColors
+      ) || secondary;
+
     const annSurf = boxSurfaceFrom(
       parsed.announcementBox,
       parsed.announcementBg
@@ -2639,6 +2723,7 @@
       bgOpacity: bgOpacity,
       bgMode: bgImage ? "image" : "solid",
       bgSolid: bgColor,
+      bgPattern: parsed.bgPattern != null ? parsed.bgPattern : config.bgPattern,
       bgScrollSpeed: parseBgScrollSpeed(
         parsed.bgScrollSpeed != null
           ? parsed.bgScrollSpeed
@@ -2655,6 +2740,8 @@
       highlightSpecial: highlightSpecial,
       stripeColor1: stripe1,
       stripeColor2: stripe2,
+      patternColor1: patternColor1,
+      patternColor2: patternColor2,
       includeStripes:
         parsed.includeStripes !== undefined
           ? !!parsed.includeStripes
@@ -3200,6 +3287,8 @@
         els.stripesTrack.style.animationPlayState = "paused";
       }
     }
+    // Keep BG pattern (if active) in sync with shared bgScrollSpeed
+    updateBgPatternAnimation();
   }
 
   function updateStripeAnimation() {
@@ -3220,6 +3309,84 @@
     const duration = Math.max(0.5, periodPx / Math.max(0.01, speed));
     els.stripesTrack.style.animationDuration = duration + "s";
     els.stripesTrack.style.animationPlayState = "running";
+  }
+
+  /** Apply animated BG pattern (currently "stripes" re-uses the announcement/drinks stripe anim). */
+  function applyBgPattern() {
+    const root = document.documentElement;
+    const pat = config && config.bgPattern;
+    const isStripes = pat === "stripes";
+    let bp = els.bgPattern;
+    let track = els.bgPatternTrack;
+
+    if (!bp) {
+      bp = document.getElementById("bg-pattern");
+      els.bgPattern = bp;
+    }
+    if (bp && !track) {
+      track = bp.querySelector("#bg-pattern-track") || document.getElementById("bg-pattern-track");
+      els.bgPatternTrack = track;
+    }
+
+    if (!bp && els.stage) {
+      // Dynamically create (keeps all index*.html untouched; works in preview iframes too)
+      bp = document.createElement("div");
+      bp.id = "bg-pattern";
+      bp.setAttribute("aria-hidden", "true");
+      const tr = document.createElement("div");
+      tr.id = "bg-pattern-track";
+      bp.appendChild(tr);
+      // Insert right after #galaxy so it paints above galaxy layers but below #frame
+      const galaxy = els.galaxy || document.getElementById("galaxy");
+      if (galaxy && galaxy.parentNode === els.stage) {
+        if (galaxy.nextSibling) {
+          els.stage.insertBefore(bp, galaxy.nextSibling);
+        } else {
+          els.stage.appendChild(bp);
+        }
+      } else {
+        els.stage.appendChild(bp);
+      }
+      els.bgPattern = bp;
+      els.bgPatternTrack = tr;
+      track = tr;
+    }
+    if (!bp) return;
+
+    if (isStripes) {
+      bp.hidden = false;
+      bp.style.display = "block";
+      bp.classList.add("active");
+      document.body.classList.add("has-bg-pattern-stripes");
+      const main = config.mainColor || "#000000";
+      const secondary = config.secondaryColor || "#ffffff";
+      const c1 = config.patternColor1 || main;
+      const c2 = config.patternColor2 || secondary;
+      root.style.setProperty("--bg-pattern-1", c1);
+      root.style.setProperty("--bg-pattern-2", c2);
+      updateBgPatternAnimation(track);
+    } else {
+      bp.hidden = true;
+      bp.style.display = "none";
+      bp.classList.remove("active");
+      document.body.classList.remove("has-bg-pattern-stripes");
+    }
+  }
+
+  function updateBgPatternAnimation(trackEl) {
+    const track = trackEl || els.bgPatternTrack || (els.bgPattern && els.bgPattern.querySelector("#bg-pattern-track"));
+    if (!track) return;
+    const mult = parseBgScrollSpeed(config && config.bgScrollSpeed, 1);
+    const pat = config && config.bgPattern;
+    if (!pat || pat !== "stripes" || mult <= 0) {
+      track.style.animationPlayState = "paused";
+      return;
+    }
+    const periodPx = 186;
+    const speed = BASE_SCROLL_PX_PER_SEC * mult * STRIPE_SPEED_FACTOR;
+    const duration = Math.max(0.5, periodPx / Math.max(0.01, speed));
+    track.style.animationDuration = duration + "s";
+    track.style.animationPlayState = "running";
   }
 
   // ---------- loaders ----------
@@ -3348,29 +3515,35 @@
 
   /**
    * True if Style row is a theme palette (not Color Picker labels, not BG-only).
-   * Themes = Theme Name and/or the four colors (typed or fill). BG is board-wide.
-   * Theme Selector is a separate dropdown of names — not a per-row flag.
+   * themesCols: { themeName, mainColor, secondaryColor, highlight, highlightSpecial }
+   * fill letters: legacy C–F (cols 2–5) or revised B–E (cols 1–4).
    */
-  function isStyleThemeRow(row, excelRow, fills) {
-    const sc = STYLE_COLUMNS;
-    const name = String(cell(row, sc.themeName) || "").trim();
+  function isStyleThemeRow(row, excelRow, fills, themesCols, fillLetters) {
+    const tc = themesCols || STYLE_COLUMNS;
+    const letters = fillLetters || ["C", "D", "E", "F"];
+    const name = String(cell(row, tc.themeName) || "").trim();
+    // Skip section headers / glossary headers
+    const low = name.toLowerCase();
+    if (
+      low === "theme name" ||
+      low === "settings" ||
+      low.indexOf("themes database") === 0 ||
+      low.indexOf("styles glossary") === 0
+    ) {
+      return false;
+    }
     if (name) return true;
     if (
-      cell(row, sc.mainColor) ||
-      cell(row, sc.secondaryColor) ||
-      cell(row, sc.highlight) ||
-      cell(row, sc.highlightSpecial)
+      cell(row, tc.mainColor) ||
+      cell(row, tc.secondaryColor) ||
+      cell(row, tc.highlight) ||
+      cell(row, tc.highlightSpecial)
     ) {
       return true;
     }
     const f = fills || {};
-    if (
-      f["C" + excelRow] ||
-      f["D" + excelRow] ||
-      f["E" + excelRow] ||
-      f["F" + excelRow]
-    ) {
-      return true;
+    for (let i = 0; i < letters.length; i++) {
+      if (f[letters[i] + excelRow]) return true;
     }
     return false;
   }
@@ -3383,10 +3556,22 @@
   }
 
   /**
-   * Theme Selector column is a dropdown of theme names (not 0/1).
-   * Use the first non-empty A cell that matches a Theme Name in column B.
+   * Theme Selector: first non-empty selector cell that matches a known theme name.
+   * Legacy: scans column A. Revised: pass settingsSelector only (Settings values row col A).
    */
-  function findSelectedThemeName(rows, sc, themes) {
+  function findSelectedThemeName(rows, sc, themes, settingsSelector) {
+    if (settingsSelector != null && String(settingsSelector).trim() !== "") {
+      const sel = String(settingsSelector).trim();
+      const key = normalizeThemeKey(sel);
+      if (key === "0" || key === "1" || key === "true" || key === "false") {
+        return null;
+      }
+      for (let k = 0; k < themes.length; k++) {
+        const tn = String(cell(themes[k].row, sc.themeName) || "").trim();
+        if (normalizeThemeKey(tn) === key) return tn;
+      }
+      return sel; // still return for logging even if not found
+    }
     const nameSet = {};
     themes.forEach(function (t) {
       const n = normalizeThemeKey(cell(t.row, sc.themeName));
@@ -3398,12 +3583,10 @@
       const sel = String(cell(row, sc.themeSelector) || "").trim();
       if (!sel) continue;
       const key = normalizeThemeKey(sel);
-      // Skip legacy 0/1 flags if someone still has them
       if (key === "0" || key === "1" || key === "true" || key === "false") {
         continue;
       }
       if (nameSet[key]) return sel.trim();
-      // Allow match even if slightly off spacing vs catalog
       for (let k = 0; k < themes.length; k++) {
         const tn = String(cell(themes[k].row, sc.themeName) || "").trim();
         if (normalizeThemeKey(tn) === key) return tn;
@@ -3413,8 +3596,33 @@
   }
 
   /**
+   * Locate section data row in revised Style sheet.
+   * Layout: section label → column-header row → data row(s).
+   * Returns 0-based index of the first data row after headers, or -1.
+   */
+  function findRevisedSectionDataStart(rows, sectionLabel) {
+    const want = String(sectionLabel || "")
+      .trim()
+      .toLowerCase();
+    for (let i = 0; i < rows.length; i++) {
+      const label = String((rows[i] && rows[i][0]) || "")
+        .trim()
+        .toLowerCase();
+      if (label === want || label.indexOf(want) === 0) {
+        // i = section label, i+1 = headers, i+2 = first data
+        return i + 2;
+      }
+    }
+    return -1;
+  }
+
+  /**
    * Parse Style & Theme rows (+ optional cell fills) into a theme object.
    * Shared by Google Sheet and local Menu.xlsx paths.
+   *
+   * Supports:
+   * - Legacy flat Style tab (STYLE_COLUMNS)
+   * - Style and Theme Revised (gid 183083022): Settings + Themes Database sections
    */
   function parseStyleThemeFromRows(rows, fills) {
     fills = fills || {};
@@ -3422,27 +3630,75 @@
       throw new Error("Style sheet has no data row");
     }
 
-    const sc = STYLE_COLUMNS;
-    const themes = [];
+    const isRevised =
+      String(cfg.styleThemeGid) === STYLE_REVISED_GID ||
+      (rows[0] &&
+        String(rows[0][0] || "")
+          .trim()
+          .toLowerCase() === "settings");
 
-    for (let i = 1; i < rows.length; i++) {
+    // Column maps + fill letters depend on sheet layout
+    const setCols = isRevised ? STYLE_REVISED_SETTINGS : STYLE_COLUMNS;
+    const themeCols = isRevised ? STYLE_REVISED_THEME : STYLE_COLUMNS;
+    const themeFillLetters = isRevised
+      ? ["B", "C", "D", "E"]
+      : ["C", "D", "E", "F"];
+    const bgColorFillLetter = isRevised ? "B" : "G";
+
+    // --- Board-wide settings row ---
+    let boardRowIndex = STYLE_BOARD_WIDE_ROW_INDEX;
+    let themesStart = 1;
+    let settingsSelector = null;
+
+    if (isRevised) {
+      const settingsData = findRevisedSectionDataStart(rows, "settings");
+      if (settingsData < 0) {
+        throw new Error(
+          "Style Revised: could not find Settings section (label → headers → values)"
+        );
+      }
+      boardRowIndex = settingsData;
+      const themesData = findRevisedSectionDataStart(rows, "themes database");
+      themesStart = themesData >= 0 ? themesData : settingsData + 1;
+      settingsSelector = cell(rows[boardRowIndex], setCols.themeSelector);
+    }
+
+    const themes = [];
+    for (let i = themesStart; i < rows.length; i++) {
       const row = rows[i];
       if (!row || !row.some((v) => v != null && String(v).trim() !== "")) {
         continue;
       }
       const excelRow = i + 1;
-      // Theme catalog = cols A–F only (isStyleThemeRow checks name/colors)
-      if (!isStyleThemeRow(row, excelRow, fills)) continue;
+      if (
+        !isStyleThemeRow(
+          row,
+          excelRow,
+          fills,
+          themeCols,
+          themeFillLetters
+        )
+      ) {
+        continue;
+      }
       themes.push({ row: row, excelRow: excelRow });
     }
+
     if (!themes.length) throw new Error("Style sheet has no theme rows");
 
-    const selectedName = findSelectedThemeName(rows, sc, themes);
+    const selectedName = findSelectedThemeName(
+      rows,
+      isRevised
+        ? { themeSelector: setCols.themeSelector, themeName: themeCols.themeName }
+        : STYLE_COLUMNS,
+      themes,
+      isRevised ? settingsSelector : null
+    );
     let chosen = null;
     if (selectedName) {
       const key = normalizeThemeKey(selectedName);
       chosen = themes.find(function (t) {
-        return normalizeThemeKey(cell(t.row, sc.themeName)) === key;
+        return normalizeThemeKey(cell(t.row, themeCols.themeName)) === key;
       });
     }
     if (!chosen) {
@@ -3453,34 +3709,78 @@
               selectedName +
               '" not found; using first theme:'
           : "No Theme Selector value; using first theme:",
-        cell(chosen.row, sc.themeName) || "row " + chosen.excelRow
+        cell(chosen.row, themeCols.themeName) || "row " + chosen.excelRow
       );
     }
 
     const first = chosen.row;
     const er = chosen.excelRow;
-    const themeName = String(cell(first, sc.themeName) || "").trim() || null;
+    const themeName =
+      String(cell(first, themeCols.themeName) || "").trim() || null;
 
-    // A–F from selected theme only
+    // Theme palette — fills use B–E (revised) or C–F (legacy)
     const main = resolveColor(
-      cell(first, sc.mainColor),
-      fills["C" + er],
+      cell(first, themeCols.mainColor),
+      fills[themeFillLetters[0] + er],
       "#000000"
     );
     const secondary = resolveColor(
-      cell(first, sc.secondaryColor),
-      fills["D" + er],
+      cell(first, themeCols.secondaryColor),
+      fills[themeFillLetters[1] + er],
       "#ffffff"
     );
     const highlight =
-      resolveColor(cell(first, sc.highlight), fills["E" + er], "#26bbcb") ||
-      "#26bbcb";
+      resolveColor(
+        cell(first, themeCols.highlight),
+        fills[themeFillLetters[2] + er],
+        "#26bbcb"
+      ) || "#26bbcb";
     const highlightSpecial =
       resolveColor(
-        cell(first, sc.highlightSpecial),
-        fills["F" + er],
+        cell(first, themeCols.highlightSpecial),
+        fills[themeFillLetters[3] + er],
         "#fff900"
       ) || "#fff900";
+
+    // Pattern Color 1 / 2 are dropdowns (values from the "Color Picker (for dropdowns)" glossary).
+    // If the chosen theme row leaves the cell blank, inherit the selection label from
+    // the defaults row (Toki Default / row 6 in the Themes Database).
+    let patternColor1Choice = isRevised
+      ? String(cell(first, themeCols.patternColor1) || "").trim() || null
+      : null;
+    let patternColor2Choice = isRevised
+      ? String(cell(first, themeCols.patternColor2) || "").trim() || null
+      : null;
+
+    if (isRevised && (!patternColor1Choice || !patternColor2Choice)) {
+      let defaultRow = null;
+      const defKey = "tokidefault";
+      for (let t of themes) {
+        if (normalizeThemeKey(cell(t.row, themeCols.themeName)) === defKey) {
+          defaultRow = t.row;
+          break;
+        }
+      }
+      if (!defaultRow && themes.length) {
+        defaultRow = themes[0].row;
+      }
+      if (defaultRow) {
+        if (!patternColor1Choice) {
+          patternColor1Choice =
+            String(cell(defaultRow, themeCols.patternColor1) || "").trim() || null;
+        }
+        if (!patternColor2Choice) {
+          patternColor2Choice =
+            String(cell(defaultRow, themeCols.patternColor2) || "").trim() || null;
+        }
+      }
+    }
+
+    // Ensure we always have explicit dropdown labels for resolution (never null)
+    if (isRevised) {
+      if (!patternColor1Choice) patternColor1Choice = "main color";
+      if (!patternColor2Choice) patternColor2Choice = "secondary color";
+    }
 
     const palette = {
       mainColor: main,
@@ -3489,38 +3789,54 @@
       highlightSpecial: highlightSpecial,
     };
 
-    // G2–M2 board-wide (always first data row — independent of Theme Selector)
-    const boardRow = rows[STYLE_BOARD_WIDE_ROW_INDEX] || first;
-    const boardEr = STYLE_BOARD_WIDE_ROW_INDEX + 1; // excel row 2
+    const boardRow = rows[boardRowIndex] || rows[1];
+    const boardEr = boardRowIndex + 1;
 
     const bgColor = parseBgColor(
-      cell(boardRow, sc.bgColor),
-      fills["G" + boardEr],
+      cell(boardRow, setCols.bgColor),
+      fills[bgColorFillLetter + boardEr],
       palette
     );
-    const bgImgResolved = resolveStageBgImageFromRows(rows, sc);
+    // BG Pattern (revised only)
+    const bgPatternRaw =
+      setCols.bgPattern != null
+        ? String(cell(boardRow, setCols.bgPattern) || "").trim()
+        : "";
+    const bgPattern =
+      !bgPatternRaw ||
+      /^(none|off|0|false|no|-|—)$/i.test(bgPatternRaw)
+        ? null
+        : bgPatternRaw;
+    const bgImgResolved = resolveStageBgImageFromRows(
+      rows,
+      setCols,
+      boardRowIndex
+    );
     const bgImage = bgImgResolved.path;
-    const bgBlur = parseUnit01(cell(boardRow, sc.bgBlur), 0);
-    const bgBlendMode = parseBgBlendMode(cell(boardRow, sc.bgBlendMode));
-    const bgOpacity = parseUnit01(cell(boardRow, sc.bgOpacity), 1);
-    const bgScrollSpeed = parseBgScrollSpeed(cell(boardRow, sc.bgScrollSpeed), 1);
+    const bgBlur = parseUnit01(cell(boardRow, setCols.bgBlur), 0);
+    const bgBlendMode = parseBgBlendMode(cell(boardRow, setCols.bgBlendMode));
+    const bgOpacity = parseUnit01(cell(boardRow, setCols.bgOpacity), 1);
+    const bgScrollSpeed = parseBgScrollSpeed(
+      cell(boardRow, setCols.bgScrollSpeed),
+      1
+    );
     const slideshowSpeed = parseSlideshowSpeed(
-      cell(boardRow, sc.slideshowSpeed),
+      cell(boardRow, setCols.slideshowSpeed),
       3
     );
     const showVersion =
-      sc.showVersion != null
-        ? parseYesNo(cell(boardRow, sc.showVersion), false)
+      setCols.showVersion != null
+        ? parseYesNo(cell(boardRow, setCols.showVersion), false)
         : false;
     const encoreSpotlightType = parseEncoreSpotlightType(
-      sc.encoreSpotlightType != null
-        ? cell(boardRow, sc.encoreSpotlightType)
+      setCols.encoreSpotlightType != null
+        ? cell(boardRow, setCols.encoreSpotlightType)
         : "",
       "hard"
     );
     const encoreSpotlightColor = parseEncoreSpotlightColor(
-      sc.encoreSpotlightColor != null
-        ? cell(boardRow, sc.encoreSpotlightColor)
+      setCols.encoreSpotlightColor != null
+        ? cell(boardRow, setCols.encoreSpotlightColor)
         : "",
       "black"
     );
@@ -3532,6 +3848,9 @@
       highlight: highlight,
       highlightSpecial: highlightSpecial,
       bgColor: bgColor,
+      bgPattern: bgPattern,
+      patternColor1Choice: patternColor1Choice,
+      patternColor2Choice: patternColor2Choice,
       bgImage: bgImage,
       bgBlur: bgBlur,
       bgBlendMode: bgBlendMode,
@@ -3546,6 +3865,7 @@
     };
     tokiInfo(
       "Style theme:",
+      isRevised ? "(revised)" : "(legacy)",
       theme.themeName || "(unnamed)",
       "main",
       theme.mainColor,
@@ -3553,6 +3873,10 @@
       theme.secondaryColor,
       "bgColor",
       theme.bgColor,
+      "bgPattern",
+      theme.bgPattern || "(none)",
+      "patternColors",
+      (theme.patternColor1Choice || "main") + "/" + (theme.patternColor2Choice || "secondary"),
       "bgImage raw=",
       JSON.stringify(bgImgResolved.raw),
       "from",
@@ -3579,6 +3903,9 @@
     parsed.highlight = theme.highlight;
     parsed.highlightSpecial = theme.highlightSpecial;
     parsed.bgColor = theme.bgColor;
+    parsed.bgPattern = theme.bgPattern != null ? theme.bgPattern : null;
+    parsed.patternColor1Choice = theme.patternColor1Choice || null;
+    parsed.patternColor2Choice = theme.patternColor2Choice || null;
     parsed.bgImage = theme.bgImage;
     parsed.bgBlur = theme.bgBlur;
     parsed.bgBlendMode = theme.bgBlendMode;
@@ -3603,9 +3930,17 @@
     const gid = cfg.styleThemeGid;
     if (gid == null || gid === "") return null;
 
+    // Try both the legacy tab name and the revised tab name for fills
     let fills = {};
+    const styleNamesToTry = ["Style and Theme Revised", "Style"];
     try {
-      fills = await loadSheetFillsByName("Style");
+      for (const name of styleNamesToTry) {
+        const meta = await loadSheetStylesByName(name);
+        if (Object.keys(meta.fills || {}).length || Object.keys(meta.fonts || {}).length) {
+          fills = meta.fills || {};
+          break;
+        }
+      }
     } catch (err) {
       console.warn("Style sheet fills unavailable:", err);
     }
@@ -8305,6 +8640,7 @@
 
   function startGalaxyScroll() {
     applyStageBackground();
+    applyBgPattern();
     // Color-only (no image): no pan/crossfade loop
     if (!config.bgImage) return;
     if (!els.galaxyA) return;
@@ -8571,6 +8907,9 @@
       bgBlur: config.bgBlur,
       bgBlendMode: config.bgBlendMode,
       bgOpacity: config.bgOpacity,
+      bgPattern: config.bgPattern,
+      pat1: config.patternColor1,
+      pat2: config.patternColor2,
       bg: config.bgScrollSpeed,
       speed: config.slideshowSpeed,
       hl: config.highlight,
@@ -8626,6 +8965,7 @@
       renderList();
       renderFooterBoxes(); // includes fitFooterBoxes()
       applyStageBackground();
+      applyBgPattern();
       // Image may be enabled after a color-only load — start pan if needed
       if (config.bgImage) startGalaxyScroll();
       const maxIdx =
@@ -8811,7 +9151,37 @@
             return refreshInProgress || !!refreshTimer;
 
           case "xlsxStyles":
-            return Object.keys(sheetFills || {}).length > 0 || Object.keys(sheetRich || {}).length > 0;
+            // More precise than "any data present in the globals":
+            // The high cost is the xlsx download + SheetJS style extraction for the *board tab*.
+            // We only consider it active when:
+            // - Rich text runs exist (the part that actually needs rich parsing for styled DOM).
+            // - OR fills exist *and* are being used for currently visible elements (boxes, stripes, ann).
+            // This fixes "active on handhelds even when not using rich" and "always active".
+            // Bowls boards never load board-tab xlsx styles (only shared/Style), so naturally off.
+            const hasRich = Object.keys(sheetRich || {}).length > 0;
+            if (hasRich) return true;
+
+            const hasFills = Object.keys(sheetFills || {}).length > 0;
+            if (!hasFills || isPreviewWall()) return false;
+
+            // Visible elements that depend on board xlsx fills
+            const stripes = document.getElementById("stripes");
+            const proteinBox = document.getElementById("protein-box");
+            const saucesBox = document.getElementById("sauces-box");
+            const drinksBox = document.getElementById("footer-drinks-box") || document.getElementById("drink-box-title");
+            const ann = document.getElementById("announcement-body");
+
+            const stripesOn = !!(stripes && !stripes.hidden);
+            const boxesOn = !!(proteinBox && !proteinBox.hidden) ||
+                            !!(saucesBox && !saucesBox.hidden) ||
+                            !!(drinksBox && !drinksBox.hidden);
+            const annOn = !!(ann && !ann.hidden);
+
+            if (isDrinks) {
+              return stripesOn || boxesOn || annOn;
+            }
+            // handhelds (and potentially others that load board styles) use fills for boxes
+            return boxesOn;
 
           case "footerBoxes":
             const pb = document.getElementById("protein-box");
@@ -9070,32 +9440,36 @@
 
     document.body.appendChild(_debugHudEl);
 
-    // Append version stamp to header if Show Version enabled in Style.
-    // This is the only place the version appears now (not in disclaimer).
-    if (config && config.showVersion) {
-      const titleEl = _debugHudEl.querySelector(".title");
-      if (titleEl) {
-        fetchBuildInfo().then(function (info) {
-          if (!titleEl || !(config && config.showVersion)) {
-            if (titleEl) titleEl.textContent = "Toki Debug";
-            return;
-          }
-          const hash = info.hash || "unknown";
-          const date = info.date || "";
-          const parts = ["Toki Debug"];
-          if (hash) parts.push(hash);
-          if (date) parts.push(date);
-          titleEl.textContent = parts.join(" · ");
-          titleEl.title = [
-            info.hashFull || hash,
-            info.subject || "",
-            date || "",
-            "source: " + (info.source || ""),
-          ]
-            .filter(Boolean)
-            .join("\n");
-        });
-      }
+    // Always enrich the Toki Debug header with build info (hash + commit subject)
+    // when the HUD is shown. (The "Show Version" Style setting still controls the
+    // versionStamp feature flag; the header stamp was relocated here.)
+    const titleEl = _debugHudEl.querySelector(".title");
+    if (titleEl) {
+      fetchBuildInfo().then(function (info) {
+        if (!titleEl) {
+          return;
+        }
+        const hash = info.hash || "unknown";
+        const date = info.date || "";
+        const subj = (info.subject || "").trim();
+        const parts = ["Toki Debug"];
+        if (hash) parts.push(hash);
+        if (subj) {
+          const short = subj.length > 32 ? subj.slice(0, 29) + "…" : subj;
+          parts.push(short);
+        } else if (date) {
+          parts.push(date);
+        }
+        titleEl.textContent = parts.join(" · ");
+        titleEl.title = [
+          info.hashFull || hash,
+          info.subject || "",
+          date || "",
+          "source: " + (info.source || ""),
+        ]
+          .filter(Boolean)
+          .join("\n");
+      });
     }
 
     return _debugHudEl;
@@ -9137,7 +9511,39 @@
       `;
     }).join("");
 
-    tbody.innerHTML = rows || "<tr><td colspan='4' style='color:#666'>no flags</td></tr>";
+    const baseRows = rows || "<tr><td colspan='4' style='color:#666'>no flags</td></tr>";
+    tbody.innerHTML = baseRows;
+
+    // Special row at the very top of the table body (above all feature rows)
+    // showing the latest commit comment (push subject) from build info.
+    fetchBuildInfo().then(function (info) {
+      if (!tbody || !_debugHudEl) return;
+      const subject = info && info.subject ? String(info.subject).trim() : "";
+      if (!subject) return;
+      const safe = subject
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const hash = (info && info.hash) || "";
+      const commitRow = `
+        <tr class="debug-commit-row">
+          <td class="flag-id" title="${hash}">commit</td>
+          <td colspan="3" class="commit-subject" title="${safe}">${safe}</td>
+        </tr>
+      `;
+
+      // Update in place if already present (from prior update), else prepend.
+      // This plays nicely with frequent ticker updates.
+      let existing = tbody.querySelector(".debug-commit-row");
+      if (existing) {
+        const idCell = existing.querySelector(".flag-id");
+        if (idCell) idCell.title = hash;
+        const subjCell = existing.querySelector(".commit-subject");
+        if (subjCell) subjCell.textContent = safe;
+        return;
+      }
+      tbody.innerHTML = commitRow + tbody.innerHTML;
+    });
   }
 
   function updateDebugVisuals() {
