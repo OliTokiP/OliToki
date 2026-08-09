@@ -708,8 +708,8 @@ body.preview-wall #family-portrait-stage .family-portrait-item {
   /* "color" = hue+sat from this plate, luminosity from gray Sticker-Body.png */
   mix-blend-mode: color;
   pointer-events: none;
-  -webkit-mask-image: url("../assets/Sticker-Body.png");
-  mask-image: url("../assets/Sticker-Body.png");
+  -webkit-mask-image: url("../assets/stickers/Sticker-Body.webp");
+  mask-image: url("../assets/stickers/Sticker-Body.webp");
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;

@@ -80,15 +80,50 @@
     }
   }
 
+  /**
+   * Prefer WebP when the path is a common raster. Sheet/source may still say
+   * .png/.jpg — we request .webp (masters kept as fallback via attachWebpFallback).
+   */
+  function toWebpPath(path) {
+    if (path == null || path === "") return path;
+    const s = String(path);
+    if (/\.webp$/i.test(s)) return s;
+    if (/\.(png|jpe?g|gif)$/i.test(s)) {
+      return s.replace(/\.(png|jpe?g|gif)$/i, ".webp");
+    }
+    return s;
+  }
+
+  /**
+   * If a .webp 404s, try .png then .jpg (one chain per element).
+   * Safe when only one format exists.
+   */
+  function attachWebpFallback(el) {
+    if (!el || el.dataset.webpFbBound === "1") return;
+    el.dataset.webpFbBound = "1";
+    el.addEventListener("error", function onRasterError() {
+      const src = el.getAttribute("src") || "";
+      if (/\.webp$/i.test(src)) {
+        el.src = src.replace(/\.webp$/i, ".png");
+        return;
+      }
+      if (/\.png$/i.test(src)) {
+        el.src = src.replace(/\.png$/i, ".jpg");
+        return;
+      }
+      el.removeEventListener("error", onRasterError);
+    });
+  }
+
   /** Prefer stage-sized galaxy in the wall (not 3600× masters ×4). */
   function wallFriendlyBgPath(path) {
     if (!path || !isPreviewWall()) return path;
     const s = String(path);
     if (s.indexOf("galaxy-bg") === -1) return path;
     if (s.indexOf("galaxy-bg-sm") !== -1 || s.indexOf("galaxy-bg-xs") !== -1) {
-      return s;
+      return toWebpPath(s);
     }
-    return "assets/bgs/galaxy-bg-sm.jpg";
+    return toWebpPath("assets/bgs/galaxy-bg-sm.jpg");
   }
 
   const STAGE_W = 1920;
@@ -184,8 +219,10 @@
     "Before placing your order, please inform us if you have a food allergy.<br />" +
     "Consuming raw or undercooked food may lead to foodborne illness.";
 
-  const DEFAULT_BG_IMAGE = "assets/bgs/galaxy-bg.jpg";
+  const DEFAULT_BG_IMAGE = "assets/bgs/galaxy-bg.webp";
   const BG_IMAGE_FOLDER = "assets/bgs";
+  const STICKER_BODY_SRC = "assets/stickers/Sticker-Body.webp";
+  const STICKER_SHADOW_SRC = "assets/stickers/Sticker-Shadow.webp";
   /** Blur 1.0 → this many CSS px (0 = filter disabled entirely). */
   const BG_BLUR_MAX_PX = 40;
   /**
@@ -582,9 +619,15 @@
     }
     const s = String(imageName).replace(/^\/+/, "").trim();
     if (!s) return null;
-    if (s.indexOf("food-pics/") === 0) return s;
+    if (s.indexOf("food-pics/") === 0) return toWebpPath(s);
     const folder = (cfg.imageFolder || "food-pics").replace(/\/+$/, "");
-    return folder + "/" + s;
+    // Sheet may list "foo.png" or "foo" — attach folder then prefer .webp
+    let path = folder + "/" + s;
+    if (!/\.(png|jpe?g|gif|webp)$/i.test(s)) {
+      path = path + ".webp";
+      return path;
+    }
+    return toWebpPath(path);
   }
 
   function formatPrice(value) {
@@ -1179,8 +1222,11 @@
       return null;
     }
     const file = token.replace(/^\/+/, "");
-    if (file.indexOf("assets/") === 0 || file.indexOf("/") !== -1) return file;
-    return BG_IMAGE_FOLDER + "/" + file;
+    let path =
+      file.indexOf("assets/") === 0 || file.indexOf("/") !== -1
+        ? file
+        : BG_IMAGE_FOLDER + "/" + file;
+    return toWebpPath(path);
   }
 
   /**
@@ -1343,6 +1389,7 @@
         return;
       }
       el.hidden = false;
+      attachWebpFallback(el);
       if (el.getAttribute("src") !== imagePath) {
         tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
         el.src = imagePath;
@@ -2363,10 +2410,11 @@
 
       if (token && /\.(jpe?g|png|webp|gif)$/i.test(low)) {
         const file = token.replace(/^\/+/, "");
-        const path =
+        const path = toWebpPath(
           file.indexOf("assets/") === 0 || file.indexOf("food-pics/") === 0
             ? file
-            : BG_IMAGE_FOLDER + "/" + file;
+            : BG_IMAGE_FOLDER + "/" + file
+        );
         // Galaxy-style photos are dark → Secondary (white) text reads best
         return {
           mode: "image",
@@ -7317,6 +7365,7 @@
       img.className = "family-portrait-item";
       img.alt = it.name || "";
       img.draggable = false;
+      attachWebpFallback(img);
       img.src = it.image;
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
@@ -7345,9 +7394,13 @@
     el.className = "family-portrait-sticker";
     el.setAttribute("aria-hidden", "true");
     el.innerHTML =
-      '<img class="new-sticker-shadow" src="assets/Sticker-Shadow.png" alt="" draggable="false" />' +
+      '<img class="new-sticker-shadow" src="' +
+      STICKER_SHADOW_SRC +
+      '" alt="" draggable="false" />' +
       '<div class="new-sticker-body">' +
-      '<img class="new-sticker-body-img" src="assets/Sticker-Body.png" alt="" draggable="false" />' +
+      '<img class="new-sticker-body-img" src="' +
+      STICKER_BODY_SRC +
+      '" alt="" draggable="false" />' +
       '<span class="new-sticker-tint"></span>' +
       "</div>" +
       '<span class="new-sticker-label">New!</span>';
@@ -7772,19 +7825,19 @@
     };
 
     const applySrc = function () {
+      attachWebpFallback(img);
       img.onload = function () {
         show();
       };
-      img.onerror = function () {
-        img.classList.remove("visible", "is-kb-in");
-        img.hidden = true;
-        img.removeAttribute("src");
-      };
-      if (img.getAttribute("src") === item.image) {
+      if (
+        img.getAttribute("src") === item.image &&
+        img.complete &&
+        img.naturalWidth
+      ) {
         show();
         return;
       }
-      // Swap while held at zoomMin — no scale snap
+      // Swap while held at zoomMin — no scale snap (.webp preferred)
       img.src = item.image;
     };
 
