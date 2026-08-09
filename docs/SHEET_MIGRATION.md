@@ -3,13 +3,13 @@
 Living notes for the **revised sheet tabs** and runtime cutovers.  
 Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on Revised.
 
-**Last updated:** 2026-08-09  
+**Last updated:** 2026-08-09 (Board 1 migrated to revised)  
 **Spreadsheet:** `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
 | Revised tab | GID | Live counterpart | Runtime status |
 |-------------|-----|------------------|----------------|
-| Style and Theme Revised | `183083022` | Style and Theme `1076652078` | **Board 1 live** (`config.js` → this gid) |
-| Board 1 Revised | `1058015863` | Board 1 `0` | Not cut over yet |
+| Style and Theme | `183083022` | Style and Theme (old) `1076652078` | **All boards live** (configs → this gid) |
+| Board 1 Revised | `1058015863` | Board 1 `0` | **Board 1 live** (`config.js` → this gid; parser supports restructured Settings/Inventory) |
 | Proteins Revised | `1420775786` | Proteins `1191392779` | Not cut over yet |
 
 Related:
@@ -26,7 +26,7 @@ Related:
 **Do not invent structure.** Fetch the tab and map headers → indices.
 
 ```bash
-python3 scripts/gsheet_client.py get --json "'Style and Theme Revised'!A1:L5"
+python3 scripts/gsheet_client.py get --json "'Style and Theme'!A1:L5"
 ```
 
 ### Section pattern (all revised tabs)
@@ -54,7 +54,7 @@ Code helper pattern: `findRevisedSectionDataStart(rows, "settings")` → returns
 
 Example (2026-08): **BG Pattern** inserted at col C → Wallpaper and everything after it moved +1.
 
-### Style Revised — Settings columns (verified live)
+### Style and Theme (revised) — Settings columns (verified live)
 
 One values row under Settings (excel row 3 / 0-based index 2):
 
@@ -73,7 +73,7 @@ One values row under Settings (excel row 3 / 0-based index 2):
 | K | Encore Spotlight Type | 10 | `encoreSpotlightType` | Hard \| Soft |
 | L | Encore Spotlight Color | 11 | `encoreSpotlightColor` | Black \| Highlight |
 
-### Style Revised — Themes Database columns (verified live)
+### Style and Theme (revised) — Themes Database columns (verified live)
 
 | Col | Header | Index | Runtime field |
 |-----|--------|------:|---------------|
@@ -86,7 +86,7 @@ One values row under Settings (excel row 3 / 0-based index 2):
 
 Toki Default may have **empty hex** — fills are the source of truth (`resolveColor` + xlsx fills).
 
-### Style Revised — what broke when we first cut over (lessons)
+### Style and Theme (revised) — what broke when we first cut over (lessons)
 
 | Symptom | Cause |
 |---------|--------|
@@ -167,7 +167,7 @@ When reviewing sheets with `spreadsheets.values.get` (formatted strings only), s
 
 ---
 
-## 4. Glossary design notes (Style Revised)
+## 4. Glossary design notes (Style and Theme revised)
 
 ### Color Picker column and `none` first
 
@@ -214,7 +214,7 @@ Recorded from author review 2026-08-09:
 | 7 | Toki Default empty hex | **Fill colors** are the source of truth when hex text is blank |
 | 8 | `none` top of Color Picker | **Validation range trick** (§4) |
 | 9 | Label case | Standardize later |
-| 10 | Pilot only Style + Board 1 + Proteins Revised | Boards 2–3 / Sauces / Board 4 later |
+| 10 | Pilot only Style + Board 1 + Proteins Revised | Style+Theme now on all boards; others later |
 
 ---
 
@@ -254,7 +254,7 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 
 ## 7. Parser / cutover checklist
 
-### Style Revised (gid `183083022`)
+### Style and Theme (revised, gid `183083022`)
 
 - [x] Detect Settings / Themes Database sections (label → headers → data)
 - [x] Map Settings columns via `STYLE_REVISED_SETTINGS` (not legacy G–Q)
@@ -263,13 +263,15 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 - [x] Theme Selector → Themes Database name match; fills when hex blank
 - [x] Board 1 `config.js` points `styleThemeGid` at Revised
 - [x] Wire **BG Pattern** (col C): parsed in Settings; Pattern Color 1/2 dropdown labels (cols K/L) read from chosen theme row, falling back to Toki Default / row 6 when blank (inheritance for defaults); resolved via `resolveNamedThemeColor` against current theme palette (supports highlight etc.); re-uses stripe anim on `#bg-pattern`
-- [ ] Boards 2–4 configs still use legacy Style gid until ready
+- [x] Hooked revised "Style and Theme" (gid 183083022) to all boards (config2/3/4 + name updates for tab rename)
+- [x] Board 1 data migrated to gid 1058015863 (restructured Settings top + Inventory headers below; parser + attach updated; config updated)
 
-### Board / Proteins Revised (not started)
+### Board / Proteins Revised (pilot done; full rollout later)
 
-- [ ] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3
+- [x] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3 (Board 1 migrated; parser updated for restructured layout)
 - [ ] Protein Settings + Inventory; ignore or implement New/Image/Include per §6
-- [ ] Point board gid / `proteinSheetGid` at Revised gids only after smoke test
+- [x] Style+Theme revised hooked to boards 2–4 (via config*.js + name handling)
+- [x] Point board gid for Board 1 at Revised (1058015863); others pending
 - [ ] Mirror pattern to remaining boards and Sauces
 - [ ] Update [DATA_MODEL.md](./DATA_MODEL.md) + configs; bump `schemaVersion` when freezing
 
@@ -279,7 +281,7 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 
 ```text
 # Formatted strings only (hides fills, percent raw, checkbox truth sometimes):
-python3 scripts/gsheet_client.py get --json "'Style and Theme Revised'!A1:I20"
+python3 scripts/gsheet_client.py get --json "'Style and Theme'!A1:I20"
 
 # Prefer grid / unformatted when auditing types:
 # spreadsheets.get includeGridData + effectiveValue.numberValue / boolValue

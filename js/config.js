@@ -1,20 +1,19 @@
 /**
  * TokiMenu — Board 1 (presentation layout: bowls)
  *
- * Sheet tab: "Board 1" (gid=0). Display title lives in Menu Title cell.
+ * Sheet tab: "Board 1 Revised" (gid=1058015863). Restructured:
+ *   - Settings block (label → headers → single data row) at top for Menu Title, Family Portrait, Presentation Mode, Include*?, Columns?
+ *   - Inventory (expanding glossary): label → headers below → items (Item, Prices, New, Image, Include, etc.)
+ * Title from Settings row. Items from Inventory section.
+ *
  * Theme / speeds / highlights: Style tab (styleThemeGid).
  * Debug Menu (master + per-feature switches): debugMenuGid.
  * Protein/Sauces content: shared sheets (proteinSheetGid / saucesSheetGid).
- *
- * Board 1 column schema (Family Portrait inserted at K):
- *   A Menu Title | B Item | C–E Price 1–3 | F Subtitle | G Description |
- *   H New | I Image | J Include | K Family Portrait | L Presentation Mode |
- *   M Include Protein Box? | N Sauces? | O Drinks? | P Descriptions?
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
-  googleSheetGid: "0",
-  styleThemeGid: "183083022", // Style and Theme Revised
+  googleSheetGid: "1058015863", // Board 1 Revised (restructured: Settings at top, Inventory headers below)
+  styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
   proteinSheetGid: "1191392779",
   saucesSheetGid: "1780619208",
@@ -31,23 +30,26 @@ window.TOKI_CONFIG = {
   extraItems: [],
 
   columns: {
+    // For revised Board 1, item parsing uses Inventory section cols (title/settings from top Settings block)
     title: 0,
-    item: 1,
+    item: 0,
     price: null,
-    price1: 2,
-    price2: 3,
-    price3: 4,
-    subtitle: 5,
-    description: 6,
-    isNew: 7,
-    image: 8,
-    include: 9,
-    familyPortrait: 10,
-    presentationMode: 11,
-    includeProteinBox: 12,
-    includeSaucesBox: 13,
-    includeDrinksBox: 14,
-    includeDescriptions: 15,
+    price1: 1,
+    price2: 2,
+    price3: 3,
+    subtitle: 4,
+    description: 5,
+    isNew: 6,
+    image: 7,
+    include: 8,
+    // Settings block (top) provides: familyPortrait, presentationMode, include*Box, menuColumns, title
+    // (see parse logic)
+    familyPortrait: null,
+    presentationMode: null,
+    includeProteinBox: null,
+    includeSaucesBox: null,
+    includeDrinksBox: null,
+    includeDescriptions: null,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

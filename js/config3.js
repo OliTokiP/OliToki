@@ -12,7 +12,7 @@
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "1427118423",
-  styleThemeGid: "1076652078",
+  styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
   proteinSheetGid: "1191392779",
   saucesSheetGid: "1780619208",

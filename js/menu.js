@@ -303,7 +303,38 @@
   const BOWLS_COLUMNS = BOARD_COLUMNS;
 
   /**
-   * Legacy Style & Theme tab (gid 1076652078) — flat layout:
+   * Board 1 Revised (gid 1058015863) — restructured per migration doc.
+   * Settings block (label → headers → 1 data row) at top for single selections:
+   *   Menu Title, Family Portrait, Presentation Mode, Include * Box?, Columns?
+   * Inventory (expanding glossary) has headers below the Settings data:
+   *   Item | Price 1 | ... | Include
+   * (No per-item FP / box includes; those live only in top Settings.)
+   */
+  const BOARD_REVISED_GID = "1058015863";
+  const BOARD_REVISED_SETTINGS = {
+    title: 0,
+    familyPortrait: 1,
+    presentationMode: 2,
+    includeProteinBox: 3,
+    includeSaucesBox: 4,
+    includeDrinksBox: 5,
+    includeDescriptions: 6,
+    menuColumns: 7,
+  };
+  const BOARD_REVISED_INVENTORY = {
+    item: 0,
+    price1: 1,
+    price2: 2,
+    price3: 3,
+    subtitle: 4,
+    description: 5,
+    isNew: 6,
+    image: 7,
+    include: 8,
+  };
+
+  /**
+   * Legacy Style & Theme tab (gid 1076652078, now "Style and Theme (old)") — flat layout:
    * Theme palette (selected row — Theme Selector in col A):
    *   A Theme Selector | B Theme Name | C Main | D Secondary |
    *   E Highlight | F Highlight Special
@@ -336,8 +367,8 @@
   };
 
   /**
-   * Style and Theme Revised (gid 183083022) — sectioned layout (verified live API).
-   * See docs/SHEET_MIGRATION.md § Style Revised layout.
+   * Style and Theme (gid 183083022, revised) — sectioned layout (verified live API).
+   * See docs/SHEET_MIGRATION.md § Style and Theme (revised) layout.
    *
    * Settings (rows: section label → column headers → ONE values row):
    *   A Theme Selector | B BG Color | C BG Pattern | D BG Wallpaper |
@@ -351,7 +382,7 @@
    *
    * When columns are inserted in Settings, shift every index AFTER the insert.
    */
-  const STYLE_REVISED_GID = "183083022";
+  const STYLE_REVISED_GID = "183083022"; // "Style and Theme" tab (revised layout)
   const STYLE_REVISED_SETTINGS = {
     themeSelector: 0,
     bgColor: 1,
@@ -405,8 +436,8 @@
   const cfg = Object.assign(
     {
       googleSheetId: "",
-      googleSheetGid: "0",
-      styleThemeGid: "1076652078",
+      googleSheetGid: "0", // legacy; board1 now uses 1058015863 via config
+      styleThemeGid: "183083022", // Style and Theme (revised)
       proteinSheetGid: null, // shared Protein sheet (all boards)
       saucesSheetGid: null, // shared Sauces sheet (all boards)
       drinksSheetGid: null, // board 4: drink box content (items / overview)
@@ -2143,9 +2174,39 @@
 
   function parsedMenuFromRows(rows, columnMap) {
     const c = columnMap || col;
-    const dataRows = rows
-      .slice(1)
-      .filter((r) => r && r.some((v) => v != null && String(v).trim() !== ""));
+
+    // Detect Board 1 Revised structure (Settings block + Inventory block with headers below)
+    // Prefer row structure (for xlsx local with tab names), fallback to gid.
+    const isBoardRevised =
+      (rows &&
+        rows[0] &&
+        String(rows[0][0] || "")
+          .trim()
+          .toLowerCase() === "settings") ||
+      String(cfg.googleSheetGid || "") === BOARD_REVISED_GID;
+
+    let dataRows;
+    let settingsRow = null;
+    let itemColMap = c;
+    if (isBoardRevised) {
+      // Settings: single row of board-wide choices (title, FP, mode, includes, columns)
+      const settingsIdx = findRevisedSectionDataStart(rows, "settings");
+      if (settingsIdx >= 0 && settingsIdx < rows.length) {
+        settingsRow = rows[settingsIdx];
+      }
+      // Inventory items: headers after "Inventory" label; data after that
+      const invIdx = findRevisedSectionDataStart(rows, "inventory");
+      const invStart = invIdx >= 0 ? invIdx : 4; // fallback
+      // slice(1) to skip the inventory headers row
+      dataRows = rows
+        .slice(invStart + 1)
+        .filter((r) => r && r.some((v) => v != null && String(v).trim() !== ""));
+      itemColMap = BOARD_REVISED_INVENTORY;
+    } else {
+      dataRows = rows
+        .slice(1)
+        .filter((r) => r && r.some((v) => v != null && String(v).trim() !== ""));
+    }
 
     if (dataRows.length === 0) {
       throw new Error("Spreadsheet has no data rows");
@@ -2166,35 +2227,35 @@
     let saucesSubtitle = "";
 
     for (const row of dataRows) {
-      const name = cell(row, c.item);
+      const name = cell(row, itemColMap.item);
       if (name !== "" && name != null) {
-        const imageName = cell(row, c.image);
+        const imageName = cell(row, itemColMap.image);
 
         // Prices: multi-price boards (price1/2/3) must NOT also read bowls' `price`
         // column — that index collides with New/Image on munchies sheets.
         const priceTokens = [];
         const multiPrice =
-          c.price1 != null || c.price2 != null || c.price3 != null;
+          itemColMap.price1 != null || itemColMap.price2 != null || itemColMap.price3 != null;
         if (multiPrice) {
-          [c.price1, c.price2, c.price3].forEach((idx) => {
+          [itemColMap.price1, itemColMap.price2, itemColMap.price3].forEach((idx) => {
             if (idx == null) return;
             const p = cell(row, idx);
             if (isUsablePriceCell(p)) priceTokens.push(String(p).trim());
           });
-        } else if (c.price != null) {
-          const p = cell(row, c.price);
+        } else if (itemColMap.price != null) {
+          const p = cell(row, itemColMap.price);
           if (isUsablePriceCell(p)) priceTokens.push(String(p).trim());
         }
 
         // Subtitle (munchies) and description (bowls/handhelds) are separate —
         // never fall back across column types (avoids Image filename as subtitle).
         const subtitle =
-          c.subtitle != null
-            ? String(cell(row, c.subtitle) || "").trim()
+          itemColMap.subtitle != null
+            ? String(cell(row, itemColMap.subtitle) || "").trim()
             : "";
         const description =
-          c.description != null
-            ? String(cell(row, c.description) || "").trim()
+          itemColMap.description != null
+            ? String(cell(row, itemColMap.description) || "").trim()
             : "";
 
         parsedItems.push({
@@ -2203,14 +2264,14 @@
           prices: priceTokens,
           description,
           subtitle,
-          isNew: Number(cell(row, c.isNew)) === 1,
+          isNew: Number(cell(row, itemColMap.isNew)) === 1,
           image:
             imageName !== "" &&
             imageName != null &&
             String(imageName).toLowerCase() !== "null"
               ? String(imageName).replace(/^\/+/, "")
               : null,
-          include: parseInclude(cell(row, c.include)),
+          include: parseInclude(cell(row, itemColMap.include)),
         });
       }
 
@@ -2255,59 +2316,89 @@
       saucesFill = sheetFills[cellRef(c.saucesBoxColor, 2)] || null;
     }
 
-    // Include flags — first non-empty cell in the column
-    function firstColumnInclude(colIdx, defaultVal) {
-      if (colIdx == null) return defaultVal !== false;
-      const def = defaultVal !== false;
-      for (let i = 1; i < rows.length; i++) {
-        const raw = cell(rows[i], colIdx);
-        if (raw === "" || raw == null) continue;
-        return parseInclude(raw);
-      }
-      return def;
-    }
-    const includeProteinBox = firstColumnInclude(c.includeProteinBox, true);
-    const includeSaucesBox = firstColumnInclude(c.includeSaucesBox, true);
-    // Drinks/soda footer: default OFF when column missing or blank
-    const includeDrinksBox = firstColumnInclude(c.includeDrinksBox, false);
-    // Family Portrait collage overview (Board K): default OFF
-    const familyPortrait = firstColumnInclude(c.familyPortrait, false);
-    // Presentation Mode (Board L): Slideshow | Encore — default Slideshow
+    let includeProteinBox;
+    let includeSaucesBox;
+    let includeDrinksBox;
+    let familyPortrait;
     let presentationMode = "slideshow";
-    if (c.presentationMode != null) {
-      for (let i = 1; i < rows.length; i++) {
-        const raw = cell(rows[i], c.presentationMode);
-        if (raw === "" || raw == null) continue;
-        presentationMode = parsePresentationMode(raw, "slideshow");
-        break;
-      }
-    }
-    // Descriptions: default ON when column missing (legacy boards)
-    const includeDescriptions = firstColumnInclude(
-      c.includeDescriptions,
-      true
-    );
+    let includeDescriptions;
+    let menuColumns = "auto";
+    let titleRowForTitle = first;
 
-    function firstColumnMenuColumns(colIdx) {
-      if (colIdx == null) return "auto";
-      for (let i = 1; i < rows.length; i++) {
-        const raw = cell(rows[i], colIdx);
-        if (raw === "" || raw == null) continue;
-        const s = String(raw).trim().toLowerCase();
-        if (!s || s === "auto") return "auto";
-        if (s === "1" || s === "one") return 1;
-        if (s === "2" || s === "two") return 2;
-        if (s === "3" || s === "three") return 3;
+    if (isBoardRevised && settingsRow) {
+      const rs = BOARD_REVISED_SETTINGS;
+      titleRowForTitle = settingsRow;
+      includeProteinBox = parseInclude(cell(settingsRow, rs.includeProteinBox));
+      includeSaucesBox = parseInclude(cell(settingsRow, rs.includeSaucesBox));
+      includeDrinksBox = parseInclude(cell(settingsRow, rs.includeDrinksBox));
+      familyPortrait = parseInclude(cell(settingsRow, rs.familyPortrait));
+      presentationMode = parsePresentationMode(cell(settingsRow, rs.presentationMode), "slideshow");
+      includeDescriptions = parseInclude(cell(settingsRow, rs.includeDescriptions));
+      // Columns?
+      const colRaw = cell(settingsRow, rs.menuColumns);
+      const s = String(colRaw || "").trim().toLowerCase();
+      if (!s || s === "auto") menuColumns = "auto";
+      else if (s === "1" || s === "one") menuColumns = 1;
+      else if (s === "2" || s === "two") menuColumns = 2;
+      else if (s === "3" || s === "three") menuColumns = 3;
+      else {
         const n = Number(s);
-        if (n === 1 || n === 2 || n === 3) return n;
+        menuColumns = (n === 1 || n === 2 || n === 3) ? n : "auto";
+      }
+    } else {
+      // Include flags — first non-empty cell in the column (legacy)
+      function firstColumnInclude(colIdx, defaultVal) {
+        if (colIdx == null) return defaultVal !== false;
+        const def = defaultVal !== false;
+        for (let i = 1; i < rows.length; i++) {
+          const raw = cell(rows[i], colIdx);
+          if (raw === "" || raw == null) continue;
+          return parseInclude(raw);
+        }
+        return def;
+      }
+      includeProteinBox = firstColumnInclude(c.includeProteinBox, true);
+      includeSaucesBox = firstColumnInclude(c.includeSaucesBox, true);
+      // Drinks/soda footer: default OFF when column missing or blank
+      includeDrinksBox = firstColumnInclude(c.includeDrinksBox, false);
+      // Family Portrait collage overview (Board K): default OFF
+      familyPortrait = firstColumnInclude(c.familyPortrait, false);
+      // Presentation Mode (Board L): Slideshow | Encore — default Slideshow
+      if (c.presentationMode != null) {
+        for (let i = 1; i < rows.length; i++) {
+          const raw = cell(rows[i], c.presentationMode);
+          if (raw === "" || raw == null) continue;
+          presentationMode = parsePresentationMode(raw, "slideshow");
+          break;
+        }
+      }
+      // Descriptions: default ON when column missing (legacy boards)
+      includeDescriptions = firstColumnInclude(
+        c.includeDescriptions,
+        true
+      );
+
+      function firstColumnMenuColumns(colIdx) {
+        if (colIdx == null) return "auto";
+        for (let i = 1; i < rows.length; i++) {
+          const raw = cell(rows[i], colIdx);
+          if (raw === "" || raw == null) continue;
+          const s = String(raw).trim().toLowerCase();
+          if (!s || s === "auto") return "auto";
+          if (s === "1" || s === "one") return 1;
+          if (s === "2" || s === "two") return 2;
+          if (s === "3" || s === "three") return 3;
+          const n = Number(s);
+          if (n === 1 || n === 2 || n === 3) return n;
+          return "auto";
+        }
         return "auto";
       }
-      return "auto";
+      menuColumns = firstColumnMenuColumns(c.menuColumns);
     }
-    const menuColumns = firstColumnMenuColumns(c.menuColumns);
 
     const out = {
-      title: String(cell(first, c.title) || ""),
+      title: String(cell(titleRowForTitle, isBoardRevised ? BOARD_REVISED_SETTINGS.title : c.title) || ""),
       items: parsedItems,
       includeDescriptions: includeDescriptions,
       menuColumns: menuColumns,
@@ -3622,7 +3713,7 @@
    *
    * Supports:
    * - Legacy flat Style tab (STYLE_COLUMNS)
-   * - Style and Theme Revised (gid 183083022): Settings + Themes Database sections
+   * - Style and Theme (gid 183083022, revised): Settings + Themes Database sections
    */
   function parseStyleThemeFromRows(rows, fills) {
     fills = fills || {};
@@ -3654,7 +3745,7 @@
       const settingsData = findRevisedSectionDataStart(rows, "settings");
       if (settingsData < 0) {
         throw new Error(
-          "Style Revised: could not find Settings section (label → headers → values)"
+          "Style and Theme (revised): could not find Settings section (label → headers → values)"
         );
       }
       boardRowIndex = settingsData;
@@ -3930,9 +4021,9 @@
     const gid = cfg.styleThemeGid;
     if (gid == null || gid === "") return null;
 
-    // Try both the legacy tab name and the revised tab name for fills
+    // Try the (revised) "Style and Theme" tab name (and fallbacks) for fills from xlsx
     let fills = {};
-    const styleNamesToTry = ["Style and Theme Revised", "Style"];
+    const styleNamesToTry = ["Style and Theme", "Style and Theme (old)", "Style"];
     try {
       for (const name of styleNamesToTry) {
         const meta = await loadSheetStylesByName(name);
@@ -4187,7 +4278,13 @@
     // Re-read include flags from board rows if present
     let flagP = includeP;
     let flagS = includeS;
-    if (boardRows && col.includeProteinBox != null) {
+    const isRevBoard = String(cfg.googleSheetGid || "") === BOARD_REVISED_GID ||
+      (boardRows && boardRows[0] && String(boardRows[0][0] || "").trim().toLowerCase() === "settings");
+    if (isRevBoard) {
+      // already read from Settings block in main parse
+      if (parsed.proteinBox && parsed.proteinBox.include !== undefined) flagP = !!parsed.proteinBox.include;
+      if (parsed.saucesBox && parsed.saucesBox.include !== undefined) flagS = !!parsed.saucesBox.include;
+    } else if (boardRows && col.includeProteinBox != null) {
       flagP = true;
       let found = false;
       for (let i = 1; i < boardRows.length; i++) {
@@ -4199,7 +4296,9 @@
       }
       if (!found) flagP = true;
     }
-    if (boardRows && col.includeSaucesBox != null) {
+    if (isRevBoard) {
+      // already handled above
+    } else if (boardRows && col.includeSaucesBox != null) {
       flagS = true;
       let found = false;
       for (let i = 1; i < boardRows.length; i++) {
@@ -4287,7 +4386,14 @@
     prefetched = prefetched || {};
 
     let flagD = !!(parsed.footerDrinksBox && parsed.footerDrinksBox.include);
-    if (boardRows && col.includeDrinksBox != null) {
+    const isRevBoard = String(cfg.googleSheetGid || "") === BOARD_REVISED_GID ||
+      (boardRows && boardRows[0] && String(boardRows[0][0] || "").trim().toLowerCase() === "settings");
+    if (isRevBoard) {
+      // For revised, the include* were already read from the Settings data row in parsedMenuFromRows
+      if (parsed.footerDrinksBox && parsed.footerDrinksBox.include !== undefined) {
+        flagD = !!parsed.footerDrinksBox.include;
+      }
+    } else if (boardRows && col.includeDrinksBox != null) {
       flagD = false;
       let found = false;
       for (let i = 1; i < boardRows.length; i++) {
