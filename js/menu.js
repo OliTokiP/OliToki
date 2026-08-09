@@ -180,6 +180,40 @@
     }
   }
 
+  /** Wire load → maybeDownsampleImg (idempotent). */
+  function bindDownsampleOnLoad(img) {
+    if (!img || !(DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1)) return;
+    if (img.dataset.downsampled === "1") return;
+    if (img.complete && img.naturalWidth) {
+      maybeDownsampleImg(img);
+      return;
+    }
+    img.addEventListener(
+      "load",
+      function onLoad() {
+        maybeDownsampleImg(img);
+      },
+      { once: true }
+    );
+  }
+
+  /**
+   * Downsample stickers / scaffold BG / any missed rasters when imgScale is on.
+   * (Board sticker HTML is static; portrait stickers + scaffold are JS-built.)
+   */
+  function downsampleAuxRasters(root) {
+    if (!(DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1)) return;
+    const scope = root || document;
+    const sel =
+      "#galaxy-a, #galaxy-b, .family-portrait-bg-img, " +
+      ".new-sticker-shadow, .new-sticker-body-img, " +
+      "#family-portrait-stage .new-sticker-shadow, " +
+      "#family-portrait-stage .new-sticker-body-img";
+    scope.querySelectorAll(sel).forEach(function (img) {
+      if (img && img.tagName === "IMG") bindDownsampleOnLoad(img);
+    });
+  }
+
   /**
    * If a .webp 404s, try .png then .jpg (one chain per element).
    * Safe when only one format exists.
@@ -1480,20 +1514,14 @@
       if (el.getAttribute("src") !== imagePath) {
         tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
         el.dataset.downsampled = "";
-        el.onload = function () {
-          if (el.dataset.downsampled === "1") return;
-          maybeDownsampleImg(el);
-        };
+        bindDownsampleOnLoad(el);
         el.src = imagePath;
-      } else if (
-        DEBUG_IMG_SCALE > 0 &&
-        el.complete &&
-        el.naturalWidth &&
-        el.dataset.downsampled !== "1"
-      ) {
-        maybeDownsampleImg(el);
+      } else {
+        bindDownsampleOnLoad(el);
       }
     });
+    // Board stickers (static HTML) — same debug path as plates
+    downsampleAuxRasters(document);
 
     if (
       imagePath &&
@@ -7036,6 +7064,8 @@
     img.className = "family-portrait-bg-img";
     img.alt = "";
     img.draggable = false;
+    attachWebpFallback(img);
+    bindDownsampleOnLoad(img);
     img.src = imagePath;
     if (els.galaxyA && els.galaxyA.style.transform) {
       img.style.transform = els.galaxyA.style.transform;
@@ -7507,6 +7537,11 @@
       '<span class="new-sticker-tint"></span>' +
       "</div>" +
       '<span class="new-sticker-label">New!</span>';
+    // imgScale debug: shrink sticker bitmaps too
+    el.querySelectorAll("img").forEach(function (im) {
+      attachWebpFallback(im);
+      bindDownsampleOnLoad(im);
+    });
 
     // Offset toward lower-right of the scaled plate (1500×1000 native)
     const ox = 280 * photoScale;
