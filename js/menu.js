@@ -7201,6 +7201,10 @@
       clearTimeout(_hidePortraitTimer);
       _hidePortraitTimer = null;
     }
+    if (stage) {
+      // Clean up any lingering transition listener
+      stage.removeEventListener("transitionend", finishHideFamilyPortrait);
+    }
     if (!stage) return;
     if (_encoreSpotTimer) {
       clearTimeout(_encoreSpotTimer);
@@ -7276,7 +7280,29 @@
       : readCssDurationMs(stage, "--dur-mid", 450);
     const fadeMs = readCssDurationMs(stage, "--dur-mid", 450);
     const wait = Math.max(zoomMs, fadeMs) + 40;
-    _hidePortraitTimer = window.setTimeout(finishHideFamilyPortrait, wait);
+
+    // Kill the expensive collage the moment it becomes fully transparent
+    // (as soon as the opacity transition ends), not after a fixed timeout.
+    const onTransitionEnd = function (e) {
+      if (e.target !== stage) return;
+      // Only react to the main opacity/transform transitions
+      if (e.propertyName === "opacity" || e.propertyName.includes("transform")) {
+        stage.removeEventListener("transitionend", onTransitionEnd);
+        if (_hidePortraitTimer) {
+          clearTimeout(_hidePortraitTimer);
+          _hidePortraitTimer = null;
+        }
+        finishHideFamilyPortrait();
+      }
+    };
+
+    stage.addEventListener("transitionend", onTransitionEnd, { once: true });
+
+    // Fallback in case transitionend doesn't fire
+    _hidePortraitTimer = window.setTimeout(function () {
+      stage.removeEventListener("transitionend", onTransitionEnd);
+      finishHideFamilyPortrait();
+    }, wait);
   }
 
   /**
@@ -7951,7 +7977,8 @@
     }
 
     // Individual item slide (Slideshow mode after overview)
-    // Reverse center zoom + fade when leaving Family Portrait
+    // Keep the nice animation, but kill the expensive collage the moment
+    // it becomes fully transparent.
     hideFamilyPortrait({
       instant: !!instant,
       reverseZoom: prevType === "portrait" && !instant,
