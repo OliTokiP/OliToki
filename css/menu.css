@@ -508,6 +508,18 @@ body.preview-wall #hero-plate {
   position: absolute;
   inset: 0;
   z-index: 1;
+
+  /* EXPERIMENT (2026-08): single shadow for entire family portrait collage.
+     The .family-portrait-plates container now casts ONE drop-shadow for all
+     its child slots/images/stickers combined.
+     This lets "a single object with multiple images" cast one shadow.
+
+     HOW TO REVERT INSTANTLY (per-slot shadows):
+       1. Delete or comment the `filter` line on this .family-portrait-plates rule.
+       2. Uncomment the `filter` line on .family-portrait-slot (see below).
+     Then hard-reload. Revert is two small edits, no other code touched.
+  */
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
 }
 
 #family-portrait-stage.visible {
@@ -527,13 +539,15 @@ body.preview-wall #family-portrait-stage {
 }
 
 /* Slot = portrait plate object: origin at lattice; holds img + optional New!
-   One drop-shadow on the slot (not per image) — major cost saver with N plates. */
+   Shadow is currently on the parent .family-portrait-plates (single collage shadow).
+   To restore the previous "one shadow per slot" behavior, UNCOMMENT the filter line below
+   AND remove the filter from .family-portrait-plates (see comment there). */
 #family-portrait-stage .family-portrait-slot {
   position: absolute;
   width: 0;
   height: 0;
   pointer-events: none;
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+  /* filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));   <--- UNCOMMENT + remove from plates to revert */
 }
 
 #family-portrait-stage .family-portrait-item {
@@ -550,6 +564,8 @@ body.preview-wall #family-portrait-stage {
   z-index: 2;
 }
 
+/* Wall lean path: disable shadows on plates container (and keep slot rule for revert compatibility) */
+body.preview-wall #family-portrait-stage .family-portrait-plates,
 body.preview-wall #family-portrait-stage .family-portrait-slot {
   filter: none;
 }

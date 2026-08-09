@@ -43,6 +43,7 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - Wall preview (`preview-all` / `body.preview-wall`): lean path — performance matters (Fire Stick)
 - Shadows off / reduced effects on multi-board wall when FPS is a concern
 - Debug pages `_index*.html` are for local debugging
+- Plate architecture: `#hero-plate` (and portrait slots) are containers that own motion and shadow; stickers are children. Prefer updating plate helpers over direct img/sticker scale sync.
 - Prefer existing patterns: `parseTextAlign`, `parseYesNo`, `fitBoxScale`, `setBoxTextAlign`
 
 ## Safety

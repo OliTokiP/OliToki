@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-08-09  
+**Last updated:** 2026-08-09 (Plate container model + debug changes)  
 **Status:** v1 — author-approved direction; sheet headers will be edited to match over time.
 
 Related: [SHEET_MIGRATION.md](./SHEET_MIGRATION.md) · [STYLE_GUIDE.md](./STYLE_GUIDE.md) · [PRODUCT.md](./PRODUCT.md)
@@ -42,7 +42,7 @@ Fixed **1920×1080** canvas.
 | **Logo** | Toki mark in the Header Band | `#logo` |
 | **Menu Title** | Board title text (e.g. “Bowls & Salads”) | `#menu-title` |
 | **Disclaimer** | Allergy / food-safety copy (usually top of the photo side) | `#disclaimer` |
-| **Version Stamp** | Optional git/build line near the Disclaimer (author/debug; off for boss handoff) | Show Version / Show Github Version |
+| **Version Stamp** | Optional git/build info appended to the Toki Debug HUD header (when Show Version + debug visuals active) | Show Version |
 
 ---
 
@@ -71,19 +71,20 @@ Layout: Frame on the **left**, photo side on the **right** (Board 4 mirrors — 
 
 | Preferred name | What it is | Also called / DOM |
 |----------------|------------|-------------------|
-| **Hero Panel** | Region that shows the large food photo for the active item (or box item in a future cycle) | `#hero-wrap`, “the blank part that shows food” |
-| **Plate** | The food image asset currently shown in the Hero Panel (or a tile in Family Portrait / Encore) | `#hero`, hero image, food pic |
-| **New Sticker** | “New!” badge overlaid when the active item is marked New | `#new-sticker` |
+| **Hero Panel** | Region that shows the large food photo for the active item (or box item in a future cycle) | `#hero-wrap` |
+| **Plate** | Container object that owns motion (opacity, Ken Burns scale, drop-shadow) for one food presentation. Children (image + decorations) inherit its transforms. | `#hero-plate` (contains `#hero` img + `#new-sticker` etc.) |
+| **Plate Image** | The actual food bitmap inside a Plate | `#hero` (img child of plate) |
+| **New Sticker** | “New!” badge decoration that lives inside a Plate (inherits plate motion) | `#new-sticker` (child of `#hero-plate`) |
 | **Family Portrait** | Multi-Plate collage overview on the photo side (when enabled) | `#family-portrait-stage`, FP |
-| **Portrait Slot** | One lattice position holding a Plate (and optional New Sticker) in Family Portrait / Encore | slot |
+| **Portrait Slot** | One lattice position that acts as a Plate container holding an image + optional New Sticker in Family Portrait / Encore. Drop-shadow lives on the slot. | `.family-portrait-slot` (contains `.family-portrait-item` img + sticker) |
 | **Encore** | Presentation mode: Ken Burns zoom on the collage + spotlight on the active Plate | presentation mode Encore |
 | **Spotlight Veil** | Dim/black overlay with a hole (hard or soft) over non-active Plates during Encore | `.family-portrait-veil`, house lights |
 | **Scaffold Background** | Optional pinned Background treatment during Encore zoom | encore scaffold BG |
 
 **Rule of thumb:**
 
-- **Hero Panel** = the *place*.
-- **Plate** = the *picture* in that place (or in a Portrait Slot).
+- **Hero Panel** = the *region*.
+- **Plate** = the animated container object (owns scale, fade, shadow). The food image and stickers are children inside it. Same idea for Portrait Slots.
 
 ---
 
@@ -136,7 +137,7 @@ As headers migrate, prefer:
 
 | Sheet concept | UI name |
 |---------------|---------|
-| Image (item or box row) | **Plate** filename (shown in **Hero Panel** or Portrait Slot) |
+| Image (item or box row) | **Plate Image** filename (shown inside a **Plate** in Hero Panel or Portrait Slot) |
 | Include (item) | Show on **Menu List** |
 | Include (box item) | Show in **Footer Box**; later may also gate presentation cycle |
 | Family Portrait | **Family Portrait** toggle |
@@ -154,13 +155,15 @@ As headers migrate, prefer:
 ┌──────────────────────────────── Stage (1920×1080) ────────────────────────────────┐
 │  Background (Background Plate + Wallpaper)                                        │
 │  ┌──────── Frame ──────────────┐   ┌──────── photo side ─────────────────────┐   │
-│  │ Header Band  Logo  Title    │   │ Disclaimer              [Version Stamp] │   │
+│  │ Header Band  Logo  Title    │   │ Disclaimer (allergy always shown)     │   │
+│  │                             │   │ (Version Stamp lives in debug HUD)    │   │
 │  ├─────────────────────────────┤   │                                         │   │
 │  │ Menu Panel                  │   │         Hero Panel                      │   │
-│  │   Menu List                 │   │            Plate                        │   │
-│  │   (List Highlight)          │   │         New Sticker                     │   │
+│  │   Menu List                 │   │            Plate (container)            │   │
+│  │   (List Highlight)          │   │              image + New Sticker (child)│   │
 │  │                             │   │   — or Family Portrait / Encore —       │   │
-│  │ Footer Boxes                │   │   Portrait Slots + Spotlight Veil       │   │
+│  │ Footer Boxes                │   │   Portrait Slots (plate containers)     │   │
+│  │                             │   │     + Spotlight Veil                    │   │
 │  └─────────────────────────────┘   └─────────────────────────────────────────┘   │
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -176,8 +179,9 @@ Track deliberately; do not block handoff:
 - [ ] Style header “BG Wallpaper” already matches **Wallpaper** language
 - [ ] Protein/Sauces tabs → generic **Footer Box** naming when multi-restaurant lands
 - [ ] DOM `#galaxy` → comment or alias as **Background** (optional)
-- [ ] DOM `#hero` → document as **Plate** in Hero Panel (optional id rename later)
+- [ ] DOM `#hero-plate` is the **Plate** container; `#hero` is the image child
 - [ ] Align boss-facing sheet notes with this vocabulary
+- [ ] Version Stamp language in sheets (no longer replaces disclaimer)
 
 ---
 
@@ -186,3 +190,4 @@ Track deliberately; do not block handoff:
 | Date | Change |
 |------|--------|
 | 2026-08-09 | v1 — Hero Panel, Plate, Frame, Menu List, Footer Boxes, Encore/Spotlight, Board 4 Announcement Panel |
+| 2026-08 | Plate as container object (#hero-plate owns motion + shadow; sticker is child decoration). Portrait slots are plate units. Version Stamp moved to Toki Debug header (disclaimer always shows allergy). Full View debug HUD mode added. |

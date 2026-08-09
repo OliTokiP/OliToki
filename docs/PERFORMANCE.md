@@ -6,7 +6,7 @@
 2. Design **console kill-switches** that truly disable work (not just hide UI)  
 3. Decide when **tearing a feature down and rebuilding** costs more than **leaving it idle**
 
-**Last updated:** 2026-08-09  
+**Last updated:** 2026-08-09 (plates as containers, debug Full View, version in HUD header)  
 **Primary runtime:** `js/menu.js`, `css/menu.css`  
 **Target display:** 1920×1080; stress cases = Amazon Fire Stick, `preview-all.html` wall (4 boards)
 
@@ -75,11 +75,11 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | Feature | Impact | Primary cost | Notes / kill guidance |
 |---------|--------|--------------|------------------------|
 | **Encore** (collage + Ken Burns + spotlight) | **Very High** | Many Plate layers, CSS transforms, veil, zoom RAF/transitions, list coupling | Largest solo-board risk after wall×4. Hard kill: hide stage, cancel zoom, unpin scaffold, restore single hero path. Hang: keep stage `hidden` but **do not** leave zoom transitions mid-flight. |
-| **Family Portrait** (collage overview, no full Encore) | **Very High** | N food rasters + layout lattice + fade | Same class of cost as Encore minus some zoom. Rebuild only on cast/fingerprint change. |
+| **Family Portrait** (collage overview, no full Encore) | **Very High** | N food rasters + layout lattice + fade | Same class of cost as Encore minus some zoom. Each Portrait Slot acts as a Plate container (one drop-shadow per slot). Rebuild only on cast/fingerprint change. |
 | **Encore Spotlight Veil** (hard/soft) | **High** | Full-stage gradient / mask composite every frame of zoom | Soft ≥ Hard. Kill with Encore; don’t leave veil class on empty stage. |
 | **Ken Burns** (hero and/or collage zoom) | **High** | Large layer transform + optional filter/stack | Solo hero KB cheaper than collage KB. Kill: remove transform transitions; reset scale 1. |
 | **Scaffold Background pin** (Encore BG copy) | **High** | Extra full-stage BG bitmap + free-galaxy hide choreography | Avoid dual BG (free galaxy + scaffold) both live; pin should **replace**, not stack. |
-| **Hero Panel + single Plate** (Slideshow) | **Medium** | One large decode + crossfade | Baseline product path. Hang Panel; swap Plate. WebP helps bandwidth more than GPU. |
+| **Hero Plate** (container + image child) (Slideshow) | **Medium** | One large decode + crossfade. Plate owns scale/shadow. | Baseline. One shadow per logical Plate (not per bitmap). Children (sticker, future multi-images) inherit motion. |
 | **New Sticker** | **Low** | Small WebPs + CSS | Fine. Kill = `hidden`. |
 | **List Highlight** (active Menu Item) | **Low** | Style/class on one row | Cheap. Encore may defer highlight — logic only. |
 | **Presentation Speed timer** | **Very Low** | `setInterval` / timeout | Kill clears timer. `0` = pause. |
@@ -106,7 +106,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | **Announcement Panel** (Board 4 body + rich text) | **Medium** | Text, optional rich styles, slide timer | Motion styles (future) may raise cost — rate per style. |
 | **Shout / future Motion Styles** | **Low–High** | Depends on effect | Treat each named style separately when implementing; default to Low until measured. |
 | **Stripes** (Board 4 scroll) | **Medium** | Extra scrolling layer | Kill = hide + stop stripe animation. |
-| **Disclaimer / Version Stamp** | **Very Low** | Text paint | Version off by default for handoff. |
+| **Disclaimer / Version Stamp** | **Very Low** | Text paint | Disclaimer always shows allergy text. Version Stamp (when enabled) is appended only to the floating Toki Debug header. |
 
 ### 3.4 Data pipeline
 

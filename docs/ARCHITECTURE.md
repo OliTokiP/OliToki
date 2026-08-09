@@ -1,5 +1,7 @@
 # TokiMenu — Architecture
 
+**Last updated:** 2026-08 (plate containers, debug HUD Full View + version in header)
+
 ## 1. Current system (baseline `a50b4d8`)
 
 ```text
@@ -21,13 +23,20 @@
 | `index.html` … `index4.html` | Stage DOM shells (frame SVG, heroes, footer/drinks markup) |
 | `js/config*.js` | Per-board sheet gids, layout name, image folder, column maps |
 | `js/data-source.js` | `google` vs `local` switch |
-| `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, hero, stripes, sticker |
+| `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, Plate objects (hero + portrait), hero motion, stickers, stripes |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
 | `scripts/toki_server.py` | Static file server + Sheets/Drive proxy + caches |
 | `scripts/gsheet_client.py` | CLI read/write for migrations / tooling |
 | `Open Toki Menus.app` | Launches server + tiles board windows |
 | `vendor/xlsx.full.min.js` | Local workbook + style fills when needed |
+
+**Current Plate model (implemented):**
+- Slideshow hero: `#hero-wrap > #hero-plate` (container) contains the food `<img id="hero">` + `#new-sticker` (decoration).
+- The plate owns `opacity`, Ken Burns `--hero-zoom` + `.is-kb-in` transitions, and the drop-shadow.
+- All children inherit the plate's transforms and fade.
+- Family Portrait: each `.family-portrait-slot` acts as a Plate container (shadow lives on the slot).
+- Goal: one logical "plate" pays for one shadow and one set of motion effects. Enables future multi-image per menu item.
 
 ### Private Google Sheet + live boards (what the API is for)
 
@@ -337,5 +346,7 @@ No need for a heavy framework initially — small pure functions + a `scripts/sm
 | 2026-08 | Hybrid rewrite preferred over full nuke or endless patch-only |
 | 2026-08 | Sheets first; Toast as future MenuSource adapter |
 | 2026-08 | Generic boxes use fixed 1 / 2⁄3–1⁄3 / thirds width rules |
+| 2026-08 | Plate as first-class container object (#hero-plate, .family-portrait-slot) for inherited motion + single shadow per logical plate |
+| 2026-08 | Debug "Full View" + Version Stamp relocated to Toki Debug header (disclaimer no longer replaced) |
 
 Update this table when product architecture choices change.

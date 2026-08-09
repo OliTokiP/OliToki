@@ -2,6 +2,8 @@
 
 This document explains how the performance feature flag output works and how to read it.
 
+**Last updated:** 2026-08-09 (Full View mode, Version Stamp location)
+
 **Primary reference:** [PERFORMANCE.md](./PERFORMANCE.md)  
 **Control source:** Google Sheet **Debug Menu** tab (gid `1793812854`)
 
@@ -39,9 +41,11 @@ Debug Mode
 TRUE
 
 Debug Features
-Performance Console   Version History   ...
-TRUE                  FALSE             ...
+Performance Console   Version History   Full View   ...
+TRUE                  FALSE             FALSE       ...
 ```
+
+- **Full View** = TRUE (with Debug Mode) expands the floating HUD to natural content height with no body scroll — useful on Fire Stick / devices without mouse. The HUD sizes to fit the entire list instead of scrolling.
 
 ---
 
@@ -131,7 +135,7 @@ These only affect the current browser tab/session.
 | `encore` | Presentation mode is encore + family-portrait stage is visible with content |
 | `spotlightVeil` | Encore veil hard or soft class is present on the stage |
 | `softRefresh` | The `setInterval` for sheet polling is armed |
-| `heroPlate` | The main `#hero` img is loaded and not hidden |
+| `heroPlate` | The Plate container (`#hero-plate`) is visible and contains an active image |
 | `xlsxStyles` | Fills or rich text from xlsx were successfully loaded |
 
 This is deliberately "is the expensive thing actually happening right now", not "the config asked for it".
@@ -198,6 +202,8 @@ In addition to (or instead of) the console, we now provide two live views that u
 - Click the header to collapse/expand.
 - Click × to hide for the session.
 - Updates automatically on state changes (no console spam).
+- **Full View** (Debug Features column): when enabled the HUD uses natural height and shows every row without internal scrolling.
+- When **Show Version** is active the build stamp (hash + date) is appended to the "Toki Debug" header title (e.g. "Toki Debug · a1b2c3d · 2026-..."). It no longer replaces the disclaimer.
 
 Both are driven from the same `updateDebugVisuals()` logic.
 
