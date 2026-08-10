@@ -406,6 +406,24 @@ body {
   user-select: none;
 }
 
+/*
+  Multi-image menu item: FP lattice lives inside #hero-plate so fade + Ken Burns
+  match single heroes. Position/size match #family-portrait-stage relative to
+  #hero-wrap (left 870, top 133). Grid: fillPortraitPlates → buildPortraitLayout.
+  See docs/FAMILY_PORTRAIT_LATTICE.md.
+*/
+#hero-plate .hero-multi-plates {
+  position: absolute;
+  left: 201.9px; /* 1071.9 − 870 */
+  top: -133px;
+  width: 848.1px;
+  height: 1080px;
+  pointer-events: none;
+  overflow: visible;
+  /* One collage shadow on the plate already; don't double-shadow multi */
+  filter: none;
+}
+
 body.preview-wall #hero-plate {
   /* Keep wall lean; still allow subtle KB if enabled in JS */
   filter: none;
@@ -548,7 +566,9 @@ body.preview-wall #family-portrait-stage {
    Shadow is currently on the parent .family-portrait-plates (single collage shadow).
    To restore the previous "one shadow per slot" behavior, UNCOMMENT the filter line below
    AND remove the filter from .family-portrait-plates (see comment there). */
-#family-portrait-stage .family-portrait-slot {
+/* Shared slot/item recipe: Family Portrait stage AND multi-image hero lattice */
+#family-portrait-stage .family-portrait-slot,
+#hero-plate .family-portrait-slot {
   position: absolute;
   width: 0;
   height: 0;
@@ -556,7 +576,8 @@ body.preview-wall #family-portrait-stage {
   /* filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));   <--- UNCOMMENT + remove from plates to revert */
 }
 
-#family-portrait-stage .family-portrait-item {
+#family-portrait-stage .family-portrait-item,
+#hero-plate .family-portrait-item {
   position: absolute;
   left: 0;
   top: 0;

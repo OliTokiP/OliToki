@@ -72,8 +72,9 @@ Layout: Frame on the **left**, photo side on the **right** (Board 4 mirrors — 
 | Preferred name | What it is | Also called / DOM |
 |----------------|------------|-------------------|
 | **Hero Panel** | Region that shows the large food photo for the active item (or box item in a future cycle) | `#hero-wrap` |
-| **Plate** | Container object that owns motion (opacity, Ken Burns scale, drop-shadow) for one food presentation. Children (image + decorations) inherit its transforms. | `#hero-plate` (contains `#hero` img + `#new-sticker` etc.) |
-| **Plate Image** | The actual food bitmap inside a Plate | `#hero` (img child of plate) |
+| **Plate** | Container object that owns motion (opacity, Ken Burns scale, drop-shadow) for one food presentation. Children (image + decorations) inherit its transforms. | `#hero-plate` (contains `#hero` img and/or multi lattice + `#new-sticker`) |
+| **Plate Image** | The actual food bitmap inside a Plate | `#hero` (single) or `.family-portrait-item` imgs in multi lattice |
+| **Multi-image lattice** | When Image has 2+ names: FP grid inside the Plate (same `buildPortraitLayout`); motion still Plate fade/KB | `.hero-multi-plates` + `.family-portrait-slot` — see [FAMILY_PORTRAIT_LATTICE.md](./FAMILY_PORTRAIT_LATTICE.md) |
 | **New Sticker** | “New!” badge decoration that lives inside a Plate (inherits plate motion) | `#new-sticker` (child of `#hero-plate`) |
 | **Family Portrait** | Multi-Plate collage overview on the photo side (when enabled) | `#family-portrait-stage`, FP |
 | **Portrait Slot** | One lattice position that acts as a Plate container holding an image + optional New Sticker in Family Portrait / Encore. Drop-shadow lives on the slot. | `.family-portrait-slot` (contains `.family-portrait-item` img + sticker) |

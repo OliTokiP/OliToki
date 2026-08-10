@@ -1,17 +1,16 @@
 /**
  * TokiMenu — Board 2 (presentation layout: handhelds)
  *
- * Sheet tab: "Board 2" (gid=1959901693). Display title lives in Menu Title cell.
- * Theme / speeds / highlights from Style tab.
- * Protein/Sauces content: shared sheets (not this tab).
+ * Sheet tab: "Board 2 Revised" (gid=314919644). Restructured like Board 1:
+ *   - Settings block (label → headers → single data row) at top.
+ *   - Inventory (headers below) for items.
  *
- * Same schema as Board 1:
- *   … | K Family Portrait | L Presentation Mode (Slideshow|Encore) |
- *   M Protein? | N Sauces? | O Drinks? | P Descriptions? | Q Columns?
+ * Theme / speeds / highlights from Style tab (revised).
+ * Protein/Sauces content: shared sheets (not this tab).
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
-  googleSheetGid: "1959901693",
+  googleSheetGid: "314919644", // Board 2 Revised (restructured)
   styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
   proteinSheetGid: "1191392779",
@@ -29,24 +28,26 @@ window.TOKI_CONFIG = {
   extraItems: [],
 
   columns: {
+    // For revised, item parsing uses Inventory section (0-based); title/settings from top Settings block
     title: 0,
-    item: 1,
+    item: 0,
     price: null,
-    price1: 2,
-    price2: 3,
-    price3: 4,
-    subtitle: 5,
-    description: 6,
-    isNew: 7,
-    image: 8,
-    include: 9,
-    familyPortrait: 10,
-    presentationMode: 11,
-    includeProteinBox: 12,
-    includeSaucesBox: 13,
-    includeDrinksBox: 14,
-    includeDescriptions: 15,
-    menuColumns: 16,
+    price1: 1,
+    price2: 2,
+    price3: 3,
+    subtitle: 4,
+    description: 5,
+    isNew: 6,
+    image: 7,
+    include: 8,
+    // Settings block provides familyPortrait, presentationMode, include*?, menuColumns
+    familyPortrait: null,
+    presentationMode: null,
+    includeProteinBox: null,
+    includeSaucesBox: null,
+    includeDrinksBox: null,
+    includeDescriptions: null,
+    menuColumns: null,
     bgScrollSpeed: null,
     slideshowSpeed: null,
     highlight: null,

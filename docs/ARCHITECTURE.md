@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-08 (plate containers, debug HUD Full View + version in header)
+**Last updated:** 2026-08-10 (multi-image hero lattice shares Family Portrait grid; see FAMILY_PORTRAIT_LATTICE.md)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -35,8 +35,8 @@
 - Slideshow hero: `#hero-wrap > #hero-plate` (container) contains the food `<img id="hero">` + `#new-sticker` (decoration).
 - The plate owns `opacity`, Ken Burns `--hero-zoom` + `.is-kb-in` transitions, and the drop-shadow.
 - All children inherit the plate's transforms and fade.
-- Family Portrait: each `.family-portrait-slot` acts as a Plate container (shadow lives on the slot).
-- Goal: one logical "plate" pays for one shadow and one set of motion effects. Enables future multi-image per menu item.
+- **Multi-image item** (comma-separated Image cell): same plate motion; content is `.hero-multi-plates` filled by `fillPortraitPlates` → `buildPortraitLayout` (identical grid to Family Portrait). Documented in [FAMILY_PORTRAIT_LATTICE.md](./FAMILY_PORTRAIT_LATTICE.md).
+- Family Portrait overview / Encore: `#family-portrait-stage` + same `fillPortraitPlates` for the cast collage (stage owns Encore zoom / veil).
 
 ### Private Google Sheet + live boards (what the API is for)
 

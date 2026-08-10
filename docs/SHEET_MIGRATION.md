@@ -3,13 +3,15 @@
 Living notes for the **revised sheet tabs** and runtime cutovers.  
 Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on Revised.
 
-**Last updated:** 2026-08-09 (Board 1 migrated to revised)  
+**Last updated:** 2026-08-10 (Board 1/2/3 revised; multi Image → FP lattice inside hero plate; see FAMILY_PORTRAIT_LATTICE.md)  
 **Spreadsheet:** `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
 | Revised tab | GID | Live counterpart | Runtime status |
 |-------------|-----|------------------|----------------|
 | Style and Theme | `183083022` | Style and Theme (old) `1076652078` | **All boards live** (configs → this gid) |
-| Board 1 Revised | `1058015863` | Board 1 `0` | **Board 1 live** (`config.js` → this gid; parser supports restructured Settings/Inventory) |
+| Board 1 Revised | `1058015863` | Board 1 `0` | **live** (config.js) |
+| Board 2 Revised | `314919644` | Board 2 `1959901693` | **live** (config2.js) |
+| Board 3 Revised | `1684494006` | Board 3 `1427118423` | **live** (config3.js) |
 | Proteins Revised | `1420775786` | Proteins `1191392779` | Not cut over yet |
 
 Related:
@@ -264,14 +266,14 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 - [x] Board 1 `config.js` points `styleThemeGid` at Revised
 - [x] Wire **BG Pattern** (col C): parsed in Settings; Pattern Color 1/2 dropdown labels (cols K/L) read from chosen theme row, falling back to Toki Default / row 6 when blank (inheritance for defaults); resolved via `resolveNamedThemeColor` against current theme palette (supports highlight etc.); re-uses stripe anim on `#bg-pattern`
 - [x] Hooked revised "Style and Theme" (gid 183083022) to all boards (config2/3/4 + name updates for tab rename)
-- [x] Board 1 data migrated to gid 1058015863 (restructured Settings top + Inventory headers below; parser + attach updated; config updated)
+- [x] Boards 1/2/3 data migrated to revised gids (1058015863 / 314919644 / 1684494006); parser + configs updated (Settings top, Inventory headers)
 
 ### Board / Proteins Revised (pilot done; full rollout later)
 
-- [x] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3 (Board 1 migrated; parser updated for restructured layout)
+- [x] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3 (Boards 1/2/3 migrated to revised; parser supports restructured layout)
 - [ ] Protein Settings + Inventory; ignore or implement New/Image/Include per §6
-- [x] Style+Theme revised hooked to boards 2–4 (via config*.js + name handling)
-- [x] Point board gid for Board 1 at Revised (1058015863); others pending
+- [x] Style+Theme revised hooked to all boards
+- [x] Point board gids for 1/2/3 at Revised (1058015863/314919644/1684494006)
 - [ ] Mirror pattern to remaining boards and Sauces
 - [ ] Update [DATA_MODEL.md](./DATA_MODEL.md) + configs; bump `schemaVersion` when freezing
 

@@ -303,14 +303,14 @@
   const BOWLS_COLUMNS = BOARD_COLUMNS;
 
   /**
-   * Board 1 Revised (gid 1058015863) — restructured per migration doc.
+   * Board Revised tabs (gids 1058015863 / 314919644 / 1684494006) — restructured (Settings block at top for singles; Inventory headers below for items).
    * Settings block (label → headers → 1 data row) at top for single selections:
    *   Menu Title, Family Portrait, Presentation Mode, Include * Box?, Columns?
    * Inventory (expanding glossary) has headers below the Settings data:
    *   Item | Price 1 | ... | Include
    * (No per-item FP / box includes; those live only in top Settings.)
    */
-  const BOARD_REVISED_GID = "1058015863";
+  const BOARD_REVISED_GIDS = ["1058015863", "314919644", "1684494006"]; // Board 1/2/3 Revised gids (structure: Settings top + Inventory)
   const BOARD_REVISED_SETTINGS = {
     title: 0,
     familyPortrait: 1,
@@ -850,6 +850,22 @@
       return path;
     }
     return toWebpPath(path);
+  }
+
+  /**
+   * Parse the Image cell which may contain a single name or multiple
+   * comma/semicolon-separated names (e.g. "PorkDumplings, KimchiDumplings").
+   * Extensions are optional (resolveImagePath will prefer .webp).
+   * Returns array of cleaned basenames (no leading /).
+   */
+  function parseImageCell(raw) {
+    if (raw === "" || raw == null) return [];
+    const s = String(raw).trim();
+    if (!s || s.toLowerCase() === "null") return [];
+    const parts = s.split(/[,;]/).map(function (p) {
+      return p.trim().replace(/[.\s]+$/g, ""); // tolerate trailing . or spaces from copy-paste
+    }).filter(Boolean);
+    return parts.map(function (p) { return p.replace(/^\/+/, ""); });
   }
 
   function formatPrice(value) {
@@ -2183,7 +2199,7 @@
         String(rows[0][0] || "")
           .trim()
           .toLowerCase() === "settings") ||
-      String(cfg.googleSheetGid || "") === BOARD_REVISED_GID;
+      BOARD_REVISED_GIDS.includes(String(cfg.googleSheetGid || ""));
 
     let dataRows;
     let settingsRow = null;
@@ -2197,9 +2213,9 @@
       // Inventory items: headers after "Inventory" label; data after that
       const invIdx = findRevisedSectionDataStart(rows, "inventory");
       const invStart = invIdx >= 0 ? invIdx : 4; // fallback
-      // slice(1) to skip the inventory headers row
+      // invStart points at the first data row (find returns label index + 2)
       dataRows = rows
-        .slice(invStart + 1)
+        .slice(invStart)
         .filter((r) => r && r.some((v) => v != null && String(v).trim() !== ""));
       itemColMap = BOARD_REVISED_INVENTORY;
     } else {
@@ -2229,7 +2245,8 @@
     for (const row of dataRows) {
       const name = cell(row, itemColMap.item);
       if (name !== "" && name != null) {
-        const imageName = cell(row, itemColMap.image);
+        const rawImageCell = cell(row, itemColMap.image);
+        const imageNames = parseImageCell(rawImageCell);
 
         // Prices: multi-price boards (price1/2/3) must NOT also read bowls' `price`
         // column — that index collides with New/Image on munchies sheets.
@@ -2265,12 +2282,7 @@
           description,
           subtitle,
           isNew: Number(cell(row, itemColMap.isNew)) === 1,
-          image:
-            imageName !== "" &&
-            imageName != null &&
-            String(imageName).toLowerCase() !== "null"
-              ? String(imageName).replace(/^\/+/, "")
-              : null,
+          rawImages: imageNames,
           include: parseInclude(cell(row, itemColMap.include)),
         });
       }
@@ -2569,7 +2581,8 @@
 
       const name = cell(row, c.item);
       if (name !== "" && name != null) {
-        const imageName = cell(row, c.image);
+        const rawImageCell = cell(row, c.image);
+        const imageNames = parseImageCell(rawImageCell);
         const subtitle =
           c.subtitle != null
             ? String(cell(row, c.subtitle) || "").trim()
@@ -2581,12 +2594,7 @@
           description: "",
           subtitle,
           isNew: c.isNew != null && Number(cell(row, c.isNew)) === 1,
-          image:
-            imageName !== "" &&
-            imageName != null &&
-            String(imageName).toLowerCase() !== "null"
-              ? String(imageName).replace(/^\/+/, "")
-              : null,
+          rawImages: imageNames,
           include: parseInclude(cell(row, c.include)),
         });
       }
@@ -3025,7 +3033,9 @@
     const rawItems = (parsed.items || []).concat(cfg.extraItems || []);
     items = rawItems
       .map((it) => {
-        const image = resolveImagePath(it.image);
+        const rawImgs = Array.isArray(it.rawImages) ? it.rawImages : (it.image ? [it.image] : []);
+        const images = rawImgs.map(resolveImagePath).filter(Boolean);
+        const image = images[0] || null;
 
         // Prefer multi-price list; fall back to single price
         let prices = Array.isArray(it.prices)
@@ -3051,6 +3061,7 @@
           subtitle,
           isNew: !!it.isNew || Number(it.isNew) === 1,
           image,
+          images: images.length > 1 ? images : null,
           include: cfg.forceIncludeAll
             ? true
             : parseInclude(it.include !== undefined ? it.include : 1),
@@ -3109,6 +3120,7 @@
             items: portraitItems,
             itemIndex: itemIndex,
             image: it.image,
+            images: it.images || null,
             isNew: !!it.isNew,
             withPortrait: true,
           });
@@ -3133,6 +3145,7 @@
           items: null,
           itemIndex: i,
           image: it.image || null,
+          images: it.images || null,
           isNew: !!it.isNew,
           withPortrait: false,
         });
@@ -3159,6 +3172,7 @@
           type: "item",
           itemIndex: i,
           image: it.image,
+          images: it.images || null,
           isNew: !!it.isNew,
         });
       });
@@ -3198,6 +3212,7 @@
         slides.push({
           type: "item",
           image: it.image,
+          images: it.images || null,
           itemIndex: i,
           isNew: !!it.isNew,
         });
@@ -4278,7 +4293,7 @@
     // Re-read include flags from board rows if present
     let flagP = includeP;
     let flagS = includeS;
-    const isRevBoard = String(cfg.googleSheetGid || "") === BOARD_REVISED_GID ||
+    const isRevBoard = BOARD_REVISED_GIDS.includes(String(cfg.googleSheetGid || "")) ||
       (boardRows && boardRows[0] && String(boardRows[0][0] || "").trim().toLowerCase() === "settings");
     if (isRevBoard) {
       // already read from Settings block in main parse
@@ -4386,7 +4401,7 @@
     prefetched = prefetched || {};
 
     let flagD = !!(parsed.footerDrinksBox && parsed.footerDrinksBox.include);
-    const isRevBoard = String(cfg.googleSheetGid || "") === BOARD_REVISED_GID ||
+    const isRevBoard = BOARD_REVISED_GIDS.includes(String(cfg.googleSheetGid || "")) ||
       (boardRows && boardRows[0] && String(boardRows[0][0] || "").trim().toLowerCase() === "settings");
     if (isRevBoard) {
       // For revised, the include* were already read from the Settings data row in parsedMenuFromRows
@@ -7301,7 +7316,9 @@
    * Incomplete last row is centered (bottom shortfall).
    * Coordinates in portrait-stage-local px; origin at photo center.
    */
-  function buildPortraitLayout(n, stageW, stageH) {
+  function buildPortraitLayout(n, stageW, stageH, opts) {
+    opts = opts || {};
+    const useCutout = opts.useCutout !== false; // default true (for family portrait)
     stageW = stageW || PORTRAIT_STAGE_W;
     stageH = stageH || PORTRAIT_STAGE_H;
     if (n <= 0) {
@@ -7361,8 +7378,8 @@
       const inRow = r === rows - 1 ? remaining : Math.min(cols, remaining);
       const incomplete = inRow < cols;
       const y = padY + (r + 0.5) * cellH;
-      // Row band between cutout (left) and screen right (stageW)
-      const xLeftEdge = portraitCutoutLocalX(y);
+      // Row band: for family portrait use diagonal cutout; for hero lattice use full rect
+      const xLeftEdge = useCutout ? portraitCutoutLocalX(y) : 0;
       const rowW = Math.max(1, stageW - xLeftEdge);
       const padX = rowW * padXFrac;
       const innerW = Math.max(1, rowW - 2 * padX);
@@ -7968,6 +7985,81 @@
     updateDebugVisuals();
   }
 
+  /**
+   * Shared lattice fill — same grid + slot DOM as Family Portrait overview.
+   * See docs/FAMILY_PORTRAIT_LATTICE.md.
+   *
+   * @param {HTMLElement} platesEl  container for slots
+   * @param {{ name?: string, image: string, isNew?: boolean }[]} portraitItems
+   * @param {{ resolveItemIndex?: (it: object, i: number) => number, stickers?: boolean }} [opts]
+   * @returns {object|null} layout from buildPortraitLayout
+   */
+  function fillPortraitPlates(platesEl, portraitItems, opts) {
+    opts = opts || {};
+    if (!platesEl) return null;
+    platesEl.innerHTML = "";
+    const list = portraitItems || [];
+    const n = list.length;
+    if (!n) return null;
+
+    // Always FP defaults — one grid for overview cast AND multi-image heroes
+    const layout = buildPortraitLayout(n, PORTRAIT_STAGE_W, PORTRAIT_STAGE_H);
+    tokiInfo(
+      "portrait layout",
+      n,
+      "→",
+      layout.cols + "×" + layout.rows,
+      "scale",
+      layout.scale.toFixed(3)
+    );
+
+    const wantStickers = opts.stickers !== false && cfg.showSticker !== false;
+    const resolveIndex =
+      typeof opts.resolveItemIndex === "function"
+        ? opts.resolveItemIndex
+        : function (it) {
+            return items.indexOf(it);
+          };
+
+    list.forEach(function (it, i) {
+      const slot = layout.slots[i];
+      if (!slot || !it || !it.image) return;
+
+      const itemIndex = resolveIndex(it, i);
+      const wrap = document.createElement("div");
+      wrap.className = "family-portrait-slot";
+      wrap.dataset.itemIndex = String(itemIndex);
+      wrap.dataset.portraitIndex = String(i);
+      wrap.dataset.baseZ = String(slot.zIndex);
+      wrap.style.left = slot.x + "px";
+      wrap.style.top = slot.y + "px";
+      wrap.style.zIndex = String(slot.zIndex);
+
+      const img = document.createElement("img");
+      img.className = "family-portrait-item";
+      img.alt = it.name || "";
+      img.draggable = false;
+      attachWebpFallback(img);
+      img.onload = function onPlateLoad() {
+        if (img.dataset.downsampled === "1") return;
+        maybeDownsampleImg(img);
+      };
+      img.src = it.image;
+      img.style.transform =
+        "translate(-50%, -50%) scale(" + layout.scale + ")";
+
+      wrap.appendChild(img);
+
+      if (wantStickers && it.isNew) {
+        appendPortraitSticker(wrap, layout.scale);
+      }
+
+      platesEl.appendChild(wrap);
+    });
+
+    return layout;
+  }
+
   function renderFamilyPortrait(portraitItems) {
     const stage = els.familyPortrait;
     if (!stage) return;
@@ -7997,22 +8089,8 @@
     veil.setAttribute("aria-hidden", "true");
     rig.appendChild(veil);
 
-    const n = portraitItems.length;
-    if (!n) return;
-
-    const layout = buildPortraitLayout(
-      n,
-      PORTRAIT_STAGE_W,
-      PORTRAIT_STAGE_H
-    );
-    tokiInfo(
-      "portrait layout",
-      n,
-      "→",
-      layout.cols + "×" + layout.rows,
-      "scale",
-      layout.scale.toFixed(3)
-    );
+    const layout = fillPortraitPlates(plates, portraitItems || []);
+    if (!layout) return;
 
     // Debug outline via ?portraitDebug=1
     try {
@@ -8031,46 +8109,73 @@
     const holeR = Math.max(70, plateW * 0.42);
     stage.style.setProperty("--encore-hole-r", holeR + "px");
 
-    portraitItems.forEach(function (it, i) {
-      const slot = layout.slots[i];
-      if (!slot || !it.image) return;
-
-      const itemIndex = items.indexOf(it);
-      const wrap = document.createElement("div");
-      wrap.className = "family-portrait-slot";
-      wrap.dataset.itemIndex = String(itemIndex);
-      wrap.dataset.portraitIndex = String(i);
-      wrap.dataset.baseZ = String(slot.zIndex);
-      wrap.style.left = slot.x + "px";
-      wrap.style.top = slot.y + "px";
-      wrap.style.zIndex = String(slot.zIndex);
-
-      const img = document.createElement("img");
-      img.className = "family-portrait-item";
-      img.alt = it.name || "";
-      img.draggable = false;
-      attachWebpFallback(img);
-      img.onload = function onPlateLoad() {
-        if (img.dataset.downsampled === "1") return;
-        maybeDownsampleImg(img);
-      };
-      img.src = it.image;
-      img.style.transform =
-        "translate(-50%, -50%) scale(" + layout.scale + ")";
-
-      wrap.appendChild(img);
-
-      // New! sticker over each isNew plate (no shadow in portrait CSS)
-      if (it.isNew && cfg.showSticker !== false) {
-        appendPortraitSticker(wrap, layout.scale);
-      }
-
-      plates.appendChild(wrap);
-    });
-
     // Tint any portrait stickers with current Special Highlight
     applyStickerTint();
     clearPortraitSpotlight();
+  }
+
+  /**
+   * Multi-image hero content: same lattice as FP, lives inside #hero-plate so
+   * fade + Ken Burns match single-image items (seamless slideshow motion).
+   * Coordinate offset maps FP stage space into the hero-wrap origin.
+   * See docs/FAMILY_PORTRAIT_LATTICE.md §4.
+   */
+  // Hero wrap CSS: left 870, top 133 — keep in sync with css/menu.css #hero-wrap
+  const HERO_WRAP_LEFT = 870;
+  const HERO_WRAP_TOP = 133;
+
+  function clearHeroMultiLattice(plate) {
+    plate = plate || els.heroPlate;
+    if (!plate) return;
+    const multi = plate.querySelector(".hero-multi-plates");
+    if (multi) multi.remove();
+    if (els.hero) {
+      els.hero.style.visibility = "";
+      els.hero.hidden = false;
+    }
+  }
+
+  function applyHeroMultiLattice(item, plate) {
+    plate = plate || els.heroPlate;
+    if (!plate || !item || !item.images || item.images.length < 2) return false;
+
+    clearHeroMultiLattice(plate);
+
+    const plates = document.createElement("div");
+    plates.className = "hero-multi-plates family-portrait-plates";
+    // Align lattice origin with #family-portrait-stage in board space
+    plates.style.position = "absolute";
+    plates.style.left = PORTRAIT_STAGE_LEFT - HERO_WRAP_LEFT + "px";
+    plates.style.top = 0 - HERO_WRAP_TOP + "px";
+    plates.style.width = PORTRAIT_STAGE_W + "px";
+    plates.style.height = PORTRAIT_STAGE_H + "px";
+    plates.style.pointerEvents = "none";
+    plates.setAttribute("aria-hidden", "true");
+
+    const cast = item.images.map(function (src, i) {
+      return {
+        name: String(item.name || "") + (item.images.length > 1 ? " (" + (i + 1) + ")" : ""),
+        image: src,
+        isNew: !!item.isNew && i === 0,
+      };
+    });
+
+    fillPortraitPlates(plates, cast, {
+      stickers: false, // plate-level New! sticker still rides #hero-plate
+      resolveItemIndex: function () {
+        return -1;
+      },
+    });
+
+    // Hide single hero img while multi lattice is the content
+    if (els.hero) {
+      els.hero.style.visibility = "hidden";
+      els.hero.removeAttribute("src");
+    }
+
+    plate.appendChild(plates);
+    applyStickerTint();
+    return true;
   }
 
   /**
@@ -8227,6 +8332,36 @@
   /** Last board slide type — for seamless FP ↔ Encore / Slideshow handoffs */
   let _prevBoardSlideType = "";
 
+  function itemHasMultiImages(item) {
+    return !!(item && Array.isArray(item.images) && item.images.length > 1);
+  }
+
+  /**
+   * Present a menu item's photo(s) on the hero plate.
+   * Multi-image uses the same lattice as Family Portrait (fillPortraitPlates)
+   * but always rides hero fade + Ken Burns — never the FP stage intro path.
+   * See docs/FAMILY_PORTRAIT_LATTICE.md.
+   */
+  function presentItemVisual(item, instant, opts) {
+    opts = opts || {};
+    const prevType = opts.prevType || "";
+    const prevWasPortrait = prevType === "portrait";
+
+    // Leaving Family Portrait overview / Encore collage → hero path
+    if (prevWasPortrait) {
+      hideFamilyPortrait({
+        instant: !!instant,
+        reverseZoom: !instant,
+      });
+    }
+
+    if (cfg.showHero !== false && item && (item.image || itemHasMultiImages(item))) {
+      updateHero(item, instant);
+    } else {
+      hideHeroPlate({ clearSrc: true });
+    }
+  }
+
   function usesBoardSlides() {
     return !isDrinks && slides.length > 0;
   }
@@ -8319,7 +8454,7 @@
           // Last Encore bow → lineup: settle only (no center solo re-intro)
           showFamilyPortrait(slide.items, instant, { fromEncore: true });
         } else if (prevType === "item" && !instant) {
-          // Last Slideshow item → portrait: same two-phase timing as item→item
+          // Last Slideshow item (single or multi hero lattice) → portrait
           handoffHeroToPortrait(slide.items, instant);
         } else {
           // Cold start (or instant): center intro
@@ -8337,8 +8472,7 @@
 
     // Encore bow:
     //   withPortrait → collage stays; soft spotlight after blackout
-    //   portrait → first bow: item-centered Encore zoom (not center intro)
-    //   without cast → list highlight + individual hero
+    //   without cast → list highlight + individual hero (multi = lattice on plate)
     if (slide.type === "encore") {
       const usePortrait =
         slide.withPortrait !== false &&
@@ -8364,22 +8498,14 @@
         return;
       }
 
-      // No cast: hero presentation
-      hideFamilyPortrait({ instant: !!instant });
+      // No full cast: per-item hero (single img or multi lattice — same motion)
       clearPortraitSpotlight();
       const item = items[slide.itemIndex] || {
         image: slide.image,
+        images: slide.images || (slide.image ? [slide.image] : null),
         isNew: !!slide.isNew,
       };
-      if (cfg.showHero !== false) {
-        if (item.image) {
-          updateHero(item, instant);
-        } else {
-          hideHeroPlate();
-        }
-      } else {
-        hideHeroPlate();
-      }
+      presentItemVisual(item, instant, { prevType: prevType });
       if (cfg.showSticker !== false) {
         updateSticker(item, instant);
       } else if (els.sticker) {
@@ -8390,21 +8516,13 @@
     }
 
     // Individual item slide (Slideshow mode after overview)
-    // Keep the nice animation, but kill the expensive collage the moment
-    // it becomes fully transparent.
-    hideFamilyPortrait({
-      instant: !!instant,
-      reverseZoom: prevType === "portrait" && !instant,
-    });
+    // Single or multi-image: always hero plate motion; multi fills FP lattice inside plate.
     const item = items[slide.itemIndex] || {
       image: slide.image,
+      images: slide.images || (slide.image ? [slide.image] : null),
       isNew: !!slide.isNew,
     };
-    if (cfg.showHero !== false) {
-      updateHero(item, instant);
-    } else {
-      hideHeroPlate();
-    }
+    presentItemVisual(item, instant, { prevType: prevType });
     if (cfg.showSticker !== false) {
       updateSticker(item, instant);
     } else if (els.sticker) {
@@ -8438,6 +8556,7 @@
 
     const heroItem = {
       image: slide.image,
+      images: slide.images || (slide.image ? [slide.image] : null),
       isNew: !!slide.isNew,
     };
     if (cfg.showHero !== false) {
@@ -8471,6 +8590,7 @@
     if (plate) {
       plate.classList.remove("visible", "is-kb-in");
       plate.hidden = true;
+      if (opts.clearSrc) clearHeroMultiLattice(plate);
     } else if (img) {
       img.classList.remove("visible", "is-kb-in");
       img.hidden = true;
@@ -8524,7 +8644,8 @@
     const img = els.hero;
     const plate = heroMotionEl();
     if (!img || !plate) return;
-    if (!item || !item.image) {
+    const multi = itemHasMultiImages(item);
+    if (!item || (!item.image && !multi)) {
       hideHeroPlate({ clearSrc: true });
       return;
     }
@@ -8559,11 +8680,29 @@
       });
     };
 
-    const afterReady = function () {
-      maybeDownsampleImg(img, show);
-    };
+    /**
+     * Content swap while plate is faded out — identical clock for single & multi.
+     * Multi: FP lattice (fillPortraitPlates) inside plate.
+     * Single: #hero src.
+     */
+    const applyContent = function () {
+      if (multi) {
+        applyHeroMultiLattice(item, plate);
+        // Lattice imgs load async; show on next frame so DOM is painted
+        // (same visual timing class as a cached single-image hit)
+        requestAnimationFrame(function () {
+          show();
+        });
+        return;
+      }
 
-    const applySrc = function () {
+      // Single image — clear any prior multi lattice first
+      clearHeroMultiLattice(plate);
+
+      const afterReady = function () {
+        maybeDownsampleImg(img, show);
+      };
+
       attachWebpFallback(img);
       img.onload = function () {
         if (img.dataset.downsampled === "1") {
@@ -8589,18 +8728,18 @@
     if (instant) {
       plate.classList.remove("visible");
       setHeroZoom(zoomMax, "snap");
-      applySrc();
+      applyContent();
       return;
     }
 
-    // Fade out plate (+ decorations) + optional zoom to min
+    // Fade out plate (+ decorations) + optional zoom to min — same for single & multi
     plate.classList.remove("visible");
     if (kb) {
       setHeroZoom(zoomMin, "out");
     }
     // Align swap with fade (~dur-mid); KB zoom-out shares that clock
     const gap = kb ? readCssDurationMs(plate, "--dur-mid", 450) : 200;
-    window.setTimeout(applySrc, gap);
+    window.setTimeout(applyContent, gap);
   }
 
   /**
