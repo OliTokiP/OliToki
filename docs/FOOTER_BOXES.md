@@ -1,5 +1,7 @@
 # Footer boxes — exact geometry (Boards 1–3)
 
+**Last updated:** 2026-08-10 23:45 — Veggies is a full 4th footer type; **which** boxes show is driven by Beta Features `Include Footer Boxes` (see [BETA_FEATURES.md](./BETA_FEATURES.md)). Max 3 on strip; Priority lower = higher rank; rest exiled.
+
 Stage: **1920 × 1080**. All values are stage CSS pixels.  
 Source of truth for footer strip layout. Shell chrome and packing live in `css/menu.css` / `js/menu.js`.
 
@@ -80,29 +82,38 @@ Check: `768 + 15 + 299 = 1082`.
 | Protein + Sauces | Protein **768** @ 38, Sauces **299** @ 821 |
 | Protein only / Sauces only | That box → **1082** @ 38 (see §2) |
 
-### Two-box pairing rule (when three box types exist)
+### Which boxes are on (selection)
 
-When exactly **two** of {Protein, Sauces, Soda} are on, order is left → right by fixed priority:
+**Source of truth (boards 1–3 today):** Beta Features tab → `Include Footer Boxes` cell (comma-separated **case-sensitive** titles).  
+That list **overrides** board Settings `Include * Box?` flags when non-empty. Full contract and “how to add a box type” checklist: **[BETA_FEATURES.md](./BETA_FEATURES.md)**.
 
-1. Protein (if on)  
-2. Sauces (if on)  
-3. Soda (if on)  
+Registry titles today: `Proteins` · `Sauces` · `Drinks` · `Veggies`.
 
-The **leftmost** of the two gets **768**; the **rightmost** gets **299**.
+### Two-box pairing rule
 
-Examples:
+When exactly **two** selected boxes are on, order is left → right by **sheet Priority** (Settings column **F** on each box’s revised sheet).
+
+**Priority rule:** lower number = higher priority.  
+Priority `1` = left = major (**768**); higher numbers go right = minor (**299**).
+
+**Defaults when Priority is blank:** Proteins `1` · Sauces `2` · Drinks `3` · Veggies `4`.
+
+Ties break in type order: Proteins → Sauces → Drinks → Veggies.
+
+Examples (with default priorities):
 
 | Enabled | Left (768) | Right (299) |
 |---------|------------|-------------|
 | Protein + Sauces | Protein | Sauces |
 | Protein + Soda | Protein | Soda |
 | Sauces + Soda | Sauces | Soda |
+| Sauces Priority 1 + Protein Priority 2 | Sauces | Protein |
 
 ---
 
 ## 4. Three boxes enabled — even thirds
 
-When **all three** are on, do **not** preserve the two-box left-heavy split. Equal widths look cleaner.
+When **all three** are on, do **not** preserve the two-box left-heavy split. Equal widths look cleaner. **Priority only sets left → right order** (lowest number leftmost); each box still gets the same third.
 
 | | Value |
 |--|--------|

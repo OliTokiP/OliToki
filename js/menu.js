@@ -317,7 +317,9 @@
     presentationMode: 2,
     includeProteinBox: 3,
     includeSaucesBox: 4,
-    includeDrinksBox: 5,
+    // Drinks include column was removed from board Settings (Beta Features now sole source for footer boxes).
+    // Veggies column exists at 5 in current sheets but is ignored for control (beta wins).
+    includeDrinksBox: null,
     includeDescriptions: 6,
     menuColumns: 7,
   };
@@ -331,6 +333,51 @@
     isNew: 6,
     image: 7,
     include: 8,
+  };
+
+  /**
+   * Uniform column layout for the three shared "add-on" boxes (Proteins / Sauces / Drinks)
+   * now using revised structure (gid 1420775786 / 1630545949 / 1145721787).
+   * Matches what user standardized:
+   *   Settings section (label + headers + data row):
+   *     Title | Subtitle | BG Color | Create Columns? | Text Align | Priority
+   *   Inventory section (label + headers + item rows):
+   *     Item | Item Subtitle | Item Price | New | Image | Include
+   *
+   * "Image" is parsed but ignored for these boxes (visuals use other assets or none).
+   * Include: blank or truthy → show; explicit 0/false/no → filtered out.
+   * Priority (col F): **lower number = higher priority**. 1 = leftmost / major when two boxes;
+   *                  when three boxes it only affects left→right order.
+   * Defaults when blank: Protein `1`, Sauces `2`, Footer drinks `3` (Protein left/major by default).
+   * New / subtitle / price supported uniformly on all three footer boxes.
+   */
+  const BOX_REVISED_SETTINGS = {
+    title: 0,
+    subtitle: 1,
+    bgColor: 2,
+    createColumns: 3,
+    textAlign: 4,
+    priority: 5, // F — strip major/minor + left→right order (lower = higher priority)
+  };
+  const BOX_REVISED_INVENTORY = {
+    item: 0,
+    itemSubtitle: 1,
+    price: 2,
+    isNew: 3,
+    image: 4,
+    include: 5,
+  };
+  /**
+   * Default Priority when Settings F is blank.
+   * Semantics: lower number = higher priority.
+   *   1 = leftmost / major (when two boxes)
+   *   For three boxes: lowest number appears leftmost.
+   * These defaults keep the traditional Protein-left layout.
+   */
+  const FOOTER_PRIORITY_DEFAULTS = {
+    protein: 1,
+    sauces: 2,
+    drinks: 3,
   };
 
   /**
@@ -383,6 +430,8 @@
    * When columns are inserted in Settings, shift every index AFTER the insert.
    */
   const STYLE_REVISED_GID = "183083022"; // "Style and Theme" tab (revised layout)
+  /** Beta Features tab — see docs/BETA_FEATURES.md (Include Footer Boxes, injection rules). */
+  const BETA_FEATURES_GID = "1710200195";
   const STYLE_REVISED_SETTINGS = {
     themeSelector: 0,
     bgColor: 1,
@@ -439,9 +488,10 @@
       googleSheetGid: "0", // legacy; board1 now uses 1058015863 via config
       styleThemeGid: "183083022", // Style and Theme (revised)
       proteinSheetGid: null, // shared Protein sheet (all boards)
-      saucesSheetGid: null, // shared Sauces sheet (all boards)
-      drinksSheetGid: null, // board 4: drink box content (items / overview)
+      saucesSheetGid: null, // shared Sauces (revised uniform)
+      drinksSheetGid: null, // board 4 + footer drinks (revised uniform)
       drinksSheetColumns: null, // column map for drinksSheetGid
+      veggiesSheetGid: null, // Veggies footer box (new 4th type)
       inheritConfigGid: null, // legacy; unused when styleThemeGid set
       layout: "bowls",
       showHero: true,
@@ -513,6 +563,10 @@
     footerDrinksSubtitle: document.getElementById("footer-drinks-subtitle"),
     footerDrinksBody: document.getElementById("footer-drinks-body"),
     footerBoxes: document.getElementById("footer-boxes"),
+    // Veggies box (4th footer type, selected via Beta Features)
+    veggiesTitle: document.getElementById("veggies-title"),
+    veggiesSubtitle: document.getElementById("veggies-subtitle"),
+    veggiesBody: document.getElementById("veggies-body"),
     disclaimer: document.getElementById("disclaimer"),
     announcementTitle: document.getElementById("announcement-title"),
     announcementSubtitle: document.getElementById("announcement-subtitle"),
@@ -580,6 +634,7 @@
     include: true,
     createColumns: true, // default: grid bake-off (legacy protein)
     textAlign: "right", // legacy protein columns were right-aligned
+    priority: FOOTER_PRIORITY_DEFAULTS.protein,
   };
   let saucesBox = {
     title: "",
@@ -589,6 +644,7 @@
     include: true,
     createColumns: false, // default: balanced wrap (legacy sauces)
     textAlign: "center",
+    priority: FOOTER_PRIORITY_DEFAULTS.sauces,
   };
   /** Boards 1–3 footer drinks/soda box (shared Drinks sheet; off by default) */
   let footerDrinksBox = {
@@ -599,6 +655,18 @@
     include: false,
     createColumns: false,
     textAlign: "center",
+    priority: FOOTER_PRIORITY_DEFAULTS.drinks,
+  };
+  /** New 4th footer box type (Veggies) — selected via Beta Features comma list */
+  let veggiesBox = {
+    title: "",
+    subtitle: "",
+    items: [],
+    bg: null,
+    include: false,
+    createColumns: false,
+    textAlign: "center",
+    priority: 4, // default lower than Drinks (3)
   };
   /** Board list options from Include Descriptions? / Columns? (first filled cell) */
   let boardListOptions = {
@@ -992,6 +1060,263 @@
     const n = Number(raw);
     if (Number.isFinite(n)) return n === 1;
     return !!defaultVal;
+  }
+
+  /** New column (checkbox / 1 / TRUE) — blank → false. */
+  function parseIsNew(raw) {
+    return parseYesNo(raw, false);
+  }
+
+  /**
+   * Footer box Priority (Settings F).
+   * Lower number = higher priority (1 wins over 2).
+   *   When two boxes visible: lowest number gets the major (left/768) slot.
+   *   When three boxes: lowest number is leftmost.
+   * Blank / non-numeric → defaultVal.
+   */
+  function parsePriority(raw, defaultVal) {
+    const fallback =
+      defaultVal != null && Number.isFinite(Number(defaultVal))
+        ? Number(defaultVal)
+        : 0;
+    if (raw === undefined || raw === null || raw === "") return fallback;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    const n = Number(String(raw).trim().replace(/,/g, ""));
+    if (Number.isFinite(n)) return n;
+    return fallback;
+  }
+
+  /**
+   * Parse the Beta Features tab (gid 1710200195).
+   * Currently supports the "Boards" → "Include Footer Boxes" comma-separated list.
+   * Values are case-sensitive titles that must match the Title cell in each box's Settings.
+   * Exiled boxes (not in final top-3 by Priority) are skipped entirely.
+   *
+   * Example cell content: "Proteins, Sauces, Veggies"
+   *
+   * Tab layout (as of 2026-08-10):
+   *   Row 0: "Beta Features:"
+   *   Row 10: "Boards"
+   *   Row 11: "Include Footer Boxes"   ← header
+   *   Row 12: "Proteins, Sauces, Veggies"  ← data cell (comma list, case-sensitive titles)
+   */
+  function parseBetaFeatures(rows) {
+    if (!rows || rows.length < 3) return { footerBoxes: [] };
+    const result = { footerBoxes: [] };
+
+    // Find "Boards" section (label row, then headers, then data)
+    let boardsIdx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0] || "").trim().toLowerCase() === "boards") {
+        boardsIdx = i;
+        break;
+      }
+    }
+    if (boardsIdx === -1) return result;
+
+    // Look for "Include Footer Boxes" header in the next few rows
+    for (let i = boardsIdx + 1; i < Math.min(boardsIdx + 6, rows.length); i++) {
+      const label = String(rows[i][0] || "").trim();
+      if (label.toLowerCase() === "include footer boxes") {
+        // Data row is usually i+1
+        const dataRow = rows[i + 1] || rows[i];
+        const raw = cell(dataRow, 0);
+        if (raw) {
+          result.footerBoxes = String(raw)
+            .split(",")
+            .map(function (s) {
+              return s.trim();
+            })
+            .filter(Boolean);
+        }
+        break;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Given the comma-separated list from Beta Features, return the ordered
+   * set of footer boxes to actually use (max 3, sorted by Priority ascending).
+   * Any boxes beyond the top 3 are exiled (never fetched, never rendered).
+   * Titles are matched case-sensitively against the box's Settings Title.
+   */
+  function selectFooterBoxesFromBeta(betaList, boxRegistry) {
+    if (!betaList || !betaList.length) return [];
+    const selected = [];
+    for (let i = 0; i < betaList.length; i++) {
+      const title = betaList[i];
+      // Find matching box in registry (canonical title match)
+      for (let j = 0; j < boxRegistry.length; j++) {
+        if (boxRegistry[j].title === title) {
+          selected.push(boxRegistry[j]);
+          break;
+        }
+      }
+    }
+    // Sort by Priority (ascending = highest priority first)
+    selected.sort(function (a, b) {
+      const pa = Number.isFinite(a.priority) ? a.priority : 999;
+      const pb = Number.isFinite(b.priority) ? b.priority : 999;
+      return pa - pb;
+    });
+    // Exile anything past 3
+    return selected.slice(0, 3);
+  }
+
+  /**
+   * Parse Veggies sheet (gid 640368705) — identical revised structure to Proteins/Sauces/Drinks.
+   */
+  function parseVeggiesSheetRows(rows, fills) {
+    fills = fills || {};
+    const box = {
+      title: "",
+      subtitle: "",
+      items: [],
+      bgChoice: null,
+      bgFill: null,
+      createColumns: false,
+      textAlign: "center",
+      priority: 4,
+    };
+    if (!rows || rows.length < 2) return box;
+
+    const isRevised =
+      rows &&
+      rows[0] &&
+      String(rows[0][0] || "").trim().toLowerCase() === "settings";
+    if (!isRevised) return box;
+
+    const settingsIdx = findRevisedSectionDataStart(rows, "settings");
+    const srow =
+      settingsIdx >= 0 && settingsIdx < rows.length ? rows[settingsIdx] : rows[2];
+    const bs = BOX_REVISED_SETTINGS;
+
+    box.title = String(cell(srow, bs.title) || "").trim();
+    box.subtitle = String(cell(srow, bs.subtitle) || "").trim();
+    box.bgChoice = String(cell(srow, bs.bgColor) || "").trim() || null;
+    const sRow1 = settingsIdx + 1;
+    box.bgFill =
+      fills["C" + sRow1] ||
+      fills["C" + (sRow1 + 1)] ||
+      fills["C2"] ||
+      null;
+
+    box.createColumns = parseYesNo(cell(srow, bs.createColumns), false);
+    box.textAlign = parseTextAlign(cell(srow, bs.textAlign), "center");
+    box.priority = parsePriority(cell(srow, bs.priority), 4);
+
+    const invIdx = findRevisedSectionDataStart(rows, "inventory");
+    const start = invIdx >= 0 ? invIdx : 5;
+    const bi = BOX_REVISED_INVENTORY;
+    for (let i = start; i < rows.length; i++) {
+      const row = rows[i];
+      const name = cell(row, bi.item);
+      if (!name) continue;
+      const includeRaw = cell(row, bi.include);
+      if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
+        continue;
+      }
+      box.items.push({
+        name: String(name).trim(),
+        subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
+        price: formatPrice(cell(row, bi.price)),
+        isNew: parseIsNew(cell(row, bi.isNew)),
+      });
+    }
+    return box;
+  }
+
+  /**
+   * Clean price token for footer display (strip leading + / $).
+   * Returns "" if empty after clean.
+   */
+  function footerPriceClean(price) {
+    if (price == null || price === "") return "";
+    return String(price)
+      .replace(/^\+\s*/, "")
+      .replace(/^\$/, "")
+      .trim();
+  }
+
+  /** Full measure label for wrap packing: name + optional (sub) + optional + $price. */
+  function footerItemMeasureLabel(it) {
+    const name = String((it && it.name) || "").trim();
+    if (!name) return "";
+    let label = name;
+    const sub = it && it.subtitle ? String(it.subtitle).trim() : "";
+    if (sub) label += " (" + sub + ")";
+    const cleaned = footerPriceClean(it && it.price);
+    if (cleaned) label += " + $" + cleaned;
+    return label;
+  }
+
+  /**
+   * Table-level typography mode from the richest inventory row.
+   * Richest = most filled of {name, subtitle, price}. All rows inherit that mode.
+   *   typo-name           → Thin name
+   *   typo-name-price     → Bold name + Thin price
+   *   typo-name-sub       → Bold name + Regular subtitle
+   *   typo-name-sub-price → Bold name + Regular subtitle + Thin price
+   */
+  function footerTypoModeClass(items) {
+    const list = items || [];
+    let best = null;
+    let bestScore = -1;
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
+      if (!it || !it.name) continue;
+      const hasSub = !!(it.subtitle && String(it.subtitle).trim());
+      const hasPrice = !!footerPriceClean(it.price);
+      const score = 1 + (hasSub ? 1 : 0) + (hasPrice ? 1 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = { hasSub: hasSub, hasPrice: hasPrice };
+      }
+    }
+    if (!best || bestScore <= 1) return "typo-name";
+    if (best.hasSub && best.hasPrice) return "typo-name-sub-price";
+    if (best.hasPrice) return "typo-name-price";
+    if (best.hasSub) return "typo-name-sub";
+    return "typo-name";
+  }
+
+  function setFooterTypoMode(el, modeClass) {
+    if (!el) return;
+    el.classList.remove(
+      "typo-name",
+      "typo-name-price",
+      "typo-name-sub",
+      "typo-name-sub-price"
+    );
+    el.classList.add(modeClass || "typo-name");
+  }
+
+  /**
+   * Append name / subtitle / price spans into a footer item row or wrap chip.
+   * Shared by protein, sauces, and footer-drinks.
+   */
+  function appendFooterItemParts(parent, it) {
+    if (!parent || !it) return;
+    const nameEl = document.createElement("span");
+    nameEl.className = "box-item-name" + (it.isNew ? " is-new" : "");
+    nameEl.textContent = it.name || "";
+    parent.appendChild(nameEl);
+
+    if (it.subtitle) {
+      const sub = document.createElement("span");
+      sub.className = "item-paren-sub box-item-sub";
+      sub.textContent = " (" + it.subtitle + ")";
+      parent.appendChild(sub);
+    }
+
+    const cleaned = footerPriceClean(it.price);
+    if (cleaned) {
+      const priceEl = document.createElement("span");
+      priceEl.className = "box-item-price";
+      priceEl.textContent = " + $" + cleaned;
+      parent.appendChild(priceEl);
+    }
   }
 
   /** First non-empty cell in a column → Yes/No (or default). */
@@ -1454,15 +1779,21 @@
     ) {
       return null;
     }
-    if (!/\.(jpe?g|png|webp|gif)$/i.test(low) && low.indexOf("/") === -1) {
-      return null;
-    }
+    // Support bare names (e.g. "film") the same way item images do.
+    // If the sheet already specifies an extension (film.jpg), respect it.
     const file = token.replace(/^\/+/, "");
-    let path =
-      file.indexOf("assets/") === 0 || file.indexOf("/") !== -1
-        ? file
-        : BG_IMAGE_FOLDER + "/" + file;
-    return toWebpPath(path);
+    let path;
+    let forceWebpPreference = false;
+    if (file.indexOf("assets/") === 0 || file.indexOf("/") !== -1) {
+      path = file;
+    } else {
+      path = BG_IMAGE_FOLDER + "/" + file;
+      if (!/\.(jpe?g|png|webp|gif)$/i.test(file)) {
+        path += ".webp";
+        forceWebpPreference = true;
+      }
+    }
+    return forceWebpPreference ? toWebpPath(path) : path;
   }
 
   /**
@@ -1494,6 +1825,20 @@
     if (BG_BLEND_MODES.indexOf(s) >= 0) return s;
     console.warn("Unknown BG Blend Mode:", raw, "— using normal");
     return "normal";
+  }
+
+  /**
+   * Suggest a sensible default blend mode for known artistic/texture wallpapers
+   * (e.g. "film", "grain", "noise"). Only used when the Style row cell is blank.
+   * Blur and opacity remain purely global (Style Settings row).
+   */
+  function suggestBlendForWallpaper(path) {
+    if (!path) return null;
+    const low = String(path).toLowerCase();
+    if (low.includes("film") || low.includes("grain") || low.includes("noise")) {
+      return "overlay";
+    }
+    return null;
   }
 
   /**
@@ -1567,6 +1912,25 @@
     return Math.max(0, Math.min(1, o));
   }
 
+  /**
+   * Apply global Style background effects (blur, opacity, blend) to a galaxy layer.
+   * This is the single place that decides visual treatment — never derived from
+   * the wallpaper filename itself.
+   */
+  function applyBgEffects(el, blur01, opacity01, blend) {
+    if (!el) return;
+    if (blur01 <= 0) {
+      el.style.setProperty("--bg-image-blur", "none");
+      el.classList.remove("has-blur");
+    } else {
+      const px = (blur01 * BG_BLUR_MAX_PX).toFixed(2);
+      el.style.setProperty("--bg-image-blur", "blur(" + px + "px)");
+      el.classList.add("has-blur");
+    }
+    el.style.setProperty("--bg-image-opacity", String(opacity01));
+    el.style.setProperty("--bg-image-blend", blend || "normal");
+  }
+
   function applyStageBackground() {
     const galaxy = document.getElementById("galaxy");
     if (!galaxy) return;
@@ -1591,17 +1955,9 @@
     galaxy.classList.toggle("has-image", !!imagePath);
     galaxy.classList.toggle("is-solid", !imagePath);
 
-    // Blur: 0 → filter disabled (not blur(0)); 1 → BG_BLUR_MAX_PX
-    if (blur01 <= 0) {
-      galaxy.style.setProperty("--bg-image-blur", "none");
-      galaxy.classList.remove("has-blur");
-    } else {
-      const px = (blur01 * BG_BLUR_MAX_PX).toFixed(2);
-      galaxy.style.setProperty("--bg-image-blur", "blur(" + px + "px)");
-      galaxy.classList.add("has-blur");
-    }
-    galaxy.style.setProperty("--bg-image-opacity", String(opacity01));
-    galaxy.style.setProperty("--bg-image-blend", blend);
+    // Global Style-driven effects (never per-wallpaper).
+    // See applyBgEffects below.
+    applyBgEffects(galaxy, blur01, opacity01, blend);
 
     // Wall: one layer only. Solo: both for pan crossfade.
     const layerEls = wall ? [els.galaxyA] : [els.galaxyA, els.galaxyB];
@@ -1930,6 +2286,101 @@
   }
 
   /**
+   * True for archived tabs like "Proteins (old)", "Board 1 (old)".
+   * Live renamed sheets use bare titles (Proteins / Sauces / Drinks / Board N).
+   */
+  function isLegacySheetName(name) {
+    return /\(\s*old\s*\)/i.test(String(name || ""));
+  }
+
+  /**
+   * Choose the best workbook tab for a needle or predicate.
+   * Prefer non-(old) exact/near-exact titles so "Proteins" wins over "Proteins (old)".
+   *
+   * @param {string[]} names
+   * @param {object} opts
+   * @param {string|string[]} [opts.exact] preferred exact titles (case-insensitive)
+   * @param {RegExp|function} [opts.match] fallback matcher
+   * @param {string} [opts.contains] substring needle (xlsx fill path)
+   * @param {boolean} [opts.allowLegacy=true] last-resort match including (old)
+   * @returns {string|null}
+   */
+  function pickBestSheetName(names, opts) {
+    opts = opts || {};
+    const list = names || [];
+    if (!list.length) return null;
+    const allowLegacy = opts.allowLegacy !== false;
+
+    const exactList = []
+      .concat(opts.exact || [])
+      .map(function (s) {
+        return String(s || "")
+          .trim()
+          .toLowerCase();
+      })
+      .filter(Boolean);
+
+    function tryExact(skipLegacy) {
+      for (let e = 0; e < exactList.length; e++) {
+        const want = exactList[e];
+        for (let i = 0; i < list.length; i++) {
+          const n = list[i];
+          if (skipLegacy && isLegacySheetName(n)) continue;
+          if (String(n || "").trim().toLowerCase() === want) return n;
+        }
+      }
+      return null;
+    }
+
+    function tryMatch(skipLegacy) {
+      const m = opts.match;
+      if (!m) return null;
+      for (let i = 0; i < list.length; i++) {
+        const n = list[i];
+        if (skipLegacy && isLegacySheetName(n)) continue;
+        if (typeof m === "function" ? m(n) : m.test(String(n || ""))) return n;
+      }
+      return null;
+    }
+
+    function tryContains(skipLegacy) {
+      const needle = String(opts.contains || "")
+        .trim()
+        .toLowerCase();
+      if (!needle) return null;
+      let best = null;
+      let bestScore = -1;
+      for (let i = 0; i < list.length; i++) {
+        const n = String(list[i] || "");
+        if (skipLegacy && isLegacySheetName(n)) continue;
+        const low = n.trim().toLowerCase();
+        if (low.indexOf(needle) === -1) continue;
+        // Higher = better. Exact / plural of needle beat partial + (old).
+        let score = 10;
+        if (low === needle) score = 100;
+        else if (low === needle + "s" || low === needle.replace(/s$/, ""))
+          score = 90;
+        else if (low.indexOf(needle) === 0 && low.indexOf("(") === -1)
+          score = 50;
+        if (isLegacySheetName(n)) score -= 80;
+        if (score > bestScore) {
+          bestScore = score;
+          best = list[i];
+        }
+      }
+      return best;
+    }
+
+    return (
+      tryExact(true) ||
+      tryMatch(true) ||
+      tryContains(true) ||
+      (allowLegacy && (tryExact(false) || tryMatch(false) || tryContains(false))) ||
+      null
+    );
+  }
+
+  /**
    * Extract fills + font styles (+ rich text) from a workbook sheet.
    * Returns { fills, fonts, rich } keyed by cell ref (e.g. "F2").
    */
@@ -2096,19 +2547,28 @@
     }
 
     let sheetPath = null;
+    // Collect tab names first so we can prefer "Proteins" over "Proteins (old)".
+    const sheetEls = [];
     for (const sh of wbDoc.getElementsByTagName("*")) {
       if (xmlLocal(sh.tagName) !== "sheet") continue;
-      const name = sh.getAttribute("name") || "";
-      const rid =
-        sh.getAttribute("r:id") ||
-        sh.getAttributeNS(
-          "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-          "id"
-        );
-      if (
-        sheetNameMatch &&
-        name.toLowerCase().indexOf(String(sheetNameMatch).toLowerCase()) !== -1
-      ) {
+      sheetEls.push(sh);
+    }
+    const tabNames = sheetEls.map(function (sh) {
+      return sh.getAttribute("name") || "";
+    });
+    const chosenName = sheetNameMatch
+      ? pickBestSheetName(tabNames, { contains: String(sheetNameMatch) })
+      : null;
+    if (chosenName) {
+      for (let si = 0; si < sheetEls.length; si++) {
+        const sh = sheetEls[si];
+        if ((sh.getAttribute("name") || "") !== chosenName) continue;
+        const rid =
+          sh.getAttribute("r:id") ||
+          sh.getAttributeNS(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+            "id"
+          );
         sheetPath = ridToTarget[rid];
         break;
       }
@@ -2342,7 +2802,9 @@
       titleRowForTitle = settingsRow;
       includeProteinBox = parseInclude(cell(settingsRow, rs.includeProteinBox));
       includeSaucesBox = parseInclude(cell(settingsRow, rs.includeSaucesBox));
-      includeDrinksBox = parseInclude(cell(settingsRow, rs.includeDrinksBox));
+      // Beta is now the source of truth for which footer boxes (P/S/D/V) are shown.
+      // Board Settings no longer carries a reliable Include Drinks column (was shifted out).
+      includeDrinksBox = false;
       familyPortrait = parseInclude(cell(settingsRow, rs.familyPortrait));
       presentationMode = parsePresentationMode(cell(settingsRow, rs.presentationMode), "slideshow");
       includeDescriptions = parseInclude(cell(settingsRow, rs.includeDescriptions));
@@ -2807,9 +3269,19 @@
       parsed.bgOpacity != null ? parsed.bgOpacity : config.bgOpacity,
       1
     );
-    const bgBlendMode = parseBgBlendMode(
+    let bgBlendMode = parseBgBlendMode(
       parsed.bgBlendMode != null ? parsed.bgBlendMode : config.bgBlendMode
     );
+    // For texture overlays like "film", default to overlay when the cell is blank
+    // (blur/opacity stay global; only the blend mode gets a helpful default).
+    if (
+      (parsed.bgBlendMode == null || parsed.bgBlendMode === "") &&
+      bgBlendMode === "normal" &&
+      parsed.bgImage
+    ) {
+      const suggested = suggestBlendForWallpaper(parsed.bgImage);
+      if (suggested) bgBlendMode = suggested;
+    }
 
     config = {
       title: parsed.title || config.title || "",
@@ -2918,12 +3390,18 @@
         include: parsed.proteinBox.include !== false,
         createColumns: parsed.proteinBox.createColumns !== false,
         textAlign: parseTextAlign(parsed.proteinBox.textAlign, "right"),
+        priority: parsePriority(
+          parsed.proteinBox.priority,
+          FOOTER_PRIORITY_DEFAULTS.protein
+        ),
       };
       console.info(
         "Protein Create Columns?",
         proteinBox.createColumns ? "Yes" : "No",
         "align",
-        proteinBox.textAlign
+        proteinBox.textAlign,
+        "priority",
+        proteinBox.priority
       );
     }
     if (parsed.saucesBox) {
@@ -2938,12 +3416,18 @@
         include: parsed.saucesBox.include !== false,
         createColumns: !!parsed.saucesBox.createColumns,
         textAlign: parseTextAlign(parsed.saucesBox.textAlign, "center"),
+        priority: parsePriority(
+          parsed.saucesBox.priority,
+          FOOTER_PRIORITY_DEFAULTS.sauces
+        ),
       };
       console.info(
         "Sauces Create Columns?",
         saucesBox.createColumns ? "Yes" : "No",
         "align",
-        saucesBox.textAlign
+        saucesBox.textAlign,
+        "priority",
+        saucesBox.priority
       );
     }
     if (parsed.footerDrinksBox) {
@@ -2961,12 +3445,18 @@
           parsed.footerDrinksBox.textAlign,
           "center"
         ),
+        priority: parsePriority(
+          parsed.footerDrinksBox.priority,
+          FOOTER_PRIORITY_DEFAULTS.drinks
+        ),
       };
       console.info(
         "Footer drinks include?",
         footerDrinksBox.include ? "Yes" : "No",
         "Create Columns?",
         footerDrinksBox.createColumns ? "Yes" : "No",
+        "priority",
+        footerDrinksBox.priority,
         "items",
         (footerDrinksBox.items || []).length
       );
@@ -4215,6 +4705,11 @@
    * Shared Protein sheet:
    * Title | Subtitle | Color | Item | Price | Create Columns? | Text Align
    */
+  /**
+   * Shared Proteins sheet (footer box add-ons).
+   * Supports legacy flat layout and revised (Settings + Inventory sections).
+   * New "Image" column in revised Inventory is ignored for now.
+   */
   function parseProteinSheetRows(rows, fills) {
     fills = fills || {};
     const box = {
@@ -4225,30 +4720,93 @@
       bgFill: null,
       createColumns: true,
       textAlign: "right",
+      priority: FOOTER_PRIORITY_DEFAULTS.protein,
     };
     if (!rows || rows.length < 2) return box;
+
+    // Detect revised Proteins sheet (gid 1420775786+): Settings section + Inventory section
+    // (new "Image" column is present but ignored for now)
+    const isProteinRevised =
+      rows &&
+      rows[0] &&
+      String(rows[0][0] || "").trim().toLowerCase() === "settings";
+
+    if (isProteinRevised) {
+      // Settings: label at i, headers i+1, data at i+2
+      const settingsIdx = findRevisedSectionDataStart(rows, "settings");
+      const srow =
+        settingsIdx >= 0 && settingsIdx < rows.length ? rows[settingsIdx] : rows[2];
+      const bs = BOX_REVISED_SETTINGS;
+
+      box.title = String(cell(srow, bs.title) || "").trim();
+      box.subtitle = String(cell(srow, bs.subtitle) || "").trim();
+      box.bgChoice = String(cell(srow, bs.bgColor) || "").trim() || null;
+      // Color fill likely on the data row (e.g. C3); fall back to legacy C2
+      const sRow1 = settingsIdx + 1;
+      box.bgFill =
+        fills["C" + sRow1] ||
+        fills["C" + (sRow1 + 1)] ||
+        fills["C2"] ||
+        fills["C" + 2] ||
+        null;
+
+      box.createColumns = parseYesNo(cell(srow, bs.createColumns), true);
+      box.textAlign = parseTextAlign(cell(srow, bs.textAlign), "right");
+      box.priority = parsePriority(
+        cell(srow, bs.priority),
+        FOOTER_PRIORITY_DEFAULTS.protein
+      );
+
+      // Inventory items using uniform BOX_REVISED_INVENTORY
+      const invIdx = findRevisedSectionDataStart(rows, "inventory");
+      const start = invIdx >= 0 ? invIdx : 5;
+      const bi = BOX_REVISED_INVENTORY;
+      for (let i = start; i < rows.length; i++) {
+        const row = rows[i];
+        const name = cell(row, bi.item);
+        if (!name) continue;
+        const includeRaw = cell(row, bi.include);
+        if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
+          continue;
+        }
+        box.items.push({
+          name: String(name).trim(),
+          subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
+          price: formatPrice(cell(row, bi.price)),
+          isNew: parseIsNew(cell(row, bi.isNew)),
+        });
+      }
+      return box;
+    }
+
+    // Legacy flat structure (old Proteins gid) — no per-item New/Include columns
     const first = rows[1];
     box.title = String(cell(first, 0) || "").trim();
     box.subtitle = String(cell(first, 1) || "").trim();
     box.bgChoice = String(cell(first, 2) || "").trim() || null;
     box.bgFill = fills["C2"] || fills["C" + 2] || null;
-    // F = Create Columns? · G = Text Align
+    // F = Create Columns? · G = Text Align (legacy flat layout)
     box.createColumns = firstColumnYesNo(rows, 5, true);
     box.textAlign = firstColumnTextAlign(rows, 6, "right");
+    box.priority = FOOTER_PRIORITY_DEFAULTS.protein;
     for (let i = 1; i < rows.length; i++) {
       const name = cell(rows[i], 3);
       if (!name) continue;
       box.items.push({
         name: String(name).trim(),
         price: formatPrice(cell(rows[i], 4)),
+        isNew: false,
       });
     }
     return box;
   }
 
   /**
-   * Shared Sauces sheet:
-   * Title | Subtitle | Color | Item | Create Columns? | Text Align
+   * Shared Sauces sheet (revised or legacy).
+   * Revised (Sauces Revised gid=1630545949): uses uniform BOX_* columns.
+   *   Settings: Title | Subtitle | BG Color | Create Columns? | Text Align
+   *   Inventory: Item | Item Subtitle | Item Price | New | Image | Include
+   * Legacy: flat row with Sauces Box Title etc + items in col D.
    */
   function parseSaucesSheetRows(rows, fills) {
     fills = fills || {};
@@ -4260,16 +4818,69 @@
       bgFill: null,
       createColumns: false,
       textAlign: "center",
+      priority: FOOTER_PRIORITY_DEFAULTS.sauces,
     };
     if (!rows || rows.length < 2) return box;
+
+    const isSaucesRevised =
+      rows &&
+      rows[0] &&
+      String(rows[0][0] || "").trim().toLowerCase() === "settings";
+
+    if (isSaucesRevised) {
+      const settingsIdx = findRevisedSectionDataStart(rows, "settings");
+      const srow =
+        settingsIdx >= 0 && settingsIdx < rows.length ? rows[settingsIdx] : rows[2];
+      const bs = BOX_REVISED_SETTINGS;
+
+      box.title = String(cell(srow, bs.title) || "").trim();
+      box.subtitle = String(cell(srow, bs.subtitle) || "").trim();
+      box.bgChoice = String(cell(srow, bs.bgColor) || "").trim() || null;
+      const sRow1 = settingsIdx + 1;
+      box.bgFill =
+        fills["C" + sRow1] ||
+        fills["C" + (sRow1 + 1)] ||
+        fills["C2"] ||
+        null;
+
+      box.createColumns = parseYesNo(cell(srow, bs.createColumns), false);
+      box.textAlign = parseTextAlign(cell(srow, bs.textAlign), "center");
+      box.priority = parsePriority(
+        cell(srow, bs.priority),
+        FOOTER_PRIORITY_DEFAULTS.sauces
+      );
+
+      const invIdx = findRevisedSectionDataStart(rows, "inventory");
+      const start = invIdx >= 0 ? invIdx : 5;
+      const bi = BOX_REVISED_INVENTORY;
+      for (let i = start; i < rows.length; i++) {
+        const row = rows[i];
+        const name = cell(row, bi.item);
+        if (!name) continue;
+        const includeRaw = cell(row, bi.include);
+        if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
+          continue;
+        }
+        box.items.push({
+          name: String(name).trim(),
+          subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
+          price: formatPrice(cell(row, bi.price)),
+          isNew: parseIsNew(cell(row, bi.isNew)),
+        });
+      }
+      return box;
+    }
+
+    // Legacy flat structure
     const first = rows[1];
     box.title = String(cell(first, 0) || "").trim();
     box.subtitle = String(cell(first, 1) || "").trim();
     box.bgChoice = String(cell(first, 2) || "").trim() || null;
     box.bgFill = fills["C2"] || null;
-    // E = Create Columns? · F = Text Align
+    // E = Create Columns? · F = Text Align (legacy)
     box.createColumns = firstColumnYesNo(rows, 4, false);
     box.textAlign = firstColumnTextAlign(rows, 5, "center");
+    box.priority = FOOTER_PRIORITY_DEFAULTS.sauces;
     for (let i = 1; i < rows.length; i++) {
       const name = cell(rows[i], 3);
       if (!name) continue;
@@ -4332,7 +4943,7 @@
       jobs.push(
         (async function () {
           try {
-            const fills = await loadSheetFillsByName("Protein").catch(
+            const fills = await loadSheetFillsByName("Proteins").catch(
               function () {
                 return {};
               }
@@ -4362,7 +4973,7 @@
       jobs.push(
         (async function () {
           try {
-            const fills = await loadSheetFillsByName("Sauce").catch(
+            const fills = await loadSheetFillsByName("Sauces").catch(
               function () {
                 return {};
               }
@@ -4389,6 +5000,277 @@
     }
 
     if (jobs.length) await Promise.all(jobs);
+    return parsed;
+  }
+
+  /**
+   * Boards 1–3: load Veggies sheet (new 4th footer box) when selected via Beta Features.
+   * Always loads content when called — caller decides include/exile afterward.
+   */
+  async function attachVeggiesBox(parsed, prefetched) {
+    if (!parsed || !cfg.veggiesSheetGid) return parsed;
+    prefetched = prefetched || {};
+
+    try {
+      let fills = {};
+      try {
+        await fetchWorkbookXlsxBuffer(false);
+        fills = await loadSheetFillsByName("Veggies").catch(function () {
+          return {};
+        });
+      } catch (e) {
+        /* optional */
+      }
+
+      const rows =
+        prefetched.veggiesRows != null
+          ? prefetched.veggiesRows
+          : await fetchSheetRows(cfg.veggiesSheetGid);
+
+      if (!rows) throw new Error("no veggies rows");
+
+      const box = parseVeggiesSheetRows(rows, fills);
+      parsed.veggiesBox = {
+        title: box.title || "Veggies",
+        subtitle: box.subtitle || "",
+        items: box.items || [],
+        bgChoice: box.bgChoice,
+        bgFill: box.bgFill,
+        createColumns: !!box.createColumns,
+        textAlign: box.textAlign || "center",
+        priority: box.priority != null ? box.priority : 4,
+        include: true,
+      };
+      console.info(
+        "Veggies sheet loaded:",
+        cfg.veggiesSheetGid,
+        "items",
+        (box.items || []).length,
+        "title",
+        parsed.veggiesBox.title,
+        "priority",
+        parsed.veggiesBox.priority
+      );
+    } catch (err) {
+      console.warn("Could not load Veggies sheet:", err);
+      if (!parsed.veggiesBox) {
+        parsed.veggiesBox = {
+          title: "Veggies",
+          items: [],
+          include: true,
+          priority: 4,
+        };
+      } else {
+        parsed.veggiesBox.include = true;
+      }
+    }
+    return parsed;
+  }
+
+  /** Paint one footer box chrome (bg / text CSS vars + body surface). */
+  function paintFooterBoxChrome(elId, bgVar, textVar, color, image, text) {
+    const main = config.mainColor || "#000000";
+    const secondary = config.secondaryColor || "#ffffff";
+    const bg = normalizeHex(color) || main;
+    const textColor = text || pickContrastingThemeColor(bg, main, secondary);
+    const root = document.documentElement;
+    root.style.setProperty(bgVar, bg);
+    root.style.setProperty(textVar, textColor);
+    if (typeof applyBoxBodySurface === "function") {
+      applyBoxBodySurface(document.getElementById(elId), bg, image || null);
+    }
+    return { bg: bg, text: textColor };
+  }
+
+  /**
+   * Resolve a footer box Settings BG Color without needing applyParsedMenu's
+   * nested boxSurfaceFrom (not in outer scope).
+   */
+  function resolveFooterBoxBg(box) {
+    const main = config.mainColor || "#000000";
+    if (!box) return main;
+    const choice = box.bgChoice != null ? box.bgChoice : box.bg;
+    const s = String(choice == null ? "" : choice).trim();
+    const low = s.toLowerCase();
+    if (!s) {
+      return normalizeHex(box.bgFill) || main;
+    }
+    if (low === "main color" || low === "main") return main;
+    if (low === "secondary color" || low === "secondary") {
+      return config.secondaryColor || "#ffffff";
+    }
+    if (low === "highlight") return config.highlight || main;
+    if (low === "highlight special" || low === "special") {
+      return config.highlightSpecial || main;
+    }
+    const hex = normalizeHex(s);
+    if (hex) return hex;
+    return normalizeHex(box.bgFill) || main;
+  }
+
+  /**
+   * Apply Beta Features "Include Footer Boxes" as the sole source of truth for
+   * which footer boxes show on boards 1–3. Loads any named boxes that were not
+   * yet attached (Drinks / Veggies), ranks by sheet Priority (lower = higher),
+   * keeps top 3, exiles the rest (include=false, never rendered), then re-paints.
+   */
+  async function applyBetaFooterBoxesOverride(parsed) {
+    if (!parsed || isDrinks) return parsed;
+
+    let beta;
+    try {
+      const betaRows =
+        parsed._betaRows != null
+          ? parsed._betaRows
+          : await fetchSheetRows(BETA_FEATURES_GID);
+      beta = parseBetaFeatures(betaRows);
+    } catch (err) {
+      console.warn("Beta Features tab unavailable; using board Include* flags", err);
+      return parsed;
+    }
+    if (!beta.footerBoxes || !beta.footerBoxes.length) {
+      console.info("Beta Features: Include Footer Boxes empty — board flags stand");
+      return parsed;
+    }
+
+    const want = beta.footerBoxes; // case-sensitive titles as listed in the sheet
+    const wantSet = {};
+    want.forEach(function (t) {
+      wantSet[t] = true;
+    });
+    console.info("Beta Features Include Footer Boxes raw:", want);
+
+    // Load every named box that needs content (before ranking so Priority is real)
+    if (wantSet.Veggies && cfg.veggiesSheetGid) {
+      await attachVeggiesBox(parsed, {
+        veggiesRows: parsed._veggiesRows || null,
+      });
+    }
+    if (wantSet.Drinks && cfg.drinksSheetGid) {
+      // Force include true so attachFooterDrinksBox does not early-return empty
+      parsed.footerDrinksBox = Object.assign(
+        {},
+        parsed.footerDrinksBox || {},
+        { include: true }
+      );
+      await attachFooterDrinksBox(parsed, null, {});
+    }
+
+    // Build registry with live priorities from loaded sheet data
+    function prioOf(box, fallback) {
+      if (!box) return fallback;
+      return parsePriority(box.priority, fallback);
+    }
+    const registry = [
+      {
+        title: "Proteins",
+        priority: prioOf(parsed.proteinBox || proteinBox, FOOTER_PRIORITY_DEFAULTS.protein),
+      },
+      {
+        title: "Sauces",
+        priority: prioOf(parsed.saucesBox || saucesBox, FOOTER_PRIORITY_DEFAULTS.sauces),
+      },
+      {
+        title: "Drinks",
+        priority: prioOf(
+          parsed.footerDrinksBox || footerDrinksBox,
+          FOOTER_PRIORITY_DEFAULTS.drinks
+        ),
+      },
+      {
+        title: "Veggies",
+        priority: prioOf(parsed.veggiesBox || veggiesBox, 4),
+      },
+    ];
+    const selected = selectFooterBoxesFromBeta(want, registry);
+    const selectedTitles = selected.map(function (s) {
+      return s.title;
+    });
+    console.info(
+      "Beta Features Footer Boxes active (top 3 by Priority):",
+      selected.map(function (s) {
+        return s.title + "@" + s.priority;
+      })
+    );
+
+    const showP = selectedTitles.indexOf("Proteins") !== -1;
+    const showS = selectedTitles.indexOf("Sauces") !== -1;
+    const showD = selectedTitles.indexOf("Drinks") !== -1;
+    const showV = selectedTitles.indexOf("Veggies") !== -1;
+
+    // Sync include flags onto parsed + globals
+    if (parsed.proteinBox) parsed.proteinBox.include = showP;
+    if (parsed.saucesBox) parsed.saucesBox.include = showS;
+    if (parsed.footerDrinksBox) parsed.footerDrinksBox.include = showD;
+    if (parsed.veggiesBox) parsed.veggiesBox.include = showV;
+    else if (showV) {
+      parsed.veggiesBox = { title: "Veggies", items: [], include: true, priority: 4 };
+    }
+
+    proteinBox.include = showP;
+    saucesBox.include = showS;
+
+    // Promote fully loaded drinks / veggies into global runtime boxes
+    if (showD && parsed.footerDrinksBox) {
+      const fd = parsed.footerDrinksBox;
+      const bg = resolveFooterBoxBg(fd);
+      footerDrinksBox = {
+        title: fd.title || "",
+        subtitle: fd.subtitle || "",
+        items: fd.items || [],
+        bg: bg,
+        bgImage: null,
+        bgChoice: fd.bgChoice,
+        bgFill: fd.bgFill,
+        include: true,
+        createColumns: !!fd.createColumns,
+        textAlign: parseTextAlign(fd.textAlign, "center"),
+        priority: parsePriority(fd.priority, FOOTER_PRIORITY_DEFAULTS.drinks),
+      };
+      paintFooterBoxChrome(
+        "footer-drinks-box",
+        "--footer-drinks-box-bg",
+        "--footer-drinks-box-text",
+        footerDrinksBox.bg,
+        null,
+        null
+      );
+    } else {
+      footerDrinksBox.include = false;
+      footerDrinksBox.items = [];
+    }
+
+    if (showV && parsed.veggiesBox) {
+      const vb = parsed.veggiesBox;
+      const bg = resolveFooterBoxBg(vb);
+      veggiesBox = {
+        title: vb.title || "Veggies",
+        subtitle: vb.subtitle || "",
+        items: vb.items || [],
+        bg: bg,
+        bgImage: null,
+        bgChoice: vb.bgChoice,
+        bgFill: vb.bgFill,
+        include: true,
+        createColumns: !!vb.createColumns,
+        textAlign: parseTextAlign(vb.textAlign, "center"),
+        priority: parsePriority(vb.priority, 4),
+      };
+      paintFooterBoxChrome(
+        "veggies-box",
+        "--veggies-box-bg",
+        "--veggies-box-text",
+        veggiesBox.bg,
+        null,
+        null
+      );
+    } else {
+      veggiesBox.include = false;
+      veggiesBox.items = [];
+    }
+
+    // Re-paint layout + bodies with the final set
+    renderFooterBoxes();
     return parsed;
   }
 
@@ -4446,7 +5328,7 @@
       let fills = {};
       try {
         await fetchWorkbookXlsxBuffer(false);
-        fills = await loadSheetFillsByName("Drink");
+        fills = await loadSheetFillsByName("Drinks");
       } catch (e) {
         /* optional */
       }
@@ -4465,6 +5347,8 @@
           return {
             name: it.name,
             subtitle: it.subtitle || "",
+            price: it.price || "",
+            isNew: !!it.isNew,
           };
         });
       parsed.footerDrinksBox = {
@@ -4475,6 +5359,10 @@
         bgFill: box.bgFill,
         createColumns: !!box.createColumns,
         textAlign: box.textAlign || "center",
+        priority:
+          box.priority != null
+            ? box.priority
+            : FOOTER_PRIORITY_DEFAULTS.drinks,
         include: true,
       };
       console.info(
@@ -4502,11 +5390,13 @@
   function attachSharedProteinSaucesFromWorkbook(parsed, wb) {
     if (!parsed || !wb) return parsed;
     const names = wb.SheetNames || [];
-    const proteinName = names.find(function (n) {
-      return /protein/i.test(n);
+    const proteinName = pickBestSheetName(names, {
+      exact: ["Proteins", "Protein"],
+      match: /protein/i,
     });
-    const saucesName = names.find(function (n) {
-      return /sauce/i.test(n);
+    const saucesName = pickBestSheetName(names, {
+      exact: ["Sauces", "Sauce"],
+      match: /sauce/i,
     });
     if (proteinName && wb.Sheets[proteinName]) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[proteinName], {
@@ -4580,6 +5470,84 @@
     };
     if (!rows || rows.length < 2) return empty;
 
+    // Detect revised Drinks sheet (uniform Settings + Inventory like Proteins/Sauces)
+    const isDrinksRevised =
+      rows &&
+      rows[0] &&
+      String(rows[0][0] || "").trim().toLowerCase() === "settings";
+
+    if (isDrinksRevised) {
+      const bs = BOX_REVISED_SETTINGS;
+      const bi = BOX_REVISED_INVENTORY;
+
+      const settingsIdx = findRevisedSectionDataStart(rows, "settings");
+      const srow =
+        settingsIdx >= 0 && settingsIdx < rows.length ? rows[settingsIdx] : rows[2];
+
+      const drinkChoice = String(cell(srow, bs.bgColor) || "").trim() || null;
+      // Fills for drinks box use the BG Color cell in settings data row
+      const sRow1 = settingsIdx + 1;
+      const drinkFill =
+        fills["C" + sRow1] || fills["C" + (sRow1 + 1)] || fills["C2"] || null;
+
+      const invIdx = findRevisedSectionDataStart(rows, "inventory");
+      const start = invIdx >= 0 ? invIdx : 5;
+
+      const items = [];
+      for (let i = start; i < rows.length; i++) {
+        const row = rows[i];
+        const name = cell(row, bi.item);
+        if (name === "" || name == null) continue;
+        const includeRaw = cell(row, bi.include);
+        const inc =
+          includeRaw !== "" && includeRaw != null
+            ? parseInclude(includeRaw)
+            : true;
+        if (!inc) continue;
+
+        const imageName = cell(row, bi.image);
+        const subtitle = String(cell(row, bi.itemSubtitle) || "").trim();
+        const priceStr = formatPrice(cell(row, bi.price));
+        items.push({
+          name: String(name).trim(),
+          price: priceStr,
+          prices: priceStr ? [priceStr] : [],
+          description: "",
+          subtitle: subtitle,
+          isNew: parseIsNew(cell(row, bi.isNew)),
+          image:
+            imageName !== "" &&
+            imageName != null &&
+            String(imageName).toLowerCase() !== "null"
+              ? String(imageName).replace(/^\/+/, "")
+              : null,
+          include: true,
+        });
+      }
+
+      // Settings: Title…Text Align + Priority (F). Overview/individual stay true
+      // for Board 4 slideshow until dedicated Settings columns are added.
+      return {
+        items: items,
+        drinkBox: {
+          title: String(cell(srow, bs.title) || "").trim(),
+          subtitle: String(cell(srow, bs.subtitle) || "").trim(),
+          bgChoice: drinkChoice,
+          bgFill: drinkFill,
+          createColumns: parseYesNo(cell(srow, bs.createColumns), false),
+          textAlign: parseTextAlign(cell(srow, bs.textAlign), "center"),
+          priority: parsePriority(
+            cell(srow, bs.priority),
+            FOOTER_PRIORITY_DEFAULTS.drinks
+          ),
+        },
+        drinksOverview: true,
+        drinksIndividual: true,
+        overviewImage: null,
+      };
+    }
+
+    // Legacy flat drinks content
     const dataRows = rows.slice(1);
     const first =
       dataRows.find(function (r) {
@@ -4698,7 +5666,9 @@
       // Prefer tab names that aren't "Drinks Deals" (board tab).
       // Fills come from the single cached workbook xlsx (no re-download).
       let fills = {};
+      // Canonical tab is "Drinks" (legacy archive is "Drinks (old)").
       const nameCandidates = [
+        "Drinks",
         "Drink Options",
         "Drinks Menu",
         "Drinks Content",
@@ -4749,13 +5719,13 @@
   function attachSharedDrinksFromWorkbook(parsed, wb, fills) {
     if (!parsed || !wb || !isDrinks) return parsed;
     const names = wb.SheetNames || [];
-    const contentName =
-      names.find(function (n) {
-        return /drink\s*option/i.test(n);
-      }) ||
-      names.find(function (n) {
+    const contentName = pickBestSheetName(names, {
+      exact: ["Drinks", "Drink Options", "Drinks Menu", "Drinks Content"],
+      match: function (n) {
+        if (/drink\s*option/i.test(n)) return true;
         return /drink/i.test(n) && !/deal/i.test(n) && !/announce/i.test(n);
-      });
+      },
+    });
     if (!contentName || !wb.Sheets[contentName]) return parsed;
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[contentName], {
       header: 1,
@@ -4814,6 +5784,17 @@
       // Board 4 content and/or boards 1–3 footer drinks box
       csvJobs.drinks = fetchSheetRows(cfg.drinksSheetGid);
     }
+    if (
+      !isDrinks &&
+      cfg.veggiesSheetGid != null &&
+      cfg.veggiesSheetGid !== ""
+    ) {
+      csvJobs.veggies = fetchSheetRows(cfg.veggiesSheetGid);
+    }
+    if (!isDrinks) {
+      // Beta Features: Include Footer Boxes (comma list) — boards 1–3
+      csvJobs.beta = fetchSheetRows(BETA_FEATURES_GID);
+    }
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
       csvJobs.style = fetchSheetRows(cfg.styleThemeGid);
     }
@@ -4871,6 +5852,8 @@
       protein: csv.protein || null,
       sauces: csv.sauces || null,
       drinks: csv.drinks || null,
+      veggies: csv.veggies || null,
+      beta: csv.beta || null,
       style: csv.style || null,
     });
     if (
@@ -4937,6 +5920,10 @@
       }
     }
 
+    // Prefetch stash for Beta override (avoid second network round-trip / 429)
+    parsed._betaRows = csv.beta || null;
+    parsed._veggiesRows = csv.veggies || null;
+
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
       try {
         const theme = await loadStyleTheme({ styleRows: csv.style });
@@ -4992,34 +5979,48 @@
 
   function pickWorkbookSheetName(wb) {
     const names = wb.SheetNames || [];
-    // Prefer generic Board N titles, then legacy product tab names.
+    // Prefer bare Board N titles (skip "Board 1 (old)"), then product names.
     const prefer = {
-      bowls: [/board\s*1/i, /bowls/i],
-      handhelds: [/board\s*2/i, /handheld/i],
-      munchies: [/board\s*3/i, /munchies/i],
-      drinks: [/drinks/i, /announce/i],
+      bowls: {
+        exact: ["Board 1", "Bowls"],
+        patterns: [/board\s*1/i, /bowls/i],
+      },
+      handhelds: {
+        exact: ["Board 2", "Handhelds"],
+        patterns: [/board\s*2/i, /handheld/i],
+      },
+      munchies: {
+        exact: ["Board 3", "Munchies"],
+        patterns: [/board\s*3/i, /munchies/i],
+      },
+      drinks: {
+        exact: ["Board 4", "Announcements"],
+        patterns: [/board\s*4/i, /announce/i],
+      },
     };
-    const patterns = prefer[cfg.layout] || [];
-    for (let p = 0; p < patterns.length; p++) {
-      const hit = names.find(function (n) {
-        return patterns[p].test(n);
+    const spec = prefer[cfg.layout] || { exact: [], patterns: [] };
+    for (let p = 0; p < (spec.patterns || []).length; p++) {
+      const hit = pickBestSheetName(names, {
+        exact: p === 0 ? spec.exact : [],
+        match: spec.patterns[p],
       });
       if (hit) return hit;
     }
     // Never use Style/Theme as menu data (it's usually first after the reorder)
-    const notStyle = names.find(function (n) {
-      return !/style|theme/i.test(n);
+    const notStyle = pickBestSheetName(names, {
+      match: function (n) {
+        return !/style|theme/i.test(n);
+      },
     });
     return notStyle || names[0];
   }
 
   function pickStyleSheetName(wb) {
     const names = wb.SheetNames || [];
-    return (
-      names.find(function (n) {
-        return /style|theme/i.test(n);
-      }) || null
-    );
+    return pickBestSheetName(names, {
+      exact: ["Style and Theme", "Style & Theme"],
+      match: /style|theme/i,
+    });
   }
 
   async function fetchLocalXlsxBuffer() {
@@ -5137,7 +6138,7 @@
     try {
       let drinkFills = {};
       try {
-        const drinkMeta = await extractSheetStylesFromXlsx(buf, "Drink");
+        const drinkMeta = await extractSheetStylesFromXlsx(buf, "Drinks");
         drinkFills = drinkMeta.fills || {};
       } catch (e) {
         /* optional */
@@ -5158,13 +6159,12 @@
   function attachFooterDrinksFromWorkbook(parsed, wb, fills) {
     if (!parsed || !wb || isDrinks) return parsed;
     const names = wb.SheetNames || [];
-    const contentName =
-      names.find(function (n) {
-        return /^drinks?$/i.test(String(n).trim());
-      }) ||
-      names.find(function (n) {
+    const contentName = pickBestSheetName(names, {
+      exact: ["Drinks", "Drink"],
+      match: function (n) {
         return /drink/i.test(n) && !/deal/i.test(n) && !/board/i.test(n);
-      });
+      },
+    });
     if (!contentName || !wb.Sheets[contentName]) return parsed;
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[contentName], {
       header: 1,
@@ -5178,7 +6178,12 @@
         return it && it.include !== false;
       })
       .map(function (it) {
-        return { name: it.name, subtitle: it.subtitle || "" };
+        return {
+          name: it.name,
+          subtitle: it.subtitle || "",
+          price: it.price || "",
+          isNew: !!it.isNew,
+        };
       });
     const flag = !!(parsed.footerDrinksBox && parsed.footerDrinksBox.include);
     parsed.footerDrinksBox = {
@@ -5189,6 +6194,10 @@
       bgFill: box.bgFill,
       createColumns: !!box.createColumns,
       textAlign: box.textAlign || "center",
+      priority:
+        box.priority != null
+          ? box.priority
+          : FOOTER_PRIORITY_DEFAULTS.drinks,
       include: flag,
     };
     return parsed;
@@ -5240,6 +6249,14 @@
       const fp = parsed._fingerprint || null;
       if (parsed._fingerprint) delete parsed._fingerprint;
       applyParsedMenu(parsed);
+      try {
+        await applyBetaFooterBoxesOverride(parsed);
+      } catch (betaErr) {
+        console.warn(
+          "Beta footer override failed (soft refresh):",
+          betaErr && betaErr.message ? betaErr.message : betaErr
+        );
+      }
       if (fp) _lastDataFingerprint = fp;
       dataSource = "google-sheet";
       tokiInfo("refresh: applied sheet changes", "fp=" + (fp || "?"));
@@ -5258,6 +6275,15 @@
         _lastDataFingerprint = fingerprintSheetPayload(parsed);
         dataSource = "xlsx-local";
         tokiInfo("TokiMenu data source: LOCAL (" + localXlsxPath() + ")");
+        // Apply Beta override on top (main board data from xlsx; Beta + Veggies/Drinks fetch live)
+        try {
+          await applyBetaFooterBoxesOverride(parsed);
+        } catch (betaErr) {
+          console.warn(
+            "Beta footer override failed (local xlsx):",
+            betaErr && betaErr.message ? betaErr.message : betaErr
+          );
+        }
         return dataSource;
       } catch (err) {
         errors.push("local xlsx: " + (err.message || err));
@@ -5278,6 +6304,16 @@
           delete parsed._fingerprint;
         }
         applyParsedMenu(parsed);
+        try {
+          await applyBetaFooterBoxesOverride(parsed);
+        } catch (betaErr) {
+          // Never let Beta override kill the whole board load
+          console.warn(
+            "Beta footer override failed (board still loaded):",
+            betaErr && betaErr.message ? betaErr.message : betaErr
+          );
+        }
+
         dataSource = "google-sheet";
         tokiInfo("TokiMenu data source: GOOGLE SHEET");
         return dataSource;
@@ -5292,7 +6328,16 @@
     for (const fb of fallbacks) {
       try {
         if (fb === "xlsx") {
-          applyParsedMenu(await loadMenuFromXlsx());
+          const p = await loadMenuFromXlsx();
+          applyParsedMenu(p);
+          try {
+            await applyBetaFooterBoxesOverride(p);
+          } catch (betaErr) {
+            console.warn(
+              "Beta footer override failed (xlsx fallback):",
+              betaErr && betaErr.message ? betaErr.message : betaErr
+            );
+          }
           dataSource = "xlsx";
           return dataSource;
         }
@@ -5975,25 +7020,50 @@
     syncInfoBoxShell(document.getElementById("protein-box"));
     syncInfoBoxShell(document.getElementById("sauces-box"));
     syncInfoBoxShell(document.getElementById("footer-drinks-box"));
+    syncInfoBoxShell(document.getElementById("veggies-box"));
   }
 
   /**
    * Footer layout (boards 1–3) — docs/FOOTER_BOXES.md
    *  0 → hide strip
    *  1 → one box 1082px
-   *  2 → left-heavy 768 + 299 (order: protein → sauces → drinks)
-   *  3 → even thirds, 15px gaps
+   *  2 → left-heavy 768 + 299 (lowest Priority number = major/left)
+   *  3 → even thirds, 15px gaps (Priority only affects left→right order)
+   * Sizes never change — only which box sits in major/minor/slots.
    */
   function applyFooterBoxesLayout() {
     if (!els.footerBoxes) return;
     const showP = proteinBox.include !== false;
     const showS = saucesBox.include !== false;
     const showD = !!footerDrinksBox.include;
+    const showV = !!veggiesBox.include;
 
+    // typeOrder is the stable tie-break when Priority values match.
     const slots = [
-      { id: "protein-box", show: showP },
-      { id: "sauces-box", show: showS },
-      { id: "footer-drinks-box", show: showD },
+      {
+        id: "protein-box",
+        show: showP,
+        priority: proteinBox.priority,
+        typeOrder: 0,
+      },
+      {
+        id: "sauces-box",
+        show: showS,
+        priority: saucesBox.priority,
+        typeOrder: 1,
+      },
+      {
+        id: "footer-drinks-box",
+        show: showD,
+        priority: footerDrinksBox.priority,
+        typeOrder: 2,
+      },
+      {
+        id: "veggies-box",
+        show: showV,
+        priority: veggiesBox.priority != null ? veggiesBox.priority : 4,
+        typeOrder: 3,
+      },
     ];
     const visible = [];
     slots.forEach(function (s) {
@@ -6001,7 +7071,32 @@
       if (!el) return;
       el.hidden = !s.show;
       el.classList.remove("footer-major", "footer-minor");
-      if (s.show) visible.push(el);
+      if (s.show) {
+        // Use the box's own default if the value is missing
+        let defP = FOOTER_PRIORITY_DEFAULTS.protein;
+        if (s.id === "sauces-box") defP = FOOTER_PRIORITY_DEFAULTS.sauces;
+        else if (s.id === "footer-drinks-box") defP = FOOTER_PRIORITY_DEFAULTS.drinks;
+        else if (s.id === "veggies-box") defP = 4;
+        visible.push({
+          el: el,
+          priority: s.priority != null ? Number(s.priority) : defP,
+          typeOrder: s.typeOrder,
+          id: s.id,
+        });
+      }
+    });
+
+    // Lowest Priority number first (leftmost). Tie → protein, sauces, drinks.
+    visible.sort(function (a, b) {
+      const pa = Number.isFinite(a.priority) ? a.priority : 0;
+      const pb = Number.isFinite(b.priority) ? b.priority : 0;
+      if (pa !== pb) return pa - pb; // smaller number wins (higher priority)
+      return a.typeOrder - b.typeOrder;
+    });
+
+    // DOM order = left → right so flex major/minor land correctly.
+    visible.forEach(function (v) {
+      els.footerBoxes.appendChild(v.el);
     });
 
     const bodyModes = [
@@ -6039,9 +7134,11 @@
       document.body.classList.add("footer-sauces-only");
     }
 
+    // Two boxes: lowest Priority number = major (768 left), higher number = minor (299).
+    // Three boxes: equal thirds — Priority only affects left→right order (via DOM sort above).
     if (n === 2) {
-      visible[0].classList.add("footer-major");
-      visible[1].classList.add("footer-minor");
+      visible[0].el.classList.add("footer-major");
+      visible[1].el.classList.add("footer-minor");
     }
 
     const any = n > 0;
@@ -6053,6 +7150,10 @@
     console.info(
       "Footer boxes:",
       mode,
+      "order",
+      visible.map(function (v) {
+        return v.id + "@" + v.priority;
+      }),
       "protein",
       showP,
       "sauces",
@@ -6067,6 +7168,91 @@
     applyFooterBoxesLayout();
   }
 
+  /**
+   * Shared footer-box body paint (protein / sauces / footer drinks).
+   * Same datapoints → same structure: name · (subtitle) · + $price · is-new.
+   * @param {HTMLElement} bodyEl
+   * @param {object} box — { items, createColumns, textAlign, include }
+   * @param {object} conf
+   * @param {string} conf.colItemClass — extra class on column row
+   * @param {string} conf.wrapItemClass — extra class on wrap chip
+   * @param {string} conf.sepClass
+   * @param {string} conf.breakClass
+   * @param {boolean} [conf.defaultColumns]
+   */
+  function renderFooterBoxBody(bodyEl, box, conf) {
+    if (!bodyEl || !box) return;
+    conf = conf || {};
+    bodyEl.innerHTML = "";
+    bodyEl.style.setProperty("--box-scale", "1");
+
+    // protein defaultColumns:true → on unless explicit No
+    // sauces/drinks defaultColumns:false → off unless explicit Yes
+    const columnsOn =
+      conf.defaultColumns === true
+        ? box.createColumns !== false
+        : !!box.createColumns;
+
+    setBoxLayoutMode(bodyEl, columnsOn);
+    setBoxTextAlign(bodyEl, box.textAlign);
+    setFooterTypoMode(bodyEl, footerTypoModeClass(box.items));
+
+    if (box.include === false) return;
+
+    const list = box.items || [];
+    if (!list.length) return;
+
+    if (columnsOn) {
+      list.forEach(function (it) {
+        const row = document.createElement("div");
+        row.className =
+          (conf.colItemClass || "box-col-item") + " box-col-item";
+        appendFooterItemParts(row, it);
+        bodyEl.appendChild(row);
+      });
+      return;
+    }
+
+    const lines = balanceItemsIntoLines(
+      list.map(function (it) {
+        return {
+          label: footerItemMeasureLabel(it),
+          name: it.name,
+          subtitle: it.subtitle || "",
+          price: it.price || "",
+          isNew: !!it.isNew,
+        };
+      }),
+      balanceOptsFromBox(bodyEl, {
+        sepText: " · ",
+        maxLines: 8,
+      })
+    );
+    lines.forEach(function (line, li) {
+      line.forEach(function (it, i) {
+        const span = document.createElement("span");
+        span.className =
+          (conf.wrapItemClass || "wrap-item") + " wrap-item";
+        appendFooterItemParts(span, it);
+        bodyEl.appendChild(span);
+        if (i < line.length - 1) {
+          const sep = document.createElement("span");
+          sep.className = (conf.sepClass || "wrap-sep") + " wrap-sep";
+          sep.textContent = " · ";
+          sep.setAttribute("aria-hidden", "true");
+          bodyEl.appendChild(sep);
+        }
+      });
+      if (li < lines.length - 1) {
+        const br = document.createElement("span");
+        br.className =
+          (conf.breakClass || "wrap-line-break") + " wrap-line-break";
+        br.setAttribute("aria-hidden", "true");
+        bodyEl.appendChild(br);
+      }
+    });
+  }
+
   function renderFooterBoxes() {
     if (!els.footerBoxes) return;
     applyHandheldsFooterLayout();
@@ -6079,196 +7265,61 @@
     if (els.saucesSubtitle) {
       els.saucesSubtitle.textContent = saucesBox.subtitle || "";
     }
-
-    if (els.proteinBody) {
-      els.proteinBody.innerHTML = "";
-      els.proteinBody.style.setProperty("--box-scale", "1");
-      setBoxLayoutMode(els.proteinBody, proteinBox.createColumns !== false);
-      setBoxTextAlign(els.proteinBody, proteinBox.textAlign);
-      if (proteinBox.include !== false) {
-        const list = proteinBox.items || [];
-        if (proteinBox.createColumns !== false) {
-          list.forEach((it) => {
-            const row = document.createElement("div");
-            row.className = "protein-row box-col-item";
-
-            const name = document.createElement("span");
-            name.className = "protein-name";
-            name.textContent = it.name;
-            row.appendChild(name);
-
-            if (it.price) {
-              const cleaned = String(it.price)
-                .replace(/^\+\s*/, "")
-                .replace(/^\$/, "")
-                .trim();
-              const priceEl = document.createElement("span");
-              priceEl.className = "protein-price";
-              priceEl.textContent = " + $" + cleaned;
-              row.appendChild(priceEl);
-            }
-
-            els.proteinBody.appendChild(row);
-          });
-        } else {
-          // Balanced wrap with bold name + regular-weight price (same as columns)
-          const lines = balanceItemsIntoLines(
-            list.map(function (it) {
-              return {
-                label: proteinWrapLabel(it),
-                name: it.name,
-                price: it.price,
-              };
-            }),
-            balanceOptsFromBox(els.proteinBody, {
-              sepText: " · ",
-              maxLines: 8,
-            })
-          );
-          lines.forEach(function (line, li) {
-            line.forEach(function (it, i) {
-              const span = document.createElement("span");
-              span.className = "protein-wrap-item wrap-item";
-
-              const nameEl = document.createElement("span");
-              nameEl.className = "protein-name";
-              nameEl.textContent = it.name || "";
-              span.appendChild(nameEl);
-
-              if (it.price) {
-                const cleaned = String(it.price)
-                  .replace(/^\+\s*/, "")
-                  .replace(/^\$/, "")
-                  .trim();
-                if (cleaned) {
-                  const priceEl = document.createElement("span");
-                  priceEl.className = "protein-price";
-                  priceEl.textContent = " + $" + cleaned;
-                  span.appendChild(priceEl);
-                }
-              }
-
-              els.proteinBody.appendChild(span);
-              if (i < line.length - 1) {
-                const sep = document.createElement("span");
-                sep.className = "protein-wrap-sep wrap-sep";
-                sep.textContent = " · ";
-                sep.setAttribute("aria-hidden", "true");
-                els.proteinBody.appendChild(sep);
-              }
-            });
-            if (li < lines.length - 1) {
-              const br = document.createElement("span");
-              br.className = "protein-line-break wrap-line-break";
-              br.setAttribute("aria-hidden", "true");
-              els.proteinBody.appendChild(br);
-            }
-          });
-        }
-      }
-    }
-
-    if (els.saucesBody) {
-      els.saucesBody.innerHTML = "";
-      els.saucesBody.style.setProperty("--box-scale", "1");
-      setBoxLayoutMode(els.saucesBody, !!saucesBox.createColumns);
-      setBoxTextAlign(els.saucesBody, saucesBox.textAlign);
-      if (saucesBox.include !== false) {
-        const list = saucesBox.items || [];
-        if (saucesBox.createColumns) {
-          list.forEach(function (it) {
-            const row = document.createElement("div");
-            row.className = "sauce-col-item box-col-item";
-            // Inner span → reliable max-content width in fitColumnBox
-            const label = document.createElement("span");
-            label.className = "sauce-col-label";
-            label.textContent = it.name;
-            row.appendChild(label);
-            els.saucesBody.appendChild(row);
-          });
-        } else {
-          const lines = balanceItemsIntoLines(
-            list.map(function (it) {
-              return { label: String(it.name || ""), name: it.name };
-            }),
-            balanceOptsFromBox(els.saucesBody, {
-              sepText: " · ",
-              maxLines: 8,
-            })
-          );
-          appendBalancedWrapItems(els.saucesBody, lines, {
-            itemClass: "sauce-item wrap-item",
-            sepClass: "sauce-sep wrap-sep",
-            breakClass: "sauce-line-break wrap-line-break",
-            sepText: " · ",
-            getText: function (it) {
-              return it.name;
-            },
-          });
-        }
-      }
-    }
-
     if (els.footerDrinksTitle) {
       els.footerDrinksTitle.textContent = footerDrinksBox.title || "";
     }
     if (els.footerDrinksSubtitle) {
       els.footerDrinksSubtitle.textContent = footerDrinksBox.subtitle || "";
     }
-    if (els.footerDrinksBody) {
-      els.footerDrinksBody.innerHTML = "";
-      els.footerDrinksBody.style.setProperty("--box-scale", "1");
-      setBoxLayoutMode(els.footerDrinksBody, !!footerDrinksBox.createColumns);
-      setBoxTextAlign(els.footerDrinksBody, footerDrinksBox.textAlign);
-      if (footerDrinksBox.include) {
-        const list = footerDrinksBox.items || [];
-        if (footerDrinksBox.createColumns) {
-          list.forEach(function (it) {
-            const row = document.createElement("div");
-            row.className = "footer-drink-col-item box-col-item";
-            const label = document.createElement("span");
-            label.className = "footer-drink-col-label";
-            label.textContent = it.name;
-            row.appendChild(label);
-            els.footerDrinksBody.appendChild(row);
-          });
-        } else {
-          const lines = balanceItemsIntoLines(
-            list.map(function (it) {
-              return { label: String(it.name || ""), name: it.name };
-            }),
-            balanceOptsFromBox(els.footerDrinksBody, {
-              sepText: " · ",
-              maxLines: 8,
-            })
-          );
-          appendBalancedWrapItems(els.footerDrinksBody, lines, {
-            itemClass: "footer-drink-item wrap-item",
-            sepClass: "footer-drink-sep wrap-sep",
-            breakClass: "footer-drink-line-break wrap-line-break",
-            sepText: " · ",
-            getText: function (it) {
-              return it.name;
-            },
-          });
-        }
-      }
+    // Re-bind in case HTML loaded after els init (defensive)
+    if (!els.veggiesTitle) els.veggiesTitle = document.getElementById("veggies-title");
+    if (!els.veggiesSubtitle) els.veggiesSubtitle = document.getElementById("veggies-subtitle");
+    if (!els.veggiesBody) els.veggiesBody = document.getElementById("veggies-body");
+    if (els.veggiesTitle) els.veggiesTitle.textContent = veggiesBox.title || "";
+    if (els.veggiesSubtitle) {
+      els.veggiesSubtitle.textContent = veggiesBox.subtitle || "";
     }
+
+    renderFooterBoxBody(els.proteinBody, proteinBox, {
+      defaultColumns: true,
+      colItemClass: "protein-row",
+      wrapItemClass: "protein-wrap-item",
+      sepClass: "protein-wrap-sep",
+      breakClass: "protein-line-break",
+    });
+
+    renderFooterBoxBody(els.saucesBody, saucesBox, {
+      defaultColumns: false,
+      colItemClass: "sauce-col-item",
+      wrapItemClass: "sauce-item",
+      sepClass: "sauce-sep",
+      breakClass: "sauce-line-break",
+    });
+
+    renderFooterBoxBody(els.footerDrinksBody, footerDrinksBox, {
+      defaultColumns: false,
+      colItemClass: "footer-drink-col-item",
+      wrapItemClass: "footer-drink-item",
+      sepClass: "footer-drink-sep",
+      breakClass: "footer-drink-line-break",
+    });
+
+    renderFooterBoxBody(els.veggiesBody, veggiesBox, {
+      defaultColumns: false,
+      colItemClass: "veggie-col-item",
+      wrapItemClass: "veggie-item",
+      sepClass: "veggie-sep",
+      breakClass: "veggie-line-break",
+    });
 
     // Shells after content/layout settle (width may change when solo)
     syncFooterBoxShells();
     fitFooterBoxes();
   }
 
+  /** @deprecated use footerItemMeasureLabel */
   function proteinWrapLabel(it) {
-    const name = String((it && it.name) || "").trim();
-    if (!it || !it.price) return name;
-    const cleaned = String(it.price)
-      .replace(/^\+\s*/, "")
-      .replace(/^\$/, "")
-      .trim();
-    if (!cleaned) return name;
-    return name + " + $" + cleaned;
+    return footerItemMeasureLabel(it);
   }
 
   /** Toggle body between grid columns and balanced wrap. */
@@ -6720,6 +7771,7 @@
         el.classList.contains("wrap-item") ||
         el.classList.contains("sauce-item") ||
         el.classList.contains("drink-item") ||
+        el.classList.contains("footer-drink-item") ||
         el.classList.contains("protein-wrap-item")
       );
     }
@@ -6859,6 +7911,24 @@
           lineBreakClass: "footer-drink-line-break",
           forceBreakClass: "footer-drink-force-break",
           itemClass: "footer-drink-item",
+        });
+      }
+    }
+
+    if (veggiesBox.include && els.veggiesBody) {
+      if (veggiesBox.createColumns) {
+        fitColumnBox(els.veggiesBody, {
+          rowSelector: ".box-col-item, .veggie-col-item",
+          label: "Veggies",
+          minColPx: 120,
+        });
+      } else {
+        fitWrapBox(els.veggiesBody, {
+          sepSelector: ".veggie-sep, .wrap-sep",
+          forceBreakSelector: ".veggie-force-break",
+          lineBreakClass: "veggie-line-break",
+          forceBreakClass: "veggie-force-break",
+          itemClass: "veggie-item",
         });
       }
     }
@@ -7598,16 +8668,7 @@
     const wrap = document.createElement("div");
     wrap.className = "family-portrait-bg";
     wrap.setAttribute("aria-hidden", "true");
-    wrap.style.setProperty("--bg-image-opacity", String(opacity01));
-    wrap.style.setProperty("--bg-image-blend", blend || "normal");
-    if (blur01 <= 0) {
-      wrap.style.setProperty("--bg-image-blur", "none");
-    } else {
-      wrap.style.setProperty(
-        "--bg-image-blur",
-        "blur(" + (blur01 * BG_BLUR_MAX_PX).toFixed(2) + "px)"
-      );
-    }
+    applyBgEffects(wrap, blur01, opacity01, blend);
 
     const plateEl = document.createElement("div");
     plateEl.className = "family-portrait-bg-plate";

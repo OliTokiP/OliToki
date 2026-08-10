@@ -8,16 +8,20 @@
  *
  * Theme / speeds / highlights: Style tab (styleThemeGid).
  * Debug Menu (master + per-feature switches): debugMenuGid.
- * Protein/Sauces content: shared sheets (proteinSheetGid / saucesSheetGid).
+ * Protein/Sauces/Drinks content: shared revised sheets (Settings top + Inventory).
+ * Footer boxes now selected via Beta Features "Include Footer Boxes" (comma list of titles; max 3 by Priority asc; others exiled).
+ * Per-box tabs (Proteins/Sauces/Drinks/Veggies) use: Settings (Title, Subtitle, BG, Create Cols?, Align, Priority) + Inventory.
+ * Priority lower number = higher (1 leftmost). Board Settings includes are overridden by Beta for boards 1-3.
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "1058015863", // Board 1 Revised (restructured: Settings at top, Inventory headers below)
   styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
-  proteinSheetGid: "1191392779",
-  saucesSheetGid: "1780619208",
-  drinksSheetGid: "628145419",
+  proteinSheetGid: "1420775786", // Proteins tab (Settings + Inventory; archive: Proteins (old))
+  saucesSheetGid: "1630545949", // Sauces tab (Settings + Inventory; archive: Sauces (old))
+  drinksSheetGid: "1145721787", // Drinks tab (Settings + Inventory; archive: Drinks (old))
+  veggiesSheetGid: "640368705", // Veggies tab (new 4th footer box)
 
   layout: "bowls",
   showHero: true,

@@ -13,8 +13,10 @@ window.TOKI_CONFIG = {
   googleSheetGid: "1962117802",
   styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
-  /** Dedicated drink-box content (items, overview, box title/color) */
-  drinksSheetGid: "628145419",
+  /** Dedicated drink-box content (items, overview, box title/color)
+   * Now points to Drinks (gid=1145721787) with uniform Settings+Inventory.
+   */
+  drinksSheetGid: "1145721787",
 
   layout: "drinks",
   showHero: true,
@@ -77,10 +79,13 @@ window.TOKI_CONFIG = {
   },
 
   /**
-   * Drinks content sheet (gid=628145419):
-   * A title | B subtitle | C color | D overview | E overview image |
-   * F individual | G item | H item subtitle | I new | J image | K include |
-   * L Create Columns? | M Text Align (Left / Center / Right)
+   * Drinks content sheet (gid=1145721787, tab "Drinks"; archive "Drinks (old)"):
+   * Uses uniform structure shared with Proteins/Sauces:
+   *   Settings (row ~3): Title | Subtitle | BG Color | Create Columns? | Text Align
+   *   Inventory (after "Inventory" label): Item | Item Subtitle | Item Price | New | Image | Include
+   *
+   * Legacy flat columns below kept for fallback / reference only.
+   * Overview / Individual flags default to true in revised path (can extend Settings cols later).
    */
   drinksSheetColumns: {
     drinkBoxTitle: 0,

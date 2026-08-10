@@ -3,16 +3,22 @@
 Living notes for the **revised sheet tabs** and runtime cutovers.  
 Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on Revised.
 
-**Last updated:** 2026-08-10 (Board 1/2/3 revised; multi Image → FP lattice inside hero plate; see FAMILY_PORTRAIT_LATTICE.md)  
+**Last updated:** 2026-08-10 23:45 (Beta Features docs + Veggies full slice; footer selection soft-fail / prefetch)  
 **Spreadsheet:** `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
 | Revised tab | GID | Live counterpart | Runtime status |
 |-------------|-----|------------------|----------------|
 | Style and Theme | `183083022` | Style and Theme (old) `1076652078` | **All boards live** (configs → this gid) |
-| Board 1 Revised | `1058015863` | Board 1 `0` | **live** (config.js) |
-| Board 2 Revised | `314919644` | Board 2 `1959901693` | **live** (config2.js) |
-| Board 3 Revised | `1684494006` | Board 3 `1427118423` | **live** (config3.js) |
-| Proteins Revised | `1420775786` | Proteins `1191392779` | Not cut over yet |
+| Board 1 | `1058015863` | Board 1 (old) `0` | **live** (config.js) |
+| Board 2 | `314919644` | Board 2 (old) `1959901693` | **live** (config2.js) |
+| Board 3 | `1684494006` | Board 3 (old) `1427118423` | **live** (config3.js) |
+| Proteins | `1420775786` | Proteins (old) `1191392779` | **live** (footer box) |
+| Sauces   | `1630545949` | Sauces (old) `1780619208`     | **live** (footer box) |
+| Drinks   | `1145721787` | Drinks (old) `628145419`      | **live** (board 4 + footer drinks) |
+| Veggies  | `640368705`  | — | **live** (4th footer box; Beta selection) |
+| Beta Features | `1710200195` | — | **live** — `Include Footer Boxes` drives boards 1–3 strip ([BETA_FEATURES.md](./BETA_FEATURES.md)) |
+
+**Tab rename (2026-08-10):** revised tabs now use bare names (`Proteins`, `Sauces`, `Drinks`, `Board 1`…); archives are `… (old)`. Live loads use **gid** (unchanged). Name-based xlsx fill / local workbook pick prefers non-`(old)` exact titles via `pickBestSheetName`.
 
 Related:
 
@@ -167,7 +173,24 @@ When reviewing sheets with `spreadsheets.values.get` (formatted strings only), s
 
 **Implication for reviews and tools:** prefer `includeGridData` (or the existing xlsx style pipeline) when judging “is this theme row empty?”
 
+### Capturing fills back into cell values (recommended workflow)
+
+The color picker is intentionally the friendly way to choose theme / highlight colors.
+A bound Apps Script helper now makes the reverse direction easy:
+
+1. Select the target color cell(s).
+2. Use the normal Sheets **Fill color** tool to paint.
+3. Run **Toki Colors → "Capture fills → write hex into selected cells"**.
+
+This writes the exact `#rrggbb` of the current fill into the cell value (overwriting prior content) and ensures readable text color on the swatch.
+
+See `scripts/TokiColorTools.gs`. It also provides the original `onEdit` behavior (type/paste hex → background + contrast text) plus menu items to re-apply hex values as backgrounds.
+
+Once captured, `values.get` and CSV exports will see the hex instead of a blank cell, while the visual fill remains the source of truth for anyone who only wants to use the picker.
+
 ---
+
+
 
 ## 4. Glossary design notes (Style and Theme revised)
 
@@ -229,7 +252,7 @@ Recorded from author review 2026-08-09:
 **Intended behavior (sketch):**
 
 1. Slideshow / Encore runs through **menu list** items as today.
-2. After the **last menu item**, presentation **rolls into footer boxes** that opt in (highest **priority** first).
+2. After the **last menu item**, presentation **rolls into footer boxes** that opt in (in Priority order — lowest number first).
 3. While in a box: **highlight each box item** in turn; show that row’s **Image** in the **Hero Panel** (see [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)).
 4. **Presentation style** (Slideshow vs Encore, speed, spotlight, etc.) is **inherited from Style Settings**, not redefined per box.
 
@@ -268,14 +291,23 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 - [x] Hooked revised "Style and Theme" (gid 183083022) to all boards (config2/3/4 + name updates for tab rename)
 - [x] Boards 1/2/3 data migrated to revised gids (1058015863 / 314919644 / 1684494006); parser + configs updated (Settings top, Inventory headers)
 
-### Board / Proteins Revised (pilot done; full rollout later)
+### Board / Proteins / Sauces / Drinks Revised (shared box sheets)
 
 - [x] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3 (Boards 1/2/3 migrated to revised; parser supports restructured layout)
-- [ ] Protein Settings + Inventory; ignore or implement New/Image/Include per §6
-- [x] Style+Theme revised hooked to all boards
-- [x] Point board gids for 1/2/3 at Revised (1058015863/314919644/1684494006)
-- [ ] Mirror pattern to remaining boards and Sauces
-- [ ] Update [DATA_MODEL.md](./DATA_MODEL.md) + configs; bump `schemaVersion` when freezing
+- [x] Proteins Revised (gid 1420775786) + Sauces Revised (1630545949) + Drinks Revised (1145721787) using **uniform** structure
+- [x] Uniform columns for the three boxes (see `BOX_REVISED_SETTINGS` + `BOX_REVISED_INVENTORY` in `menu.js` and config headers):
+  - **Settings**: Title | Subtitle | BG Color | Create Columns? | Text Align | **Priority** (col F)
+  - **Inventory**: Item | **Item Subtitle** | Item Price | New | Image | Include
+- [x] Item Subtitle column added for uniformity (drinks already rendered it; now protein + sauces + footer-drinks also parse + render subtitles in parens)
+- [x] Include filter + **New / price / subtitle on all three footer boxes** (shared `renderFooterBoxBody`)
+- [x] **Priority** drives 2-box major/minor assignment and 3-box left→right order.
+  Lower number = higher priority (1 = leftmost/major). Defaults: Proteins `1`, Sauces `2`, Drinks `3`, Veggies `4`.
+- [x] **Beta Features** `Include Footer Boxes` comma list overrides board Include* flags (case-sensitive titles; max 3; exile rest). Architecture + checklist: [BETA_FEATURES.md](./BETA_FEATURES.md).
+- [x] Table typography mode from richest inventory row: name-only Thin; name+price Bold/Thin; name+sub+price Bold/Regular/Thin
+- [x] All board configs point shared *_SheetGid at the revised gids
+- [ ] Mirror pattern / cleanup for any remaining old tabs; update DATA_MODEL if freezing
+
+Column renames performed for uniformity across Proteins/Sauces/Drinks boxes (legacy names like "Sauces Box Item", "Drink Box Item Subtitle", "Sauces Box Color" etc. → standardized "Item", "Item Subtitle", "BG Color", "Item Price"...). Noted in code comments + this doc.
 
 ---
 

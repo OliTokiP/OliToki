@@ -6,16 +6,18 @@
  *   - Inventory (headers below) for items.
  *
  * Theme / speeds / highlights from Style tab (revised).
- * Protein/Sauces content: shared sheets.
+ * Footer boxes (Proteins/Sauces/Drinks/Veggies) selected via Beta Features tab (comma-separated titles, Priority ranked, max 3).
+ * Per-box tabs use Settings (Title|Subtitle|BG|Cols?|Align|Priority) + Inventory. Beta overrides board flags.
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "1684494006", // Board 3 Revised (restructured)
   styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
-  proteinSheetGid: "1191392779",
-  saucesSheetGid: "1780619208",
-  drinksSheetGid: "628145419",
+  proteinSheetGid: "1420775786", // Proteins (restructured: Settings + Inventory)
+  saucesSheetGid: "1630545949", // Sauces (restructured: Settings + Inventory; uniform cols)
+  drinksSheetGid: "1145721787", // Drinks (restructured: Settings + Inventory; uniform cols)
+  veggiesSheetGid: "640368705", // Veggies (new 4th footer box)
 
   layout: "munchies",
   showHero: true,

@@ -985,7 +985,8 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   width: 299px;
 }
 
-#footer-drinks-box {
+#footer-drinks-box,
+#veggies-box {
   flex: 0 0 299px;
   width: 299px;
 }
@@ -1037,6 +1038,10 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   fill: var(--footer-drinks-box-bg, var(--main-color));
 }
 
+#veggies-box .shell-body {
+  fill: var(--veggies-box-bg, var(--main-color));
+}
+
 /* When image pattern is applied, JS sets inline fill; keep solid vars as fallback */
 
 #protein-box .info-box-body {
@@ -1049,6 +1054,10 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 
 #footer-drinks-box .info-box-body {
   color: var(--footer-drinks-box-text, var(--secondary-color));
+}
+
+#veggies-box .info-box-body {
+  color: var(--veggies-box-text, var(--secondary-color));
 }
 
 /* Image box bodies: fill painted via SVG <pattern> in JS (shell-body rect).
@@ -1122,7 +1131,8 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 /* ----- Columns mode (protein default; sauces/drinks when Yes) ----- */
 #protein-box .info-box-body.layout-columns,
 #sauces-box .info-box-body.layout-columns,
-#footer-drinks-box .info-box-body.layout-columns {
+#footer-drinks-box .info-box-body.layout-columns,
+#veggies-box .info-box-body.layout-columns {
   --protein-cols: 2;
   --box-cols: 2;
   display: grid;
@@ -1141,8 +1151,8 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 }
 
 #sauces-box .info-box-body.layout-columns {
-  font-family: "Roboto Condensed", "Roboto", sans-serif;
-  font-weight: 700;
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
   font-size: calc(30px * var(--box-scale));
   padding: 10px 12px 12px;
 }
@@ -1166,14 +1176,78 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   grid-column: auto;
 }
 
+/*
+  Footer item type roles (shared protein / sauces / footer-drinks).
+  Table mode is set on the body: typo-name | typo-name-price | typo-name-sub | typo-name-sub-price
+  from the richest inventory row (most filled columns).
+*/
+#protein-box .box-item-name,
+#sauces-box .box-item-name,
+#footer-drinks-box .box-item-name,
+#veggies-box .box-item-name,
 #protein-box .protein-name {
   font-family: "Roboto", sans-serif;
-  font-weight: 700;
+  font-weight: 700; /* overridden by typo-name → Thin */
+  /* non-New items inherit the box text color (Secondary) */
 }
 
+#protein-box .box-item-name.is-new,
+#sauces-box .box-item-name.is-new,
+#footer-drinks-box .box-item-name.is-new,
+#veggies-box .box-item-name.is-new,
+#protein-box .protein-name.is-new {
+  color: var(--highlight-special);
+}
+
+#protein-box .box-item-price,
+#sauces-box .box-item-price,
+#footer-drinks-box .box-item-price,
+#veggies-box .box-item-price,
 #protein-box .protein-price {
   font-family: "Roboto", sans-serif;
-  font-weight: 400;
+  font-weight: 100; /* Thin */
+}
+
+/* Item subtitles in the three footer-style boxes (Protein / Sauces / Footer Drinks).
+   Re-uses .item-paren-sub for consistent paren styling. Slightly smaller + softer. */
+#protein-box .item-paren-sub,
+#sauces-box .item-paren-sub,
+#footer-drinks-box .item-paren-sub,
+#veggies-box .item-paren-sub,
+#protein-box .box-item-sub,
+#sauces-box .box-item-sub,
+#footer-drinks-box .box-item-sub,
+#veggies-box .box-item-sub {
+  font-family: "Roboto", sans-serif;
+  font-weight: 400; /* Regular */
+  opacity: 0.8;
+  font-size: 0.82em;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+/* Name-only table → Roboto Thin on every item label */
+#protein-box .info-box-body.typo-name .box-item-name,
+#sauces-box .info-box-body.typo-name .box-item-name,
+#footer-drinks-box .info-box-body.typo-name .box-item-name,
+#veggies-box .info-box-body.typo-name .box-item-name {
+  font-weight: 100;
+}
+
+/* Item + Price (and full triple / sub modes) → Bold names */
+#protein-box .info-box-body.typo-name-price .box-item-name,
+#sauces-box .info-box-body.typo-name-price .box-item-name,
+#footer-drinks-box .info-box-body.typo-name-price .box-item-name,
+#veggies-box .info-box-body.typo-name-price .box-item-name,
+#protein-box .info-box-body.typo-name-sub .box-item-name,
+#sauces-box .info-box-body.typo-name-sub .box-item-name,
+#footer-drinks-box .info-box-body.typo-name-sub .box-item-name,
+#veggies-box .info-box-body.typo-name-sub .box-item-name,
+#protein-box .info-box-body.typo-name-sub-price .box-item-name,
+#sauces-box .info-box-body.typo-name-sub-price .box-item-name,
+#footer-drinks-box .info-box-body.typo-name-sub-price .box-item-name,
+#veggies-box .info-box-body.typo-name-sub-price .box-item-name {
+  font-weight: 700;
 }
 
 /*
@@ -1192,7 +1266,8 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 /* ----- Wrap mode (sauces default; protein/drinks when No) ----- */
 #protein-box .info-box-body.layout-wrap,
 #sauces-box .info-box-body.layout-wrap,
-#footer-drinks-box .info-box-body.layout-wrap {
+#footer-drinks-box .info-box-body.layout-wrap,
+#veggies-box .info-box-body.layout-wrap {
   display: flex;
   flex-wrap: wrap;
   align-content: space-evenly;
@@ -1218,6 +1293,7 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #protein-box .info-box-body.align-left,
 #sauces-box .info-box-body.align-left,
 #footer-drinks-box .info-box-body.align-left,
+#veggies-box .info-box-body.align-left,
 #drink-options-box .drinks-box-body.align-left {
   text-align: left;
   justify-content: flex-start;
@@ -1227,6 +1303,7 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #protein-box .info-box-body.align-center,
 #sauces-box .info-box-body.align-center,
 #footer-drinks-box .info-box-body.align-center,
+#veggies-box .info-box-body.align-center,
 #drink-options-box .drinks-box-body.align-center {
   text-align: center;
   justify-content: center;
@@ -1236,6 +1313,7 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #protein-box .info-box-body.align-right,
 #sauces-box .info-box-body.align-right,
 #footer-drinks-box .info-box-body.align-right,
+#veggies-box .info-box-body.align-right,
 #drink-options-box .drinks-box-body.align-right {
   text-align: right;
   justify-content: flex-end;
@@ -1268,8 +1346,11 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #sauces-box .info-box-body.layout-columns.align-center .box-col-item,
 #sauces-box .info-box-body.layout-columns.align-right .box-col-item,
 #footer-drinks-box .info-box-body.layout-columns.align-left .box-col-item,
+#veggies-box .info-box-body.layout-columns.align-left .box-col-item,
 #footer-drinks-box .info-box-body.layout-columns.align-center .box-col-item,
+#veggies-box .info-box-body.layout-columns.align-center .box-col-item,
 #footer-drinks-box .info-box-body.layout-columns.align-right .box-col-item,
+#veggies-box .info-box-body.layout-columns.align-right .box-col-item,
 #drink-options-box .drinks-box-body.layout-columns.align-left .box-col-item,
 #drink-options-box .drinks-box-body.layout-columns.align-center .box-col-item,
 #drink-options-box .drinks-box-body.layout-columns.align-right .box-col-item {
@@ -1288,11 +1369,13 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 /*
   Sauces + footer drinks wrap — match footer-verify density.
   Tighter leading/padding lets fitWrapBox reach ~24px type in the narrow slot.
+  Item face is Roboto (shared with protein); weights come from typo-* modes.
 */
 #sauces-box .info-box-body.layout-wrap,
-#footer-drinks-box .info-box-body.layout-wrap {
-  font-family: "Roboto Condensed", "Roboto", sans-serif;
-  font-weight: 700;
+#footer-drinks-box .info-box-body.layout-wrap,
+#veggies-box .info-box-body.layout-wrap {
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
   font-size: calc(32px * var(--box-scale));
   line-height: 1.1;
   padding: 6px 10px 8px;
@@ -1311,48 +1394,43 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   row-gap: calc(4px * var(--box-scale));
 }
 
-#footer-drinks-box .info-box-body.layout-columns {
-  font-family: "Roboto Condensed", "Roboto", sans-serif;
-  font-weight: 700;
+#footer-drinks-box .info-box-body.layout-columns,
+#veggies-box .info-box-body.layout-columns {
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
   font-size: calc(30px * var(--box-scale));
   padding: 10px 12px 12px;
 }
 
 #protein-box .protein-wrap-item,
 #sauces-box .sauce-item,
-#footer-drinks-box .footer-drink-item {
+#footer-drinks-box .footer-drink-item,
+#veggies-box .veggie-item {
   display: inline-block;
   white-space: nowrap;
   color: inherit;
   font-family: inherit;
-  font-weight: 700;
+  font-weight: inherit;
   max-width: 100%;
-}
-
-/* Wrap mode: keep name bold / price regular (match column mode) */
-#protein-box .protein-wrap-item .protein-name {
-  font-weight: 700;
-}
-
-#protein-box .protein-wrap-item .protein-price {
-  font-weight: 400;
 }
 
 #protein-box .protein-wrap-sep,
 #sauces-box .sauce-sep,
-#footer-drinks-box .footer-drink-sep {
+#footer-drinks-box .footer-drink-sep,
+#veggies-box .veggie-sep {
   display: inline-block;
   white-space: pre;
   color: inherit;
   font-family: inherit;
-  font-weight: 700;
+  font-weight: 400;
 }
 
-/* Sauces column cells: label fills cell for width measure */
-#sauces-box .sauce-col-item .sauce-col-label {
-  display: inline-block;
+/* Column cells: parts live in .box-item-*; keep row unbroken */
+#sauces-box .sauce-col-item,
+#footer-drinks-box .footer-drink-col-item,
+#veggies-box .veggie-col-item,
+#protein-box .protein-row {
   white-space: nowrap;
-  font-weight: 700;
 }
 
 /* Planned / emergency flex line breaks */
@@ -1361,7 +1439,9 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #sauces-box .sauce-force-break,
 #sauces-box .sauce-line-break,
 #footer-drinks-box .footer-drink-force-break,
+#veggies-box .veggie-force-break,
 #footer-drinks-box .footer-drink-line-break,
+#veggies-box .veggie-line-break,
 .wrap-force-break,
 .wrap-line-break {
   flex: 1 0 100%;
