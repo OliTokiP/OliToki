@@ -40,13 +40,22 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
-# Cache: avoid hammering Google on every soft reload
+# Cache: avoid hammering Google on every soft reload / multi-board open.
+# googleapiclient is serialized under _api_lock — without CSV cache, 8 parallel
+# board fetches become 8 sequential Google round-trips (20–45s each when slow).
 _meta_lock = threading.Lock()
 _meta_cache = {"at": 0, "title_by_gid": {}, "gid_by_title": {}}
 _xlsx_lock = threading.Lock()
 _xlsx_cache = {"at": 0, "bytes": None}
+_csv_lock = threading.Lock()
+# gid -> {"at": float, "text": str}
+_csv_cache: dict[str, dict] = {}
+# Single-flight for full-workbook batchGet (all tabs in one Google round-trip)
+_csv_batch_event: threading.Event | None = None
+_csv_batch_error: BaseException | None = None
 META_TTL = 120.0
 XLSX_TTL = 90.0
+CSV_TTL = 90.0
 
 
 def _log(msg: str) -> None:
@@ -142,43 +151,151 @@ class SheetsBackend:
             raise KeyError(f"No sheet with gid={gid}")
         return title
 
-    def csv_for_gid(self, gid: str) -> str:
-        """Fetch sheet values by gid. Retries once with fresh meta if tab was renamed."""
-        last_err = None
-        for attempt in (0, 1):
-            title = self.title_for_gid(gid) if attempt == 0 else (
-                self.refresh_meta(force=True)["title_by_gid"].get(str(gid))
-            )
-            if not title:
-                raise KeyError(f"No sheet with gid={gid}")
-            safe = "'" + title.replace("'", "''") + "'"
-            try:
-                with self._api_lock:
-                    result = (
-                        self.sheets.spreadsheets()
-                        .values()
-                        .get(
-                            spreadsheetId=self.sheet_id,
-                            range=safe,
-                            majorDimension="ROWS",
-                            valueRenderOption="FORMATTED_VALUE",
-                        )
-                        .execute()
+    @staticmethod
+    def _values_to_csv(values: list) -> str:
+        buf = io.StringIO()
+        writer = csv.writer(buf, lineterminator="\n")
+        for row in values or []:
+            writer.writerow(row)
+        return buf.getvalue()
+
+    def warm_csv_cache(self, force: bool = False) -> None:
+        """
+        Load *all* spreadsheet tabs into the CSV cache with one values.batchGet.
+
+        Why: boards fire ~8 parallel /api/sheets/csv requests; googleapiclient is
+        serialized under _api_lock. Without batching, 4 boards × 8 tabs ≈ 32
+        sequential Google round-trips → multi-minute freezes that all resolve at once.
+        """
+        global _csv_batch_event, _csv_batch_error
+        now = time.time()
+        meta = self.refresh_meta(force=force)
+        title_by_gid = meta["title_by_gid"]
+
+        with _csv_lock:
+            need: list[tuple[str, str]] = []
+            for gid, title in title_by_gid.items():
+                hit = _csv_cache.get(str(gid))
+                if force or not hit or now - hit["at"] >= CSV_TTL:
+                    need.append((str(gid), title))
+            if not need:
+                return
+
+            # Single-flight: one batchGet, everyone else waits
+            if _csv_batch_event is not None:
+                wait_ev = _csv_batch_event
+            else:
+                wait_ev = None
+                _csv_batch_event = threading.Event()
+                _csv_batch_error = None
+
+        if wait_ev is not None:
+            _log(f"csv batch: join in-flight ({len(need)} tabs pending at check)")
+            wait_ev.wait(timeout=180.0)
+            if _csv_batch_error is not None:
+                raise _csv_batch_error
+            return
+
+        t0 = time.time()
+        try:
+            # Recompute need under lock after winning the race
+            with _csv_lock:
+                need = []
+                now = time.time()
+                for gid, title in title_by_gid.items():
+                    hit = _csv_cache.get(str(gid))
+                    if force or not hit or now - hit["at"] >= CSV_TTL:
+                        need.append((str(gid), title))
+            if not need:
+                return
+
+            ranges = []
+            for _gid, title in need:
+                safe = "'" + str(title).replace("'", "''") + "'"
+                ranges.append(safe)
+
+            with self._api_lock:
+                result = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .batchGet(
+                        spreadsheetId=self.sheet_id,
+                        ranges=ranges,
+                        majorDimension="ROWS",
+                        valueRenderOption="FORMATTED_VALUE",
                     )
-                values = result.get("values", [])
-                buf = io.StringIO()
-                writer = csv.writer(buf, lineterminator="\n")
-                for row in values:
-                    writer.writerow(row)
-                return buf.getvalue()
-            except Exception as e:
-                last_err = e
-                # Stale title after rename — force meta refresh and retry once
-                if attempt == 0:
-                    _log(f"csv gid={gid} title={title!r} failed, refreshing meta: {e}")
-                    continue
-                raise
-        raise last_err  # pragma: no cover
+                    .execute()
+                )
+            value_ranges = result.get("valueRanges") or []
+            filled = 0
+            now = time.time()
+            with _csv_lock:
+                for i, (gid, title) in enumerate(need):
+                    vr = value_ranges[i] if i < len(value_ranges) else {}
+                    values = vr.get("values") or []
+                    text = self._values_to_csv(values)
+                    _csv_cache[gid] = {"at": now, "text": text}
+                    filled += 1
+            _log(
+                f"csv batchGet tabs={filled}/{len(need)} "
+                f"fetch={time.time() - t0:.2f}s"
+            )
+        except Exception as e:
+            _csv_batch_error = e
+            _log(f"csv batchGet failed after {time.time() - t0:.2f}s: {e}")
+            raise
+        finally:
+            with _csv_lock:
+                ev = _csv_batch_event
+                _csv_batch_event = None
+            if ev is not None:
+                ev.set()
+
+    def csv_for_gid(self, gid: str, force: bool = False) -> str:
+        """Fetch sheet values by gid. Prefer cache; miss warms *all* tabs via batchGet."""
+        gid = str(gid)
+        now = time.time()
+
+        if not force:
+            with _csv_lock:
+                hit = _csv_cache.get(gid)
+                if hit and now - hit["at"] < CSV_TTL:
+                    age = now - hit["at"]
+                    _log(f"csv gid={gid} cache hit age={age:.1f}s")
+                    return hit["text"]
+
+        # One Google round-trip fills every tab — multi-board opens share this
+        self.warm_csv_cache(force=force)
+
+        with _csv_lock:
+            hit = _csv_cache.get(gid)
+            if hit:
+                return hit["text"]
+
+        # Tab missing from workbook meta or batch — last-resort single get
+        t0 = time.time()
+        title = self.title_for_gid(gid)
+        safe = "'" + title.replace("'", "''") + "'"
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self.sheet_id,
+                    range=safe,
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        text = self._values_to_csv(result.get("values") or [])
+        with _csv_lock:
+            _csv_cache[gid] = {"at": time.time(), "text": text}
+        _log(
+            f"csv gid={gid} title={title!r} single-get "
+            f"fetch={time.time() - t0:.2f}s bytes={len(text)}"
+        )
+        return text
 
     def xlsx_bytes(self, force: bool = False) -> bytes:
         now = time.time()
@@ -350,17 +467,24 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                 if gid is None or gid == "":
                     self._json(400, {"error": "missing gid"})
                     return
+                force = (qs.get("force") or ["0"])[0] in ("1", "true", "yes")
                 try:
-                    text = backend.csv_for_gid(str(gid))
+                    text = backend.csv_for_gid(str(gid), force=force)
                     self._send(
                         200,
                         text.encode("utf-8"),
                         "text/csv; charset=utf-8",
                     )
+                except BrokenPipeError:
+                    # Client navigated away mid-response — not a server fault
+                    return
                 except Exception as e:
-                    _log(f"csv gid={gid} error: {e}")
-                    traceback.print_exc()
-                    self._json(500, {"error": str(e)})
+                    try:
+                        _log(f"csv gid={gid} error: {e}")
+                        traceback.print_exc()
+                        self._json(500, {"error": str(e)})
+                    except BrokenPipeError:
+                        return
                 return
 
             if path == "/api/sheets/xlsx":
@@ -455,6 +579,16 @@ def main():
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
     if backend:
         _log("Sheets API proxy: /api/sheets/csv?gid=…  /api/sheets/xlsx")
+        # Warm CSV cache in background so first board open isn't 8× Google latency
+        def _bg_warm() -> None:
+            try:
+                t0 = time.time()
+                backend.warm_csv_cache(force=True)
+                _log(f"startup csv warm done in {time.time() - t0:.2f}s")
+            except Exception as e:
+                _log(f"startup csv warm failed: {e}")
+
+        threading.Thread(target=_bg_warm, name="csv-warm", daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

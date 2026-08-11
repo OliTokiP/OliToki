@@ -243,19 +243,19 @@ Frame on the **right**; photo side on the **left**.
 
 As headers migrate, prefer:
 
-| Sheet concept | UI name |
-|---------------|---------|
-| Image (item or box row) | **Plate Image** filename (shown inside a **Plate** in Hero Panel or Portrait Slot) |
-| Include (item) | Show on **Menu List** |
-| Include (box item) | Show in **Footer Box**; later may also gate presentation cycle |
-| Family Portrait | **Family Portrait** toggle (may compose as Encore **Wind-up** when both on) |
-| Presentation Mode | **Presentation Mode** |
-| Presentation Speed | **Presentation Step** / default **Hold** duration |
-| BG Wallpaper | **Wallpaper** on **Background** |
-| Include Protein/Sauces/Drinks Box | Show **Footer Box** N |
-| Include in Presentation? (box) | Box **Presentation Segment** opt-in |
-| Announcement columns | **Announcement Panel** fields |
-| Motion style (future) | **Motion Style** (phases: Wind-up → Punch-in → Hold → Punch-out → Wind-down) |
+| Sheet concept                     | UI name                                                                            |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| Image (item or box row)           | **Plate Image** filename (shown inside a **Plate** in Hero Panel or Portrait Slot) |
+| Include (item)                    | Show on **Menu List**                                                              |
+| Include (box item)                | Show in **Footer Box**; later may also gate presentation cycle                     |
+| Family Portrait                   | **Family Portrait** toggle (may compose as Encore **Wind-up** when both on)        |
+| Presentation Mode                 | **Presentation Mode**                                                              |
+| Presentation Speed                | **Presentation Step** / default **Hold** duration                                  |
+| BG Wallpaper                      | **Wallpaper** on **Background**                                                    |
+| Include Protein/Sauces/Drinks Box | Show **Footer Box** N                                                              |
+| Include in Presentation? (box)    | Box **Presentation Segment** opt-in                                                |
+| Announcement columns              | **Announcement Panel** fields                                                      |
+| Motion style (future)             | **Motion Style** (phases: Wind-up → Punch-in → Hold → Punch-out → Wind-down)       |
 
 ---
 

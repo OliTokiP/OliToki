@@ -9334,17 +9334,26 @@
    *   phase 2: portrait fade-in + zoom peak→1 (opacity mid, scale encore-zoom)
    */
   let _portraitHandoffTimer = null;
-  function handoffHeroToPortrait(portraitItems, instant) {
-    filterLoadablePortraitItems(portraitItems || [], function (loadable) {
-      if (!loadable.length) {
-        hideHeroPlate({ instant: !!instant });
-        return;
-      }
-      handoffHeroToPortraitWithCast(loadable, instant);
+
+  /** Keep only items that have an image path (no network preload — paint ASAP). */
+  function portraitItemsWithPaths(portraitItems) {
+    return (portraitItems || []).filter(function (it) {
+      return !!(it && it.image);
     });
   }
 
-  function handoffHeroToPortraitWithCast(portraitItems, instant) {
+  /**
+   * Slideshow last item → Family Portrait: same two-phase timing as
+   * updateHero between adjacent items.
+   *   phase 1: hero fade-out + zoom-out (--dur-mid)
+   *   phase 2: portrait fade-in + zoom peak→1 (opacity mid, scale encore-zoom)
+   */
+  function handoffHeroToPortrait(portraitItems, instant) {
+    const cast = portraitItemsWithPaths(portraitItems);
+    if (!cast.length) {
+      hideHeroPlate({ instant: !!instant });
+      return;
+    }
     const stage = els.familyPortrait;
     if (!stage) return;
 
@@ -9366,7 +9375,7 @@
     stage.hidden = true;
     snapPortraitZoom(stage, 1);
 
-    ensureFamilyPortrait(portraitItems || []);
+    ensureFamilyPortrait(cast);
 
     if (instant) {
       hideHeroPlate();
@@ -9429,54 +9438,24 @@
   }
 
   /**
-   * Show collage.
+   * Show collage. Fast path: no network preload. ensureFamilyPortrait caches DOM
+   * by cast fingerprint so Encore bows do not rebuild / re-decode every step.
+   * Broken URLs drop their slot via img.onerror in fillPortraitPlates.
+   *
    * @param {object[]} portraitItems
    * @param {boolean} [instant]
    * @param {{fromEncore?: boolean, settle?: boolean, forceIntro?: boolean}} [opts]
-   *   settle / fromEncore: keep collage, ease to full cast (no center solo intro)
-   *   forceIntro: cold-start center intro (not used for item→portrait handoff)
    */
-  /**
-   * Drop items whose image URL 404s so FP/Encore never paint broken glyphs
-   * and the lattice is laid out for loadable images only.
-   */
-  function filterLoadablePortraitItems(portraitItems, done) {
-    const list = (portraitItems || []).filter(function (it) {
-      return !!(it && it.image);
-    });
-    if (!list.length) {
-      done([]);
-      return;
-    }
-    let pending = list.length;
-    const kept = [];
-    list.forEach(function (it, order) {
-      const im = new Image();
-      im.onload = function () {
-        kept.push({ it: it, order: order });
-        if (--pending === 0) finish();
-      };
-      im.onerror = function () {
-        if (--pending === 0) finish();
-      };
-      im.src = it.image;
-    });
-    function finish() {
-      kept.sort(function (a, b) {
-        return a.order - b.order;
-      });
-      done(
-        kept.map(function (k) {
-          return k.it;
-        })
-      );
-    }
-  }
-
   function showFamilyPortrait(portraitItems, instant, opts) {
     opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
+
+    const cast = portraitItemsWithPaths(portraitItems);
+    if (!cast.length) {
+      finishHideFamilyPortrait();
+      return;
+    }
 
     if (_portraitHandoffTimer) {
       clearTimeout(_portraitHandoffTimer);
@@ -9494,23 +9473,7 @@
       _portraitIntroTimer = null;
     }
 
-    // Preload: only seats that actually load (no empty holes / broken icons)
-    filterLoadablePortraitItems(portraitItems || [], function (loadable) {
-      if (!loadable.length) {
-        // Nothing to show — hide collage; caller may still do text highlights
-        finishHideFamilyPortrait();
-        return;
-      }
-      showFamilyPortraitWithCast(loadable, instant, opts);
-    });
-  }
-
-  function showFamilyPortraitWithCast(portraitItems, instant, opts) {
-    opts = opts || {};
-    const stage = els.familyPortrait;
-    if (!stage) return;
-
-    ensureFamilyPortrait(portraitItems || []);
+    ensureFamilyPortrait(cast);
 
     const settle = !!(opts.settle || opts.fromEncore) && !opts.forceIntro;
 
@@ -9563,8 +9526,9 @@
   }
 
   function ensureFamilyPortrait(portraitItems) {
+    // Fingerprint cast only — do not bake Alpha presentationMode (Box segments differ)
     const key =
-      (config.presentationMode || "slideshow") +
+      (_activeSegmentMode || config.presentationMode || "slideshow") +
       "\0" +
       (config.bgImage || "") +
       "\0" +
@@ -9573,8 +9537,12 @@
           return (it && it.name) + "\0" + (it && it.image) + "\0" + !!it.isNew;
         })
         .join("|");
-    if (key === _portraitRenderKey && els.familyPortrait && els.familyPortrait.children.length) {
-      return;
+    if (
+      key === _portraitRenderKey &&
+      els.familyPortrait &&
+      els.familyPortrait.children.length
+    ) {
+      return; // reuse DOM + decoded bitmaps (critical for Encore multi-item casts)
     }
     renderFamilyPortrait(portraitItems || []);
     _portraitRenderKey = key;
