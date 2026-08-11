@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;400;700;900&family=Roboto+Condensed:wght@300;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/menu.css?v=20260810veggies3" />
+  <link rel="stylesheet" href="css/menu.css?v=20260811motion1" />
 </head>
 <body class="board-munchies">
   <div id="stage">
@@ -87,7 +87,10 @@
 
     <div id="hero-wrap">
       <div id="hero-plate" hidden>
-        <img id="hero" alt="" draggable="false" />
+        <div class="hero-anim">
+          <img id="hero" alt="" draggable="false" />
+        </div>
+        <!-- New badge: plate child (inherits opacity fade; not in .hero-anim so no Ken Burns) -->
         <div id="new-sticker" hidden>
           <img
             class="new-sticker-shadow"
@@ -110,7 +113,6 @@
         </div>
       </div>
     </div>
-    <!-- Right of frame cutout: Family Portrait collage (same as Board 1–2) -->
     <div id="family-portrait-stage" hidden aria-hidden="true"></div>
   </div>
 
@@ -119,6 +121,6 @@
   <script src="js/menu-data.js?v=20260805fix1"></script>
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="js/build-info.js?v=20260808ver1"></script>
-  <script src="js/menu.js?v=20260810veggies3"></script>
+  <script src="js/menu.js?v=20260811motion3"></script>
 </body>
 </html>

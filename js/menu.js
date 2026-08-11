@@ -315,11 +315,8 @@
     title: 0,
     familyPortrait: 1,
     presentationMode: 2,
-    includeProteinBox: 3,
-    includeSaucesBox: 4,
-    // Drinks include column was removed from board Settings (Beta Features now sole source for footer boxes).
-    // Veggies column exists at 5 in current sheets but is ignored for control (beta wins).
-    includeDrinksBox: null,
+    includeFooterBoxes: 3,   // comma list e.g. "Proteins, Sauces, Veggies" — replaces the old individual Include*? flags
+    // columns 4 and 5 are currently empty/spacers in the Settings row
     includeDescriptions: 6,
     menuColumns: 7,
   };
@@ -336,20 +333,17 @@
   };
 
   /**
-   * Uniform column layout for the three shared "add-on" boxes (Proteins / Sauces / Drinks)
-   * now using revised structure (gid 1420775786 / 1630545949 / 1145721787).
-   * Matches what user standardized:
-   *   Settings section (label + headers + data row):
-   *     Title | Subtitle | BG Color | Create Columns? | Text Align | Priority
-   *   Inventory section (label + headers + item rows):
-   *     Item | Item Subtitle | Item Price | New | Image | Include
+   * Uniform column layout for shared footer boxes (Proteins / Sauces / Drinks / Veggies).
+   * Settings (label → headers → data row):
+   *   A Title | B Subtitle | C BG Color | D Create Columns? | E Text Align | F Priority
+   *   G Include in Presentation? | H Family Portrait | I Presentation Mode
+   * Inventory:
+   *   A Item | B Item Subtitle | C Item Price | D New | E Image | F Include
    *
-   * "Image" is parsed but ignored for these boxes (visuals use other assets or none).
-   * Include: blank or truthy → show; explicit 0/false/no → filtered out.
-   * Priority (col F): **lower number = higher priority**. 1 = leftmost / major when two boxes;
-   *                  when three boxes it only affects left→right order.
-   * Defaults when blank: Protein `1`, Sauces `2`, Footer drinks `3` (Protein left/major by default).
-   * New / subtitle / price supported uniformly on all three footer boxes.
+   * Priority (F): lower number = higher priority — strip order AND presentation cue order.
+   * Alpha menu is implicit Priority 0 (not in the sheet).
+   * Include in Presentation (G): box runs its own FP + Slideshow/Encore after Alpha.
+   * Image (E): resolved for hero/FP; blank → text-only highlight during that item’s beat.
    */
   const BOX_REVISED_SETTINGS = {
     title: 0,
@@ -357,7 +351,10 @@
     bgColor: 2,
     createColumns: 3,
     textAlign: 4,
-    priority: 5, // F — strip major/minor + left→right order (lower = higher priority)
+    priority: 5, // F — strip + presentation order (lower = higher priority)
+    includeInPresentation: 6, // G
+    familyPortrait: 7, // H
+    presentationMode: 8, // I — Slideshow | Encore
   };
   const BOX_REVISED_INVENTORY = {
     item: 0,
@@ -430,7 +427,7 @@
    * When columns are inserted in Settings, shift every index AFTER the insert.
    */
   const STYLE_REVISED_GID = "183083022"; // "Style and Theme" tab (revised layout)
-  /** Beta Features tab — see docs/BETA_FEATURES.md (Include Footer Boxes, injection rules). */
+  /** Central Beta Features tab (fallback for Include Footer Boxes if not present on the board row). */
   const BETA_FEATURES_GID = "1710200195";
   const STYLE_REVISED_SETTINGS = {
     themeSelector: 0,
@@ -563,7 +560,7 @@
     footerDrinksSubtitle: document.getElementById("footer-drinks-subtitle"),
     footerDrinksBody: document.getElementById("footer-drinks-body"),
     footerBoxes: document.getElementById("footer-boxes"),
-    // Veggies box (4th footer type, selected via Beta Features)
+    // Veggies box (4th footer type, selected via Include Footer Boxes list)
     veggiesTitle: document.getElementById("veggies-title"),
     veggiesSubtitle: document.getElementById("veggies-subtitle"),
     veggiesBody: document.getElementById("veggies-body"),
@@ -635,6 +632,9 @@
     createColumns: true, // default: grid bake-off (legacy protein)
     textAlign: "right", // legacy protein columns were right-aligned
     priority: FOOTER_PRIORITY_DEFAULTS.protein,
+    includeInPresentation: false,
+    familyPortrait: false,
+    presentationMode: "slideshow",
   };
   let saucesBox = {
     title: "",
@@ -645,6 +645,9 @@
     createColumns: false, // default: balanced wrap (legacy sauces)
     textAlign: "center",
     priority: FOOTER_PRIORITY_DEFAULTS.sauces,
+    includeInPresentation: false,
+    familyPortrait: false,
+    presentationMode: "slideshow",
   };
   /** Boards 1–3 footer drinks/soda box (shared Drinks sheet; off by default) */
   let footerDrinksBox = {
@@ -656,8 +659,11 @@
     createColumns: false,
     textAlign: "center",
     priority: FOOTER_PRIORITY_DEFAULTS.drinks,
+    includeInPresentation: false,
+    familyPortrait: false,
+    presentationMode: "slideshow",
   };
-  /** New 4th footer box type (Veggies) — selected via Beta Features comma list */
+  /** New 4th footer box type (Veggies) — selected via the Include Footer Boxes list */
   let veggiesBox = {
     title: "",
     subtitle: "",
@@ -667,6 +673,9 @@
     createColumns: false,
     textAlign: "center",
     priority: 4, // default lower than Drinks (3)
+    includeInPresentation: false,
+    familyPortrait: false,
+    presentationMode: "slideshow",
   };
   /** Board list options from Include Descriptions? / Columns? (first filled cell) */
   let boardListOptions = {
@@ -694,6 +703,15 @@
   /** Slideshow slides for drinks: overview + individuals */
   let slides = [];
   let activeIndex = 0;
+  /** Active presentation segment mode ("slideshow"|"encore") — Box Menus may differ from Alpha */
+  let _activeSegmentMode = "slideshow";
+  /** Last encore bow item (for veil color through zoom-out) */
+  let _lastEncoreBowItem = null;
+  let _presHandoffTimer = null;
+  /** True after first Wind-up is allowed (page visible / fonts / layout ready) */
+  let _presSurfaceReady = false;
+  /** True while a Wind-down handoff is running (block timer double-advance) */
+  let _presHandoffBusy = false;
   let slideshowTimer = null;
   let refreshTimer = null;
   let dataSource = "";
@@ -899,7 +917,22 @@
     return indexToColLetter(colIndex) + String(row1Based);
   }
 
-  function resolveImagePath(imageName) {
+  /**
+   * Per-box image roots (bare sheet filenames). Board Alpha uses cfg.imageFolder.
+   * Future: rename folders to match box Titles exactly (see WHATS_NEW / SHEET_MIGRATION).
+   */
+  const FOOTER_BOX_IMAGE_FOLDERS = {
+    protein: "food-pics/proteins",
+    sauces: "food-pics/sauces",
+    drinks: "food-pics/drinks",
+    veggies: "food-pics/veggies",
+  };
+
+  /**
+   * @param {string} imageName
+   * @param {string} [folderOverride] e.g. "food-pics/drinks" for Box Menu inventory
+   */
+  function resolveImagePath(imageName, folderOverride) {
     if (
       imageName === "" ||
       imageName == null ||
@@ -910,7 +943,9 @@
     const s = String(imageName).replace(/^\/+/, "").trim();
     if (!s) return null;
     if (s.indexOf("food-pics/") === 0) return toWebpPath(s);
-    const folder = (cfg.imageFolder || "food-pics").replace(/\/+$/, "");
+    const folder = String(
+      folderOverride || cfg.imageFolder || "food-pics"
+    ).replace(/\/+$/, "");
     // Sheet may list "foo.png" or "foo" — attach folder then prefer .webp
     let path = folder + "/" + s;
     if (!/\.(png|jpe?g|gif|webp)$/i.test(s)) {
@@ -1068,6 +1103,68 @@
   }
 
   /**
+   * Box Settings G–I: Include in Presentation?, Family Portrait, Presentation Mode.
+   * Blank Include/FP → false (opt-in). Mode blank → slideshow.
+   */
+  function applyBoxPresentationSettings(box, srow) {
+    if (!box) return box;
+    const bs = BOX_REVISED_SETTINGS;
+    box.includeInPresentation = parseYesNo(
+      cell(srow, bs.includeInPresentation),
+      false
+    );
+    box.familyPortrait = parseYesNo(cell(srow, bs.familyPortrait), false);
+    box.presentationMode = parsePresentationMode(
+      cell(srow, bs.presentationMode),
+      "slideshow"
+    );
+    return box;
+  }
+
+  /**
+   * Inventory Image cell → resolved hero path(s). Blank → { image:null, images:null }.
+   * @param {*} raw
+   * @param {string} [folderOverride] Box Menu folder (not the Alpha board folder)
+   */
+  function parseBoxItemImages(raw, folderOverride) {
+    const names = parseImageCell(raw);
+    if (!names.length) return { image: null, images: null };
+    const paths = [];
+    for (let i = 0; i < names.length; i++) {
+      const p = resolveImagePath(names[i], folderOverride);
+      if (p) paths.push(p);
+    }
+    if (!paths.length) return { image: null, images: null };
+    return {
+      image: paths[0],
+      images: paths.length > 1 ? paths : null,
+    };
+  }
+
+  /**
+   * One inventory row → footer box item (name/sub/price/new/image).
+   * @param {string} [imageFolder] e.g. FOOTER_BOX_IMAGE_FOLDERS.drinks
+   */
+  function parseBoxInventoryItemRow(row, imageFolder) {
+    const bi = BOX_REVISED_INVENTORY;
+    const name = cell(row, bi.item);
+    if (!name) return null;
+    const includeRaw = cell(row, bi.include);
+    if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
+      return null;
+    }
+    const imgs = parseBoxItemImages(cell(row, bi.image), imageFolder);
+    return {
+      name: String(name).trim(),
+      subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
+      price: formatPrice(cell(row, bi.price)),
+      isNew: parseIsNew(cell(row, bi.isNew)),
+      image: imgs.image,
+      images: imgs.images,
+    };
+  }
+
+  /**
    * Footer box Priority (Settings F).
    * Lower number = higher priority (1 wins over 2).
    *   When two boxes visible: lowest number gets the major (left/768) slot.
@@ -1087,18 +1184,10 @@
   }
 
   /**
-   * Parse the Beta Features tab (gid 1710200195).
-   * Currently supports the "Boards" → "Include Footer Boxes" comma-separated list.
-   * Values are case-sensitive titles that must match the Title cell in each box's Settings.
-   * Exiled boxes (not in final top-3 by Priority) are skipped entirely.
-   *
-   * Example cell content: "Proteins, Sauces, Veggies"
-   *
-   * Tab layout (as of 2026-08-10):
-   *   Row 0: "Beta Features:"
-   *   Row 10: "Boards"
-   *   Row 11: "Include Footer Boxes"   ← header
-   *   Row 12: "Proteins, Sauces, Veggies"  ← data cell (comma list, case-sensitive titles)
+   * Parse the central Beta Features tab (used only as fallback).
+   * Supports the "Boards" → "Include Footer Boxes" comma-separated list.
+   * Values are case-sensitive titles matching the box Settings Title cells.
+   * (Primary source is now the per-board Settings row "Include Footer Boxes" cell.)
    */
   function parseBetaFeatures(rows) {
     if (!rows || rows.length < 3) return { footerBoxes: [] };
@@ -1136,10 +1225,9 @@
   }
 
   /**
-   * Given the comma-separated list from Beta Features, return the ordered
-   * set of footer boxes to actually use (max 3, sorted by Priority ascending).
-   * Any boxes beyond the top 3 are exiled (never fetched, never rendered).
-   * Titles are matched case-sensitively against the box's Settings Title.
+   * Given the comma-separated list (from board Settings or Beta fallback),
+   * return the ordered set of footer boxes to use (max 3, sorted by Priority asc).
+   * Boxes beyond top 3 are exiled. Case-sensitive title match.
    */
   function selectFooterBoxesFromBeta(betaList, boxRegistry) {
     if (!betaList || !betaList.length) return [];
@@ -1178,6 +1266,9 @@
       createColumns: false,
       textAlign: "center",
       priority: 4,
+      includeInPresentation: false,
+      familyPortrait: false,
+      presentationMode: "slideshow",
     };
     if (!rows || rows.length < 2) return box;
 
@@ -1205,24 +1296,14 @@
     box.createColumns = parseYesNo(cell(srow, bs.createColumns), false);
     box.textAlign = parseTextAlign(cell(srow, bs.textAlign), "center");
     box.priority = parsePriority(cell(srow, bs.priority), 4);
+    applyBoxPresentationSettings(box, srow);
 
     const invIdx = findRevisedSectionDataStart(rows, "inventory");
     const start = invIdx >= 0 ? invIdx : 5;
-    const bi = BOX_REVISED_INVENTORY;
+    const vegFolder = FOOTER_BOX_IMAGE_FOLDERS.veggies;
     for (let i = start; i < rows.length; i++) {
-      const row = rows[i];
-      const name = cell(row, bi.item);
-      if (!name) continue;
-      const includeRaw = cell(row, bi.include);
-      if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
-        continue;
-      }
-      box.items.push({
-        name: String(name).trim(),
-        subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
-        price: formatPrice(cell(row, bi.price)),
-        isNew: parseIsNew(cell(row, bi.isNew)),
-      });
+      const it = parseBoxInventoryItemRow(rows[i], vegFolder);
+      if (it) box.items.push(it);
     }
     return box;
   }
@@ -1296,16 +1377,26 @@
    * Append name / subtitle / price spans into a footer item row or wrap chip.
    * Shared by protein, sauces, and footer-drinks.
    */
-  function appendFooterItemParts(parent, it) {
+  /**
+   * @param {HTMLElement} parent
+   * @param {object} it
+   * @param {{ suppressNewStyle?: boolean }} [opts]
+   *   suppressNewStyle: box is in presentation — no static Special color;
+   *   turn highlight applies Special/Highlight only when active.
+   */
+  function appendFooterItemParts(parent, it, opts) {
     if (!parent || !it) return;
+    opts = opts || {};
+    const markNew = !!it.isNew && !opts.suppressNewStyle;
     const nameEl = document.createElement("span");
-    nameEl.className = "box-item-name" + (it.isNew ? " is-new" : "");
+    nameEl.className = "box-item-name" + (markNew ? " is-new" : "");
     nameEl.textContent = it.name || "";
     parent.appendChild(nameEl);
 
     if (it.subtitle) {
       const sub = document.createElement("span");
-      sub.className = "item-paren-sub box-item-sub";
+      sub.className =
+        "item-paren-sub box-item-sub" + (markNew ? " is-new" : "");
       sub.textContent = " (" + it.subtitle + ")";
       parent.appendChild(sub);
     }
@@ -1313,10 +1404,16 @@
     const cleaned = footerPriceClean(it.price);
     if (cleaned) {
       const priceEl = document.createElement("span");
-      priceEl.className = "box-item-price";
+      priceEl.className = "box-item-price" + (markNew ? " is-new" : "");
       priceEl.textContent = " + $" + cleaned;
       parent.appendChild(priceEl);
     }
+  }
+
+  /** Mark a box row/chip with inventory index for presentation highlight. */
+  function setBoxItemIndexAttr(el, index) {
+    if (!el || index == null || index < 0) return;
+    el.dataset.boxItemIndex = String(index);
   }
 
   /** First non-empty cell in a column → Yes/No (or default). */
@@ -1386,23 +1483,39 @@
   }
 
   /**
-   * Style → Encore Spotlight Type/Color classes + --encore-veil-color.
-   * @param {{isNew?: boolean}|null} [item] active bow item (for Highlight color)
+   * Encore is active for the Alpha board mode OR the current presentation segment.
+   * Box Menu Encore must not depend on Alpha Presentation Mode.
    */
-  function applyEncoreSpotlightChrome(item) {
+  function isEncoreActiveNow() {
+    return (
+      _activeSegmentMode === "encore" ||
+      config.presentationMode === "encore"
+    );
+  }
+
+  /**
+   * Style → Encore Spotlight Type/Color classes + --encore-veil-color.
+   * @param {{isNew?: boolean}|null} [item] active bow item (for Highlight color).
+   *   When null/omitted and already in Encore, **keep** the current veil color
+   *   so New → Special does not snap to regular Highlight during zoom-out.
+   * @param {{forceClear?: boolean}} [opts]
+   */
+  function applyEncoreSpotlightChrome(item, opts) {
+    opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
 
-    // Spotlight Veil should only be active during Encore.
-    // Guard here so classes are never present outside Encore mode.
-    if (config.presentationMode !== "encore") {
+    // Spotlight Veil only during Encore (board or active Box segment).
+    if (!isEncoreActiveNow()) {
       stage.classList.remove(
         "encore-spot-hard",
         "encore-spot-soft",
         "encore-spot-color-highlight",
         "encore-spot-color-black"
       );
-      stage.style.removeProperty("--encore-veil-color");
+      if (opts.forceClear) {
+        stage.style.removeProperty("--encore-veil-color");
+      }
       return;
     }
 
@@ -1419,24 +1532,30 @@
     );
     stage.classList.toggle("encore-spot-color-black", colorMode === "black");
 
-    let veilColor = "#000000";
     if (colorMode === "highlight") {
-      veilColor =
-        item && item.isNew
+      // Only update color when we know the bow item — preserve Special through zoom-out
+      if (item) {
+        let veilColor = item.isNew
           ? config.highlightSpecial || config.highlight || "#fff900"
           : config.highlight || "#26bbcb";
-      veilColor = normalizeHex(veilColor) || veilColor || "#26bbcb";
+        veilColor = normalizeHex(veilColor) || veilColor || "#26bbcb";
+        stage.style.setProperty("--encore-veil-color", veilColor);
+        tokiInfo(
+          "encore spotlight",
+          type,
+          colorMode,
+          "veil",
+          veilColor,
+          item.isNew ? "(special)" : ""
+        );
+      } else if (opts.forceClear || !stage.style.getPropertyValue("--encore-veil-color")) {
+        const fallback =
+          normalizeHex(config.highlight) || config.highlight || "#26bbcb";
+        stage.style.setProperty("--encore-veil-color", fallback);
+      }
+    } else {
+      stage.style.setProperty("--encore-veil-color", "#000000");
     }
-    // Set on stage (inherits into veil). Do not set a conflicting default on .veil.
-    stage.style.setProperty("--encore-veil-color", veilColor);
-    tokiInfo(
-      "encore spotlight",
-      type,
-      colorMode,
-      "veil",
-      veilColor,
-      item && item.isNew ? "(special)" : ""
-    );
   }
 
   /**
@@ -1466,6 +1585,7 @@
    */
   let _disclaimerSampleGen = 0;
   const _bgImageCache = {};
+  const _imageAvgPlateCache = Object.create(null);
 
   function setDisclaimerColor(color) {
     if (!els.disclaimer) return;
@@ -1602,6 +1722,82 @@
     ctx.restore();
 
     return averageCanvasHex(ctx, W, H) || plateHex;
+  }
+
+  /**
+   * Average of the *entire* source PNG (all pixels). Downscaled only for perf.
+   * Used solely for the crossfade plate-override when 100% + Normal.
+   */
+  function computeAverageOfImage(img) {
+    if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+    // Reasonable cap keeps getImageData fast while mean color remains accurate.
+    const MAX_DIM = 512;
+    let cw = W,
+      ch = H;
+    if (Math.max(W, H) > MAX_DIM) {
+      const scale = MAX_DIM / Math.max(W, H);
+      cw = Math.max(1, Math.round(W * scale));
+      ch = Math.max(1, Math.round(H * scale));
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, cw, ch);
+    return averageCanvasHex(ctx, cw, ch);
+  }
+
+  /**
+   * IF wallpaper selected AND opacity===100% AND blend==="normal" (or wall-forced normal),
+   * compute the PNG average *once* and override the #galaxy backgroundColor plate.
+   * This eliminates the BG COLOR flash/peek during dual-layer crossfades.
+   * Only overrides in exactly those conditions. Called from applyStageBackground.
+   * Idempotent per resolved display image path.
+   */
+  async function maybeApplyImageAverageAsPlate(displayPath) {
+    if (!displayPath) return;
+    const opacity01 = bgImageOpacityPeak();
+    let effBlend = parseBgBlendMode(config.bgBlendMode);
+    if (isPreviewWall()) effBlend = "normal";
+    if (opacity01 < 0.999 || effBlend !== "normal") {
+      return;
+    }
+    if (_imageAvgPlateCache[displayPath]) {
+      // Ensure the plate is using the averaged color for this image
+      // (setting is cheap and avoids rgb vs hex comparison gotchas).
+      const galaxy = document.getElementById("galaxy");
+      if (galaxy) {
+        galaxy.style.backgroundColor = _imageAvgPlateCache[displayPath];
+      }
+      return;
+    }
+    try {
+      const img = await loadBgImageCached(displayPath);
+      // Revalidate conditions + that this image is still the active one
+      if (!config.bgImage) return;
+      const currentDisplay = wallFriendlyBgPath(config.bgImage);
+      if (currentDisplay !== displayPath) return;
+      const curOpacity = bgImageOpacityPeak();
+      let curBlend = parseBgBlendMode(config.bgBlendMode);
+      if (isPreviewWall()) curBlend = "normal";
+      if (curOpacity < 0.999 || curBlend !== "normal") return;
+
+      const avg = computeAverageOfImage(img);
+      if (!avg) return;
+
+      _imageAvgPlateCache[displayPath] = avg;
+
+      const galaxy = document.getElementById("galaxy");
+      if (galaxy) {
+        galaxy.style.backgroundColor = avg;
+      }
+      tokiInfo("BG plate overridden with PNG average for crossfade (image+100%+Normal only):", avg);
+    } catch (err) {
+      // Load/decode/getImageData issue (e.g. unexpected cross-origin). Keep user plate.
+    }
   }
 
   /**
@@ -1950,6 +2146,17 @@
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
 
+    // Special-case plate override (only when image + 100% opacity + Normal):
+    // Use a pre-computed PNG average (if we have it from a prior load) so the
+    // first paint of the galaxy also uses the matching tone. The async compute
+    // (kicked off below) will fill the cache for subsequent applies / reloads.
+    if (imagePath && opacity01 >= 0.999 && blend === "normal") {
+      const cachedAvg = _imageAvgPlateCache[imagePath];
+      if (cachedAvg) {
+        plate = cachedAvg;
+      }
+    }
+
     // Color plate always under the image
     galaxy.style.backgroundColor = plate;
     galaxy.classList.toggle("has-image", !!imagePath);
@@ -2020,6 +2227,13 @@
       } else {
         els.galaxyA.addEventListener("load", onReady, { once: true });
       }
+    }
+
+    // If wallpaper + 100% + Normal (the only case we override), compute the
+    // full PNG average color once and set it as the galaxy plate. This is the
+    // exact condition requested; the work is async and only on image load.
+    if (imagePath) {
+      maybeApplyImageAverageAsPlate(imagePath);
     }
 
     updateDebugVisuals();
@@ -2796,15 +3010,24 @@
     let includeDescriptions;
     let menuColumns = "auto";
     let titleRowForTitle = first;
+    let includeFooterBoxes = [];  // per-board comma list from Settings (new unified control)
 
     if (isBoardRevised && settingsRow) {
       const rs = BOARD_REVISED_SETTINGS;
       titleRowForTitle = settingsRow;
-      includeProteinBox = parseInclude(cell(settingsRow, rs.includeProteinBox));
-      includeSaucesBox = parseInclude(cell(settingsRow, rs.includeSaucesBox));
-      // Beta is now the source of truth for which footer boxes (P/S/D/V) are shown.
-      // Board Settings no longer carries a reliable Include Drinks column (was shifted out).
+
+      // New per-page control (replaces the old individual Include Protein/Sauces/Drinks/Veggies? flags)
+      const footerBoxesRaw = cell(settingsRow, rs.includeFooterBoxes);
+      includeFooterBoxes = String(footerBoxesRaw || "")
+        .split(",")
+        .map(function (s) { return s.trim(); })
+        .filter(Boolean);
+
+      // Old per-box flags no longer exist in the row. Default conservatively; the list + selection will decide.
+      includeProteinBox = true;
+      includeSaucesBox = true;
       includeDrinksBox = false;
+
       familyPortrait = parseInclude(cell(settingsRow, rs.familyPortrait));
       presentationMode = parsePresentationMode(cell(settingsRow, rs.presentationMode), "slideshow");
       includeDescriptions = parseInclude(cell(settingsRow, rs.includeDescriptions));
@@ -2902,6 +3125,7 @@
         createColumns: false,
         textAlign: "center",
       },
+      includeFooterBoxes: includeFooterBoxes,
     };
 
     // Speeds / colors only when those columns exist on this sheet
@@ -3394,6 +3618,12 @@
           parsed.proteinBox.priority,
           FOOTER_PRIORITY_DEFAULTS.protein
         ),
+        includeInPresentation: !!parsed.proteinBox.includeInPresentation,
+        familyPortrait: !!parsed.proteinBox.familyPortrait,
+        presentationMode: parsePresentationMode(
+          parsed.proteinBox.presentationMode,
+          "slideshow"
+        ),
       };
       console.info(
         "Protein Create Columns?",
@@ -3401,7 +3631,12 @@
         "align",
         proteinBox.textAlign,
         "priority",
-        proteinBox.priority
+        proteinBox.priority,
+        "pres",
+        proteinBox.includeInPresentation
+          ? proteinBox.presentationMode +
+              (proteinBox.familyPortrait ? "+FP" : "")
+          : "off"
       );
     }
     if (parsed.saucesBox) {
@@ -3420,6 +3655,12 @@
           parsed.saucesBox.priority,
           FOOTER_PRIORITY_DEFAULTS.sauces
         ),
+        includeInPresentation: !!parsed.saucesBox.includeInPresentation,
+        familyPortrait: !!parsed.saucesBox.familyPortrait,
+        presentationMode: parsePresentationMode(
+          parsed.saucesBox.presentationMode,
+          "slideshow"
+        ),
       };
       console.info(
         "Sauces Create Columns?",
@@ -3427,7 +3668,12 @@
         "align",
         saucesBox.textAlign,
         "priority",
-        saucesBox.priority
+        saucesBox.priority,
+        "pres",
+        saucesBox.includeInPresentation
+          ? saucesBox.presentationMode +
+              (saucesBox.familyPortrait ? "+FP" : "")
+          : "off"
       );
     }
     if (parsed.footerDrinksBox) {
@@ -3448,6 +3694,12 @@
         priority: parsePriority(
           parsed.footerDrinksBox.priority,
           FOOTER_PRIORITY_DEFAULTS.drinks
+        ),
+        includeInPresentation: !!parsed.footerDrinksBox.includeInPresentation,
+        familyPortrait: !!parsed.footerDrinksBox.familyPortrait,
+        presentationMode: parsePresentationMode(
+          parsed.footerDrinksBox.presentationMode,
+          "slideshow"
         ),
       };
       console.info(
@@ -3565,116 +3817,245 @@
   }
 
   /**
-   * Bowls / list boards: Family Portrait + Presentation Mode.
-   * Portrait cast: name + include + image (all three).
+   * Multi-segment presentation for boards 1–3 (not Board 4).
    *
-   * Slideshow + Family Portrait ON: collage overview, then individual heroes.
-   * Slideshow + Family Portrait OFF: empty slides → default per-item heroes.
+   * Segments in cue order:
+   *   1. Alpha Menu (board items) — implicit Priority 0
+   *   2. Footer Box Menus with Include in Presentation? — by Priority (lower first)
    *
-   * Encore always uses the collage when a cast exists (Encore overrides FP off
-   * for the visual — you still see all plates). Family Portrait only controls
-   * whether Encore starts with a neutral lineup beat:
-   *   FP ON  + Encore → lineup (no highlight), then each bow + spotlight
-   *   FP OFF + Encore → skip lineup; jump straight into first bow (presentation
-   *                     already begun — first item highlighted + spotlit)
-   * Encore with no cast images → fall through to list/hero bows (no collage).
+   * Each segment has its own Family Portrait + Presentation Mode (Slideshow|Encore).
+   * Alpha never mixes box items; each box presents only its inventory.
+   * Blank Image → textOnly slide (highlight only, no hero).
+   * After the last slide, setActive wraps to 0 → loop back to Alpha.
    */
   function buildBoardSlides() {
     slides = [];
-    const portraitItems = items.filter(function (it) {
-      return !!(it && it.name && it.include !== false && it.image);
-    });
-    const mode = config.presentationMode === "encore" ? "encore" : "slideshow";
-    const hasCast = portraitItems.length > 0;
-    // Slideshow-only gate for the collage overview
-    const portraitOn = !!config.familyPortrait && hasCast;
-    // Encore: collage whenever cast exists (FP flag only gates the lineup beat)
-    const encoreLineup = !!config.familyPortrait;
+    if (isDrinks) return;
 
-    if (mode === "encore") {
-      if (hasCast) {
-        if (encoreLineup) {
-          // Full cast first (no spotlight), then each bow
-          slides.push({
+    appendPresSegment({
+      segment: "alpha",
+      boxKey: null,
+      mode: config.presentationMode,
+      familyPortrait: !!config.familyPortrait,
+      itemList: items
+        .map(function (it, i) {
+          if (!it || !it.name || it.include === false) return null;
+          return {
+            name: it.name,
+            image: it.image || null,
+            images: it.images || null,
+            isNew: !!it.isNew,
+            itemIndex: i,
+            boxItemIndex: -1,
+          };
+        })
+        .filter(Boolean),
+    });
+
+    const boxSpecs = [
+      { key: "protein", box: proteinBox },
+      { key: "sauces", box: saucesBox },
+      { key: "drinks", box: footerDrinksBox },
+      { key: "veggies", box: veggiesBox },
+    ]
+      .filter(function (s) {
+        return (
+          s.box &&
+          s.box.include !== false &&
+          s.box.includeInPresentation &&
+          s.box.items &&
+          s.box.items.length > 0
+        );
+      })
+      .sort(function (a, b) {
+        const pa = Number.isFinite(a.box.priority) ? a.box.priority : 999;
+        const pb = Number.isFinite(b.box.priority) ? b.box.priority : 999;
+        return pa - pb;
+      });
+
+    boxSpecs.forEach(function (s) {
+      const box = s.box;
+      const inv = box.items || [];
+      // Display order (wrap/columns paint order) — fall back to sheet order
+      let order =
+        Array.isArray(box.displayOrder) && box.displayOrder.length
+          ? box.displayOrder.slice()
+          : inv.map(function (_it, i) {
+              return i;
+            });
+      // De-dupe + drop invalid indices
+      const seen = {};
+      order = order.filter(function (idx) {
+        if (seen[idx] || idx < 0 || idx >= inv.length) return false;
+        seen[idx] = true;
+        return true;
+      });
+      // Append any inventory rows missing from displayOrder (safety)
+      for (let i = 0; i < inv.length; i++) {
+        if (!seen[i]) order.push(i);
+      }
+      appendPresSegment({
+        segment: "box",
+        boxKey: s.key,
+        mode: box.presentationMode || "slideshow",
+        familyPortrait: !!box.familyPortrait,
+        itemList: order.map(function (idx) {
+          const it = inv[idx];
+          return {
+            name: it.name,
+            image: it.image || null,
+            images: it.images || null,
+            isNew: !!it.isNew,
+            itemIndex: idx,
+            boxItemIndex: idx,
+          };
+        }),
+      });
+    });
+
+    tokiInfo(
+      "presentation slides",
+      slides.length,
+      "(alpha +",
+      boxSpecs.length,
+      "box segment(s):",
+      boxSpecs
+        .map(function (s) {
+          return (
+            s.key +
+            "@" +
+            s.box.priority +
+            ":" +
+            (s.box.presentationMode || "slideshow") +
+            (s.box.familyPortrait ? "+FP" : "")
+          );
+        })
+        .join(", ") ||
+        "none",
+      ")"
+    );
+  }
+
+  /**
+   * Append one presentation segment’s slides (portrait / encore / item).
+   * Display order of itemList is the cue order (sheet order for Alpha; box
+   * displayOrder for Box Menus). FP/Encore cast = only items with image paths.
+   * Zero images → skip FP and Encore entirely (slideshow text highlights only).
+   * Partial images → FP layout for those only; Encore bows only those (no empty seats).
+   *
+   * @param {{ segment: string, boxKey: string|null, mode: string, familyPortrait: boolean, itemList: Array }} opts
+   */
+  function appendPresSegment(opts) {
+    const list = opts.itemList || [];
+    if (!list.length) return;
+
+    let mode = opts.mode === "encore" ? "encore" : "slideshow";
+    // Only items with a non-empty image path count for cast (broken loads stripped at paint)
+    const portraitItems = list.filter(function (it) {
+      return !!(it && it.name && it.image);
+    });
+    const hasCast = portraitItems.length > 0;
+    // No images at all → cannot run FP or Encore; fall back to text-only slideshow
+    if (!hasCast && mode === "encore") {
+      mode = "slideshow";
+    }
+    const portraitOn = !!opts.familyPortrait && hasCast;
+    const encoreLineup = !!opts.familyPortrait && hasCast;
+    const seg = opts.segment || "alpha";
+    const boxKey = opts.boxKey || null;
+
+    /**
+     * Animation Block id (product sense — barriers for Wind-up/Wind-down):
+     *   encore (FP on or off) → one block for the whole encore sequence
+     *   slideshow FP overview → its own block
+     *   slideshow items → one block for the item cycle
+     * See docs/UI_NOMENCLATURE.md §4.
+     */
+    function blockId(kind) {
+      return seg + ":" + (boxKey || "alpha") + ":" + kind;
+    }
+
+    function base(kind, extra) {
+      return Object.assign(
+        {
+          segment: seg,
+          boxKey: boxKey,
+          segmentMode: mode,
+          animationBlockId: blockId(kind),
+        },
+        extra
+      );
+    }
+
+    if (mode === "encore" && hasCast) {
+      if (encoreLineup) {
+        slides.push(
+          base("encore", {
             type: "portrait",
             items: portraitItems,
             itemIndex: -1,
+            boxItemIndex: -1,
             isNew: false,
             image: null,
-          });
-        }
-        portraitItems.forEach(function (it) {
-          const itemIndex = items.indexOf(it);
-          slides.push({
+            textOnly: false,
+            // Lineup is Encore Wind-up when FP is on (composed into same block)
+            isBlockWindUp: true,
+          })
+        );
+      }
+      // Encore bows ONLY items with images (partial cast → fewer bows, denser grid)
+      portraitItems.forEach(function (it, bowIndex) {
+        slides.push(
+          base("encore", {
             type: "encore",
             items: portraitItems,
-            itemIndex: itemIndex,
+            itemIndex: it.itemIndex,
+            boxItemIndex:
+              it.boxItemIndex != null ? it.boxItemIndex : it.itemIndex,
             image: it.image,
             images: it.images || null,
             isNew: !!it.isNew,
             withPortrait: true,
-          });
-        });
-        tokiInfo(
-          "encore slides",
-          slides.length,
-          encoreLineup
-            ? "(1 lineup +"
-            : "(no lineup, FP off — straight into",
-          portraitItems.length,
-          "bows, collage on)"
+            textOnly: false,
+            // First bow is Encore Wind-up when FP lineup was skipped
+            isBlockWindUp: !encoreLineup && bowIndex === 0,
+          })
         );
-        return;
-      }
-
-      // No cast images: list/hero bows only (still Encore, not Slideshow mode)
-      items.forEach(function (it, i) {
-        if (!it || it.include === false || !it.name) return;
-        slides.push({
-          type: "encore",
-          items: null,
-          itemIndex: i,
-          image: it.image || null,
-          images: it.images || null,
-          isNew: !!it.isNew,
-          withPortrait: false,
-        });
       });
-      tokiInfo(
-        "encore slides",
-        slides.length,
-        "(no cast images — list/hero bows)"
-      );
       return;
     }
 
+    // Slideshow (or Encore-with-no-images fallback)
     if (portraitOn) {
-      slides.push({
-        type: "portrait",
-        items: portraitItems,
-        itemIndex: -1,
-        isNew: false,
-        image: null,
-      });
-      items.forEach(function (it, i) {
-        if (!it.image) return;
-        slides.push({
-          type: "item",
-          itemIndex: i,
-          image: it.image,
-          images: it.images || null,
-          isNew: !!it.isNew,
-        });
-      });
-      tokiInfo(
-        "family portrait slides",
-        slides.length,
-        "portrait items",
-        portraitItems.length,
-        "mode",
-        mode
+      slides.push(
+        base("fp", {
+          type: "portrait",
+          items: portraitItems,
+          itemIndex: -1,
+          boxItemIndex: -1,
+          isNew: false,
+          image: null,
+          textOnly: false,
+          isBlockWindUp: true,
+        })
       );
     }
+    // Every inventory row still gets a highlight beat; missing image → textOnly
+    list.forEach(function (it, i) {
+      slides.push(
+        base("slideshow", {
+          type: "item",
+          itemIndex: it.itemIndex,
+          boxItemIndex:
+            it.boxItemIndex != null ? it.boxItemIndex : it.itemIndex,
+          image: it.image || null,
+          images: it.images || null,
+          isNew: !!it.isNew,
+          textOnly: !it.image,
+          isBlockWindUp: !portraitOn && i === 0,
+        })
+      );
+    });
   }
 
   let _portraitRenderKey = "";
@@ -4721,11 +5102,13 @@
       createColumns: true,
       textAlign: "right",
       priority: FOOTER_PRIORITY_DEFAULTS.protein,
+      includeInPresentation: false,
+      familyPortrait: false,
+      presentationMode: "slideshow",
     };
     if (!rows || rows.length < 2) return box;
 
     // Detect revised Proteins sheet (gid 1420775786+): Settings section + Inventory section
-    // (new "Image" column is present but ignored for now)
     const isProteinRevised =
       rows &&
       rows[0] &&
@@ -4756,25 +5139,15 @@
         cell(srow, bs.priority),
         FOOTER_PRIORITY_DEFAULTS.protein
       );
+      applyBoxPresentationSettings(box, srow);
 
       // Inventory items using uniform BOX_REVISED_INVENTORY
       const invIdx = findRevisedSectionDataStart(rows, "inventory");
       const start = invIdx >= 0 ? invIdx : 5;
-      const bi = BOX_REVISED_INVENTORY;
+      const proteinFolder = FOOTER_BOX_IMAGE_FOLDERS.protein;
       for (let i = start; i < rows.length; i++) {
-        const row = rows[i];
-        const name = cell(row, bi.item);
-        if (!name) continue;
-        const includeRaw = cell(row, bi.include);
-        if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
-          continue;
-        }
-        box.items.push({
-          name: String(name).trim(),
-          subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
-          price: formatPrice(cell(row, bi.price)),
-          isNew: parseIsNew(cell(row, bi.isNew)),
-        });
+        const it = parseBoxInventoryItemRow(rows[i], proteinFolder);
+        if (it) box.items.push(it);
       }
       return box;
     }
@@ -4819,6 +5192,9 @@
       createColumns: false,
       textAlign: "center",
       priority: FOOTER_PRIORITY_DEFAULTS.sauces,
+      includeInPresentation: false,
+      familyPortrait: false,
+      presentationMode: "slideshow",
     };
     if (!rows || rows.length < 2) return box;
 
@@ -4849,24 +5225,14 @@
         cell(srow, bs.priority),
         FOOTER_PRIORITY_DEFAULTS.sauces
       );
+      applyBoxPresentationSettings(box, srow);
 
       const invIdx = findRevisedSectionDataStart(rows, "inventory");
       const start = invIdx >= 0 ? invIdx : 5;
-      const bi = BOX_REVISED_INVENTORY;
+      const saucesFolder = FOOTER_BOX_IMAGE_FOLDERS.sauces;
       for (let i = start; i < rows.length; i++) {
-        const row = rows[i];
-        const name = cell(row, bi.item);
-        if (!name) continue;
-        const includeRaw = cell(row, bi.include);
-        if (includeRaw !== "" && includeRaw != null && !parseInclude(includeRaw)) {
-          continue;
-        }
-        box.items.push({
-          name: String(name).trim(),
-          subtitle: String(cell(row, bi.itemSubtitle) || "").trim(),
-          price: formatPrice(cell(row, bi.price)),
-          isNew: parseIsNew(cell(row, bi.isNew)),
-        });
+        const it = parseBoxInventoryItemRow(rows[i], saucesFolder);
+        if (it) box.items.push(it);
       }
       return box;
     }
@@ -5004,7 +5370,7 @@
   }
 
   /**
-   * Boards 1–3: load Veggies sheet (new 4th footer box) when selected via Beta Features.
+   * Boards 1–3: load Veggies sheet (new 4th footer box) when selected via the list.
    * Always loads content when called — caller decides include/exile afterward.
    */
   async function attachVeggiesBox(parsed, prefetched) {
@@ -5040,6 +5406,12 @@
         textAlign: box.textAlign || "center",
         priority: box.priority != null ? box.priority : 4,
         include: true,
+        includeInPresentation: !!box.includeInPresentation,
+        familyPortrait: !!box.familyPortrait,
+        presentationMode: parsePresentationMode(
+          box.presentationMode,
+          "slideshow"
+        ),
       };
       console.info(
         "Veggies sheet loaded:",
@@ -5109,36 +5481,44 @@
   }
 
   /**
-   * Apply Beta Features "Include Footer Boxes" as the sole source of truth for
-   * which footer boxes show on boards 1–3. Loads any named boxes that were not
-   * yet attached (Drinks / Veggies), ranks by sheet Priority (lower = higher),
-   * keeps top 3, exiles the rest (include=false, never rendered), then re-paints.
+   * Apply "Include Footer Boxes" list (from per-board Settings row if present,
+   * else central Beta Features tab) as the source of truth for boards 1–3.
+   * Loads named boxes not yet attached (Drinks/Veggies), ranks by Priority (lower=higher),
+   * keeps top 3, exiles the rest (include=false, never rendered), re-paints.
    */
   async function applyBetaFooterBoxesOverride(parsed) {
     if (!parsed || isDrinks) return parsed;
 
-    let beta;
-    try {
-      const betaRows =
-        parsed._betaRows != null
-          ? parsed._betaRows
-          : await fetchSheetRows(BETA_FEATURES_GID);
-      beta = parseBetaFeatures(betaRows);
-    } catch (err) {
-      console.warn("Beta Features tab unavailable; using board Include* flags", err);
-      return parsed;
+    let want = [];
+    // Prefer the list the user put directly on each menu page's Settings row
+    if (Array.isArray(parsed.includeFooterBoxes) && parsed.includeFooterBoxes.length) {
+      want = parsed.includeFooterBoxes;
+      console.info("Per-board Include Footer Boxes:", want);
+    } else {
+      // Fallback to central Beta Features tab
+      try {
+        const betaRows =
+          parsed._betaRows != null
+            ? parsed._betaRows
+            : await fetchSheetRows(BETA_FEATURES_GID);
+        const beta = parseBetaFeatures(betaRows);
+        want = beta.footerBoxes || [];
+      } catch (err) {
+        console.warn("No per-board list and Beta Features tab unavailable; using board flags", err);
+        return parsed;
+      }
     }
-    if (!beta.footerBoxes || !beta.footerBoxes.length) {
-      console.info("Beta Features: Include Footer Boxes empty — board flags stand");
+
+    if (!want || !want.length) {
+      console.info("Include Footer Boxes list empty — board flags stand");
       return parsed;
     }
 
-    const want = beta.footerBoxes; // case-sensitive titles as listed in the sheet
     const wantSet = {};
     want.forEach(function (t) {
       wantSet[t] = true;
     });
-    console.info("Beta Features Include Footer Boxes raw:", want);
+    console.info("Include Footer Boxes raw:", want);
 
     // Load every named box that needs content (before ranking so Priority is real)
     if (wantSet.Veggies && cfg.veggiesSheetGid) {
@@ -5187,7 +5567,7 @@
       return s.title;
     });
     console.info(
-      "Beta Features Footer Boxes active (top 3 by Priority):",
+      "Footer Boxes active (top 3 by Priority):",
       selected.map(function (s) {
         return s.title + "@" + s.priority;
       })
@@ -5209,6 +5589,7 @@
 
     proteinBox.include = showP;
     saucesBox.include = showS;
+    // Keep presentation flags from sheet parse (applyParsedMenu) for proteins/sauces
 
     // Promote fully loaded drinks / veggies into global runtime boxes
     if (showD && parsed.footerDrinksBox) {
@@ -5226,6 +5607,12 @@
         createColumns: !!fd.createColumns,
         textAlign: parseTextAlign(fd.textAlign, "center"),
         priority: parsePriority(fd.priority, FOOTER_PRIORITY_DEFAULTS.drinks),
+        includeInPresentation: !!fd.includeInPresentation,
+        familyPortrait: !!fd.familyPortrait,
+        presentationMode: parsePresentationMode(
+          fd.presentationMode,
+          "slideshow"
+        ),
       };
       paintFooterBoxChrome(
         "footer-drinks-box",
@@ -5238,6 +5625,7 @@
     } else {
       footerDrinksBox.include = false;
       footerDrinksBox.items = [];
+      footerDrinksBox.includeInPresentation = false;
     }
 
     if (showV && parsed.veggiesBox) {
@@ -5255,6 +5643,12 @@
         createColumns: !!vb.createColumns,
         textAlign: parseTextAlign(vb.textAlign, "center"),
         priority: parsePriority(vb.priority, 4),
+        includeInPresentation: !!vb.includeInPresentation,
+        familyPortrait: !!vb.familyPortrait,
+        presentationMode: parsePresentationMode(
+          vb.presentationMode,
+          "slideshow"
+        ),
       };
       paintFooterBoxChrome(
         "veggies-box",
@@ -5267,10 +5661,15 @@
     } else {
       veggiesBox.include = false;
       veggiesBox.items = [];
+      veggiesBox.includeInPresentation = false;
     }
 
     // Re-paint layout + bodies with the final set
     renderFooterBoxes();
+    // Rebuild presentation after include/exile is final (box segments depend on it)
+    if (!isDrinks) {
+      buildBoardSlides();
+    }
     return parsed;
   }
 
@@ -5349,6 +5748,8 @@
             subtitle: it.subtitle || "",
             price: it.price || "",
             isNew: !!it.isNew,
+            image: it.image || null,
+            images: it.images || null,
           };
         });
       parsed.footerDrinksBox = {
@@ -5364,6 +5765,12 @@
             ? box.priority
             : FOOTER_PRIORITY_DEFAULTS.drinks,
         include: true,
+        includeInPresentation: !!box.includeInPresentation,
+        familyPortrait: !!box.familyPortrait,
+        presentationMode: parsePresentationMode(
+          box.presentationMode,
+          "slideshow"
+        ),
       };
       console.info(
         "Footer drinks sheet:",
@@ -5505,7 +5912,10 @@
             : true;
         if (!inc) continue;
 
-        const imageName = cell(row, bi.image);
+        const imgs = parseBoxItemImages(
+          cell(row, bi.image),
+          FOOTER_BOX_IMAGE_FOLDERS.drinks
+        );
         const subtitle = String(cell(row, bi.itemSubtitle) || "").trim();
         const priceStr = formatPrice(cell(row, bi.price));
         items.push({
@@ -5515,32 +5925,33 @@
           description: "",
           subtitle: subtitle,
           isNew: parseIsNew(cell(row, bi.isNew)),
-          image:
-            imageName !== "" &&
-            imageName != null &&
-            String(imageName).toLowerCase() !== "null"
-              ? String(imageName).replace(/^\/+/, "")
-              : null,
+          image: imgs.image,
+          images: imgs.images,
           include: true,
         });
       }
 
-      // Settings: Title…Text Align + Priority (F). Overview/individual stay true
+      // Settings: Title…Priority + presentation G–I. Overview/individual stay true
       // for Board 4 slideshow until dedicated Settings columns are added.
+      const drinkBox = {
+        title: String(cell(srow, bs.title) || "").trim(),
+        subtitle: String(cell(srow, bs.subtitle) || "").trim(),
+        bgChoice: drinkChoice,
+        bgFill: drinkFill,
+        createColumns: parseYesNo(cell(srow, bs.createColumns), false),
+        textAlign: parseTextAlign(cell(srow, bs.textAlign), "center"),
+        priority: parsePriority(
+          cell(srow, bs.priority),
+          FOOTER_PRIORITY_DEFAULTS.drinks
+        ),
+        includeInPresentation: false,
+        familyPortrait: false,
+        presentationMode: "slideshow",
+      };
+      applyBoxPresentationSettings(drinkBox, srow);
       return {
         items: items,
-        drinkBox: {
-          title: String(cell(srow, bs.title) || "").trim(),
-          subtitle: String(cell(srow, bs.subtitle) || "").trim(),
-          bgChoice: drinkChoice,
-          bgFill: drinkFill,
-          createColumns: parseYesNo(cell(srow, bs.createColumns), false),
-          textAlign: parseTextAlign(cell(srow, bs.textAlign), "center"),
-          priority: parsePriority(
-            cell(srow, bs.priority),
-            FOOTER_PRIORITY_DEFAULTS.drinks
-          ),
-        },
+        drinkBox: drinkBox,
         drinksOverview: true,
         drinksIndividual: true,
         overviewImage: null,
@@ -5792,7 +6203,7 @@
       csvJobs.veggies = fetchSheetRows(cfg.veggiesSheetGid);
     }
     if (!isDrinks) {
-      // Beta Features: Include Footer Boxes (comma list) — boards 1–3
+      // Central Beta (fallback); per-board "Include Footer Boxes" is read from each board's Settings
       csvJobs.beta = fetchSheetRows(BETA_FEATURES_GID);
     }
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
@@ -7186,6 +7597,12 @@
     bodyEl.innerHTML = "";
     bodyEl.style.setProperty("--box-scale", "1");
 
+    // reset line-count conditional classes
+    bodyEl.classList.remove("lines-1", "lines-2", "lines-3", "lines-4", "lines-many");
+    bodyEl.removeAttribute("data-line-count");
+    // Display order for presentation cue (sheet index order until packed)
+    box.displayOrder = [];
+
     // protein defaultColumns:true → on unless explicit No
     // sauces/drinks defaultColumns:false → off unless explicit Yes
     const columnsOn =
@@ -7202,38 +7619,57 @@
     const list = box.items || [];
     if (!list.length) return;
 
+    // Boxes in presentation: no static Special on New — only turn highlight
+    const suppressNewStyle = !!box.includeInPresentation;
+    const partOpts = { suppressNewStyle: suppressNewStyle };
+
     if (columnsOn) {
-      list.forEach(function (it) {
+      list.forEach(function (it, idx) {
         const row = document.createElement("div");
         row.className =
           (conf.colItemClass || "box-col-item") + " box-col-item";
-        appendFooterItemParts(row, it);
+        setBoxItemIndexAttr(row, idx);
+        appendFooterItemParts(row, it, partOpts);
         bodyEl.appendChild(row);
+        box.displayOrder.push(idx);
       });
       return;
     }
 
+    // Preserve inventory indices through wrap packing
+    const measured = list.map(function (it, idx) {
+      return {
+        label: footerItemMeasureLabel(it),
+        name: it.name,
+        subtitle: it.subtitle || "",
+        price: it.price || "",
+        isNew: !!it.isNew,
+        _boxItemIndex: idx,
+      };
+    });
     const lines = balanceItemsIntoLines(
-      list.map(function (it) {
-        return {
-          label: footerItemMeasureLabel(it),
-          name: it.name,
-          subtitle: it.subtitle || "",
-          price: it.price || "",
-          isNew: !!it.isNew,
-        };
-      }),
+      measured,
       balanceOptsFromBox(bodyEl, {
         sepText: " · ",
         maxLines: 8,
       })
     );
+
+    // Conditional formatting for line count (used for tighter 2-line spacing)
+    bodyEl.classList.remove("lines-1", "lines-2", "lines-3", "lines-4", "lines-many");
+    const lc = lines.length || 1;
+    bodyEl.classList.add(lc >= 5 ? "lines-many" : "lines-" + lc);
+    bodyEl.dataset.lineCount = String(lc);
+
     lines.forEach(function (line, li) {
       line.forEach(function (it, i) {
         const span = document.createElement("span");
         span.className =
           (conf.wrapItemClass || "wrap-item") + " wrap-item";
-        appendFooterItemParts(span, it);
+        const invIdx = it._boxItemIndex != null ? it._boxItemIndex : -1;
+        setBoxItemIndexAttr(span, invIdx);
+        if (invIdx >= 0) box.displayOrder.push(invIdx);
+        appendFooterItemParts(span, it, partOpts);
         bodyEl.appendChild(span);
         if (i < line.length - 1) {
           const sep = document.createElement("span");
@@ -7315,6 +7751,28 @@
     // Shells after content/layout settle (width may change when solo)
     syncFooterBoxShells();
     fitFooterBoxes();
+    // Presentation cue follows painted DOM order (wrap L→R, columns top→bottom)
+    captureBoxDisplayOrderFromDom(els.proteinBody, proteinBox);
+    captureBoxDisplayOrderFromDom(els.saucesBody, saucesBox);
+    captureBoxDisplayOrderFromDom(els.footerDrinksBody, footerDrinksBox);
+    captureBoxDisplayOrderFromDom(
+      els.veggiesBody || document.getElementById("veggies-body"),
+      veggiesBox
+    );
+    if (!isDrinks) {
+      buildBoardSlides();
+    }
+  }
+
+  /** Read data-box-item-index in DOM paint order → box.displayOrder */
+  function captureBoxDisplayOrderFromDom(bodyEl, box) {
+    if (!bodyEl || !box) return;
+    const order = [];
+    bodyEl.querySelectorAll("[data-box-item-index]").forEach(function (el) {
+      const idx = Number(el.dataset.boxItemIndex);
+      if (Number.isFinite(idx) && idx >= 0) order.push(idx);
+    });
+    if (order.length) box.displayOrder = order;
   }
 
   /** @deprecated use footerItemMeasureLabel */
@@ -7988,6 +8446,13 @@
     el.style.setProperty("--box-cols", String(bestCols));
     el.style.setProperty("--protein-cols", String(bestCols));
     el.setAttribute("data-cols", String(bestCols));
+
+    // Set line count class for 2-row (and other) conditional spacing
+    const visualRows = Math.max(1, Math.ceil(n / bestCols));
+    el.classList.remove("lines-1", "lines-2", "lines-3", "lines-4", "lines-many");
+    el.classList.add(visualRows >= 5 ? "lines-many" : "lines-" + visualRows);
+    el.dataset.lineCount = String(visualRows);
+
     fitBoxScale(el, 0.35, 2.0, {
       checkChildWidth: true,
       proteinRows: true,
@@ -8657,13 +9122,20 @@
 
     const wall = isPreviewWall();
     const main = config.mainColor || "#000000";
-    const plate =
+    let plate =
       normalizeHex(config.bgColor) ||
       normalizeHex(config.bgSolid) ||
       main;
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blur01 = wall ? 0 : parseUnit01(config.bgBlur, 0);
     const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
+
+    // Mirror the special 100%+Normal plate override for the scaffold copy
+    // (uses cached avg if the main galaxy path has already computed it).
+    if (imagePath && opacity01 >= 0.999 && blend === "normal") {
+      const cachedAvg = _imageAvgPlateCache[imagePath];
+      if (cachedAvg) plate = cachedAvg;
+    }
 
     const wrap = document.createElement("div");
     wrap.className = "family-portrait-bg";
@@ -8863,6 +9335,16 @@
    */
   let _portraitHandoffTimer = null;
   function handoffHeroToPortrait(portraitItems, instant) {
+    filterLoadablePortraitItems(portraitItems || [], function (loadable) {
+      if (!loadable.length) {
+        hideHeroPlate({ instant: !!instant });
+        return;
+      }
+      handoffHeroToPortraitWithCast(loadable, instant);
+    });
+  }
+
+  function handoffHeroToPortraitWithCast(portraitItems, instant) {
     const stage = els.familyPortrait;
     if (!stage) return;
 
@@ -8954,6 +9436,43 @@
    *   settle / fromEncore: keep collage, ease to full cast (no center solo intro)
    *   forceIntro: cold-start center intro (not used for item→portrait handoff)
    */
+  /**
+   * Drop items whose image URL 404s so FP/Encore never paint broken glyphs
+   * and the lattice is laid out for loadable images only.
+   */
+  function filterLoadablePortraitItems(portraitItems, done) {
+    const list = (portraitItems || []).filter(function (it) {
+      return !!(it && it.image);
+    });
+    if (!list.length) {
+      done([]);
+      return;
+    }
+    let pending = list.length;
+    const kept = [];
+    list.forEach(function (it, order) {
+      const im = new Image();
+      im.onload = function () {
+        kept.push({ it: it, order: order });
+        if (--pending === 0) finish();
+      };
+      im.onerror = function () {
+        if (--pending === 0) finish();
+      };
+      im.src = it.image;
+    });
+    function finish() {
+      kept.sort(function (a, b) {
+        return a.order - b.order;
+      });
+      done(
+        kept.map(function (k) {
+          return k.it;
+        })
+      );
+    }
+  }
+
   function showFamilyPortrait(portraitItems, instant, opts) {
     opts = opts || {};
     const stage = els.familyPortrait;
@@ -8974,6 +9493,22 @@
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
     }
+
+    // Preload: only seats that actually load (no empty holes / broken icons)
+    filterLoadablePortraitItems(portraitItems || [], function (loadable) {
+      if (!loadable.length) {
+        // Nothing to show — hide collage; caller may still do text highlights
+        finishHideFamilyPortrait();
+        return;
+      }
+      showFamilyPortraitWithCast(loadable, instant, opts);
+    });
+  }
+
+  function showFamilyPortraitWithCast(portraitItems, instant, opts) {
+    opts = opts || {};
+    const stage = els.familyPortrait;
+    if (!stage) return;
 
     ensureFamilyPortrait(portraitItems || []);
 
@@ -9078,8 +9613,13 @@
     const resolveIndex =
       typeof opts.resolveItemIndex === "function"
         ? opts.resolveItemIndex
-        : function (it) {
-            return items.indexOf(it);
+        : function (it, i) {
+            // Prefer explicit index (box cast / alpha mapped objects)
+            if (it && it.itemIndex != null && it.itemIndex >= 0) {
+              return it.itemIndex;
+            }
+            const idx = items.indexOf(it);
+            return idx >= 0 ? idx : i;
           };
 
     list.forEach(function (it, i) {
@@ -9098,12 +9638,16 @@
 
       const img = document.createElement("img");
       img.className = "family-portrait-item";
-      img.alt = it.name || "";
+      img.alt = "";
       img.draggable = false;
       attachWebpFallback(img);
       img.onload = function onPlateLoad() {
         if (img.dataset.downsampled === "1") return;
         maybeDownsampleImg(img);
+      };
+      // Missing file → remove slot entirely (no broken-image glyph)
+      img.onerror = function () {
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
       };
       img.src = it.image;
       img.style.transform =
@@ -9176,9 +9720,9 @@
   }
 
   /**
-   * Multi-image hero content: same lattice as FP, lives inside #hero-plate so
-   * fade + Ken Burns match single-image items (seamless slideshow motion).
-   * Coordinate offset maps FP stage space into the hero-wrap origin.
+   * Multi-image hero content: same lattice as FP, lives inside .hero-anim (child of
+   * #hero-plate) so fade + Ken Burns match single-image items. The New sticker
+   * is also a direct child of the plate but does not receive the scale.
    * See docs/FAMILY_PORTRAIT_LATTICE.md §4.
    */
   // Hero wrap CSS: left 870, top 133 — keep in sync with css/menu.css #hero-wrap
@@ -9222,7 +9766,7 @@
     });
 
     fillPortraitPlates(plates, cast, {
-      stickers: false, // plate-level New! sticker still rides #hero-plate
+      stickers: false, // multi lattice: use stage #new-sticker, not per-slot
       resolveItemIndex: function () {
         return -1;
       },
@@ -9234,7 +9778,8 @@
       els.hero.removeAttribute("src");
     }
 
-    plate.appendChild(plates);
+    const anim = plate.querySelector('.hero-anim') || plate;
+    anim.appendChild(plates);
     applyStickerTint();
     return true;
   }
@@ -9270,8 +9815,9 @@
     el.style.left = "calc(50% + " + ox + "px)";
     el.style.top = "calc(50% + " + oy + "px)";
     const stickScale = Math.max(0.16, Math.min(0.4, photoScale * 0.9));
+    /* No extra rotate — Sticker-Body tilt is baked into the asset (matches mockup). */
     el.style.transform =
-      "translate(-50%, -50%) rotate(-12deg) scale(" + stickScale + ")";
+      "translate(-50%, -50%) scale(" + stickScale + ")";
     slotEl.appendChild(el);
   }
 
@@ -9281,17 +9827,119 @@
   const ENCORE_FIRST_BOW_MS = 120;
   let _encoreSpotTimer = null;
 
-  /** Encore-only: list highlight tracks camera (off on zoom-out, on on zoom-in). */
-  function clearEncoreListHighlight() {
-    if (!els.list) return;
-    els.list.querySelectorAll(".menu-item").forEach(function (node) {
-      node.classList.remove("active");
-      node.style.removeProperty("--item-highlight");
+  function boxStateByKey(boxKey) {
+    if (boxKey === "protein") return proteinBox;
+    if (boxKey === "sauces") return saucesBox;
+    if (boxKey === "drinks") return footerDrinksBox;
+    if (boxKey === "veggies") return veggiesBox;
+    return null;
+  }
+
+  function boxBodyElByKey(boxKey) {
+    if (boxKey === "protein") return els.proteinBody;
+    if (boxKey === "sauces") return els.saucesBody;
+    if (boxKey === "drinks") return els.footerDrinksBody;
+    if (boxKey === "veggies") {
+      return (
+        els.veggiesBody || document.getElementById("veggies-body")
+      );
+    }
+    return null;
+  }
+
+  /** Clear Alpha list + all footer box presentation highlights. */
+  function clearAllPresentationHighlights() {
+    clearEncoreListHighlight();
+    clearBoxPresentationHighlights();
+  }
+
+  function clearBoxPresentationHighlights() {
+    const roots = [
+      els.proteinBody,
+      els.saucesBody,
+      els.footerDrinksBody,
+      els.veggiesBody || document.getElementById("veggies-body"),
+    ];
+    roots.forEach(function (body) {
+      if (!body) return;
+      body.querySelectorAll("[data-box-item-index].active").forEach(function (
+        node
+      ) {
+        node.classList.remove("active");
+        node.style.removeProperty("--item-highlight");
+      });
     });
   }
 
+  /**
+   * Highlight one footer-box inventory line (name + subtitle + price).
+   * Clears Alpha list highlight while a Box Menu segment is active.
+   */
+  function setBoxPresentationHighlight(boxKey, itemIndex, isNew) {
+    clearEncoreListHighlight();
+    clearBoxPresentationHighlights();
+    if (!boxKey || itemIndex == null || itemIndex < 0) return;
+    const body = boxBodyElByKey(boxKey);
+    if (!body) return;
+    const color = isNew
+      ? config.highlightSpecial || config.highlight
+      : config.highlight;
+    body.querySelectorAll("[data-box-item-index]").forEach(function (node) {
+      const on = Number(node.dataset.boxItemIndex) === itemIndex;
+      node.classList.toggle("active", on);
+      if (on) {
+        node.style.setProperty("--item-highlight", color);
+      } else {
+        node.style.removeProperty("--item-highlight");
+      }
+    });
+  }
+
+  /** Active slide helper (box or alpha). */
+  function activePresSlide() {
+    return slides.length ? slides[activeIndex] || null : null;
+  }
+
+  function resolvePresItem(itemIndex, slide) {
+    slide = slide || activePresSlide();
+    if (slide && slide.segment === "box" && slide.boxKey) {
+      const box = boxStateByKey(slide.boxKey);
+      const bi =
+        slide.boxItemIndex != null && slide.boxItemIndex >= 0
+          ? slide.boxItemIndex
+          : itemIndex;
+      if (box && box.items && bi >= 0 && bi < box.items.length) {
+        return box.items[bi];
+      }
+      return null;
+    }
+    if (itemIndex == null || itemIndex < 0) return null;
+    return items[itemIndex] || null;
+  }
+
+  /** Encore-only: list/box highlight tracks camera (off on zoom-out, on on zoom-in). */
+  function clearEncoreListHighlight() {
+    if (els.list) {
+      els.list.querySelectorAll(".menu-item").forEach(function (node) {
+        node.classList.remove("active");
+        node.style.removeProperty("--item-highlight");
+      });
+    }
+  }
+
   function setEncoreListHighlight(itemIndex) {
-    if (!els.list || itemIndex == null || itemIndex < 0) return;
+    if (itemIndex == null || itemIndex < 0) return;
+    const slide = activePresSlide();
+    if (slide && slide.segment === "box") {
+      const bi =
+        slide.boxItemIndex != null && slide.boxItemIndex >= 0
+          ? slide.boxItemIndex
+          : itemIndex;
+      setBoxPresentationHighlight(slide.boxKey, bi, !!slide.isNew);
+      return;
+    }
+    clearBoxPresentationHighlights();
+    if (!els.list) return;
     const item = items[itemIndex];
     els.list.querySelectorAll(".menu-item").forEach(function (node, i) {
       const on = i === itemIndex;
@@ -9326,10 +9974,14 @@
       clearTimeout(_encoreSpotTimer);
       _encoreSpotTimer = null;
     }
+    // Keep Special veil through undim if last bow was New
+    if (_lastEncoreBowItem) {
+      applyEncoreSpotlightChrome(_lastEncoreBowItem);
+    }
     stage.classList.remove("is-dimmed");
     easePortraitZoomOut(stage);
-    if (config.presentationMode === "encore") {
-      clearEncoreListHighlight();
+    if (isEncoreActiveNow()) {
+      clearAllPresentationHighlights();
     }
   }
 
@@ -9344,20 +9996,29 @@
     opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
+    const slide = activePresSlide();
+    const segEncore = isEncoreActiveNow();
+    const presItem = resolvePresItem(itemIndex, slide);
 
     if (_encoreSpotTimer) {
       clearTimeout(_encoreSpotTimer);
       _encoreSpotTimer = null;
     }
-    // Fade veil out + ease zoom to 1×; drop list highlight with the pull-back
+    // Zoom-out of previous bow: keep last veil color (Special for New) until
+    // the next bow applies its own color after blackout.
+    if (_lastEncoreBowItem) {
+      applyEncoreSpotlightChrome(_lastEncoreBowItem);
+    } else {
+      applyEncoreSpotlightChrome(null);
+    }
     stage.classList.remove("is-dimmed");
     easePortraitZoomOut(stage);
-    if (config.presentationMode === "encore") {
-      clearEncoreListHighlight();
+    if (segEncore) {
+      clearAllPresentationHighlights();
     }
 
     if (itemIndex == null || itemIndex < 0) return;
-    if (!items[itemIndex]) return;
+    if (!presItem) return;
 
     const gap = opts.instant ? ENCORE_FIRST_BOW_MS : ENCORE_BLACKOUT_MS;
 
@@ -9372,7 +10033,8 @@
       const lx = parseFloat(slot.style.left) || 0;
       const ly = parseFloat(slot.style.top) || 0;
       setEncoreZoomOrigin(stage, lx, ly);
-      applyEncoreSpotlightChrome(items[itemIndex] || null);
+      _lastEncoreBowItem = presItem;
+      applyEncoreSpotlightChrome(presItem);
       const zoomTo = readEncoreZoomTo(stage);
       // Long push-in again (drop .is-zoom-out so --dur-encore-zoom applies)
       const rig = stage.querySelector(".family-portrait-rig");
@@ -9381,8 +10043,8 @@
       void stage.offsetWidth;
       stage.classList.add("is-dimmed");
       stage.style.setProperty("--encore-zoom", String(zoomTo));
-      // List highlight arrives with the zoom-in (Encore only)
-      if (config.presentationMode === "encore") {
+      // List/box highlight arrives with the zoom-in (Encore only)
+      if (segEncore) {
         setEncoreListHighlight(itemIndex);
       }
     }, gap);
@@ -9392,6 +10054,8 @@
 
   /** Last board slide type — for seamless FP ↔ Encore / Slideshow handoffs */
   let _prevBoardSlideType = "";
+  /** Previous board slide (full object) for segment-exit handoffs */
+  let _prevBoardSlide = null;
 
   function itemHasMultiImages(item) {
     return !!(item && Array.isArray(item.images) && item.images.length > 1);
@@ -9400,7 +10064,8 @@
   /**
    * Present a menu item's photo(s) on the hero plate.
    * Multi-image uses the same lattice as Family Portrait (fillPortraitPlates)
-   * but always rides hero fade + Ken Burns — never the FP stage intro path.
+   * but always rides hero fade + Ken Burns (via .hero-anim) — the New sticker
+   * (plate child) does not get the scale.
    * See docs/FAMILY_PORTRAIT_LATTICE.md.
    */
   function presentItemVisual(item, instant, opts) {
@@ -9469,57 +10134,228 @@
     }
   }
 
+  /**
+   * Animation Block id for Wind-up / Wind-down barriers.
+   * Same id → Punch-in/out only; different id → Wind-down then Wind-up.
+   */
+  function animationBlockId(slide) {
+    if (!slide) return "";
+    if (slide.animationBlockId) return slide.animationBlockId;
+    const seg = (slide.segment || "alpha") + ":" + (slide.boxKey || "alpha");
+    if (slide.segmentMode === "encore") return seg + ":encore";
+    if (slide.type === "portrait") return seg + ":fp";
+    return seg + ":slideshow";
+  }
+
+  /** Collage-based block (FP overview or Encore bows on the portrait stage). */
+  function isCollageBlockSlide(slide) {
+    if (!slide) return false;
+    if (slide.type === "portrait") return true;
+    if (
+      slide.type === "encore" &&
+      slide.withPortrait !== false &&
+      slide.items &&
+      slide.items.length
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Presentation Punch-out / Wind-down clock — same as Slideshow item→item
+   * (updateHero outgoing gap). Application-wide: every Animation Block handoff
+   * uses this duration so Wind-down→Wind-up feels identical to Punch-out→Punch-in.
+   */
+  function presentationPunchGapMs(el) {
+    const node = el || heroMotionEl() || els.familyPortrait || document.documentElement;
+    return readCssDurationMs(node, "--dur-mid", 450);
+  }
+
+  /**
+   * Only when both sides need the portrait stage (collage→collage, different
+   * Animation Blocks). Hero↔collage handoffs apply immediately so Wind-down
+   * and Wind-up overlap on the Punch gap — same as Slideshow.
+   */
+  function needsSameStageBlockHandoff(prev, next) {
+    if (!prev || !next) return false;
+    if (animationBlockId(prev) === animationBlockId(next)) return false;
+    return isCollageBlockSlide(prev) && isCollageBlockSlide(next);
+  }
+
+  /**
+   * Wind-down of outgoing collage on the portrait stage, then callback after
+   * exactly one Punch gap (--dur-mid). No Encore blackout delay — labels are
+   * construction-only; timing matches Slideshow Punch-out→Punch-in.
+   */
+  function beginCollageBlockHandoff(prevSlide, done) {
+    if (_presHandoffTimer) {
+      clearTimeout(_presHandoffTimer);
+      _presHandoffTimer = null;
+    }
+    _presHandoffBusy = true;
+
+    const stage = els.familyPortrait;
+    const gap = presentationPunchGapMs(stage);
+
+    if (_lastEncoreBowItem) {
+      applyEncoreSpotlightChrome(_lastEncoreBowItem);
+    } else {
+      applyEncoreSpotlightChrome(null);
+    }
+    if (stage && !stage.hidden) {
+      if (_encoreSpotTimer) {
+        clearTimeout(_encoreSpotTimer);
+        _encoreSpotTimer = null;
+      }
+      // Punch-out of last bow / FP settle (undim + ease) + reverse Zoom Reveal
+      stage.classList.remove("is-dimmed");
+      easePortraitZoomOut(stage);
+      clearAllPresentationHighlights();
+      hideFamilyPortrait({ reverseZoom: true });
+    } else {
+      clearAllPresentationHighlights();
+    }
+
+    _presHandoffTimer = window.setTimeout(function () {
+      _presHandoffTimer = null;
+      _presHandoffBusy = false;
+      _lastEncoreBowItem = null;
+      if (typeof done === "function") done();
+    }, gap + 40);
+  }
+
   function setActiveBoardSlides(index, instant) {
     if (!slides.length) return;
-    activeIndex = ((index % slides.length) + slides.length) % slides.length;
-    const slide = slides[activeIndex];
-    const prevType = _prevBoardSlideType;
-    _prevBoardSlideType = slide.type || "";
+    // During same-stage collage handoff, ignore timer ticks
+    if (_presHandoffBusy && !instant) return;
 
-    const nodes = els.list
-      ? els.list.querySelectorAll(".menu-item")
-      : [];
-    // Encore collage bows: list highlight is deferred to zoom-in (see
-    // setPortraitSpotlight). Slideshow + non-collage Encore keep immediate.
+    const nextIndex =
+      ((index % slides.length) + slides.length) % slides.length;
+    const prevSlide = _prevBoardSlide;
+    const slide = slides[nextIndex];
+    if (!slide) return;
+
+    // Same portrait stage, different Animation Block: Punch-gap handoff only
+    // (Encore→Encore, FP→Encore of another segment, etc.). All other block
+    // boundaries apply immediately so Wind-down overlaps Wind-up like Slideshow.
+    if (!instant && needsSameStageBlockHandoff(prevSlide, slide)) {
+      activeIndex = nextIndex;
+      _activeSegmentMode =
+        prevSlide && prevSlide.segmentMode === "encore"
+          ? "encore"
+          : "slideshow";
+      beginCollageBlockHandoff(prevSlide, function () {
+        _activeSegmentMode =
+          slide.segmentMode === "encore" ? "encore" : "slideshow";
+        applyBoardSlideContent(slide, false, prevSlide, {
+          isBlockEntry: true,
+        });
+        _prevBoardSlideType = slide.type || "";
+        _prevBoardSlide = slide;
+      });
+      return;
+    }
+
+    if (_presHandoffTimer) {
+      clearTimeout(_presHandoffTimer);
+      _presHandoffTimer = null;
+    }
+    _presHandoffBusy = false;
+
+    activeIndex = nextIndex;
+    const isBlockEntry =
+      !prevSlide ||
+      animationBlockId(prevSlide) !== animationBlockId(slide);
+    applyBoardSlideContent(slide, instant, prevSlide, {
+      isBlockEntry: isBlockEntry && !instant,
+    });
+    _prevBoardSlideType = slide.type || "";
+    _prevBoardSlide = slide;
+  }
+
+  /**
+   * Paint one board presentation slide (Alpha or Box segment).
+   * @param {object} slide
+   * @param {boolean} instant
+   * @param {object|null} prevSlide
+   * @param {{ isBlockEntry?: boolean }} [opts]
+   */
+  function applyBoardSlideContent(slide, instant, prevSlide, opts) {
+    opts = opts || {};
+    const prevType = (prevSlide && prevSlide.type) || _prevBoardSlideType || "";
+    const isBoxSeg = slide.segment === "box";
+    const segMode =
+      slide.segmentMode === "encore" ? "encore" : "slideshow";
+    const textOnly =
+      (slide.type === "item" || slide.type === "encore") &&
+      (!!slide.textOnly || !slide.image);
+    const isBlockEntry = !!opts.isBlockEntry || !!slide.isBlockWindUp;
+    _activeSegmentMode = segMode;
+
+    // Encore chrome for THIS segment (independent of Alpha Presentation Mode).
+    // Do not pass a dummy item — preserve Special veil color during bow zoom-out.
+    applyEncoreSpotlightChrome(null);
+
+    // —— Highlights ——
     const deferEncoreListHighlight =
-      config.presentationMode === "encore" &&
+      segMode === "encore" &&
       slide.type === "encore" &&
       slide.withPortrait !== false &&
       slide.items &&
       slide.items.length > 0;
 
-    nodes.forEach(function (node, i) {
-      const on =
+    if (isBoxSeg) {
+      clearEncoreListHighlight();
+      if (
         !deferEncoreListHighlight &&
-        (slide.type === "item" || slide.type === "encore") &&
-        i === slide.itemIndex;
-      node.classList.toggle("active", on);
-      if (on) {
-        const item = items[slide.itemIndex];
-        const color =
-          item && item.isNew ? config.highlightSpecial : config.highlight;
-        node.style.setProperty("--item-highlight", color);
-      } else {
-        node.style.removeProperty("--item-highlight");
+        (slide.type === "item" || slide.type === "encore")
+      ) {
+        setBoxPresentationHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else if (slide.type === "portrait") {
+        clearBoxPresentationHighlights();
       }
-    });
+    } else {
+      clearBoxPresentationHighlights();
+      const nodes = els.list
+        ? els.list.querySelectorAll(".menu-item")
+        : [];
+      nodes.forEach(function (node, i) {
+        const on =
+          !deferEncoreListHighlight &&
+          (slide.type === "item" || slide.type === "encore") &&
+          i === slide.itemIndex;
+        node.classList.toggle("active", on);
+        if (on) {
+          const item = items[slide.itemIndex];
+          const color =
+            item && item.isNew ? config.highlightSpecial : config.highlight;
+          node.style.setProperty("--item-highlight", color);
+        } else {
+          node.style.removeProperty("--item-highlight");
+        }
+      });
+    }
 
-    // Family Portrait overview (Slideshow, or Encore lineup when FP on)
+    // Family Portrait overview (Slideshow FP block Wind-up, or Encore lineup Wind-up)
     if (slide.type === "portrait") {
-      // Encore lineup: nothing list-highlighted (between bows / before first)
-      if (config.presentationMode === "encore") {
-        clearEncoreListHighlight();
+      if (segMode === "encore") {
+        clearAllPresentationHighlights();
       }
       if (cfg.showHero !== false) {
         if (prevType === "encore") {
-          // Last Encore bow → lineup: settle only (no center solo re-intro)
           showFamilyPortrait(slide.items, instant, { fromEncore: true });
         } else if (prevType === "item" && !instant) {
-          // Last Slideshow item (single or multi hero lattice) → portrait
           handoffHeroToPortrait(slide.items, instant);
         } else {
-          // Cold start (or instant): center intro
-          showFamilyPortrait(slide.items, instant, { forceIntro: !instant });
+          // Block Wind-up: Zoom Reveal (forceIntro unless instant paint)
+          showFamilyPortrait(slide.items, instant, {
+            forceIntro: !instant,
+          });
         }
       }
       if (cfg.showSticker !== false) {
@@ -9531,24 +10367,58 @@
       return;
     }
 
-    // Encore bow:
-    //   withPortrait → collage stays; soft spotlight after blackout
-    //   without cast → list highlight + individual hero (multi = lattice on plate)
+    // Encore bow
     if (slide.type === "encore") {
       const usePortrait =
         slide.withPortrait !== false &&
         slide.items &&
-        slide.items.length > 0;
+        slide.items.length > 0 &&
+        !textOnly;
 
       if (usePortrait) {
         if (cfg.showHero !== false) {
-          // Always settle — never center intro on bows (item zoom owns motion)
-          showFamilyPortrait(slide.items, instant, { settle: true });
-          // List highlight toggled inside setPortraitSpotlight (zoom in/out)
-          setPortraitSpotlight(slide.itemIndex, {
-            // Short gap from lineup so first bow doesn’t wait full blackout
-            instant: !!instant || prevType === "portrait" || prevType === "",
-          });
+          // Encore Wind-up without FP lineup: Zoom Reveal into collage, then first Punch-in
+          const needsEncoreWindUp =
+            !instant &&
+            isBlockEntry &&
+            prevType !== "portrait" &&
+            prevType !== "encore";
+
+          if (needsEncoreWindUp) {
+            showFamilyPortrait(slide.items, false, { forceIntro: true });
+            // After Zoom Reveal fade-in, Punch-in the first bow (not instant)
+            const stage = els.familyPortrait;
+            const introMs = stage
+              ? readCssDurationMs(stage, "--dur-mid", 450) + 120
+              : 500;
+            if (_encoreSpotTimer) {
+              clearTimeout(_encoreSpotTimer);
+              _encoreSpotTimer = null;
+            }
+            window.setTimeout(function () {
+              // Abort if user/timer advanced away from this bow
+              const cur = activePresSlide();
+              if (
+                !cur ||
+                cur.type !== "encore" ||
+                cur.itemIndex !== slide.itemIndex ||
+                animationBlockId(cur) !== animationBlockId(slide)
+              ) {
+                return;
+              }
+              setPortraitSpotlight(slide.itemIndex, { instant: false });
+            }, introMs);
+          } else {
+            showFamilyPortrait(slide.items, instant, { settle: true });
+            // After lineup portrait: short gap OK. Within bows: full punch-out/in.
+            // Never treat cold "" as instant when surface is ready (Wind-up case handled above).
+            setPortraitSpotlight(slide.itemIndex, {
+              instant:
+                !!instant ||
+                prevType === "portrait" ||
+                (prevType === "" && !_presSurfaceReady),
+            });
+          }
         }
         if (cfg.showSticker !== false) {
           updateSticker({ isNew: false }, instant);
@@ -9559,26 +10429,39 @@
         return;
       }
 
-      // No full cast: per-item hero (single img or multi lattice — same motion)
       clearPortraitSpotlight();
-      const item = items[slide.itemIndex] || {
-        image: slide.image,
-        images: slide.images || (slide.image ? [slide.image] : null),
-        isNew: !!slide.isNew,
-      };
-      presentItemVisual(item, instant, { prevType: prevType });
-      if (cfg.showSticker !== false) {
-        updateSticker(item, instant);
-      } else if (els.sticker) {
-        els.sticker.classList.remove("visible");
-        els.sticker.hidden = true;
+      if (textOnly) {
+        hideFamilyPortrait({ instant: !!instant });
+        presentTextOnlyBeat(slide, instant, prevType);
+      } else {
+        const item = resolvePresItem(slide.itemIndex, slide) || {
+          image: slide.image,
+          images: slide.images || (slide.image ? [slide.image] : null),
+          isNew: !!slide.isNew,
+        };
+        presentItemVisual(item, instant, { prevType: prevType });
+        if (cfg.showSticker !== false) {
+          updateSticker(item, instant);
+        } else if (els.sticker) {
+          els.sticker.classList.remove("visible");
+          els.sticker.hidden = true;
+        }
       }
       return;
     }
 
-    // Individual item slide (Slideshow mode after overview)
-    // Single or multi-image: always hero plate motion; multi fills FP lattice inside plate.
-    const item = items[slide.itemIndex] || {
+    // Slideshow item
+    if (textOnly) {
+      // FP → item: seamless reverseZoom overlap (Wind-down + Wind-up tasteful)
+      if (prevType === "portrait" && !instant) {
+        hideFamilyPortrait({ reverseZoom: true });
+      } else {
+        hideFamilyPortrait({ instant: !!instant });
+      }
+      presentTextOnlyBeat(slide, instant, prevType);
+      return;
+    }
+    const item = resolvePresItem(slide.itemIndex, slide) || {
       image: slide.image,
       images: slide.images || (slide.image ? [slide.image] : null),
       isNew: !!slide.isNew,
@@ -9589,6 +10472,38 @@
     } else if (els.sticker) {
       els.sticker.classList.remove("visible");
       els.sticker.hidden = true;
+    }
+  }
+
+  /**
+   * Text-only beat: no hero image. Keep plate only if New sticker is needed.
+   */
+  function presentTextOnlyBeat(slide, instant, prevType) {
+    if (prevType === "portrait" || prevType === "encore") {
+      hideFamilyPortrait({ instant: !!instant, reverseZoom: !instant });
+    }
+    const wantNew =
+      !!slide.isNew && config && config.showSticker !== false;
+    if (wantNew) {
+      // Empty plate so #new-sticker (plate child) can fade in
+      const plate = els.heroPlate;
+      const img = els.hero;
+      if (plate) {
+        clearHeroMultiLattice(plate);
+        if (img) {
+          img.removeAttribute("src");
+          img.dataset.downsampled = "";
+        }
+        plate.hidden = false;
+        applyPlateSticker(true);
+        requestAnimationFrame(function () {
+          plate.classList.add("visible");
+        });
+      } else {
+        applyPlateSticker(true);
+      }
+    } else {
+      hideHeroPlate({ clearSrc: true });
     }
   }
 
@@ -9642,7 +10557,7 @@
 
   /**
    * Hide the plate unit (opacity/scale classes + optional src clear).
-   * Decorations (sticker) live on the plate and hide with it.
+   * Also hides the fixed stage-corner New badge when hideSticker is not false.
    */
   function hideHeroPlate(opts) {
     opts = opts || {};
@@ -9665,7 +10580,10 @@
     }
   }
 
-  /** Show/hide New! decoration on the plate (no independent motion — plate owns scale/fade). */
+  /**
+   * Show/hide New badge (plate child). Opacity fade is owned by #hero-plate;
+   * only toggle presence here so isNew items carry the badge through the fade.
+   */
   function applyPlateSticker(wantNew) {
     if (!els.sticker) return;
     if (wantNew && config && config.showSticker !== false) {
@@ -9680,13 +10598,16 @@
   function setHeroZoom(scale, mode) {
     const el = heroMotionEl();
     if (!el) return;
-    // mode: "in" = long push | "out" = with fade | "snap"
-    // Applied to #hero-plate so all children (img, sticker, future multi-size) inherit.
+    // Zoom only affects .hero-anim (photo). Sticker is outside that subtree.
+    const anim = el.querySelector ? el.querySelector(".hero-anim") : null;
     if (mode === "snap") {
       el.style.transition = "none";
+      if (anim) anim.style.transition = "none";
       el.style.setProperty("--hero-zoom", String(scale));
+      if (anim) void anim.offsetWidth;
       void el.offsetWidth;
       el.style.transition = "";
+      if (anim) anim.style.transition = "";
       el.classList.remove("is-kb-in");
       setFeatureActive("kenBurns", false, "snap");
       return;
@@ -9728,7 +10649,7 @@
 
     const show = function () {
       plate.hidden = false;
-      // Sticker is a plate decoration — present before fade-in so it rides opacity+scale
+      // Sticker presence while plate is at opacity 0; then plate fade carries it
       applyPlateSticker(wantSticker);
       // Do not reset scale here — stay at min until push-in
       requestAnimationFrame(function () {
@@ -9743,8 +10664,9 @@
 
     /**
      * Content swap while plate is faded out — identical clock for single & multi.
-     * Multi: FP lattice (fillPortraitPlates) inside plate.
-     * Single: #hero src.
+     * Multi: FP lattice inside .hero-anim (gets the scale).
+     * Single: #hero src (inside .hero-anim).
+     * #new-sticker is a plate child outside .hero-anim: fades with plate, no zoom.
      */
     const applyContent = function () {
       if (multi) {
@@ -9765,6 +10687,18 @@
       };
 
       attachWebpFallback(img);
+      img.onerror = function () {
+        // Missing asset → treat as text-only (no broken icon on hero)
+        hideHeroPlate({ clearSrc: true, hideSticker: !wantSticker });
+        if (wantSticker) {
+          // presentTextOnly-style sticker if New
+          plate.hidden = false;
+          applyPlateSticker(true);
+          requestAnimationFrame(function () {
+            plate.classList.add("visible");
+          });
+        }
+      };
       img.onload = function () {
         if (img.dataset.downsampled === "1") {
           show();
@@ -9804,8 +10738,9 @@
   }
 
   /**
-   * Sticker is a plate decoration. Instant / non-hero paths set it here;
-   * animated hero slides apply it in updateHero show() so it rides plate motion.
+   * New badge is a #hero-plate child — non-instant paths leave show/hide to
+   * updateHero.show() so the badge rides the plate opacity fade (not Ken Burns).
+   * Works for Alpha and Box Menu presentation segments.
    */
   function updateSticker(item, instant) {
     if (!els.sticker) return;
@@ -9814,7 +10749,11 @@
     function stillWantsHidden() {
       if (isDrinks || usesBoardSlides()) {
         const slide = slides[activeIndex];
-        return !slide || !slide.isNew || slide.type === "portrait";
+        return (
+          !slide ||
+          !slide.isNew ||
+          slide.type === "portrait"
+        );
       }
       return !items[activeIndex]?.isNew;
     }
@@ -9823,10 +10762,10 @@
       applyPlateSticker(wantNew);
       return;
     }
-    // Non-instant with plate: show() owns sticker state after the fade/src swap.
-    // If leaving New, leave sticker until plate show() clears it (fades with plate).
+    // Animated hero: show() applies sticker while plate is faded out, then
+    // plate .visible fade-in/out carries the badge. Leave New→not-New until then
+    // so the outgoing badge fades with the plate instead of snapping off.
     if (!wantNew && stillWantsHidden()) {
-      // Soft clear only if plate is already gone
       if (els.heroPlate.hidden) applyPlateSticker(false);
     }
   }
@@ -9903,6 +10842,57 @@
     return fb;
   }
 
+  /**
+   * Wait until the board surface is visible enough for the first Wind-up
+   * (fonts, layout paint, stage scaled). Avoids Animation Blocks running off-screen.
+   */
+  function whenPresentationSurfaceReady(done) {
+    const run = function () {
+      // Stage must have non-zero size (scaleStageToWindow has run)
+      const stage = document.getElementById("stage");
+      const readySize =
+        stage &&
+        stage.offsetWidth > 8 &&
+        stage.offsetHeight > 8;
+      if (!readySize) {
+        window.setTimeout(run, 50);
+        return;
+      }
+      // Double rAF: styles + first paint committed
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (typeof done === "function") done();
+        });
+      });
+    };
+    const fontsReady =
+      document.fonts && document.fonts.ready
+        ? document.fonts.ready
+        : Promise.resolve();
+    fontsReady.then(run).catch(run);
+  }
+
+  /**
+   * First Wind-up after load: re-apply current slide with motion (not instant).
+   */
+  function playOpeningWindUp() {
+    _presSurfaceReady = true;
+    if (!usesBoardSlides() || !slides.length) {
+      // Simple item path: re-trigger with motion
+      if (items.length) setActive(activeIndex, false);
+      return;
+    }
+    const slide = slides[activeIndex] || slides[0];
+    if (!slide) return;
+    // Treat as block entry with no previous block so Wind-up treatments run
+    _prevBoardSlide = null;
+    _prevBoardSlideType = "";
+    applyBoardSlideContent(slide, false, null, { isBlockEntry: true });
+    _prevBoardSlideType = slide.type || "";
+    _prevBoardSlide = slide;
+    tokiInfo("presentation opening Wind-up", animationBlockId(slide));
+  }
+
   function startSlideshow() {
     if (slideshowTimer) clearInterval(slideshowTimer);
     slideshowTimer = null;
@@ -9916,6 +10906,7 @@
     }
     const ms = sec * 1000;
     slideshowTimer = setInterval(function () {
+      if (_presHandoffBusy) return; // don't skip during Wind-down
       setActive(activeIndex + 1, false);
     }, ms);
     tokiInfo(
@@ -11000,6 +11991,7 @@
     const params = new URLSearchParams(window.location.search);
     const hashMatch = (window.location.hash || "").match(/item=(\d+)/i);
     const startRaw = params.get("item") || (hashMatch ? hashMatch[1] : null);
+    // Instant paint for layout/first frame (no Wind-up yet — wait until visible)
     if (startRaw != null) {
       const idx = parseInt(startRaw, 10);
       if (Number.isFinite(idx)) setActive(idx, true);
@@ -11008,15 +12000,19 @@
       setActive(0, true);
     }
 
-    if (params.get("pause") !== "1") {
-      startSlideshow();
-      if (isDrinks) startAnnouncementSlideshow();
-    } else if (isDrinks) {
-      // Still paint first message when paused
-      setAnnouncementMessage(announcementIndex, { instant: true });
-    }
     startGalaxyScroll();
-    startAutoRefresh();
+
+    // Opening Wind-up only after fonts/layout/stage are visible to the viewer
+    whenPresentationSurfaceReady(function () {
+      playOpeningWindUp();
+      if (params.get("pause") !== "1") {
+        startSlideshow();
+        if (isDrinks) startAnnouncementSlideshow();
+      } else if (isDrinks) {
+        setAnnouncementMessage(announcementIndex, { instant: true });
+      }
+      startAutoRefresh();
+    });
 
     // Update hybrid debug visuals (CSS vars in Computed + HUD) when gate is satisfied.
     // This gives real-time on/off view without console spam.

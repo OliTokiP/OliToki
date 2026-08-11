@@ -1,6 +1,6 @@
 # Beta Features — injection guide
 
-**Last updated:** 2026-08-10 23:45  
+**Last updated:** 2026-08-10 23:55 (per-board lists on menu tabs are now primary source; central Beta is fallback)  
 
 **Tab:** `Beta Features` · **GID:** `1710200195` · constant `BETA_FEATURES_GID` in `js/menu.js`  
 
@@ -24,11 +24,11 @@ Section pattern matches other revised tabs (label → headers → data), but Bet
 
 ### `Include Footer Boxes` (primary control today)
 
-- **One cell**, comma-separated titles, e.g. `Proteins, Sauces, Veggies`
-- **Case-sensitive** exact match against registry titles (`Proteins`, `Sauces`, `Drinks`, `Veggies`)
-- Multi-select via Sheets **data validation** is fine; CSV export quotes the cell; runtime `parseCsv` handles quotes
-- **Overrides** per-board `Include Protein Box?` / `Include Sauces Box?` / `Include Drinks Box?` when the list is non-empty
-- Empty / missing Beta list → fall back to board Settings flags
+- The list now lives on **each board's own Settings row** (column "Include Footer Boxes", e.g. `Proteins, Sauces, Veggies`).
+- Falls back to the central Beta Features tab cell if the board row has no list.
+- **One cell**, comma-separated titles. Case-sensitive match to the box tab Titles.
+- Multi-select data validation works; quotes in CSV are handled.
+- The list fully replaces the old per-board Include Protein/Sauces/Drinks/Veggies? flags. Empty list → original board flags (if any).
 
 ### Selection → display (footer boxes)
 

@@ -3,7 +3,7 @@
 Living notes for the **revised sheet tabs** and runtime cutovers.  
 Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on Revised.
 
-**Last updated:** 2026-08-10 23:45 (Beta Features docs + Veggies full slice; footer selection soft-fail / prefetch)  
+**Last updated:** 2026-08-11 14:05 (Box image folders; Box Menu presentation G–I)  
 **Spreadsheet:** `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
 | Revised tab | GID | Live counterpart | Runtime status |
@@ -243,25 +243,32 @@ Recorded from author review 2026-08-09:
 
 ---
 
-## 6. Future implementation (not built yet)
+## 6. Future implementation / shipped presentation
 
-### 6.1 Footer box items in the presentation cycle
+### 6.1 Footer Box Menu presentation — **SHIPPED 2026-08-11**
 
-**Columns reserved on Proteins Revised Inventory:** New, Image, Include (and later a priority / “include in presentation” flag as needed).
+See [WHATS_NEW.md](./WHATS_NEW.md) for the product write-up. Summary:
 
-**Intended behavior (sketch):**
+**Settings (per box tab — Proteins / Sauces / Veggies / Drinks):**
 
-1. Slideshow / Encore runs through **menu list** items as today.
-2. After the **last menu item**, presentation **rolls into footer boxes** that opt in (in Priority order — lowest number first).
-3. While in a box: **highlight each box item** in turn; show that row’s **Image** in the **Hero Panel** (see [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)).
-4. **Presentation style** (Slideshow vs Encore, speed, spotlight, etc.) is **inherited from Style Settings**, not redefined per box.
+| Col | Header | Index | Notes |
+|-----|--------|------:|-------|
+| F | Priority | 5 | Strip order **and** presentation cue (lower = first). Alpha = implicit 0 |
+| G | Include in Presentation? | 6 | Opt-in; blank → off |
+| H | Family Portrait | 7 | Per-box collage when cast has images |
+| I | Presentation Mode | 8 | Slideshow \| Encore (box-local) |
 
-Open product details to lock before coding:
+**Inventory:** Item | Item Subtitle | Item Price | New | Image | Include — Image drives hero/FP; blank Image = text-only highlight beat.
 
-- Priority field location (column vs Settings order of boxes)
-- Whether Sauces / Drinks boxes use the same columns
-- What happens when Image is blank (skip item vs hold previous Plate)
-- Interaction with Family Portrait / Encore collage
+**Image paths:** bare filenames resolve under **per-box** folders (`food-pics/drinks`, `food-pics/proteins`, `food-pics/sauces`, `food-pics/veggies`), not the Alpha board folder. Full paths starting with `food-pics/` still work as-is.  
+**Future:** rename folders to match box **Titles** exactly (owner preference).
+
+**Queue:** Alpha Menu (board inventory) → presenting boxes by Priority → loop Alpha.  
+**Not mixed:** each segment’s cast is exclusive.  
+**Global Style only:** Presentation Speed, Encore spotlight type/color, Ken Burns.  
+**Board 4:** excluded until Announcements sheet redesign.
+
+Code: `FOOTER_BOX_IMAGE_FOLDERS`, `BOX_REVISED_SETTINGS` G–I, `appendPresSegment`, `buildBoardSlides`, box highlight helpers in `js/menu.js`.
 
 ### 6.2 Announcement motion styles
 
@@ -296,12 +303,13 @@ After [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) is accepted, **rename sheet hea
 - [x] Board Settings single row + Inventory items; `Columns?` Auto|1|2|3 (Boards 1/2/3 migrated to revised; parser supports restructured layout)
 - [x] Proteins Revised (gid 1420775786) + Sauces Revised (1630545949) + Drinks Revised (1145721787) using **uniform** structure
 - [x] Uniform columns for the three boxes (see `BOX_REVISED_SETTINGS` + `BOX_REVISED_INVENTORY` in `menu.js` and config headers):
-  - **Settings**: Title | Subtitle | BG Color | Create Columns? | Text Align | **Priority** (col F)
+  - **Settings**: Title | Subtitle | BG Color | Create Columns? | Text Align | **Priority** (col F) | **Include in Presentation?** (G) | **Family Portrait** (H) | **Presentation Mode** (I)
   - **Inventory**: Item | **Item Subtitle** | Item Price | New | Image | Include
 - [x] Item Subtitle column added for uniformity (drinks already rendered it; now protein + sauces + footer-drinks also parse + render subtitles in parens)
 - [x] Include filter + **New / price / subtitle on all three footer boxes** (shared `renderFooterBoxBody`)
-- [x] **Priority** drives 2-box major/minor assignment and 3-box left→right order.
-  Lower number = higher priority (1 = leftmost/major). Defaults: Proteins `1`, Sauces `2`, Drinks `3`, Veggies `4`.
+- [x] **Priority** drives 2-box major/minor assignment and 3-box left→right order **and** presentation cue order.
+  Lower number = higher priority (1 = leftmost/major). Defaults: Proteins `1`, Sauces `2`, Drinks `3`, Veggies `4`. Alpha presentation = Priority 0.
+- [x] **Box Menu presentation** (G–I): own FP + Slideshow/Encore after Alpha; text-only when Image blank; Board 4 out of scope — [WHATS_NEW.md](./WHATS_NEW.md)
 - [x] **Beta Features** `Include Footer Boxes` comma list overrides board Include* flags (case-sensitive titles; max 3; exile rest). Architecture + checklist: [BETA_FEATURES.md](./BETA_FEATURES.md).
 - [x] Table typography mode from richest inventory row: name-only Thin; name+price Bold/Thin; name+sub+price Bold/Regular/Thin
 - [x] All board configs point shared *_SheetGid at the revised gids

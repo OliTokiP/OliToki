@@ -355,9 +355,10 @@ body {
 }
 
 /* ---------- Layer 4: hero plate object ----------
-   Plate container owns motion (opacity, Ken Burns scale) + one drop-shadow.
-   Children (food img, New! sticker, future multi-size images) inherit motion.
-   Photos are 1500×1000 transparent; sized to match Menu Mockup.png.
+   Plate owns opacity (slideshow fade). #new-sticker is a plate child so it
+   inherits that fade, but lives outside .hero-anim so Ken Burns does not zoom it.
+   Photos are 1500×1000 transparent; plate is oversized past stage right
+   (left 870 + 1305 → 2175) so food can bleed off the edge.
 */
 #hero-wrap {
   position: absolute;
@@ -367,34 +368,39 @@ body {
   width: 1305px;
   height: 870px;
   pointer-events: none;
+  overflow: visible;
 }
 
-/* Single animated unit: img + decorations ride this transform/opacity */
 #hero-plate {
   position: relative;
   display: block;
   width: 1305px;
   height: 870px;
   opacity: 0;
-  transform-origin: center center;
-  transform: scale(var(--hero-zoom, 1));
-  /* One shadow for the whole plate (not per child image) */
-  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
-  transition:
-    opacity var(--dur-mid) var(--ease-fade),
-    transform var(--dur-mid) var(--ease-fade);
+  transition: opacity var(--dur-mid) var(--ease-fade);
   pointer-events: none;
   user-select: none;
+  overflow: visible; /* sticker hangs below plate box */
 }
 
 #hero-plate.visible {
   opacity: 1;
 }
 
-#hero-plate.is-kb-in {
-  transition:
-    opacity var(--dur-mid) var(--ease-fade),
-    transform var(--dur-encore-zoom) var(--ease-out);
+/* Only the photo (and multi lattice) zoom — not the New sticker sibling */
+#hero-plate .hero-anim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transform: scale(var(--hero-zoom, 1));
+  transition: transform var(--dur-mid) var(--ease-fade);
+  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
+}
+
+#hero-plate.is-kb-in .hero-anim {
+  transition: transform var(--dur-encore-zoom) var(--ease-out);
 }
 
 /* Food image is content only — no independent motion or shadow */
@@ -680,40 +686,42 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 }
 
 /* ---------- Layer 5: new sticker ----------
-   Same size + bottom on every board (drinks only overrides horizontal/rotate).
-   Assets are 1024² with transparent padding; bottom is shared so Y matches.
-   Also used under .family-portrait-sticker (shared child selectors).
+   Child of #hero-plate (sibling of .hero-anim):
+     • Opacity: inherits plate fade (slideshow) — no independent opacity transition
+     • Zoom: not inside .hero-anim → Ken Burns does not scale it
+   Same size/seat on boards 1–3; drinks overrides horizontal.
+   Assets are 1024² with transparent pad. Family-portrait stickers share child selectors.
 
    Stack:
-     1) Sticker-Shadow.png — plain, no blend
-     2) Sticker-Body.png — neutral metallic body (no text)
+     1) Sticker-Shadow.webp — plain, no blend
+     2) Sticker-Body.webp — neutral metallic body (no text); tilt is BAKED IN
      3) .new-sticker-tint — Special Highlight color via mix-blend-mode: color
-        (body PNG is gray; "hue" blend does nothing on unsaturated pixels —
-         "color" takes H+S from the theme and keeps the body's luminosity)
-     4) CSS “New!” — Roboto Black, white, -7.25° (matched to new-sticker.png)
-   Body group is isolated so the blend does not tint shadow or the label.
+     4) CSS “New!” — Roboto Black, white, -7.25° to follow the baked body tilt
+
+   Do NOT CSS-rotate the wrapper — body asset already matches mockup (~−7°).
 */
-/* Decoration live inside #hero-plate so they inherit plate motion (scale/opacity). */
+/*
+  Stage seat from Munchies Mockup gold AABB (1509,869)–(1883,1075):
+    stage left 1436, top 692, width 524 (tilt baked in).
+  Plate-relative (#hero-wrap at 870,133):
+    left = 1436−870 = 566; top = 692−133 = 559.
+*/
 #new-sticker {
   position: absolute;
-  z-index: 6;
-  right: -52px;
-  bottom: -74px;
-  width: 560px;
+  z-index: 2;
+  left: 566px;
+  top: 559px;
+  right: auto;
+  bottom: auto;
+  width: 524px;
   aspect-ratio: 1 / 1;
-  /* 1em = sticker width → label font-size scales with board */
-  font-size: 560px;
+  font-size: 524px;
   pointer-events: none;
   user-select: none;
-  opacity: 0;
-  transform: rotate(-12deg);
-  transform-origin: center center;
-  /* Opacity only — scale/fade of the plate come from #hero-plate */
-  transition: opacity var(--dur-mid) var(--ease-fade);
-}
-
-#new-sticker.visible {
+  /* Full opacity when present — fade comes from #hero-plate only */
   opacity: 1;
+  transform: none;
+  transform-origin: center center;
 }
 
 #new-sticker .new-sticker-shadow {
@@ -1088,6 +1096,7 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 }
 
 .info-box-title {
+  font-family: "Roboto", sans-serif;
   font-size: 48px;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -1098,8 +1107,9 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 
 /* ~75% of companion title (48px → 36px) — Protein Options, Sauces, etc. */
 .info-box-subtitle {
+  font-family: "Roboto", sans-serif;
   font-size: 36px;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.02em;
   color: var(--main-color);
   line-height: 1;
@@ -1107,7 +1117,9 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 }
 
 #sauces-box .info-box-title {
+  font-family: "Roboto", sans-serif;
   font-size: 48px;
+  font-weight: 700;
 }
 
 /* Body fill = Main; type = Secondary. --box-scale filled by fitFooterBoxes(). */
@@ -1145,6 +1157,22 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   letter-spacing: -0.02em;
 }
 
+/* For columns mode, when only 2 visual rows, pinch the grid row gap and center for edge room.
+   Use high-specificity selectors to beat the #id rules that set the base 4px gap. */
+#protein-box .info-box-body.lines-2.layout-columns,
+#sauces-box .info-box-body.lines-2.layout-columns,
+#footer-drinks-box .info-box-body.lines-2.layout-columns,
+#veggies-box .info-box-body.lines-2.layout-columns {
+  row-gap: 0.18em;
+  align-content: center;
+  padding: calc(6px * var(--box-scale)) calc(10px * var(--box-scale)) calc(8px * var(--box-scale));
+}
+
+/* Protein specific padding for 2 lines to match its base design proportions when scaled */
+#protein-box .info-box-body.lines-2.layout-columns {
+  padding: calc(8px * var(--box-scale)) calc(14px * var(--box-scale)) calc(10px * var(--box-scale));
+}
+
 #protein-box .info-box-body.layout-columns {
   font-size: calc(34px * var(--box-scale));
   padding: 8px 14px 10px;
@@ -1152,7 +1180,6 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 
 #sauces-box .info-box-body.layout-columns {
   font-family: "Roboto", sans-serif;
-  font-weight: 400;
   font-size: calc(30px * var(--box-scale));
   padding: 10px 12px 12px;
 }
@@ -1191,12 +1218,72 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   /* non-New items inherit the box text color (Secondary) */
 }
 
+/* NEW items in footer boxes: entire Title + subtitle + price + connective symbols (parens, +$) get the special highlight */
 #protein-box .box-item-name.is-new,
 #sauces-box .box-item-name.is-new,
 #footer-drinks-box .box-item-name.is-new,
 #veggies-box .box-item-name.is-new,
-#protein-box .protein-name.is-new {
+#protein-box .protein-name.is-new,
+#protein-box .box-item-sub.is-new,
+#sauces-box .box-item-sub.is-new,
+#footer-drinks-box .box-item-sub.is-new,
+#veggies-box .box-item-sub.is-new,
+#protein-box .item-paren-sub.is-new,
+#sauces-box .item-paren-sub.is-new,
+#footer-drinks-box .item-paren-sub.is-new,
+#veggies-box .item-paren-sub.is-new,
+#protein-box .box-item-price.is-new,
+#sauces-box .box-item-price.is-new,
+#footer-drinks-box .box-item-price.is-new,
+#veggies-box .box-item-price.is-new {
   color: var(--highlight-special);
+}
+
+/* Box Menu presentation highlight: full line (name + sub + price) */
+#protein-box .box-col-item.active,
+#sauces-box .box-col-item.active,
+#footer-drinks-box .box-col-item.active,
+#veggies-box .box-col-item.active,
+#protein-box .wrap-item.active,
+#sauces-box .wrap-item.active,
+#footer-drinks-box .wrap-item.active,
+#veggies-box .wrap-item.active {
+  color: var(--item-highlight, var(--highlight));
+  transition: color var(--dur-instant, 0.12s) var(--ease-fade, ease);
+}
+#protein-box .box-col-item.active .box-item-name,
+#sauces-box .box-col-item.active .box-item-name,
+#footer-drinks-box .box-col-item.active .box-item-name,
+#veggies-box .box-col-item.active .box-item-name,
+#protein-box .box-col-item.active .box-item-sub,
+#sauces-box .box-col-item.active .box-item-sub,
+#footer-drinks-box .box-col-item.active .box-item-sub,
+#veggies-box .box-col-item.active .box-item-sub,
+#protein-box .box-col-item.active .item-paren-sub,
+#sauces-box .box-col-item.active .item-paren-sub,
+#footer-drinks-box .box-col-item.active .item-paren-sub,
+#veggies-box .box-col-item.active .item-paren-sub,
+#protein-box .box-col-item.active .box-item-price,
+#sauces-box .box-col-item.active .box-item-price,
+#footer-drinks-box .box-col-item.active .box-item-price,
+#veggies-box .box-col-item.active .box-item-price,
+#protein-box .wrap-item.active .box-item-name,
+#sauces-box .wrap-item.active .box-item-name,
+#footer-drinks-box .wrap-item.active .box-item-name,
+#veggies-box .wrap-item.active .box-item-name,
+#protein-box .wrap-item.active .box-item-sub,
+#sauces-box .wrap-item.active .box-item-sub,
+#footer-drinks-box .wrap-item.active .box-item-sub,
+#veggies-box .wrap-item.active .box-item-sub,
+#protein-box .wrap-item.active .item-paren-sub,
+#sauces-box .wrap-item.active .item-paren-sub,
+#footer-drinks-box .wrap-item.active .item-paren-sub,
+#veggies-box .wrap-item.active .item-paren-sub,
+#protein-box .wrap-item.active .box-item-price,
+#sauces-box .wrap-item.active .box-item-price,
+#footer-drinks-box .wrap-item.active .box-item-price,
+#veggies-box .wrap-item.active .box-item-price {
+  color: inherit;
 }
 
 #protein-box .box-item-price,
@@ -1205,7 +1292,7 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #veggies-box .box-item-price,
 #protein-box .protein-price {
   font-family: "Roboto", sans-serif;
-  font-weight: 100; /* Thin */
+  font-weight: 400; /* Regular */
 }
 
 /* Item subtitles in the three footer-style boxes (Protein / Sauces / Footer Drinks).
@@ -1226,12 +1313,12 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   white-space: nowrap;
 }
 
-/* Name-only table → Roboto Thin on every item label */
+/* Name-only table → keep names bold (user request: always bold) */
 #protein-box .info-box-body.typo-name .box-item-name,
 #sauces-box .info-box-body.typo-name .box-item-name,
 #footer-drinks-box .info-box-body.typo-name .box-item-name,
 #veggies-box .info-box-body.typo-name .box-item-name {
-  font-weight: 100;
+  font-weight: 700;
 }
 
 /* Item + Price (and full triple / sub modes) → Bold names */
@@ -1366,6 +1453,24 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   padding: 8px 14px 10px;
 }
 
+/* Tighter vertical for 2-line cases across footer boxes (wrap mode).
+   space-evenly on 2 lines creates excessive between-line gap.
+   Centering the pair gives better breathing room from top/bottom shell edges.
+   "Pinch" the gap between the two lines. Use high-specificity to win. */
+#protein-box .info-box-body.lines-2.layout-wrap,
+#sauces-box .info-box-body.lines-2.layout-wrap,
+#footer-drinks-box .info-box-body.lines-2.layout-wrap,
+#veggies-box .info-box-body.lines-2.layout-wrap {
+  row-gap: 0.18em;
+  align-content: center;
+  padding: calc(6px * var(--box-scale)) calc(10px * var(--box-scale)) calc(8px * var(--box-scale));
+}
+
+/* Protein specific padding for 2 lines to match its base design proportions when scaled */
+#protein-box .info-box-body.lines-2.layout-wrap {
+  padding: calc(8px * var(--box-scale)) calc(14px * var(--box-scale)) calc(10px * var(--box-scale));
+}
+
 /*
   Sauces + footer drinks wrap — match footer-verify density.
   Tighter leading/padding lets fitWrapBox reach ~24px type in the narrow slot.
@@ -1375,7 +1480,6 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #footer-drinks-box .info-box-body.layout-wrap,
 #veggies-box .info-box-body.layout-wrap {
   font-family: "Roboto", sans-serif;
-  font-weight: 400;
   font-size: calc(32px * var(--box-scale));
   line-height: 1.1;
   padding: 6px 10px 8px;
@@ -1393,6 +1497,8 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   padding: 8px 14px 10px;
   row-gap: calc(4px * var(--box-scale));
 }
+
+
 
 #footer-drinks-box .info-box-body.layout-columns,
 #veggies-box .info-box-body.layout-columns {
@@ -2043,12 +2149,12 @@ body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line
   height: 870px;
 }
 
-/* NEW sticker — plate-relative; X differs (hero sits on left on drinks board) */
+/* Drinks: hero-wrap left −255; stage seat (40, 692) → plate-relative (295, 559) */
 .board-drinks #new-sticker {
+  left: 295px;
+  top: 559px;
   right: auto;
-  /* stage left 400 − hero-wrap left (−255) = 655 within plate */
-  left: 655px;
-  top: auto;
+  bottom: auto;
 }
 
 /* ==========================================================================
