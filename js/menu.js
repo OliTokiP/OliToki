@@ -4438,13 +4438,24 @@
   /** Last successful soft/cold load fingerprint (null until first good load). */
   let _lastDataFingerprint = null;
 
-  async function fetchSheetRows(gid) {
+  /**
+   * Fetch one sheet as rows.
+   * @param {string|number} gid
+   * @param {{ force?: boolean }} [opts]
+   *   force (default true): ask proxy to re-batchGet from Google so sheet edits
+   *   show on hard refresh / soft reload. Concurrent boards coalesce server-side.
+   *   force:false only for opportunistic reads (rare).
+   */
+  async function fetchSheetRows(gid, opts) {
+    opts = opts || {};
+    const force = opts.force !== false; // default TRUE — live sheet is the CMS
     const useProxy = await detectSheetsApiProxy();
     let url;
     if (useProxy) {
       url =
         "/api/sheets/csv?gid=" +
         encodeURIComponent(String(gid)) +
+        (force ? "&force=1" : "") +
         "&t=" +
         Date.now();
     } else {
@@ -5480,20 +5491,42 @@
     return normalizeHex(box.bgFill) || main;
   }
 
+  /** Turn off every footer box and repaint (explicit empty Include Footer Boxes). */
+  function exileAllFooterBoxes(parsed) {
+    if (parsed) {
+      if (parsed.proteinBox) parsed.proteinBox.include = false;
+      if (parsed.saucesBox) parsed.saucesBox.include = false;
+      if (parsed.footerDrinksBox) parsed.footerDrinksBox.include = false;
+      if (parsed.veggiesBox) parsed.veggiesBox.include = false;
+    }
+    proteinBox.include = false;
+    saucesBox.include = false;
+    footerDrinksBox.include = false;
+    footerDrinksBox.items = [];
+    footerDrinksBox.includeInPresentation = false;
+    veggiesBox.include = false;
+    veggiesBox.items = [];
+    veggiesBox.includeInPresentation = false;
+    renderFooterBoxes();
+    if (!isDrinks) buildBoardSlides();
+  }
+
   /**
    * Apply "Include Footer Boxes" list (from per-board Settings row if present,
    * else central Beta Features tab) as the source of truth for boards 1–3.
    * Loads named boxes not yet attached (Drinks/Veggies), ranks by Priority (lower=higher),
    * keeps top 3, exiles the rest (include=false, never rendered), re-paints.
+   *
+   * Empty per-board cell = show no footer boxes (does not keep last state / defaults).
    */
   async function applyBetaFooterBoxesOverride(parsed) {
     if (!parsed || isDrinks) return parsed;
 
-    let want = [];
-    // Prefer the list the user put directly on each menu page's Settings row
-    if (Array.isArray(parsed.includeFooterBoxes) && parsed.includeFooterBoxes.length) {
+    let want = null; // null = board did not own the list → Beta / legacy flags
+    // Revised boards always pass an array (possibly empty). Empty is authoritative.
+    if (Array.isArray(parsed.includeFooterBoxes)) {
       want = parsed.includeFooterBoxes;
-      console.info("Per-board Include Footer Boxes:", want);
+      console.info("Per-board Include Footer Boxes:", want.length ? want : "(empty)");
     } else {
       // Fallback to central Beta Features tab
       try {
@@ -5510,7 +5543,8 @@
     }
 
     if (!want || !want.length) {
-      console.info("Include Footer Boxes list empty — board flags stand");
+      console.info("Include Footer Boxes empty — no footer boxes");
+      exileAllFooterBoxes(parsed);
       return parsed;
     }
 

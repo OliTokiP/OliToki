@@ -55,7 +55,10 @@ _csv_batch_event: threading.Event | None = None
 _csv_batch_error: BaseException | None = None
 META_TTL = 120.0
 XLSX_TTL = 90.0
+# Opportunistic cache only (non-force). Menu loads pass force=1 for live sheet edits.
 CSV_TTL = 90.0
+# Concurrent boards all force-refresh in the same second → one batchGet, not four.
+CSV_FORCE_COALESCE_S = 2.5
 
 
 def _log(msg: str) -> None:
@@ -163,21 +166,32 @@ class SheetsBackend:
         """
         Load *all* spreadsheet tabs into the CSV cache with one values.batchGet.
 
-        Why: boards fire ~8 parallel /api/sheets/csv requests; googleapiclient is
-        serialized under _api_lock. Without batching, 4 boards × 8 tabs ≈ 32
-        sequential Google round-trips → multi-minute freezes that all resolve at once.
+        force=True: always re-fetch from Google unless a force-fill completed in the
+        last CSV_FORCE_COALESCE_S seconds (multi-board open / parallel requests).
+        force=False: only fill missing/stale entries (TTL).
         """
         global _csv_batch_event, _csv_batch_error
         now = time.time()
-        meta = self.refresh_meta(force=force)
+        meta = self.refresh_meta(force=False)
         title_by_gid = meta["title_by_gid"]
 
         with _csv_lock:
+            if force and _csv_cache and _csv_batch_event is None:
+                ages = [now - v["at"] for v in _csv_cache.values()]
+                # Concurrent boards all pass force=1 in the same wave → share one batch
+                if ages and max(ages) < CSV_FORCE_COALESCE_S:
+                    _log(
+                        f"csv batch: coalesce force "
+                        f"(cache max age {max(ages):.2f}s < {CSV_FORCE_COALESCE_S}s)"
+                    )
+                    return
+
             need: list[tuple[str, str]] = []
-            for gid, title in title_by_gid.items():
-                hit = _csv_cache.get(str(gid))
+            for g, title in title_by_gid.items():
+                g = str(g)
+                hit = _csv_cache.get(g)
                 if force or not hit or now - hit["at"] >= CSV_TTL:
-                    need.append((str(gid), title))
+                    need.append((g, title))
             if not need:
                 return
 
@@ -190,7 +204,7 @@ class SheetsBackend:
                 _csv_batch_error = None
 
         if wait_ev is not None:
-            _log(f"csv batch: join in-flight ({len(need)} tabs pending at check)")
+            _log("csv batch: join in-flight batchGet")
             wait_ev.wait(timeout=180.0)
             if _csv_batch_error is not None:
                 raise _csv_batch_error
@@ -198,21 +212,20 @@ class SheetsBackend:
 
         t0 = time.time()
         try:
-            # Recompute need under lock after winning the race
             with _csv_lock:
                 need = []
                 now = time.time()
-                for gid, title in title_by_gid.items():
-                    hit = _csv_cache.get(str(gid))
+                for g, title in title_by_gid.items():
+                    g = str(g)
+                    hit = _csv_cache.get(g)
                     if force or not hit or now - hit["at"] >= CSV_TTL:
-                        need.append((str(gid), title))
+                        need.append((g, title))
             if not need:
                 return
 
-            ranges = []
-            for _gid, title in need:
-                safe = "'" + str(title).replace("'", "''") + "'"
-                ranges.append(safe)
+            ranges = [
+                "'" + str(title).replace("'", "''") + "'" for _g, title in need
+            ]
 
             with self._api_lock:
                 result = (
@@ -230,14 +243,14 @@ class SheetsBackend:
             filled = 0
             now = time.time()
             with _csv_lock:
-                for i, (gid, title) in enumerate(need):
+                for i, (g, title) in enumerate(need):
                     vr = value_ranges[i] if i < len(value_ranges) else {}
                     values = vr.get("values") or []
                     text = self._values_to_csv(values)
-                    _csv_cache[gid] = {"at": now, "text": text}
+                    _csv_cache[g] = {"at": now, "text": text}
                     filled += 1
             _log(
-                f"csv batchGet tabs={filled}/{len(need)} "
+                f"csv batchGet force={force} tabs={filled}/{len(need)} "
                 f"fetch={time.time() - t0:.2f}s"
             )
         except Exception as e:
@@ -252,7 +265,11 @@ class SheetsBackend:
                 ev.set()
 
     def csv_for_gid(self, gid: str, force: bool = False) -> str:
-        """Fetch sheet values by gid. Prefer cache; miss warms *all* tabs via batchGet."""
+        """
+        Fetch sheet values by gid.
+        force=True (menu hard/soft refresh): re-batchGet unless coalesce window.
+        force=False: serve CSV_TTL cache when warm.
+        """
         gid = str(gid)
         now = time.time()
 
@@ -260,16 +277,17 @@ class SheetsBackend:
             with _csv_lock:
                 hit = _csv_cache.get(gid)
                 if hit and now - hit["at"] < CSV_TTL:
-                    age = now - hit["at"]
-                    _log(f"csv gid={gid} cache hit age={age:.1f}s")
+                    _log(f"csv gid={gid} cache hit age={now - hit['at']:.1f}s")
                     return hit["text"]
 
-        # One Google round-trip fills every tab — multi-board opens share this
+        # One Google round-trip fills every tab — multi-board shares single-flight
         self.warm_csv_cache(force=force)
 
         with _csv_lock:
             hit = _csv_cache.get(gid)
             if hit:
+                if force:
+                    _log(f"csv gid={gid} after force-batch age={now - hit['at']:.2f}s")
                 return hit["text"]
 
         # Tab missing from workbook meta or batch — last-resort single get

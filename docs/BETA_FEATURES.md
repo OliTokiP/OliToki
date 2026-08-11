@@ -28,7 +28,8 @@ Section pattern matches other revised tabs (label → headers → data), but Bet
 - Falls back to the central Beta Features tab cell if the board row has no list.
 - **One cell**, comma-separated titles. Case-sensitive match to the box tab Titles.
 - Multi-select data validation works; quotes in CSV are handled.
-- The list fully replaces the old per-board Include Protein/Sauces/Drinks/Veggies? flags. Empty list → original board flags (if any).
+- The list fully replaces the old per-board Include Protein/Sauces/Drinks/Veggies? flags.
+- **Empty list (blank cell) → no footer boxes** (does not keep the previous selection or default Proteins/Sauces on).
 
 ### Selection → display (footer boxes)
 
