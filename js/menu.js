@@ -1483,14 +1483,15 @@
   }
 
   /**
-   * Encore is active for the Alpha board mode OR the current presentation segment.
-   * Box Menu Encore must not depend on Alpha Presentation Mode.
+   * Encore chrome (veil / bow) follows the *active presentation segment only*.
+   * Alpha Encore must not keep the veil alive during a Box Slideshow segment
+   * (and vice versa). Without multi-segment slides, fall back to board mode.
    */
   function isEncoreActiveNow() {
-    return (
-      _activeSegmentMode === "encore" ||
-      config.presentationMode === "encore"
-    );
+    if (usesBoardSlides()) {
+      return _activeSegmentMode === "encore";
+    }
+    return config.presentationMode === "encore";
   }
 
   /**
@@ -1505,15 +1506,21 @@
     const stage = els.familyPortrait;
     if (!stage) return;
 
-    // Spotlight Veil only during Encore (board or active Box segment).
-    if (!isEncoreActiveNow()) {
+    // Spotlight Veil only during Encore (active presentation segment).
+    // forceClear: hard teardown (finishHide) even if segment mode still says encore.
+    if (!isEncoreActiveNow() || opts.forceClear) {
+      // During Encore Wind-down the stage is still on-screen (fading). Keep veil
+      // classes so Punch-out undim can animate; finishHide forceClear removes them.
+      if (!opts.forceClear && !stage.hidden) {
+        return;
+      }
       stage.classList.remove(
         "encore-spot-hard",
         "encore-spot-soft",
         "encore-spot-color-highlight",
         "encore-spot-color-black"
       );
-      if (opts.forceClear) {
+      if (opts.forceClear || !isEncoreActiveNow()) {
         stage.style.removeProperty("--encore-veil-color");
       }
       return;
@@ -9010,7 +9017,8 @@
    * layers are hidden under scaffold-pin mode.
    */
   function bgScrollFrozen() {
-    if (config.presentationMode === "encore") return true;
+    // Segment-scoped: Alpha Encore must not freeze pan during Box Slideshow
+    if (isEncoreActiveNow()) return true;
     const stage = els.familyPortrait;
     if (stage && !stage.hidden && stage.classList.contains("visible")) {
       return true;
@@ -9203,6 +9211,29 @@
 
   let _hidePortraitTimer = null;
   let _portraitIntroTimer = null;
+  /** Bumped to invalidate in-flight hide transitionend / timeout (see cancelPendingPortraitHide). */
+  let _hidePortraitGen = 0;
+  let _hidePortraitTransitionHandler = null;
+
+  /**
+   * Stop a pending Wind-down teardown so it cannot call finishHide *after*
+   * the next Wind-up has started (that killed every FP intro after the first).
+   */
+  function cancelPendingPortraitHide() {
+    _hidePortraitGen += 1;
+    if (_hidePortraitTimer) {
+      clearTimeout(_hidePortraitTimer);
+      _hidePortraitTimer = null;
+    }
+    const stage = els.familyPortrait;
+    if (stage && _hidePortraitTransitionHandler) {
+      stage.removeEventListener(
+        "transitionend",
+        _hidePortraitTransitionHandler
+      );
+      _hidePortraitTransitionHandler = null;
+    }
+  }
 
   function finishHideFamilyPortrait() {
     const stage = els.familyPortrait;
@@ -9210,9 +9241,12 @@
       clearTimeout(_hidePortraitTimer);
       _hidePortraitTimer = null;
     }
-    if (stage) {
-      // Clean up any lingering transition listener
-      stage.removeEventListener("transitionend", finishHideFamilyPortrait);
+    if (stage && _hidePortraitTransitionHandler) {
+      stage.removeEventListener(
+        "transitionend",
+        _hidePortraitTransitionHandler
+      );
+      _hidePortraitTransitionHandler = null;
     }
     if (!stage) return;
     if (_encoreSpotTimer) {
@@ -9222,28 +9256,81 @@
     stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
     stage.hidden = true;
     stage.setAttribute("aria-hidden", "true");
+    stage.style.opacity = "";
     snapPortraitZoom(stage, 1);
     setEncoreScaffoldBgActive(false);
+    _lastEncoreBowItem = null;
+    // Drop veil classes so a later Slideshow hero is not under leftover chrome
+    applyEncoreSpotlightChrome(null, { forceClear: true });
     // Keep render key so re-show can reuse DOM; cleared only on full re-render
+  }
+
+  /**
+   * Encore Wind-down clock: zoom last bow → full spread (must finish *before*
+   * opacity fade so the cast is readable during the fade).
+   */
+  function encoreWindDownZoomMs(stage) {
+    return readCssDurationMs(
+      stage || els.familyPortrait || document.documentElement,
+      "--dur-fp-windup",
+      700
+    );
+  }
+
+  /**
+   * Wind-down when leaving a collage Animation Block (FP overview or Encore).
+   * - portrait (FP overview): reverse Zoom Reveal (center peak) + fade
+   * - encore (last bow): undim + zoom out to full spread (opaque), *then* fade
+   *   — never reverseZoom (veil-to-center), never fade while still punched-in.
+   *
+   * @param {string} prevType  "portrait" | "encore" | other
+   * @param {boolean} [instant]
+   */
+  function windDownCollageStage(prevType, instant) {
+    if (prevType !== "portrait" && prevType !== "encore") return;
+    if (instant) {
+      hideFamilyPortrait({ instant: true });
+      return;
+    }
+    if (prevType === "encore") {
+      hideFamilyPortrait({ encoreWindDown: true });
+      return;
+    }
+    hideFamilyPortrait({ reverseZoom: true });
   }
 
   /**
    * Hide collage. Soft path fades opacity (and optional reverse center zoom)
    * before setting hidden — fixes Slideshow blink.
-   * @param {{instant?: boolean, reverseZoom?: boolean}} [opts]
+   * @param {{instant?: boolean, reverseZoom?: boolean, encoreWindDown?: boolean}} [opts]
    */
   function hideFamilyPortrait(opts) {
     opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
 
+    // New hide supersedes any prior hide (and its transitionend)
     if (_hidePortraitTimer) {
       clearTimeout(_hidePortraitTimer);
       _hidePortraitTimer = null;
     }
+    if (_hidePortraitTransitionHandler) {
+      stage.removeEventListener(
+        "transitionend",
+        _hidePortraitTransitionHandler
+      );
+      _hidePortraitTransitionHandler = null;
+    }
+    const hideGen = ++_hidePortraitGen;
+
     if (_portraitIntroTimer) {
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
+    }
+    // Always kill a pending Encore Punch-in so it cannot re-dim after Wind-down starts
+    if (_encoreSpotTimer) {
+      clearTimeout(_encoreSpotTimer);
+      _encoreSpotTimer = null;
     }
 
     if (opts.instant || stage.hidden) {
@@ -9263,14 +9350,48 @@
     // Already fading out — don't restart reverse zoom mid-way
     const fadingOut = !stage.classList.contains("visible") && !stage.hidden;
 
+    // ── Encore Wind-down ──────────────────────────────────────────────
+    // Echo FP Wind-down structure (motion then exit), but for Encore:
+    //   Phase 1 (opaque): undim veil + zoom last bow → full 1× spread
+    //   Phase 2 (fade):   opacity out at full spread so the cast is readable
+    // Previously we removed .visible immediately while still at Punch-in zoom,
+    // and finishHide fired on opacity end (~0.45s) while zoom-out still had
+    // ~1s left — so the spread never appeared.
+    if (opts.encoreWindDown && !fadingOut) {
+      stage.classList.remove("is-dimmed");
+      clearAllPresentationHighlights();
+      // Keep Special veil color off during undim; chrome may already be clearing
+      const zoomMs = encoreWindDownZoomMs(stage);
+      const fadeMs = readCssDurationMs(stage, "--dur-mid", 450);
+      const rig = stage.querySelector(".family-portrait-rig");
+      if (rig) {
+        // Same snappy clock as FP Wind-up Zoom Reveal (peak→1×)
+        rig.style.transition =
+          "transform var(--dur-fp-windup, 0.7s) var(--ease-out)";
+      }
+      stage.classList.add("is-zoom-out");
+      stage.style.setProperty("--encore-zoom", "1");
+      // Stay .visible for phase 1 — full opacity while we settle to 1×
+
+      _hidePortraitTimer = window.setTimeout(function () {
+        if (hideGen !== _hidePortraitGen) return;
+        // Phase 2: fade at full spread
+        stage.classList.remove("visible");
+        _hidePortraitTimer = window.setTimeout(function () {
+          if (hideGen !== _hidePortraitGen) return;
+          _hidePortraitTimer = null;
+          if (rig) rig.style.transition = "";
+          finishHideFamilyPortrait();
+        }, fadeMs + 40);
+      }, zoomMs + 40);
+      return;
+    }
+
+    // ── FP reverse Zoom Reveal / generic hide ─────────────────────────
     stage.classList.remove("visible");
 
     if (opts.reverseZoom && !fadingOut) {
-      // Pull camera in toward plane center (Encore peak) while fading
-      if (_encoreSpotTimer) {
-        clearTimeout(_encoreSpotTimer);
-        _encoreSpotTimer = null;
-      }
+      // FP Wind-down: reverse Zoom Reveal — center origin + peak while fading
       setPlaneCenterOrigin(stage);
       stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
@@ -9280,47 +9401,61 @@
         String(readEncoreZoomTo(stage))
       );
     } else if (!opts.reverseZoom) {
+      // Generic: undim + ease to 1× while fading
       stage.classList.remove("is-dimmed");
       easePortraitZoomOut(stage);
     }
 
     const zoomMs = opts.reverseZoom
-      ? readCssDurationMs(stage, "--dur-encore-zoom", 3400)
-      : readCssDurationMs(stage, "--dur-mid", 450);
+      ? readCssDurationMs(stage, "--dur-fp-windup", 700)
+      : readCssDurationMs(stage, "--dur-slow", 1050);
     const fadeMs = readCssDurationMs(stage, "--dur-mid", 450);
+    // Wait for both fade and zoom — do not tear down on first opacity end
+    // while a longer zoom-out is still mid-flight.
     const wait = Math.max(zoomMs, fadeMs) + 40;
 
-    // Kill the expensive collage the moment it becomes fully transparent
-    // (as soon as the opacity transition ends), not after a fixed timeout.
     const onTransitionEnd = function (e) {
+      if (hideGen !== _hidePortraitGen) return;
       if (e.target !== stage) return;
-      // Only react to the main opacity/transform transitions
-      if (e.propertyName === "opacity" || e.propertyName.includes("transform")) {
-        stage.removeEventListener("transitionend", onTransitionEnd);
-        if (_hidePortraitTimer) {
-          clearTimeout(_hidePortraitTimer);
-          _hidePortraitTimer = null;
-        }
-        finishHideFamilyPortrait();
+      // Only opacity on the stage ends the hide (not early child transforms)
+      if (e.propertyName !== "opacity") return;
+      // If zoom still longer than fade, let the timeout finish the job
+      if (zoomMs > fadeMs + 20) return;
+      stage.removeEventListener("transitionend", onTransitionEnd);
+      if (_hidePortraitTransitionHandler === onTransitionEnd) {
+        _hidePortraitTransitionHandler = null;
       }
+      if (_hidePortraitTimer) {
+        clearTimeout(_hidePortraitTimer);
+        _hidePortraitTimer = null;
+      }
+      finishHideFamilyPortrait();
     };
 
-    stage.addEventListener("transitionend", onTransitionEnd, { once: true });
+    _hidePortraitTransitionHandler = onTransitionEnd;
+    stage.addEventListener("transitionend", onTransitionEnd);
 
-    // Fallback in case transitionend doesn't fire
     _hidePortraitTimer = window.setTimeout(function () {
+      if (hideGen !== _hidePortraitGen) return;
       stage.removeEventListener("transitionend", onTransitionEnd);
+      if (_hidePortraitTransitionHandler === onTransitionEnd) {
+        _hidePortraitTransitionHandler = null;
+      }
+      _hidePortraitTimer = null;
       finishHideFamilyPortrait();
     }, wait);
   }
 
   /**
-   * Incoming half of a Slideshow-frame handoff for the collage.
-   * Same clocks as updateHero show(): opacity --dur-mid, scale --dur-encore-zoom.
-   * Starts at Encore peak (center hole) and pulls back to 1×.
+   * Family Portrait / segment Wind-up Zoom Reveal.
+   * Opacity: --dur-mid. Scale peak→1×: --dur-fp-windup (snappy).
+   * Encore bow Punch-in keeps --dur-encore-zoom (long Ken Burns) via setPortraitSpotlight.
+   * Safe to call on every Animation Block Wind-up (not only cold start).
    */
   function beginPortraitCenterIntro(stage) {
     if (!stage) return;
+    // Invalidate any Wind-down teardown still in flight from the previous block
+    cancelPendingPortraitHide();
     if (_portraitIntroTimer) {
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
@@ -9333,30 +9468,30 @@
     stage.setAttribute("aria-hidden", "false");
     snapPortraitZoom(stage, readEncoreZoomTo(stage));
     stage.classList.add("is-dimmed");
-    // Force opacity 0 so .visible fade-in always plays (loop re-entry)
-    void stage.offsetWidth;
+    // Force opacity 0 so .visible fade-in always plays (every Wind-up, not just first)
     stage.style.opacity = "0";
     void stage.offsetWidth;
-    stage.style.opacity = "";
 
     requestAnimationFrame(function () {
-      // Match #hero show(): fade in + long ease zoom in the same frame pair
+      // Clear inline opacity so CSS .visible { opacity:1 } can transition
+      stage.style.opacity = "";
       stage.classList.add("visible");
       scheduleScaffoldPinAfterFadeIn(stage);
       requestAnimationFrame(function () {
         const rig = stage.querySelector(".family-portrait-rig");
+        // Wind-up only — do not use --dur-encore-zoom (that's Encore Punch-in)
+        const windMs = readCssDurationMs(stage, "--dur-fp-windup", 700);
         if (rig) {
           rig.style.transition =
-            "transform var(--dur-encore-zoom) var(--ease-out)";
+            "transform var(--dur-fp-windup, 0.7s) var(--ease-out)";
         }
         stage.classList.remove("is-zoom-out");
         stage.style.setProperty("--encore-zoom", "1");
         stage.classList.remove("is-dimmed");
-        const zoomMs = readCssDurationMs(stage, "--dur-encore-zoom", 3400);
         _portraitIntroTimer = window.setTimeout(function () {
           _portraitIntroTimer = null;
           if (rig) rig.style.transition = "";
-        }, zoomMs + 40);
+        }, windMs + 40);
       });
     });
   }
@@ -9395,10 +9530,8 @@
       clearTimeout(_portraitHandoffTimer);
       _portraitHandoffTimer = null;
     }
-    if (_hidePortraitTimer) {
-      clearTimeout(_hidePortraitTimer);
-      _hidePortraitTimer = null;
-    }
+    // Cancel prior Wind-down so its finishHide cannot kill this Wind-up
+    cancelPendingPortraitHide();
     if (_portraitIntroTimer) {
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
@@ -9407,6 +9540,7 @@
     // Reset collage surface so intro can run cleanly
     stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
     stage.hidden = true;
+    stage.style.opacity = "";
     snapPortraitZoom(stage, 1);
 
     ensureFamilyPortrait(cast);
@@ -9495,13 +9629,9 @@
       clearTimeout(_portraitHandoffTimer);
       _portraitHandoffTimer = null;
     }
-    if (_hidePortraitTimer) {
-      clearTimeout(_hidePortraitTimer);
-      _hidePortraitTimer = null;
-      stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
-      stage.hidden = true;
-      snapPortraitZoom(stage, 1);
-    }
+    // Always cancel pending hide before show — stale finishHide was snapping
+    // every Family Portrait Wind-up after the first opening.
+    cancelPendingPortraitHide();
     if (_portraitIntroTimer) {
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
@@ -9511,12 +9641,13 @@
 
     const settle = !!(opts.settle || opts.fromEncore) && !opts.forceIntro;
 
-    // Encore bows / encore→lineup: keep collage, ease to 1× (no center solo)
+    // Same-block Encore only: keep collage, ease to 1× (no center solo).
     // Pin free galaxy immediately — collage is already fully visible in Encore.
     if (settle) {
       hideHeroPlate();
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
+      stage.style.opacity = "";
       stage.classList.add("visible");
       if (stage.querySelector(".family-portrait-bg")) {
         setEncoreScaffoldBgActive(true);
@@ -9534,6 +9665,7 @@
       stage.setAttribute("aria-hidden", "false");
       snapPortraitZoom(stage, 1);
       stage.classList.remove("is-dimmed", "is-zoom-out");
+      stage.style.opacity = "";
       stage.classList.add("visible");
       if (stage.querySelector(".family-portrait-bg")) {
         setEncoreScaffoldBgActive(true);
@@ -9541,7 +9673,8 @@
       return;
     }
 
-    // Cold start / first portrait: center intro (no prior hero out-phase)
+    // Already fully settled at 1× with no forceIntro → no re-intro (bow settle).
+    // Block Wind-up always passes forceIntro so every segment FP animates.
     if (
       !opts.forceIntro &&
       stage.classList.contains("visible") &&
@@ -10073,15 +10206,11 @@
   function presentItemVisual(item, instant, opts) {
     opts = opts || {};
     const prevType = opts.prevType || "";
-    const prevWasPortrait = prevType === "portrait";
 
-    // Leaving Family Portrait overview / Encore collage → hero path
-    if (prevWasPortrait) {
-      hideFamilyPortrait({
-        instant: !!instant,
-        reverseZoom: !instant,
-      });
-    }
+    // Leaving collage (FP overview OR Encore bows) → hero path.
+    // Critical: prevType === "encore" was previously ignored, so Alpha/Box
+    // Encore never Wind-down'd and the last Punch-in frame stayed on top.
+    windDownCollageStage(prevType, !!instant);
 
     if (cfg.showHero !== false && item && (item.image || itemHasMultiImages(item))) {
       updateHero(item, instant);
@@ -10186,9 +10315,11 @@
   }
 
   /**
-   * Wind-down of outgoing collage on the portrait stage, then callback after
-   * exactly one Punch gap (--dur-mid). No Encore blackout delay — labels are
-   * construction-only; timing matches Slideshow Punch-out→Punch-in.
+   * Wind-down of outgoing collage on the portrait stage, then callback.
+   *
+   * Encore exit: wait through Phase 1 (zoom last bow → full spread, opaque)
+   * so the next Wind-up only overlaps the opacity fade — not the zoom-out.
+   * FP overview exit: Punch-gap wait (fade + reverse Zoom Reveal).
    */
   function beginCollageBlockHandoff(prevSlide, done) {
     if (_presHandoffTimer) {
@@ -10198,25 +10329,24 @@
     _presHandoffBusy = true;
 
     const stage = els.familyPortrait;
-    const gap = presentationPunchGapMs(stage);
+    const prevType = (prevSlide && prevSlide.type) || "";
+    // Encore: hold until full-spread zoom-out lands; next intro may overlap fade.
+    // FP / other: classic Punch gap.
+    const gap =
+      prevType === "encore"
+        ? encoreWindDownZoomMs(stage)
+        : presentationPunchGapMs(stage);
 
-    if (_lastEncoreBowItem) {
+    // Keep last bow veil color through Encore undim (then wind-down clears dim)
+    if (prevType === "encore" && _lastEncoreBowItem) {
       applyEncoreSpotlightChrome(_lastEncoreBowItem);
-    } else {
+    } else if (prevType === "encore") {
       applyEncoreSpotlightChrome(null);
     }
+
+    clearAllPresentationHighlights();
     if (stage && !stage.hidden) {
-      if (_encoreSpotTimer) {
-        clearTimeout(_encoreSpotTimer);
-        _encoreSpotTimer = null;
-      }
-      // Punch-out of last bow / FP settle (undim + ease) + reverse Zoom Reveal
-      stage.classList.remove("is-dimmed");
-      easePortraitZoomOut(stage);
-      clearAllPresentationHighlights();
-      hideFamilyPortrait({ reverseZoom: true });
-    } else {
-      clearAllPresentationHighlights();
+      windDownCollageStage(prevType || "portrait", false);
     }
 
     _presHandoffTimer = window.setTimeout(function () {
@@ -10293,6 +10423,23 @@
       (slide.type === "item" || slide.type === "encore") &&
       (!!slide.textOnly || !slide.image);
     const isBlockEntry = !!opts.isBlockEntry || !!slide.isBlockWindUp;
+    const nextIsCollage =
+      slide.type === "portrait" ||
+      (slide.type === "encore" &&
+        slide.withPortrait !== false &&
+        slide.items &&
+        slide.items.length > 0 &&
+        !textOnly);
+    const prevIsCollage =
+      prevType === "portrait" || prevType === "encore";
+
+    // Encore/FP Wind-down must start *before* we flip segment mode, so veil
+    // classes stay on for Punch-out undim. Same-stage collage handoffs already
+    // ran beginCollageBlockHandoff with the previous mode held.
+    if (prevIsCollage && !nextIsCollage) {
+      windDownCollageStage(prevType, !!instant);
+    }
+
     _activeSegmentMode = segMode;
 
     // Encore chrome for THIS segment (independent of Alpha Presentation Mode).
@@ -10349,12 +10496,21 @@
         clearAllPresentationHighlights();
       }
       if (cfg.showHero !== false) {
-        if (prevType === "encore") {
-          showFamilyPortrait(slide.items, instant, { fromEncore: true });
-        } else if (prevType === "item" && !instant) {
+        // Wind-up rules:
+        //  - From slideshow item → two-phase hero→portrait handoff
+        //  - Animation Block entry (every segment FP, including after Encore) →
+        //    Zoom Reveal (forceIntro). Never settle/snap — that only looked
+        //    right for the cold-open Wind-up.
+        //  - Same-block encore→lineup (rare; not how slides are built today) → settle
+        if (prevType === "item" && !instant) {
           handoffHeroToPortrait(slide.items, instant);
+        } else if (
+          prevType === "encore" &&
+          !isBlockEntry &&
+          !instant
+        ) {
+          showFamilyPortrait(slide.items, instant, { fromEncore: true });
         } else {
-          // Block Wind-up: Zoom Reveal (forceIntro unless instant paint)
           showFamilyPortrait(slide.items, instant, {
             forceIntro: !instant,
           });
@@ -10433,7 +10589,6 @@
 
       clearPortraitSpotlight();
       if (textOnly) {
-        hideFamilyPortrait({ instant: !!instant });
         presentTextOnlyBeat(slide, instant, prevType);
       } else {
         const item = resolvePresItem(slide.itemIndex, slide) || {
@@ -10454,12 +10609,6 @@
 
     // Slideshow item
     if (textOnly) {
-      // FP → item: seamless reverseZoom overlap (Wind-down + Wind-up tasteful)
-      if (prevType === "portrait" && !instant) {
-        hideFamilyPortrait({ reverseZoom: true });
-      } else {
-        hideFamilyPortrait({ instant: !!instant });
-      }
       presentTextOnlyBeat(slide, instant, prevType);
       return;
     }
@@ -10481,9 +10630,8 @@
    * Text-only beat: no hero image. Keep plate only if New sticker is needed.
    */
   function presentTextOnlyBeat(slide, instant, prevType) {
-    if (prevType === "portrait" || prevType === "encore") {
-      hideFamilyPortrait({ instant: !!instant, reverseZoom: !instant });
-    }
+    // Encore must Punch-out+fade (not reverseZoom veil-to-center)
+    windDownCollageStage(prevType, !!instant);
     const wantNew =
       !!slide.isNew && config && config.showSticker !== false;
     if (wantNew) {
