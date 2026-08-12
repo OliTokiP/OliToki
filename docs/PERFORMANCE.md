@@ -16,23 +16,23 @@ Related: [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) · [ARCHITECTURE.md](./ARCHI
 
 ## 1. Impact scale
 
-| Rating | Meaning | Typical symptoms |
-|--------|---------|------------------|
+| Rating        | Meaning                                                                                           | Typical symptoms                                            |
+| ------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | **Very High** | Sustained multi-layer compositing, many large rasters, or continuous animation at full stage size | Hitched Ken Burns, low FPS, thermal throttle, wall unusable |
-| **High** | Expensive filter / blend / dual-buffer work, or large decode + layout spikes | Stutter on theme change, pan jank, soft-refresh spikes |
-| **Medium** | Periodic work or moderate continuous cost; fine solo, stacks poorly ×4 | Noticeable on wall or when stacked with Encore |
-| **Low** | Cheap continuous or occasional work | Rarely the bottleneck alone |
-| **Very Low** | Idle flags, small DOM text, pure data toggles | Negligible if implemented as no-ops when off |
+| **High**      | Expensive filter / blend / dual-buffer work, or large decode + layout spikes                      | Stutter on theme change, pan jank, soft-refresh spikes      |
+| **Medium**    | Periodic work or moderate continuous cost; fine solo, stacks poorly ×4                            | Noticeable on wall or when stacked with Encore              |
+| **Low**       | Cheap continuous or occasional work                                                               | Rarely the bottleneck alone                                 |
+| **Very Low**  | Idle flags, small DOM text, pure data toggles                                                     | Negligible if implemented as no-ops when off                |
 
 **Axes (when rating):**
 
-| Axis | Examples |
-|------|----------|
-| **GPU composite** | CSS `filter`, `mix-blend-mode`, large transformed layers, veil gradients |
-| **CPU** | RAF loops, fit bake-offs, text measurement, JSON/CSV parse |
-| **Memory / decode** | Many full-res Plates, dual galaxy layers, xlsx inflate |
-| **Network** | Sheet refresh, xlsx download, food-pics / wallpapers |
-| **Main-thread spikes** | Soft re-render, Family Portrait rebuild, menu fit |
+| Axis                   | Examples                                                                 |
+| ---------------------- | ------------------------------------------------------------------------ |
+| **GPU composite**      | CSS `filter`, `mix-blend-mode`, large transformed layers, veil gradients |
+| **CPU**                | RAF loops, fit bake-offs, text measurement, JSON/CSV parse               |
+| **Memory / decode**    | Many full-res Plates, dual galaxy layers, xlsx inflate                   |
+| **Network**            | Sheet refresh, xlsx download, food-pics / wallpapers                     |
+| **Main-thread spikes** | Soft re-render, Family Portrait rebuild, menu fit                        |
 
 Ratings below assume **one full-quality solo board** unless noted. **×4 wall multiplies** almost everything that is not already on the lean wall path.
 

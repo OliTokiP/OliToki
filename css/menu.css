@@ -171,9 +171,12 @@ body {
   height: 100%;
 }
 
-/* Frame: Secondary = header fill, Main = panel body */
+/* Frame: Secondary = header fill, Main = panel body.
+   fill transition shared with logo/title under body.fp-alpha-header-hl
+   (see FP_ALPHA_OVERVIEW_HL in menu.js). */
 #frame .frame-header {
   fill: var(--secondary-color);
+  transition: fill var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
 }
 
 #frame .frame-panel {
@@ -207,10 +210,38 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 6px;
+  transition: stroke var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
 }
 
 #logo .logo-eye {
   fill: var(--main-color);
+  transition: fill var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
+}
+
+/*
+  Alpha FP overview — FP_ALPHA_OVERVIEW_HL === "header"
+  One body class, one --motion-highlight clock, simultaneous:
+    header fill → Highlight
+    menu title + logo vector → Secondary
+*/
+body.fp-alpha-header-hl #frame .frame-header {
+  fill: var(--item-highlight, var(--highlight));
+}
+body.fp-alpha-header-hl #menu-title,
+body.fp-alpha-header-hl #menu-title.active,
+body.fp-alpha-header-hl #menu-title.hl-on,
+body.presentation-engine.fp-alpha-header-hl #menu-title,
+body.presentation-engine.fp-alpha-header-hl #menu-title.active,
+body.presentation-engine.fp-alpha-header-hl #menu-title.active.hl-on,
+body.presentation-engine.fp-alpha-header-hl #menu-title.hl-on {
+  color: var(--secondary-color);
+  opacity: 1;
+}
+body.fp-alpha-header-hl #logo .logo-outline {
+  stroke: var(--secondary-color);
+}
+body.fp-alpha-header-hl #logo .logo-eye {
+  fill: var(--secondary-color);
 }
 
 /* ---------- Title ----------
@@ -234,6 +265,16 @@ body {
   overflow: hidden;
   pointer-events: none;
   white-space: pre-line;
+  /* Family Portrait: color ease main ↔ highlight (same clock as list items) */
+  transition: color var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
+  opacity: 1;
+}
+
+/* FP overview (and any active title highlight): Highlight color, not Special */
+#menu-title.active,
+#menu-title.hl-on {
+  color: var(--item-highlight, var(--highlight));
+  opacity: 1;
 }
 
 /* ---------- Allergy disclaimer (top-right, over galaxy / hero) ----------
@@ -296,12 +337,132 @@ body {
   color: var(--secondary-color);
   font-family: "Roboto", sans-serif;
   font-weight: 700;
-  transition: color var(--dur-instant) var(--ease-standard);
+  /* Engine sets --motion-highlight to Punch-Out / Punch-In duration */
+  transition: color var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
   flex-shrink: 0;
 }
 
 .menu-item.active {
   color: var(--item-highlight, var(--highlight));
+}
+
+/*
+  Motion engine highlights (COLOR only, never opacity on text):
+  - Punch-in: base → highlight over Punch-Out duration
+  - Punch-out: highlight → base over same Punch-Out duration
+  - Menu title (#menu-title): base is --main-color (Family Portrait overview)
+  - List/box items: base is --secondary-color
+*/
+body.presentation-engine #menu-title {
+  color: var(--main-color);
+  opacity: 1;
+  transition: color var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
+}
+body.presentation-engine #menu-title.active,
+body.presentation-engine #menu-title.active.hl-on,
+body.presentation-engine #menu-title.hl-on {
+  color: var(--item-highlight, var(--highlight));
+  opacity: 1;
+}
+body.presentation-engine .menu-item {
+  color: var(--secondary-color);
+  opacity: 1;
+  transition: color var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
+}
+body.presentation-engine .menu-item.active,
+body.presentation-engine .menu-item.active.hl-on {
+  color: var(--item-highlight, var(--highlight));
+  opacity: 1;
+}
+body.presentation-engine #protein-box .box-col-item,
+body.presentation-engine #sauces-box .box-col-item,
+body.presentation-engine #footer-drinks-box .box-col-item,
+body.presentation-engine #veggies-box .box-col-item,
+body.presentation-engine #protein-box .wrap-item,
+body.presentation-engine #sauces-box .wrap-item,
+body.presentation-engine #footer-drinks-box .wrap-item,
+body.presentation-engine #veggies-box .wrap-item {
+  opacity: 1;
+  transition: color var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
+}
+body.presentation-engine #protein-box .box-col-item.active,
+body.presentation-engine #sauces-box .box-col-item.active,
+body.presentation-engine #footer-drinks-box .box-col-item.active,
+body.presentation-engine #veggies-box .box-col-item.active,
+body.presentation-engine #protein-box .wrap-item.active,
+body.presentation-engine #sauces-box .wrap-item.active,
+body.presentation-engine #footer-drinks-box .wrap-item.active,
+body.presentation-engine #veggies-box .wrap-item.active,
+body.presentation-engine #protein-box .box-col-item.active.hl-on,
+body.presentation-engine #sauces-box .box-col-item.active.hl-on,
+body.presentation-engine #footer-drinks-box .box-col-item.active.hl-on,
+body.presentation-engine #veggies-box .box-col-item.active.hl-on,
+body.presentation-engine #protein-box .wrap-item.active.hl-on,
+body.presentation-engine #sauces-box .wrap-item.active.hl-on,
+body.presentation-engine #footer-drinks-box .wrap-item.active.hl-on,
+body.presentation-engine #veggies-box .wrap-item.active.hl-on {
+  color: var(--item-highlight, var(--highlight));
+  opacity: 1;
+}
+
+/*
+  Static presentation (body.presentation-static):
+  - Hero / collage: no motion transitions
+  - Highlights: .hl-on drives opacity 0→1 (and color); only opacity animation allowed
+*/
+body.presentation-static .menu-item {
+  color: var(--secondary-color);
+  opacity: 1;
+  transition: opacity 0.35s var(--ease-fade);
+}
+body.presentation-static .menu-item.active {
+  color: var(--item-highlight, var(--highlight));
+  /* Stay at 0 until .hl-on so we get a real opacity fade-in */
+  opacity: 0;
+}
+body.presentation-static .menu-item.active.hl-on {
+  opacity: 1;
+}
+body.presentation-static #hero-plate,
+body.presentation-static #hero-plate .hero-anim,
+body.presentation-static #hero-plate.visible,
+body.presentation-static #family-portrait-stage,
+body.presentation-static #family-portrait-stage.visible,
+body.presentation-static #family-portrait-stage .family-portrait-rig {
+  transition: none !important;
+}
+body.presentation-static #protein-box .box-col-item,
+body.presentation-static #sauces-box .box-col-item,
+body.presentation-static #footer-drinks-box .box-col-item,
+body.presentation-static #veggies-box .box-col-item,
+body.presentation-static #protein-box .wrap-item,
+body.presentation-static #sauces-box .wrap-item,
+body.presentation-static #footer-drinks-box .wrap-item,
+body.presentation-static #veggies-box .wrap-item {
+  color: inherit;
+  opacity: 1;
+  transition: opacity 0.35s var(--ease-fade);
+}
+body.presentation-static #protein-box .box-col-item.active,
+body.presentation-static #sauces-box .box-col-item.active,
+body.presentation-static #footer-drinks-box .box-col-item.active,
+body.presentation-static #veggies-box .box-col-item.active,
+body.presentation-static #protein-box .wrap-item.active,
+body.presentation-static #sauces-box .wrap-item.active,
+body.presentation-static #footer-drinks-box .wrap-item.active,
+body.presentation-static #veggies-box .wrap-item.active {
+  color: var(--item-highlight, var(--highlight));
+  opacity: 0;
+}
+body.presentation-static #protein-box .box-col-item.active.hl-on,
+body.presentation-static #sauces-box .box-col-item.active.hl-on,
+body.presentation-static #footer-drinks-box .box-col-item.active.hl-on,
+body.presentation-static #veggies-box .box-col-item.active.hl-on,
+body.presentation-static #protein-box .wrap-item.active.hl-on,
+body.presentation-static #sauces-box .wrap-item.active.hl-on,
+body.presentation-static #footer-drinks-box .wrap-item.active.hl-on,
+body.presentation-static #veggies-box .wrap-item.active.hl-on {
+  opacity: 1;
 }
 
 .menu-item .item-line {
@@ -380,7 +541,8 @@ body {
   width: 1305px;
   height: 870px;
   opacity: 0;
-  transition: opacity var(--dur-mid) var(--ease-fade);
+  /* Engine overrides via --motion-opacity-in / --motion-opacity-out */
+  transition: opacity var(--motion-opacity-in, var(--dur-mid)) var(--ease-fade);
   pointer-events: none;
   user-select: none;
   overflow: visible; /* sticker hangs below plate box */
@@ -398,12 +560,15 @@ body {
   height: 100%;
   transform-origin: center center;
   transform: scale(var(--hero-zoom, 1));
-  transition: transform var(--dur-mid) var(--ease-fade);
+  /* Punch-out default; engine sets inline for exact Beta digits */
+  transition: transform var(--motion-punch-out, var(--dur-mid)) var(--ease-fade);
   filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
 }
 
 #hero-plate.is-kb-in .hero-anim {
-  transition: transform var(--dur-encore-zoom) var(--ease-out);
+  /* Punch-in: Beta Motion "Punch-In Time" via --motion-punch-in */
+  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
+    var(--ease-out);
 }
 
 /* Food image is content only — no independent motion or shadow */
@@ -477,13 +642,16 @@ body.preview-wall #hero-plate {
   inset: 0;
   transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
   transform: scale(var(--encore-zoom, 1));
-  transition: transform var(--dur-encore-zoom) var(--ease-out);
+  /* Engine sets --motion-punch-in for Encore camera push */
+  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
+    var(--ease-out);
   will-change: transform;
 }
 
 #family-portrait-stage.is-zoom-out .family-portrait-rig {
-  /* Match .family-portrait-veil opacity fade */
-  transition: transform var(--dur-slow) var(--ease-fade);
+  /* Punch-out / ease back — engine may set --motion-punch-out */
+  transition: transform var(--motion-punch-out, var(--dur-slow))
+    var(--ease-fade);
 }
 
 /*
@@ -623,7 +791,8 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   z-index: 2;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-fade);
+  /* Engine sets --motion-veil from Punch-In / Wind phase digits */
+  transition: opacity var(--motion-veil, var(--dur-slow)) var(--ease-fade);
   transform: translateZ(0);
 }
 
@@ -1028,13 +1197,20 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 }
 
 /* White header band — sits in top 64px (includes visual top border).
-   Title sizes fixed to mockup (not dynamic): cap height ~35px → ~48–50px Roboto Bold. */
+   Title sizes fixed to mockup (not dynamic): cap height ~35px → ~48–50px Roboto Bold.
+   fill transition: Family Portrait on a Box eases outer shape → Highlight. */
 .info-box-shell .shell-outer {
   fill: var(--secondary-color);
+  transition: fill var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
 }
 
 .info-box-shell .shell-body {
   fill: var(--main-color);
+}
+
+/* Box-segment Family Portrait: shape chrome → Highlight (titles stay put) */
+.info-box.fp-shell-hl .info-box-shell .shell-outer {
+  fill: var(--item-highlight, var(--highlight));
 }
 
 #protein-box .shell-body {
@@ -1242,6 +1418,18 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   color: var(--highlight-special);
 }
 
+/* Base: transition lives here so Punch-out fade still runs after .active is removed */
+#protein-box .box-col-item,
+#sauces-box .box-col-item,
+#footer-drinks-box .box-col-item,
+#veggies-box .box-col-item,
+#protein-box .wrap-item,
+#sauces-box .wrap-item,
+#footer-drinks-box .wrap-item,
+#veggies-box .wrap-item {
+  transition: color var(--dur-slow) var(--ease-fade);
+}
+
 /* Box Menu presentation highlight: full line (name + sub + price) */
 #protein-box .box-col-item.active,
 #sauces-box .box-col-item.active,
@@ -1252,7 +1440,6 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 #footer-drinks-box .wrap-item.active,
 #veggies-box .wrap-item.active {
   color: var(--item-highlight, var(--highlight));
-  transition: color var(--dur-instant, 0.12s) var(--ease-fade, ease);
 }
 #protein-box .box-col-item.active .box-item-name,
 #sauces-box .box-col-item.active .box-item-name,

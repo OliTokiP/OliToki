@@ -8,6 +8,8 @@ Use these words in:
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
 **Last updated:** 2026-08-11 (Motion phases: Wind-up / Punch-in / Hold / Punch-out / Wind-down)  
+
+**Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **Status:** v1 — author-approved direction; sheet headers will be edited to match over time.
 
 Related: [SHEET_MIGRATION.md](./SHEET_MIGRATION.md) · [STYLE_GUIDE.md](./STYLE_GUIDE.md) · [PRODUCT.md](./PRODUCT.md) · [WHATS_NEW.md](./WHATS_NEW.md)

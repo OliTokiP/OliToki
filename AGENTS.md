@@ -62,6 +62,7 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - `docs/PRODUCT.md`
 - `docs/STYLE_GUIDE.md`
 - `docs/UI_NOMENCLATURE.md` — Hero Panel, Plates, Frame, etc. (truth source for naming)
+- `docs/MOTION_REFACTOR.md` — deferred pre-launch Motion Style / phase-runner work (not a mid-QA rewrite)
 - `docs/PERFORMANCE.md` — feature performance tiers + kill vs hang + console debug prompt
 - `docs/DEBUG_CONSOLE.md` — reading the performance flag console output (gated by Debug Menu sheet)
 - `docs/SHEET_MIGRATION.md` — revised sheet tabs, percent 0–1 fields, future presentation features

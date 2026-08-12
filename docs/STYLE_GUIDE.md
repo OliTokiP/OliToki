@@ -96,14 +96,14 @@ clip-path: polygon(
 
 ## 4. Chrome placements (Boards 1–3)
 
-| Element | Position / size | Notes |
-|---------|-----------------|--------|
-| Logo | `left: 758px; top: 16px; 156×202` | Stroke/eyes = Main |
-| Menu title | `left: 140px; top: 18px; width: 600px; height: header−28` | Font ~104px, weight 700, Main on Secondary header |
-| Disclaimer | `top: 18px; right: 28px; max-width: 720px` | Roboto Condensed 300, 16px; color by contrast on BG |
-| Menu list | `top: 234; left: 0; width: 1114; height: fills panel` | Padding ~28 / 16 / 20; shortens when footer on |
-| Hero wrap | `left: 870; top: 133; 1305×870` | Photos authored 1500×1000 (3:2) |
-| New sticker | `right: -52; bottom: -74; 560×560; rotate -12°` | See §7 |
+| Element     | Position / size                                           | Notes                                               |
+| ----------- | --------------------------------------------------------- | --------------------------------------------------- |
+| Logo        | `left: 758px; top: 16px; 156×202`                         | Stroke/eyes = Main                                  |
+| Menu title  | `left: 140px; top: 18px; width: 600px; height: header−28` | Font ~104px, weight 700, Main on Secondary header   |
+| Disclaimer  | `top: 18px; right: 28px; max-width: 720px`                | Roboto Condensed 300, 16px; color by contrast on BG |
+| Menu list   | `top: 234; left: 0; width: 1114; height: fills panel`     | Padding ~28 / 16 / 20; shortens when footer on      |
+| Hero wrap   | `left: 870; top: 133; 1305×870`                           | Photos authored 1500×1000 (3:2)                     |
+| New sticker | `right: -52; bottom: -74; 560×560; rotate -12°`           | See §7                                              |
 
 List height when **any** footer box shown: **620px** (with reduced bottom padding).  
 List height when **no** footer boxes: full panel `1080 − 234`.
@@ -123,11 +123,11 @@ Auto **2-column** bake-off (JS): try when ≥7 items / always ≥10 / or 1-col s
 
 Measured from Handhelds mockup @ 1920:
 
-| Box (legacy) | Origin (L,T) | Size W×H | Role today |
-|--------------|--------------|----------|------------|
-| Protein | 38, 863 | **768 × 197** | Left footer (~2/3 of strip) |
-| Sauces | 821, 863 | **299 × 197** | Right footer (~1/3 of strip) |
-| Combined strip | 38 → 1120 | **1082 × 197** | Full width when only one box enabled |
+| Box (legacy)   | Origin (L,T) | Size W×H       | Role today                           |
+| -------------- | ------------ | -------------- | ------------------------------------ |
+| Protein        | 38, 863      | **768 × 197**  | Left footer (~2/3 of strip)          |
+| Sauces         | 821, 863     | **299 × 197**  | Right footer (~1/3 of strip)         |
+| Combined strip | 38 → 1120    | **1082 × 197** | Full width when only one box enabled |
 
 **Gap between boxes:** 821 − (38 + 768) = **15px**.
 

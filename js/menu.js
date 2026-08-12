@@ -64,6 +64,94 @@
   );
 
   /**
+   * Presentation motion mode (see docs/MOTION_QUARANTINE.md).
+   * "static" — snap images, highlight opacity only (debug / fallback).
+   * "engine" — Beta Features → Motion table drives Ken Burns (and later Encore).
+   * Legacy motion remains in-file for inspiration; live path is engine or static.
+   */
+  const PRESENTATION_MOTION_MODE = "engine";
+
+  /**
+   * Alpha Family Portrait overview chrome (easy flip — Alpha only).
+   * Box-segment FP always uses box shell shape (not this switch).
+   *
+   *   "header" — simultaneous Punch-Out ease (default, bold):
+   *                #frame .frame-header fill → Highlight
+   *                #menu-title color         → Secondary
+   *                #logo stroke + eyes       → Secondary
+   *   "title"  — only #menu-title color → Highlight (legacy title-only)
+   */
+  const FP_ALPHA_OVERVIEW_HL = "header";
+
+  function isPresentationStatic() {
+    return PRESENTATION_MOTION_MODE === "static";
+  }
+
+  function isPresentationEngine() {
+    return PRESENTATION_MOTION_MODE === "engine";
+  }
+
+  function fpAlphaOverviewIsHeader() {
+    return String(FP_ALPHA_OVERVIEW_HL || "header").toLowerCase() !== "title";
+  }
+
+  /** Defaults if Beta Motion row missing (seconds). */
+  const MOTION_DEFAULTS_KEN_BURNS = {
+    name: "Ken Burns",
+    windUp: 0,
+    punchIn: 3.4,
+    hold: 3,
+    punchOut: 0.45,
+    windDown: 0,
+    zoomMin: 0.93,
+    zoomMax: 1,
+  };
+
+  /** Slideshow = same phase digits as Ken Burns, but no scale zoom (opacity only). */
+  const MOTION_DEFAULTS_SLIDESHOW = {
+    name: "Slideshow",
+    windUp: 0,
+    punchIn: 3.4,
+    hold: 3,
+    punchOut: 0.45,
+    windDown: 0,
+    zoomMin: 1,
+    zoomMax: 1,
+  };
+
+  /** name → motion style from Beta Features → Motion */
+  let motionStylesByName = {};
+
+  /**
+   * Encore bespoke multipliers (sheet digits stay authoritative; these only scale).
+   * ENCORE_VEIL_IN_MULT — veil *fade-in* = phaseSeconds × mult (zoom/phase wait unchanged).
+   * ENCORE_HOLD_MULT — Hold dwell = sheet Hold × mult (entrance/exit unchanged).
+   * FP on an Encore segment inherits this Hold scale automatically.
+   */
+  const ENCORE_VEIL_IN_MULT = 0.5;
+  const ENCORE_HOLD_MULT = 0.5;
+
+  function encoreVeilInSeconds(phaseSec) {
+    const p = Number(phaseSec);
+    const base = Number.isFinite(p) && p > 0 ? p : 0.45;
+    const m =
+      Number.isFinite(ENCORE_VEIL_IN_MULT) && ENCORE_VEIL_IN_MULT > 0
+        ? ENCORE_VEIL_IN_MULT
+        : 1;
+    return Math.max(0.05, base * m);
+  }
+
+  function encoreHoldSeconds(sheetHold) {
+    const h = Number(sheetHold);
+    const base = Number.isFinite(h) && h > 0 ? h : 0;
+    const m =
+      Number.isFinite(ENCORE_HOLD_MULT) && ENCORE_HOLD_MULT > 0
+        ? ENCORE_HOLD_MULT
+        : 1;
+    return Math.max(0, base * m);
+  }
+
+  /**
    * True when embedded in preview-all.html (or ?preview=all).
    * Four full boards kill Fire Stick / phone WebViews — use a leaner path
    * that keeps the design, not 4× dual-galaxy + xlsx + blur + refresh.
@@ -712,7 +800,23 @@
   let _presSurfaceReady = false;
   /** True while a Wind-down handoff is running (block timer double-advance) */
   let _presHandoffBusy = false;
+  /**
+   * Presentation advance timer. One clock for every step (Encore, Slideshow,
+   * Family Portrait): Style → Presentation Speed from *paint* → next paint.
+   */
   let slideshowTimer = null;
+  /** True while presentation should keep auto-advancing (startSlideshow…stopSlideshow). */
+  let _presentationRunning = false;
+  /** performance.now() when the current slide became the active step (clock origin). */
+  let _presentationStepStartedAt = 0;
+  /** Bumped on every notePresentationStepStart — invalidates stale step timers. */
+  let _presentationStepGen = 0;
+  /**
+   * When true, applyBoardSlideContent must NOT start collage Wind-down again —
+   * leaveCurrentSlideThen already ran it between steps (so FP/Encore don't
+   * "hold" into the next slide's clock).
+   */
+  let _skipNextCollageWindDown = false;
   let refreshTimer = null;
   let dataSource = "";
 
@@ -1190,8 +1294,10 @@
    * (Primary source is now the per-board Settings row "Include Footer Boxes" cell.)
    */
   function parseBetaFeatures(rows) {
-    if (!rows || rows.length < 3) return { footerBoxes: [] };
-    const result = { footerBoxes: [] };
+    if (!rows || rows.length < 3) {
+      return { footerBoxes: [], motionStyles: {} };
+    }
+    const result = { footerBoxes: [], motionStyles: {} };
 
     // Find "Boards" section (label row, then headers, then data)
     let boardsIdx = -1;
@@ -1201,27 +1307,234 @@
         break;
       }
     }
-    if (boardsIdx === -1) return result;
-
-    // Look for "Include Footer Boxes" header in the next few rows
-    for (let i = boardsIdx + 1; i < Math.min(boardsIdx + 6, rows.length); i++) {
-      const label = String(rows[i][0] || "").trim();
-      if (label.toLowerCase() === "include footer boxes") {
-        // Data row is usually i+1
-        const dataRow = rows[i + 1] || rows[i];
-        const raw = cell(dataRow, 0);
-        if (raw) {
-          result.footerBoxes = String(raw)
-            .split(",")
-            .map(function (s) {
-              return s.trim();
-            })
-            .filter(Boolean);
+    if (boardsIdx !== -1) {
+      // Look for "Include Footer Boxes" header in the next few rows
+      for (let i = boardsIdx + 1; i < Math.min(boardsIdx + 6, rows.length); i++) {
+        const label = String(rows[i][0] || "").trim();
+        if (label.toLowerCase() === "include footer boxes") {
+          const dataRow = rows[i + 1] || rows[i];
+          const raw = cell(dataRow, 0);
+          if (raw) {
+            result.footerBoxes = String(raw)
+              .split(",")
+              .map(function (s) {
+                return s.trim();
+              })
+              .filter(Boolean);
+          }
+          break;
         }
+      }
+    }
+
+    result.motionStyles = parseMotionStylesTable(rows);
+    return result;
+  }
+
+  /** Parse seconds from a Motion table cell; blank → fallback. */
+  function parseMotionSeconds(raw, fallback) {
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fallback;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return fallback;
+    return n;
+  }
+
+  /**
+   * Beta Features → Motion section.
+   * Columns: Motion Style | Explanation | Wind-up | Punch-In | Hold | Punch-Out | Wind-Down | Grok's Notes
+   * Wind-up/Wind-down 0 = no override (use Punch-in / Punch-out on first/last).
+   */
+  function parseMotionStylesTable(rows) {
+    const styles = {};
+    if (!rows || !rows.length) return styles;
+
+    let motionIdx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const a = String(cell(rows[i], 0) || "").trim().toLowerCase();
+      if (a === "motion") {
+        motionIdx = i;
         break;
       }
     }
-    return result;
+    if (motionIdx < 0) return styles;
+
+    let headerIdx = -1;
+    for (let i = motionIdx + 1; i < Math.min(motionIdx + 8, rows.length); i++) {
+      const a = String(cell(rows[i], 0) || "").trim().toLowerCase();
+      if (a.indexOf("motion style") !== -1) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx < 0) return styles;
+
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const name = String(cell(rows[i], 0) || "").trim();
+      if (!name) continue;
+      const lower = name.toLowerCase();
+      // End of section / placeholder row
+      if (
+        lower === "boards" ||
+        lower === "style and theme" ||
+        lower.indexOf("name of motion") === 0
+      ) {
+        if (lower.indexOf("name of motion") === 0) continue;
+        break;
+      }
+      // Stop if we hit another section title (single cell-ish row)
+      if (
+        !String(cell(rows[i], 2) || "").trim() &&
+        !String(cell(rows[i], 3) || "").trim() &&
+        lower !== "ken burns" &&
+        lower !== "encore"
+      ) {
+        // might still be a valid style with empty times — only break on known sections
+        if (
+          lower === "herotext" ||
+          lower.indexOf("include footer") === 0
+        ) {
+          break;
+        }
+      }
+
+      styles[name] = {
+        name: name,
+        explanation: String(cell(rows[i], 1) || "").trim(),
+        windUp: parseMotionSeconds(cell(rows[i], 2), 0),
+        punchIn: parseMotionSeconds(cell(rows[i], 3), 3.4),
+        hold: parseMotionSeconds(cell(rows[i], 4), 3),
+        punchOut: parseMotionSeconds(cell(rows[i], 5), 0.45),
+        windDown: parseMotionSeconds(cell(rows[i], 6), 0),
+        notes: String(cell(rows[i], 7) || "").trim(),
+        zoomMin: 0.93,
+        zoomMax: 1,
+      };
+    }
+    return styles;
+  }
+
+  function applyMotionStylesConfig(stylesMap) {
+    motionStylesByName = stylesMap && typeof stylesMap === "object" ? stylesMap : {};
+    const kb = getMotionStyle("Ken Burns");
+    const ss = getMotionStyle("Slideshow");
+    // CSS vars track Ken Burns by default; engine sets per-phase inline too
+    const root = document.documentElement;
+    if (root && root.style) {
+      root.style.setProperty("--motion-punch-in", String(kb.punchIn) + "s");
+      root.style.setProperty("--motion-punch-out", String(kb.punchOut) + "s");
+      root.style.setProperty(
+        "--motion-opacity",
+        String(Math.min(0.45, kb.punchIn || 0.45)) + "s"
+      );
+      root.style.setProperty(
+        "--hero-zoom-min",
+        String(kb.zoomMin != null ? kb.zoomMin : 0.93)
+      );
+      root.style.setProperty(
+        "--hero-zoom-max",
+        String(kb.zoomMax != null ? kb.zoomMax : 1)
+      );
+    }
+    tokiInfo(
+      "Motion styles loaded:",
+      Object.keys(motionStylesByName).join(", ") || "(defaults)",
+      "| Ken Burns",
+      "in/hold/out=",
+      kb.punchIn + "/" + kb.hold + "/" + kb.punchOut,
+      "| Slideshow",
+      "in/hold/out=",
+      ss.punchIn + "/" + ss.hold + "/" + ss.punchOut
+    );
+  }
+
+  function getMotionStyle(name) {
+    const want = String(name || "Slideshow").trim();
+    if (want && motionStylesByName[want]) {
+      return normalizeMotionStyle(motionStylesByName[want]);
+    }
+    const keys = Object.keys(motionStylesByName);
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === want.toLowerCase()) {
+        return normalizeMotionStyle(motionStylesByName[keys[i]]);
+      }
+    }
+    if (want.toLowerCase() === "ken burns") {
+      return Object.assign({}, MOTION_DEFAULTS_KEN_BURNS);
+    }
+    if (want.toLowerCase() === "encore") {
+      // Not implemented yet — opacity-only like Slideshow, not Ken Burns zoom
+      return Object.assign({}, MOTION_DEFAULTS_SLIDESHOW, { name: "Encore" });
+    }
+    return Object.assign({}, MOTION_DEFAULTS_SLIDESHOW);
+  }
+
+  function normalizeMotionStyle(s) {
+    const name = s.name || "Slideshow";
+    const isKb = String(name).toLowerCase() === "ken burns";
+    return {
+      name: name,
+      explanation: s.explanation || "",
+      windUp: parseMotionSeconds(s.windUp, 0),
+      punchIn: parseMotionSeconds(s.punchIn, 3.4),
+      hold: parseMotionSeconds(s.hold, 3),
+      punchOut: parseMotionSeconds(s.punchOut, 0.45),
+      windDown: parseMotionSeconds(s.windDown, 0),
+      notes: s.notes || "",
+      // Ken Burns zooms; Slideshow (and others) stay at 1×
+      zoomMin: isKb ? (s.zoomMin != null ? s.zoomMin : 0.93) : 1,
+      zoomMax: isKb ? (s.zoomMax != null ? s.zoomMax : 1) : 1,
+    };
+  }
+
+  /** True only for Motion Style "Ken Burns" — hero plate scale zoom. */
+  function motionStyleUsesZoom(style) {
+    return String((style && style.name) || "").toLowerCase() === "ken burns";
+  }
+
+  /** Motion Style "Encore" — grid + veil camera (not hero Ken Burns). */
+  function motionStyleIsEncore(style) {
+    return String((style && style.name) || "").toLowerCase() === "encore";
+  }
+
+  /**
+   * Presentation Mode (board/box Settings) → Motion Style name (Beta Motion col A).
+   *   Slideshow  → "Slideshow"  (opacity in/out, no scale zoom)
+   *   Ken Burns  → "Ken Burns"  (opacity + scale 0.93↔1)
+   *   Encore     → "Encore"     (not built; falls back to Slideshow-like)
+   * Do not treat Presentation Mode "Slideshow" as Motion Style "Ken Burns".
+   */
+  function motionStyleNameForSlide(slide) {
+    if (slide && slide.motionStyle) return slide.motionStyle;
+    const mode = String(
+      (slide && slide.segmentMode) || config.presentationMode || "slideshow"
+    ).toLowerCase();
+    if (mode === "encore") return "Encore";
+    if (mode === "kenburns" || mode.indexOf("ken") !== -1) return "Ken Burns";
+    return "Slideshow";
+  }
+
+  /**
+   * Normalize Presentation Mode from sheet: slideshow | encore | kenburns
+   */
+  function presentationModeToStructureAndMotion(mode) {
+    const m = String(mode || "slideshow").toLowerCase();
+    if (m === "encore") {
+      return { structure: "encore", motionStyle: "Encore" };
+    }
+    if (m === "kenburns" || m.indexOf("ken") !== -1) {
+      // Same slide list as Slideshow (items + optional FP); motion is Ken Burns
+      return { structure: "slideshow", motionStyle: "Ken Burns" };
+    }
+    return { structure: "slideshow", motionStyle: "Slideshow" };
+  }
+
+  function isPresSegmentBoundary(a, b) {
+    if (!a || !b) return true;
+    if (a.segment !== b.segment) return true;
+    if ((a.boxKey || "") !== (b.boxKey || "")) return true;
+    return false;
   }
 
   /**
@@ -1483,15 +1796,23 @@
   }
 
   /**
-   * Encore chrome (veil / bow) follows the *active presentation segment only*.
-   * Alpha Encore must not keep the veil alive during a Box Slideshow segment
-   * (and vice versa). Without multi-segment slides, fall back to board mode.
+   * Spotlight Veil only during an Encore *bow* (type === "encore"), never during
+   * Family Portrait lineup Wind-up (type === "portrait") even when the segment
+   * mode is Encore (FP composes as Encore's Wind-up without the veil).
    */
   function isEncoreActiveNow() {
-    if (usesBoardSlides()) {
-      return _activeSegmentMode === "encore";
+    if (usesBoardSlides() && slides.length) {
+      const s = slides[activeIndex];
+      return !!(
+        s &&
+        s.segmentMode === "encore" &&
+        s.type === "encore"
+      );
     }
-    return config.presentationMode === "encore";
+    return (
+      _activeSegmentMode === "encore" ||
+      config.presentationMode === "encore"
+    );
   }
 
   /**
@@ -3956,15 +4277,19 @@
     const list = opts.itemList || [];
     if (!list.length) return;
 
-    let mode = opts.mode === "encore" ? "encore" : "slideshow";
+    // Presentation Mode (Settings) → structure (which slides) + Motion Style name
+    const mapped = presentationModeToStructureAndMotion(opts.mode);
+    let structureMode = mapped.structure; // "encore" | "slideshow"
+    const motionStyleName = mapped.motionStyle; // "Ken Burns" | "Slideshow" | "Encore"
+
     // Only items with a non-empty image path count for cast (broken loads stripped at paint)
     const portraitItems = list.filter(function (it) {
       return !!(it && it.name && it.image);
     });
     const hasCast = portraitItems.length > 0;
-    // No images at all → cannot run FP or Encore; fall back to text-only slideshow
-    if (!hasCast && mode === "encore") {
-      mode = "slideshow";
+    // No images at all → cannot run FP or Encore; fall back to item slideshow structure
+    if (!hasCast && structureMode === "encore") {
+      structureMode = "slideshow";
     }
     const portraitOn = !!opts.familyPortrait && hasCast;
     const encoreLineup = !!opts.familyPortrait && hasCast;
@@ -3987,14 +4312,17 @@
         {
           segment: seg,
           boxKey: boxKey,
-          segmentMode: mode,
+          // structure for FP/Encore slide types
+          segmentMode: structureMode,
+          // Beta Motion table row name (Ken Burns vs Slideshow vs Encore)
+          motionStyle: motionStyleName,
           animationBlockId: blockId(kind),
         },
         extra
       );
     }
 
-    if (mode === "encore" && hasCast) {
+    if (structureMode === "encore" && hasCast) {
       if (encoreLineup) {
         slides.push(
           base("encore", {
@@ -6375,6 +6703,19 @@
     // Prefetch stash for Beta override (avoid second network round-trip / 429)
     parsed._betaRows = csv.beta || null;
     parsed._veggiesRows = csv.veggies || null;
+
+    // Beta → Motion table (Ken Burns digits, etc.) — always apply when present
+    try {
+      if (csv.beta) {
+        const betaMotion = parseBetaFeatures(csv.beta);
+        applyMotionStylesConfig(betaMotion.motionStyles || {});
+      } else {
+        applyMotionStylesConfig({});
+      }
+    } catch (motionErr) {
+      tokiWarn("Motion styles load failed; using Ken Burns defaults", motionErr);
+      applyMotionStylesConfig({});
+    }
 
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
       try {
@@ -9265,16 +9606,45 @@
     // Keep render key so re-show can reuse DOM; cleared only on full re-render
   }
 
-  /**
-   * Encore Wind-down clock: zoom last bow → full spread (must finish *before*
-   * opacity fade so the cast is readable during the fade).
-   */
+  /** Encore Wind-down: zoom last bow → full spread (opaque phase). */
   function encoreWindDownZoomMs(stage) {
     return readCssDurationMs(
       stage || els.familyPortrait || document.documentElement,
       "--dur-fp-windup",
       700
     );
+  }
+
+  /** Shared opacity fade clock (Wind-up / Wind-down). */
+  function presentationFadeMs(stage) {
+    return readCssDurationMs(
+      stage || els.familyPortrait || document.documentElement,
+      "--dur-mid",
+      450
+    );
+  }
+
+  /** Full Encore Wind-down = zoom-out to spread + opacity fade. */
+  function encoreWindDownTotalMs(stage) {
+    return encoreWindDownZoomMs(stage) + presentationFadeMs(stage);
+  }
+
+  /** FP overview Wind-down duration (reverse Zoom Reveal + fade). */
+  function familyPortraitWindDownMs(stage) {
+    return Math.max(
+      presentationFadeMs(stage),
+      readCssDurationMs(
+        stage || els.familyPortrait || document.documentElement,
+        "--dur-fp-windup",
+        700
+      )
+    );
+  }
+
+  function collageWindDownMs(prevType, stage) {
+    if (prevType === "encore") return encoreWindDownTotalMs(stage);
+    if (prevType === "portrait") return familyPortraitWindDownMs(stage);
+    return presentationFadeMs(stage);
   }
 
   /**
@@ -9308,6 +9678,11 @@
     opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
+
+    // Static quarantine: always snap hide (no reverse zoom / fade choreography)
+    if (isPresentationStatic()) {
+      opts = Object.assign({}, opts, { instant: true });
+    }
 
     // New hide supersedes any prior hide (and its transitionend)
     if (_hidePortraitTimer) {
@@ -9351,36 +9726,39 @@
     const fadingOut = !stage.classList.contains("visible") && !stage.hidden;
 
     // ── Encore Wind-down ──────────────────────────────────────────────
-    // Echo FP Wind-down structure (motion then exit), but for Encore:
-    //   Phase 1 (opaque): undim veil + zoom last bow → full 1× spread
-    //   Phase 2 (fade):   opacity out at full spread so the cast is readable
-    // Previously we removed .visible immediately while still at Punch-in zoom,
-    // and finishHide fired on opacity end (~0.45s) while zoom-out still had
-    // ~1s left — so the spread never appeared.
+    // Phase 1 (opaque): undim + zoom last bow → full 1× spread
+    // Phase 2 (fade):   real opacity fade at full spread (must not be cancelled
+    //                   by the next Wind-up — handoff waits zoom+fade total)
     if (opts.encoreWindDown && !fadingOut) {
       stage.classList.remove("is-dimmed");
       clearAllPresentationHighlights();
-      // Keep Special veil color off during undim; chrome may already be clearing
       const zoomMs = encoreWindDownZoomMs(stage);
-      const fadeMs = readCssDurationMs(stage, "--dur-mid", 450);
+      const fadeMs = presentationFadeMs(stage);
       const rig = stage.querySelector(".family-portrait-rig");
       if (rig) {
-        // Same snappy clock as FP Wind-up Zoom Reveal (peak→1×)
         rig.style.transition =
           "transform var(--dur-fp-windup, 0.7s) var(--ease-out)";
       }
       stage.classList.add("is-zoom-out");
       stage.style.setProperty("--encore-zoom", "1");
-      // Stay .visible for phase 1 — full opacity while we settle to 1×
+      // Keep full opacity for phase 1
+      stage.style.opacity = "1";
+      stage.classList.add("visible");
 
       _hidePortraitTimer = window.setTimeout(function () {
         if (hideGen !== _hidePortraitGen) return;
-        // Phase 2: fade at full spread
+        // Phase 2: force a real opacity fade (don't rely only on .visible class)
+        stage.style.transition =
+          "opacity var(--dur-mid, 0.45s) var(--ease-fade, ease)";
+        void stage.offsetWidth;
         stage.classList.remove("visible");
+        stage.style.opacity = "0";
         _hidePortraitTimer = window.setTimeout(function () {
           if (hideGen !== _hidePortraitGen) return;
           _hidePortraitTimer = null;
           if (rig) rig.style.transition = "";
+          stage.style.transition = "";
+          stage.style.opacity = "";
           finishHideFamilyPortrait();
         }, fadeMs + 40);
       }, zoomMs + 40);
@@ -9448,38 +9826,40 @@
 
   /**
    * Family Portrait / segment Wind-up Zoom Reveal.
-   * Opacity: --dur-mid. Scale peak→1×: --dur-fp-windup (snappy).
-   * Encore bow Punch-in keeps --dur-encore-zoom (long Ken Burns) via setPortraitSpotlight.
-   * Safe to call on every Animation Block Wind-up (not only cold start).
+   * - Opacity fade-in: --dur-mid (forced; no is-dimmed / veil)
+   * - Scale peak→1×: --dur-fp-windup
+   * Encore bow Punch-in uses setPortraitSpotlight (--dur-encore-zoom + veil).
    */
   function beginPortraitCenterIntro(stage) {
     if (!stage) return;
-    // Invalidate any Wind-down teardown still in flight from the previous block
     cancelPendingPortraitHide();
     if (_portraitIntroTimer) {
       clearTimeout(_portraitIntroTimer);
       _portraitIntroTimer = null;
     }
-    // Free galaxy stays up until fade-in completes (scaffold has its own copy)
+    // FP Wind-up is never an Encore bow — strip veil so lineup isn't blacked out
+    applyEncoreSpotlightChrome(null, { forceClear: true });
     setEncoreScaffoldBgActive(false);
     setPlaneCenterOrigin(stage);
-    stage.classList.remove("visible", "is-zoom-out");
+    // No is-dimmed: that turns the Encore veil on; Wind-up is collage only
+    stage.classList.remove("visible", "is-zoom-out", "is-dimmed");
     stage.hidden = false;
     stage.setAttribute("aria-hidden", "false");
     snapPortraitZoom(stage, readEncoreZoomTo(stage));
-    stage.classList.add("is-dimmed");
-    // Force opacity 0 so .visible fade-in always plays (every Wind-up, not just first)
+
+    // Hard reset opacity so .visible fade always runs (every Wind-up)
+    stage.style.transition = "none";
     stage.style.opacity = "0";
     void stage.offsetWidth;
+    stage.style.transition =
+      "opacity var(--dur-mid, 0.45s) var(--ease-fade, ease)";
 
     requestAnimationFrame(function () {
-      // Clear inline opacity so CSS .visible { opacity:1 } can transition
-      stage.style.opacity = "";
       stage.classList.add("visible");
+      stage.style.opacity = "1";
       scheduleScaffoldPinAfterFadeIn(stage);
       requestAnimationFrame(function () {
         const rig = stage.querySelector(".family-portrait-rig");
-        // Wind-up only — do not use --dur-encore-zoom (that's Encore Punch-in)
         const windMs = readCssDurationMs(stage, "--dur-fp-windup", 700);
         if (rig) {
           rig.style.transition =
@@ -9487,10 +9867,12 @@
         }
         stage.classList.remove("is-zoom-out");
         stage.style.setProperty("--encore-zoom", "1");
-        stage.classList.remove("is-dimmed");
         _portraitIntroTimer = window.setTimeout(function () {
           _portraitIntroTimer = null;
           if (rig) rig.style.transition = "";
+          // Leave opacity to CSS .visible after intro
+          stage.style.transition = "";
+          stage.style.opacity = "";
         }, windMs + 40);
       });
     });
@@ -9518,6 +9900,8 @@
    *   phase 2: portrait fade-in + zoom peak→1 (opacity mid, scale encore-zoom)
    */
   function handoffHeroToPortrait(portraitItems, instant) {
+    // Static quarantine: no two-phase hero→portrait handoff
+    if (isPresentationStatic()) instant = true;
     const cast = portraitItemsWithPaths(portraitItems);
     if (!cast.length) {
       hideHeroPlate({ instant: !!instant });
@@ -9619,6 +10003,9 @@
     const stage = els.familyPortrait;
     if (!stage) return;
 
+    // Static quarantine: always instant collage at 1×
+    if (isPresentationStatic()) instant = true;
+
     const cast = portraitItemsWithPaths(portraitItems);
     if (!cast.length) {
       finishHideFamilyPortrait();
@@ -9639,7 +10026,8 @@
 
     ensureFamilyPortrait(cast);
 
-    const settle = !!(opts.settle || opts.fromEncore) && !opts.forceIntro;
+    const settle =
+      !instant && !!(opts.settle || opts.fromEncore) && !opts.forceIntro;
 
     // Same-block Encore only: keep collage, ease to 1× (no center solo).
     // Pin free galaxy immediately — collage is already fully visible in Encore.
@@ -9956,10 +10344,8 @@
     slotEl.appendChild(el);
   }
 
-  /** Time for dim + spotlight to fully fade out before the next bow */
+  /** Punch-out → Punch-in gap between Encore bows (same for every bow). */
   const ENCORE_BLACKOUT_MS = 1100;
-  /** Soft delay before first bow after lineup (instant path) */
-  const ENCORE_FIRST_BOW_MS = 120;
   let _encoreSpotTimer = null;
 
   function boxStateByKey(boxKey) {
@@ -9982,13 +10368,33 @@
     return null;
   }
 
-  /** Clear Alpha list + all footer box presentation highlights. */
-  function clearAllPresentationHighlights() {
-    clearEncoreListHighlight();
-    clearBoxPresentationHighlights();
+  /** Footer info-box root element by segment key. */
+  function boxRootElByKey(boxKey) {
+    if (boxKey === "protein") return document.getElementById("protein-box");
+    if (boxKey === "sauces") return document.getElementById("sauces-box");
+    if (boxKey === "drinks") return document.getElementById("footer-drinks-box");
+    if (boxKey === "veggies") return document.getElementById("veggies-box");
+    return null;
   }
 
-  function clearBoxPresentationHighlights() {
+  /** Punch-out clock for list/box highlight fade (matches veil / zoom-out). */
+  function presentationHighlightFadeMs() {
+    return readCssDurationMs(document.documentElement, "--dur-slow", 1050);
+  }
+
+  /**
+   * Clear Alpha list + footer box presentation highlights.
+   * @param {{ fade?: boolean }} [opts] fade:true = Encore Punch-out (ease color
+   *   with --dur-slow). fade:false/omit = instant (segment change, instant paint).
+   */
+  function clearAllPresentationHighlights(opts) {
+    clearEncoreListHighlight(opts);
+    clearBoxPresentationHighlights(opts);
+  }
+
+  function clearBoxPresentationHighlights(opts) {
+    opts = opts || {};
+    const fade = !!opts.fade;
     const roots = [
       els.proteinBody,
       els.saucesBody,
@@ -10000,8 +10406,18 @@
       body.querySelectorAll("[data-box-item-index].active").forEach(function (
         node
       ) {
+        // Remove .active only — CSS transition on the base selector fades color.
+        // Stripping --item-highlight in the same frame can snap the computed color.
         node.classList.remove("active");
-        node.style.removeProperty("--item-highlight");
+        if (fade) {
+          window.setTimeout(function () {
+            if (!node.classList.contains("active")) {
+              node.style.removeProperty("--item-highlight");
+            }
+          }, presentationHighlightFadeMs() + 40);
+        } else {
+          node.style.removeProperty("--item-highlight");
+        }
       });
     });
   }
@@ -10011,8 +10427,8 @@
    * Clears Alpha list highlight while a Box Menu segment is active.
    */
   function setBoxPresentationHighlight(boxKey, itemIndex, isNew) {
-    clearEncoreListHighlight();
-    clearBoxPresentationHighlights();
+    clearEncoreListHighlight({ fade: true });
+    clearBoxPresentationHighlights({ fade: true });
     if (!boxKey || itemIndex == null || itemIndex < 0) return;
     const body = boxBodyElByKey(boxKey);
     if (!body) return;
@@ -10021,11 +10437,16 @@
       : config.highlight;
     body.querySelectorAll("[data-box-item-index]").forEach(function (node) {
       const on = Number(node.dataset.boxItemIndex) === itemIndex;
-      node.classList.toggle("active", on);
       if (on) {
         node.style.setProperty("--item-highlight", color);
+        // Double rAF so color transition runs from previous → highlight
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            node.classList.add("active");
+          });
+        });
       } else {
-        node.style.removeProperty("--item-highlight");
+        node.classList.remove("active");
       }
     });
   }
@@ -10052,16 +10473,43 @@
     return items[itemIndex] || null;
   }
 
-  /** Encore-only: list/box highlight tracks camera (off on zoom-out, on on zoom-in). */
-  function clearEncoreListHighlight() {
-    if (els.list) {
-      els.list.querySelectorAll(".menu-item").forEach(function (node) {
-        node.classList.remove("active");
+  /**
+   * Encore list highlight clear.
+   * @param {{ fade?: boolean }} [opts] fade with Punch-out (--dur-slow) when true
+   */
+  function clearEncoreListHighlight(opts) {
+    opts = opts || {};
+    const fade = !!opts.fade;
+    if (!els.list) return;
+    els.list.querySelectorAll(".menu-item").forEach(function (node) {
+      if (isPresentationStatic() && fade && node.classList.contains("active")) {
+        // Opacity out, then clear
+        node.style.opacity = "0.35";
+        window.setTimeout(function () {
+          node.classList.remove("active");
+          node.style.opacity = "";
+          node.style.removeProperty("--item-highlight");
+        }, 350);
+        return;
+      }
+      node.classList.remove("active");
+      if (isPresentationStatic()) node.style.opacity = "";
+      if (fade) {
+        window.setTimeout(function () {
+          if (!node.classList.contains("active")) {
+            node.style.removeProperty("--item-highlight");
+          }
+        }, presentationHighlightFadeMs() + 40);
+      } else {
         node.style.removeProperty("--item-highlight");
-      });
-    }
+      }
+    });
   }
 
+  /**
+   * Encore-only: list/box highlight tracks camera —
+   * fade off on Punch-out, ease on with Punch-in (same --dur-slow as veil).
+   */
   function setEncoreListHighlight(itemIndex) {
     if (itemIndex == null || itemIndex < 0) return;
     const slide = activePresSlide();
@@ -10073,19 +10521,35 @@
       setBoxPresentationHighlight(slide.boxKey, bi, !!slide.isNew);
       return;
     }
-    clearBoxPresentationHighlights();
+    clearBoxPresentationHighlights({ fade: true });
     if (!els.list) return;
     const item = items[itemIndex];
     els.list.querySelectorAll(".menu-item").forEach(function (node, i) {
       const on = i === itemIndex;
-      node.classList.toggle("active", on);
       if (on && item) {
         const color = item.isNew
           ? config.highlightSpecial || config.highlight
           : config.highlight;
         node.style.setProperty("--item-highlight", color);
+        if (isPresentationStatic()) {
+          // Opacity shift only: dip then settle full
+          node.style.opacity = "0.35";
+          node.classList.add("active");
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              node.style.opacity = "1";
+            });
+          });
+        } else {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              node.classList.add("active");
+            });
+          });
+        }
       } else {
-        node.style.removeProperty("--item-highlight");
+        node.classList.remove("active");
+        if (isPresentationStatic()) node.style.opacity = "";
       }
     });
   }
@@ -10116,14 +10580,15 @@
     stage.classList.remove("is-dimmed");
     easePortraitZoomOut(stage);
     if (isEncoreActiveNow()) {
-      clearAllPresentationHighlights();
+      // Punch-out: fade highlight with veil, do not blink off
+      clearAllPresentationHighlights({ fade: true });
     }
   }
 
   /**
    * Encore curtain-call: blackout veil + ease zoom out together, then open a
    * soft hole and Ken Burns push-in toward the bowing plate’s lattice point.
-   * List highlight (Encore only): off with zoom-out, on with zoom-in.
+   * List highlight: fade off with Punch-out (--dur-slow), on with Punch-in.
    * @param {number} itemIndex
    * @param {{instant?: boolean}} [opts]
    */
@@ -10139,6 +10604,26 @@
       clearTimeout(_encoreSpotTimer);
       _encoreSpotTimer = null;
     }
+
+    // Static quarantine: collage at 1×, no veil/zoom; highlight opacity only
+    if (isPresentationStatic()) {
+      applyEncoreSpotlightChrome(null, { forceClear: true });
+      stage.classList.remove("is-dimmed", "is-zoom-out");
+      snapPortraitZoom(stage, 1);
+      stage.hidden = false;
+      stage.setAttribute("aria-hidden", "false");
+      stage.style.opacity = "";
+      stage.classList.add("visible");
+      hideHeroPlate({ instant: true });
+      if (segEncore && itemIndex != null && itemIndex >= 0 && presItem) {
+        _lastEncoreBowItem = presItem;
+        setEncoreListHighlight(itemIndex);
+      } else if (segEncore) {
+        clearAllPresentationHighlights({ fade: true });
+      }
+      return;
+    }
+
     // Zoom-out of previous bow: keep last veil color (Special for New) until
     // the next bow applies its own color after blackout.
     if (_lastEncoreBowItem) {
@@ -10149,13 +10634,16 @@
     stage.classList.remove("is-dimmed");
     easePortraitZoomOut(stage);
     if (segEncore) {
-      clearAllPresentationHighlights();
+      // Same clock as veil / zoom-out — not an instant class strip
+      clearAllPresentationHighlights({ fade: true });
     }
 
     if (itemIndex == null || itemIndex < 0) return;
     if (!presItem) return;
 
-    const gap = opts.instant ? ENCORE_FIRST_BOW_MS : ENCORE_BLACKOUT_MS;
+    // Same Punch-out → Punch-in gap every bow (including first after FP lineup).
+    // A shorter "first bow" gap made highlight lengths unequal under a uniform step clock.
+    const gap = opts.instant ? 0 : ENCORE_BLACKOUT_MS;
 
     _encoreSpotTimer = window.setTimeout(function () {
       _encoreSpotTimer = null;
@@ -10192,6 +10680,931 @@
   /** Previous board slide (full object) for segment-exit handoffs */
   let _prevBoardSlide = null;
 
+  /**
+   * Style → Presentation Speed (ms). ONE duration for every Animation Block step:
+   * Encore bow, Slideshow item, Family Portrait overview, drinks step.
+   * 0 = paused.
+   */
+  function presentationStepMs() {
+    const sec = parseSlideshowSpeed(config.slideshowSpeed, 3);
+    if (!(sec > 0)) return 0;
+    return Math.round(sec * 1000);
+  }
+
+  function cancelPresentationAdvance() {
+    if (slideshowTimer != null) {
+      clearTimeout(slideshowTimer);
+      clearInterval(slideshowTimer);
+      slideshowTimer = null;
+    }
+  }
+
+  /**
+   * Uniform block clock: every Animation Block is active for exactly
+   * Presentation Speed, then we leave (Wind-down if needed), *then* the next
+   * block paints and starts its own Presentation Speed.
+   *
+   * Critical: collage Wind-down must NOT run on the next slide's clock
+   * (that made Family Portrait look like it "held" longer than Slideshow items).
+   */
+  function notePresentationStepStart() {
+    // Engine owns its own phase timers
+    if (isPresentationEngine()) return;
+    const gen = ++_presentationStepGen;
+    _presentationStepStartedAt =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    armPresentationStepDeadline(gen);
+  }
+
+  // ---------- Motion engine (Beta Motion table → sequential blocks) ----------
+  let _motionEngineGen = 0;
+  let _motionPhaseTimer = null;
+  let _motionEngineRunning = false;
+
+  function cancelMotionPhaseTimer() {
+    if (_motionPhaseTimer != null) {
+      clearTimeout(_motionPhaseTimer);
+      _motionPhaseTimer = null;
+    }
+  }
+
+  function stopMotionEngine() {
+    _motionEngineGen += 1;
+    _motionEngineRunning = false;
+    cancelMotionPhaseTimer();
+  }
+
+  function afterMs(ms, gen, fn) {
+    cancelMotionPhaseTimer();
+    const wait = Math.max(0, Math.round(ms));
+    _motionPhaseTimer = window.setTimeout(function () {
+      _motionPhaseTimer = null;
+      if (gen !== _motionEngineGen) return;
+      if (typeof fn === "function") fn();
+    }, wait);
+  }
+
+  function engineEntranceSec(style, isFirstInSegment) {
+    if (isFirstInSegment && style.windUp > 0) return style.windUp;
+    return style.punchIn;
+  }
+
+  function engineExitSec(style, isLastInSegment) {
+    if (isLastInSegment && style.windDown > 0) return style.windDown;
+    return style.punchOut;
+  }
+
+  /** Set CSS transition durations from sheet digits for this phase. */
+  function engineApplyCssDurations(entranceSec, exitSec) {
+    const root = document.documentElement;
+    if (!root || !root.style) return;
+    const opIn = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
+    const opOut = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
+    root.style.setProperty("--motion-punch-in", String(entranceSec) + "s");
+    root.style.setProperty("--motion-punch-out", String(exitSec) + "s");
+    root.style.setProperty("--motion-opacity-in", String(opIn) + "s");
+    root.style.setProperty("--motion-opacity-out", String(opOut) + "s");
+  }
+
+  function engineLoadHeroImage(item, done) {
+    const plate = els.heroPlate;
+    const img = els.hero;
+    finishHideFamilyPortrait();
+    applyEncoreSpotlightChrome(null, { forceClear: true });
+    if (!plate || !img || cfg.showHero === false) {
+      if (typeof done === "function") done(false);
+      return;
+    }
+    if (!item || !(item.image || itemHasMultiImages(item))) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      if (typeof done === "function") done(false);
+      return;
+    }
+    clearHeroMultiLattice(plate);
+    const wantSticker = !!(item.isNew && config && config.showSticker !== false);
+    applyPlateSticker(wantSticker);
+    plate.hidden = false;
+
+    if (itemHasMultiImages(item)) {
+      applyHeroMultiLattice(item, plate);
+      if (typeof done === "function") done(true);
+      return;
+    }
+
+    const src = item.image;
+    const finish = function (ok) {
+      if (typeof done === "function") done(!!ok);
+    };
+    if (
+      img.getAttribute("src") === src &&
+      img.complete &&
+      img.naturalWidth > 0
+    ) {
+      finish(true);
+      return;
+    }
+    img.onload = function () {
+      img.onload = null;
+      img.onerror = null;
+      finish(true);
+    };
+    img.onerror = function () {
+      img.onload = null;
+      img.onerror = null;
+      finish(false);
+    };
+    attachWebpFallback(img);
+    img.dataset.downsampled = "";
+    img.src = src;
+    if (img.complete && img.naturalWidth > 0) {
+      img.onload = null;
+      img.onerror = null;
+      finish(true);
+    }
+  }
+
+  /**
+   * Family Portrait — hidden one-slide overview (full cast, no item punch).
+   * Entrance: grid opacity 0→1 at zoom 1×, veil OFF.
+   * Exit into Encore (same segment): keep grid (compose); no fade-out.
+   * Exit elsewhere: grid opacity out (like Slideshow/KB wind-down).
+   */
+  function familyPortraitPrepareSurface(slide) {
+    const cast = portraitItemsWithPaths(slide.items || []);
+    if (!cast.length) return null;
+    hideHeroPlate({ clearSrc: true, instant: true });
+    ensureFamilyPortrait(cast);
+    const stage = els.familyPortrait;
+    if (!stage) return null;
+    cancelPendingPortraitHide();
+    applyEncoreSpotlightChrome(null, { forceClear: true });
+    stage.hidden = false;
+    stage.setAttribute("aria-hidden", "false");
+    return stage;
+  }
+
+  function familyPortraitRunEntrance(slide, style, entranceSec, gen, done) {
+    const stage = familyPortraitPrepareSurface(slide);
+    // Clear item highlights; FP overview chrome (Alpha title | Box shell)
+    staticClearHighlights();
+    engineArmHighlightIn(style && style.punchOut);
+    armFpOverviewHighlight(slide);
+    if (!stage) {
+      afterMs(entranceSec * 1000, gen, done);
+      return;
+    }
+    const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
+    const rig = stage.querySelector(".family-portrait-rig");
+    engineApplyCssDurations(entranceSec, style.punchOut);
+
+    if (rig) rig.style.transition = "none";
+    stage.style.transition = "none";
+    setPlaneCenterOrigin(stage);
+    snapPortraitZoom(stage, 1);
+    stage.classList.remove("is-dimmed", "is-zoom-out");
+    stage.style.opacity = "0";
+    stage.classList.add("visible");
+    void stage.offsetWidth;
+
+    stage.style.transition =
+      "opacity " + opSec + "s var(--ease-fade, ease)";
+    stage.style.opacity = "1";
+
+    afterMs(entranceSec * 1000, gen, function () {
+      stage.style.transition = "";
+      if (rig) rig.style.transition = "";
+      done();
+    });
+  }
+
+  /**
+   * @param {object|null} nextSlide  next playable slide (for compose into Encore)
+   */
+  function familyPortraitRunExit(
+    slide,
+    style,
+    exitSec,
+    gen,
+    nextSlide,
+    done
+  ) {
+    const stage = els.familyPortrait;
+    const opSec = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
+    // Color fade title (and any list/box) over Punch-Out — same as item punch-out
+    engineHighlightFadeOut(exitSec);
+    engineApplyCssDurations(style.punchIn, exitSec);
+
+    // Compose into Encore: keep full-spread grid; first bow will Punch-In (veil+zoom)
+    const composeEncore =
+      nextSlide &&
+      nextSlide.type === "encore" &&
+      !isPresSegmentBoundary(slide, nextSlide);
+
+    if (composeEncore && stage && !stage.hidden) {
+      stage.style.opacity = "1";
+      stage.classList.add("visible");
+      stage.classList.remove("is-dimmed", "is-zoom-out");
+      snapPortraitZoom(stage, 1);
+      applyEncoreSpotlightChrome(null, { forceClear: true });
+      afterMs(exitSec * 1000, gen, done);
+      return;
+    }
+
+    // Full exit (FP alone, or before Slideshow/Ken Burns items)
+    if (!stage || stage.hidden) {
+      afterMs(exitSec * 1000, gen, done);
+      return;
+    }
+    stage.style.transition =
+      "opacity " + opSec + "s var(--ease-fade, ease)";
+    stage.style.opacity = "0";
+    afterMs(exitSec * 1000, gen, function () {
+      stage.style.transition = "";
+      finishHideFamilyPortrait();
+      done();
+    });
+  }
+
+  /** Lattice origin for Encore camera (slot center). */
+  function encoreSlotOrigin(stage, itemIndex) {
+    if (!stage || itemIndex == null || itemIndex < 0) return null;
+    const slot = stage.querySelector(
+      '.family-portrait-slot[data-item-index="' + itemIndex + '"]'
+    );
+    if (!slot) return null;
+    return {
+      x: parseFloat(slot.style.left) || 0,
+      y: parseFloat(slot.style.top) || 0,
+    };
+  }
+
+  /**
+   * Ensure Encore collage surface is ready (cast with images).
+   * Returns stage or null.
+   */
+  function encorePrepareSurface(slide) {
+    const cast = portraitItemsWithPaths(slide.items || []);
+    if (!cast.length) return null;
+    hideHeroPlate({ clearSrc: true, instant: true });
+    ensureFamilyPortrait(cast);
+    const stage = els.familyPortrait;
+    if (!stage) return null;
+    cancelPendingPortraitHide();
+    stage.hidden = false;
+    stage.setAttribute("aria-hidden", "false");
+    // Veil chrome (hard/soft) — isEncoreActiveNow true on encore bow slides
+    applyEncoreSpotlightChrome(null);
+    return stage;
+  }
+
+  function encoreArmHighlight(slide, colorSec) {
+    // colorSec = Punch-Out (same clock as fade-out), never full Punch-In
+    if (colorSec != null) engineArmHighlightIn(colorSec);
+    if (slide.segment === "box") {
+      staticSetBoxHighlight(
+        slide.boxKey,
+        slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+        !!slide.isNew
+      );
+    } else if (slide.itemIndex != null && slide.itemIndex >= 0) {
+      staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+    }
+  }
+
+  /**
+   * Highlight COLOR ease duration — always Punch-Out (default 0.45s).
+   * Same number for fade-in and fade-out. Never full Punch-In. Never opacity.
+   */
+  let _highlightColorSec = 0.45;
+
+  /**
+   * Punch-Out: color eases highlight → Secondary over exitSec (--ease-fade).
+   * No opacity / transparency on either phase.
+   */
+  function engineHighlightFadeOut(exitSec) {
+    const sec =
+      Number.isFinite(Number(exitSec)) && Number(exitSec) > 0
+        ? Number(exitSec)
+        : 0.45;
+    _highlightColorSec = sec;
+    const root = document.documentElement;
+    if (root && root.style) {
+      root.style.setProperty("--motion-highlight", String(sec) + "s");
+    }
+    const ms = Math.round(sec * 1000) + 40;
+    const clearNode = function (node) {
+      if (!node) return;
+      node.style.opacity = "";
+      node.style.transition =
+        "color " + sec + "s var(--ease-fade, cubic-bezier(0.4, 0, 0.2, 1))";
+      void node.offsetWidth;
+      // Drop .active → CSS color becomes --secondary-color; transition runs
+      node.classList.remove("hl-on", "active");
+      window.setTimeout(function () {
+        node.style.transition = "";
+        node.style.removeProperty("--item-highlight");
+      }, ms);
+    };
+    if (els.list) {
+      els.list
+        .querySelectorAll(".menu-item.hl-on, .menu-item.active")
+        .forEach(clearNode);
+    }
+    ["protein", "sauces", "drinks", "veggies"].forEach(function (key) {
+      const body = boxBodyElByKey(key);
+      if (!body) return;
+      body
+        .querySelectorAll(
+          "[data-box-item-index].hl-on, [data-box-item-index].active"
+        )
+        .forEach(clearNode);
+    });
+    // Alpha Family Portrait overview: title text and/or header fill
+    if (
+      els.title &&
+      (els.title.classList.contains("hl-on") ||
+        els.title.classList.contains("active"))
+    ) {
+      clearNode(els.title);
+    }
+    fadeFpAlphaHeaderHighlight(sec);
+    // Box shell shape (Box Family Portrait overview) — fill eases via CSS
+    fadeFpBoxShellHighlights(sec);
+  }
+
+  function encoreClearHighlight(exitSec) {
+    engineHighlightFadeOut(exitSec);
+  }
+
+  /**
+   * Encore entrance.
+   * First of segment (Wind-up treatment, duration = Wind-Up if >0 else Punch-In):
+   *   PARALLEL: grid opacity 0→1 + veil in + camera zoom overview→item
+   * Mid-run Punch-In: grid stays; veil + camera only.
+   */
+  function encoreRunEntrance(
+    slide,
+    style,
+    entranceSec,
+    gen,
+    isFirstInSegment,
+    done
+  ) {
+    const stage = encorePrepareSurface(slide);
+    if (!stage) {
+      // No cast images — highlight only
+      finishHideFamilyPortrait();
+      encoreArmHighlight(slide, style.punchOut);
+      afterMs(entranceSec * 1000, gen, done);
+      return;
+    }
+
+    const itemIndex = slide.itemIndex;
+    const presItem = resolvePresItem(itemIndex, slide);
+    const zoomTo = readEncoreZoomTo(stage);
+    const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
+    const rig = stage.querySelector(".family-portrait-rig");
+    const origin = encoreSlotOrigin(stage, itemIndex);
+
+    // Veil *in* only: shorter than phase (ENCORE_VEIL_IN_MULT); zoom still uses full entranceSec
+    stage.style.setProperty(
+      "--motion-veil",
+      String(encoreVeilInSeconds(entranceSec)) + "s"
+    );
+    engineApplyCssDurations(entranceSec, style.punchOut);
+
+    if (isFirstInSegment) {
+      // —— Wind-up treatment (FP off kicker): grid + veil + camera together ——
+      setPlaneCenterOrigin(stage);
+      if (rig) {
+        rig.style.transition = "none";
+      }
+      stage.style.transition = "none";
+      snapPortraitZoom(stage, 1);
+      stage.classList.remove("is-dimmed", "is-zoom-out");
+      stage.style.opacity = "0";
+      stage.classList.add("visible");
+      void stage.offsetWidth;
+
+      if (rig) {
+        rig.style.transition =
+          "transform " + entranceSec + "s var(--ease-out, ease-out)";
+      }
+      stage.style.transition =
+        "opacity " + opSec + "s var(--ease-fade, ease)";
+      stage.classList.remove("is-zoom-out");
+      if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
+      if (presItem) {
+        _lastEncoreBowItem = presItem;
+        applyEncoreSpotlightChrome(presItem);
+      } else {
+        applyEncoreSpotlightChrome(null);
+      }
+      stage.style.setProperty("--encore-zoom", String(zoomTo));
+      stage.classList.add("is-dimmed");
+      stage.style.opacity = "1";
+      encoreArmHighlight(slide, style.punchOut);
+
+      afterMs(entranceSec * 1000, gen, function () {
+        if (rig) rig.style.transition = "";
+        stage.style.transition = "";
+        done();
+      });
+      return;
+    }
+
+    // —— Punch-In (mid-run): grid already up; veil + camera only (no grid fade) ——
+    // Previous Punch-Out left zoom≈1 and veil undimmed.
+    stage.style.opacity = "1";
+    stage.classList.add("visible");
+    stage.classList.remove("is-dimmed", "is-zoom-out");
+    if (rig) {
+      rig.style.transition = "none";
+    }
+    // Retarget origin while at ~1× (under undimmed veil), then punch in
+    if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
+    void stage.offsetWidth;
+    if (rig) {
+      rig.style.transition =
+        "transform " + entranceSec + "s var(--ease-out, ease-out)";
+    }
+    if (presItem) {
+      _lastEncoreBowItem = presItem;
+      applyEncoreSpotlightChrome(presItem);
+    } else {
+      applyEncoreSpotlightChrome(null);
+    }
+    stage.style.setProperty("--encore-zoom", String(zoomTo));
+    stage.classList.add("is-dimmed");
+    encoreArmHighlight(slide, style.punchOut);
+    afterMs(entranceSec * 1000, gen, function () {
+      if (rig) rig.style.transition = "";
+      done();
+    });
+  }
+
+  /**
+   * Encore exit.
+   * Mid-run Punch-Out: veil out + ease zoom; grid opacity stays 1.
+   * Last-of-segment Wind-Down: grid opacity out + veil out (KB/Slideshow-like).
+   */
+  function encoreRunExit(slide, style, exitSec, gen, isLastInSegment, done) {
+    const stage = els.familyPortrait;
+    const opSec = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
+    const rig = stage ? stage.querySelector(".family-portrait-rig") : null;
+
+    // Veil *out* keeps full exit duration (multiplier is fade-in only)
+    if (stage) {
+      stage.style.setProperty("--motion-veil", String(exitSec) + "s");
+    }
+    engineApplyCssDurations(style.punchIn, exitSec);
+    encoreClearHighlight(exitSec);
+
+    if (!stage || stage.hidden) {
+      afterMs(exitSec * 1000, gen, done);
+      return;
+    }
+
+    // Veil out + ease camera toward 1×
+    stage.classList.remove("is-dimmed");
+    stage.classList.add("is-zoom-out");
+    if (rig) {
+      rig.style.transition =
+        "transform " + exitSec + "s var(--ease-fade, ease)";
+    }
+    stage.style.setProperty("--encore-zoom", "1");
+
+    if (isLastInSegment) {
+      // Wind-down: grid opacity out (inherit KB/Slideshow full exit)
+      stage.style.transition =
+        "opacity " + opSec + "s var(--ease-fade, ease)";
+      stage.style.opacity = "0";
+      afterMs(exitSec * 1000, gen, function () {
+        if (rig) rig.style.transition = "";
+        stage.style.transition = "";
+        stage.classList.remove("visible", "is-zoom-out");
+        finishHideFamilyPortrait();
+        done();
+      });
+      return;
+    }
+
+    // Punch-out: grid stays visible
+    stage.style.opacity = "1";
+    afterMs(exitSec * 1000, gen, function () {
+      if (rig) rig.style.transition = "";
+      stage.classList.remove("is-zoom-out");
+      done();
+    });
+  }
+
+  /**
+   * Entrance for Motion Style (Ken Burns / Slideshow / Encore).
+   * @param {{ isFirstInSegment?: boolean }} [flags]
+   */
+  function motionRunEntrance(slide, style, entranceSec, gen, done, flags) {
+    flags = flags || {};
+    // Family Portrait overview (any segment that includes FP)
+    if (slide.type === "portrait") {
+      familyPortraitRunEntrance(slide, style, entranceSec, gen, done);
+      return;
+    }
+    if (motionStyleIsEncore(style)) {
+      encoreRunEntrance(
+        slide,
+        style,
+        entranceSec,
+        gen,
+        !!flags.isFirstInSegment,
+        done
+      );
+      return;
+    }
+    const plate = heroMotionEl();
+    const item = resolvePresItem(slide.itemIndex, slide) || {
+      image: slide.image,
+      images: slide.images,
+      isNew: !!slide.isNew,
+    };
+    const useZoom = motionStyleUsesZoom(style);
+    const zMin = useZoom
+      ? style.zoomMin != null
+        ? style.zoomMin
+        : 0.93
+      : 1;
+    const zMax = useZoom
+      ? style.zoomMax != null
+        ? style.zoomMax
+        : 1
+      : 1;
+    engineApplyCssDurations(entranceSec, style.punchOut);
+
+    const textOnly = !!slide.textOnly || !slide.image;
+    if (textOnly) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      finishHideFamilyPortrait();
+      engineArmHighlightIn(style.punchOut);
+      if (slide.segment === "box") {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      }
+      afterMs(entranceSec * 1000, gen, done);
+      return;
+    }
+
+    engineLoadHeroImage(item, function (ok) {
+      if (gen !== _motionEngineGen) return;
+      if (!ok || !plate) {
+        engineArmHighlightIn(style.punchOut);
+        if (slide.segment === "box") {
+          staticSetBoxHighlight(
+            slide.boxKey,
+            slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+            !!slide.isNew
+          );
+        } else {
+          staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+        }
+        afterMs(entranceSec * 1000, gen, done);
+        return;
+      }
+
+      const anim = plate.querySelector
+        ? plate.querySelector(".hero-anim")
+        : null;
+      // Park: Ken Burns at zoomMin; Slideshow stays at 1×
+      plate.style.transition = "none";
+      if (anim) anim.style.transition = "none";
+      plate.style.setProperty("--hero-zoom", String(zMin));
+      plate.style.opacity = "0";
+      plate.classList.add("visible");
+      plate.hidden = false;
+      void plate.offsetWidth;
+
+      // Highlight color ease = Punch-Out (same as fade-out), not full Punch-In
+      engineArmHighlightIn(style.punchOut);
+      if (slide.segment === "box") {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      }
+
+      const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
+      plate.style.transition =
+        "opacity " + opSec + "s var(--ease-fade, ease)";
+      if (useZoom && anim) {
+        anim.style.transition =
+          "transform " + entranceSec + "s var(--ease-out, ease-out)";
+        plate.classList.add("is-kb-in");
+        plate.style.setProperty("--hero-zoom", String(zMax));
+        setFeatureActive("kenBurns", true, "engine punch-in");
+      } else {
+        plate.classList.remove("is-kb-in");
+        plate.style.setProperty("--hero-zoom", "1");
+        if (anim) anim.style.transition = "none";
+        setFeatureActive("kenBurns", false, "slideshow opacity-only");
+      }
+      plate.style.opacity = "1";
+
+      afterMs(entranceSec * 1000, gen, function () {
+        if (anim) anim.style.transition = "";
+        plate.style.transition = "";
+        done();
+      });
+    });
+  }
+
+  function kenBurnsRunHold(holdSec, gen, done) {
+    afterMs(holdSec * 1000, gen, done);
+  }
+
+  /**
+   * Exit: Ken Burns / Slideshow hero; Encore grid+veil rules.
+   * @param {{ isLastInSegment?: boolean }} [flags]
+   */
+  function motionRunExit(slide, style, exitSec, gen, done, flags) {
+    flags = flags || {};
+    if (slide.type === "portrait") {
+      familyPortraitRunExit(
+        slide,
+        style,
+        exitSec,
+        gen,
+        flags.nextSlide || null,
+        done
+      );
+      return;
+    }
+    if (motionStyleIsEncore(style)) {
+      encoreRunExit(
+        slide,
+        style,
+        exitSec,
+        gen,
+        !!flags.isLastInSegment,
+        done
+      );
+      return;
+    }
+    const plate = heroMotionEl();
+    const useZoom = motionStyleUsesZoom(style);
+    const zMin = useZoom
+      ? style.zoomMin != null
+        ? style.zoomMin
+        : 0.93
+      : 1;
+    engineApplyCssDurations(style.punchIn, exitSec);
+
+    // Highlight → secondary color on Punch-Out clock (same as image/veil exit)
+    engineHighlightFadeOut(exitSec);
+
+    if (!plate || plate.hidden) {
+      afterMs(exitSec * 1000, gen, done);
+      return;
+    }
+
+    const anim = plate.querySelector ? plate.querySelector(".hero-anim") : null;
+    const opSec = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
+    plate.classList.remove("is-kb-in");
+    plate.style.transition =
+      "opacity " + opSec + "s var(--ease-fade, ease)";
+    if (useZoom && anim) {
+      anim.style.transition =
+        "transform " + exitSec + "s var(--ease-fade, ease)";
+      plate.style.setProperty("--hero-zoom", String(zMin));
+    } else {
+      if (anim) anim.style.transition = "none";
+      plate.style.setProperty("--hero-zoom", "1");
+    }
+    plate.style.opacity = "0";
+    setFeatureActive("kenBurns", false, "engine punch-out");
+
+    afterMs(exitSec * 1000, gen, function () {
+      if (anim) anim.style.transition = "";
+      plate.style.transition = "";
+      plate.classList.remove("visible");
+      done();
+    });
+  }
+
+  /**
+   * One Animation Block. Phases: entrance → Hold → exit → next.
+   * Segment boundary (Alpha → Drinks box, etc.): last exit uses Wind-down
+   * override (or Punch-out); first entrance uses Wind-up (or Punch-in).
+   * Works when both segments are Slideshow, or Slideshow → Ken Burns, etc.
+   */
+  let _motionEngineColdStart = false;
+
+  function motionEngineRunBlock(index, gen) {
+    if (gen !== _motionEngineGen || !_motionEngineRunning) return;
+    if (!slides.length) return;
+
+    const i = ((index % slides.length) + slides.length) % slides.length;
+    const slide = slides[i];
+    if (!slide) return;
+
+    activeIndex = i;
+
+    const prevSlide =
+      slides.length > 1
+        ? slides[(i - 1 + slides.length) % slides.length]
+        : null;
+    const nextSlide =
+      slides.length > 1 ? slides[(i + 1) % slides.length] : null;
+
+    // Cold start: first block of the run gets segment-first entrance (Encore Wind-up / FP)
+    const cold = _motionEngineColdStart;
+    _motionEngineColdStart = false;
+
+    // First of segment OR cold start. After FP overview, next Encore bow is NOT
+    // first (prev is portrait, same segment) → Punch-In only (compose).
+    const isFirstInSegment =
+      cold || !prevSlide || isPresSegmentBoundary(prevSlide, slide);
+    const isLastInSegment =
+      !nextSlide || isPresSegmentBoundary(slide, nextSlide);
+
+    const styleName = motionStyleNameForSlide(slide);
+    const style = getMotionStyle(styleName);
+    // FP overview uses same phase digits as the segment's motion style
+    const entranceSec = engineEntranceSec(style, isFirstInSegment);
+    // Encore (and FP attached to Encore): optional Hold scale; KB/Slideshow use sheet Hold as-is
+    const holdSec = motionStyleIsEncore(style)
+      ? encoreHoldSeconds(style.hold)
+      : style.hold;
+    const exitSec = engineExitSec(style, isLastInSegment);
+
+    _prevBoardSlide = slide;
+    _prevBoardSlideType = slide.type || "";
+    _activeSegmentMode =
+      slide.segmentMode === "encore" ? "encore" : "slideshow";
+
+    tokiInfo(
+      "motion block",
+      i + 1 + "/" + slides.length,
+      "type=",
+      slide.type,
+      "seg=",
+      slide.segment + (slide.boxKey ? ":" + slide.boxKey : ""),
+      "motionStyle=",
+      styleName,
+      "fp=",
+      slide.type === "portrait" ? "yes" : "no",
+      "encore=",
+      motionStyleIsEncore(style) ? "yes" : "no",
+      "first=",
+      isFirstInSegment,
+      "last=",
+      isLastInSegment,
+      "in=",
+      entranceSec,
+      "hold=",
+      holdSec,
+      "out=",
+      exitSec
+    );
+
+    motionRunEntrance(
+      slide,
+      style,
+      entranceSec,
+      gen,
+      function () {
+        if (gen !== _motionEngineGen) return;
+        kenBurnsRunHold(holdSec, gen, function () {
+          if (gen !== _motionEngineGen) return;
+          motionRunExit(
+            slide,
+            style,
+            exitSec,
+            gen,
+            function () {
+              if (gen !== _motionEngineGen || !_motionEngineRunning) return;
+              motionEngineRunBlock(i + 1, gen);
+            },
+            {
+              isLastInSegment: isLastInSegment,
+              nextSlide: nextSlide,
+            }
+          );
+        });
+      },
+      { isFirstInSegment: isFirstInSegment }
+    );
+  }
+
+  function startMotionEngineAt(index) {
+    stopMotionEngine();
+    if (!usesBoardSlides() || !slides.length) return;
+    if (isDrinks) return;
+    _motionEngineRunning = true;
+    _motionEngineColdStart = true;
+    const gen = ++_motionEngineGen;
+    const i = ((index % slides.length) + slides.length) % slides.length;
+    tokiInfo("motion engine START at", i, "blocks=", slides.length);
+    motionEngineRunBlock(i, gen);
+  }
+
+  /**
+   * After a step's Presentation Speed elapses: finish leaving the current
+   * slide (serialized Wind-down), then advance. Next step clock starts only
+   * after the next slide is painted (setActiveBoardSlides → note…).
+   */
+  function leaveCurrentSlideThen(done) {
+    if (typeof done !== "function") return;
+    // Static quarantine: no between-step Wind-down delays
+    if (isPresentationStatic()) {
+      done();
+      return;
+    }
+    if (!usesBoardSlides() || !slides.length) {
+      done();
+      return;
+    }
+    const cur = slides[activeIndex];
+    const next = slides[(activeIndex + 1) % slides.length];
+    if (!cur || !next) {
+      done();
+      return;
+    }
+
+    // Collage→collage different blocks: setActiveBoardSlides runs handoff
+    if (needsSameStageBlockHandoff(cur, next)) {
+      done();
+      return;
+    }
+
+    // Same collage surface continues (FP lineup → first Encore bow, bow→bow)
+    if (
+      isCollageBlockSlide(cur) &&
+      isCollageBlockSlide(next) &&
+      animationBlockId(cur) === animationBlockId(next)
+    ) {
+      done();
+      return;
+    }
+
+    // Collage → hero/item (or anything non-collage): Wind-down BETWEEN steps
+    if (isCollageBlockSlide(cur) && !isCollageBlockSlide(next)) {
+      _presHandoffBusy = true;
+      cancelPresentationAdvance();
+      const prevType = cur.type === "encore" ? "encore" : "portrait";
+      const wait = collageWindDownMs(prevType, els.familyPortrait);
+      windDownCollageStage(prevType, false);
+      _skipNextCollageWindDown = true;
+      window.setTimeout(function () {
+        _presHandoffBusy = false;
+        done();
+      }, wait + 40);
+      return;
+    }
+
+    done();
+  }
+
+  function armPresentationStepDeadline(gen) {
+    cancelPresentationAdvance();
+    if (!_presentationRunning) return;
+    const step = presentationStepMs();
+    if (step <= 0) return;
+
+    function fire() {
+      slideshowTimer = null;
+      if (gen !== _presentationStepGen) return;
+      if (!_presentationRunning) return;
+      if (_presHandoffBusy) {
+        slideshowTimer = window.setTimeout(fire, 50);
+        return;
+      }
+      const now =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      const left = step - (now - _presentationStepStartedAt);
+      if (left > 16) {
+        slideshowTimer = window.setTimeout(fire, left);
+        return;
+      }
+      // Step fully elapsed — leave current (Wind-down between steps), then advance
+      leaveCurrentSlideThen(function () {
+        if (gen !== _presentationStepGen) return;
+        if (!_presentationRunning) return;
+        setActive(activeIndex + 1, false);
+      });
+    }
+
+    const now =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const remaining = Math.max(0, step - (now - _presentationStepStartedAt));
+    slideshowTimer = window.setTimeout(fire, remaining);
+  }
+
   function itemHasMultiImages(item) {
     return !!(item && Array.isArray(item.images) && item.images.length > 1);
   }
@@ -10226,6 +11639,7 @@
   function setActive(index, instant) {
     if (isDrinks) {
       setActiveDrinks(index, instant);
+      if (_presentationRunning && !instant) notePresentationStepStart();
       return;
     }
     if (usesBoardSlides()) {
@@ -10263,6 +11677,7 @@
       els.sticker.classList.remove("visible");
       els.sticker.hidden = true;
     }
+    if (_presentationRunning && !instant) notePresentationStepStart();
   }
 
   /**
@@ -10332,9 +11747,10 @@
     const prevType = (prevSlide && prevSlide.type) || "";
     // Encore: hold until full-spread zoom-out lands; next intro may overlap fade.
     // FP / other: classic Punch gap.
+    // Full Wind-down between blocks (not stolen from either step's Hold)
     const gap =
-      prevType === "encore"
-        ? encoreWindDownZoomMs(stage)
+      prevType === "encore" || prevType === "portrait"
+        ? collageWindDownMs(prevType, stage)
         : presentationPunchGapMs(stage);
 
     // Keep last bow veil color through Encore undim (then wind-down clears dim)
@@ -10359,20 +11775,44 @@
 
   function setActiveBoardSlides(index, instant) {
     if (!slides.length) return;
-    // During same-stage collage handoff, ignore timer ticks
-    if (_presHandoffBusy && !instant) return;
 
     const nextIndex =
       ((index % slides.length) + slides.length) % slides.length;
-    const prevSlide = _prevBoardSlide;
     const slide = slides[nextIndex];
     if (!slide) return;
 
-    // Same portrait stage, different Animation Block: Punch-gap handoff only
-    // (Encore→Encore, FP→Encore of another segment, etc.). All other block
-    // boundaries apply immediately so Wind-down overlaps Wind-up like Slideshow.
-    if (!instant && needsSameStageBlockHandoff(prevSlide, slide)) {
+    // Beta Motion engine owns sequencing when running (Ken Burns phases)
+    if (isPresentationEngine()) {
       activeIndex = nextIndex;
+      _prevBoardSlide = slide;
+      _prevBoardSlideType = slide.type || "";
+      _activeSegmentMode =
+        slide.segmentMode === "encore" ? "encore" : "slideshow";
+      if (instant || !_presentationRunning) {
+        // Soft reload / pause: one static frame; engine restarts on startSlideshow
+        applyStaticPresentationSlide(slide);
+        return;
+      }
+      startMotionEngineAt(nextIndex);
+      return;
+    }
+
+    // motionInstant: static quarantine snaps visuals; `instant` still controls step clock
+    const motionInstant = !!instant || isPresentationStatic();
+    // During same-stage collage handoff, ignore timer ticks
+    if (_presHandoffBusy && !motionInstant) return;
+
+    const prevSlide = _prevBoardSlide;
+
+    // Same portrait stage, different Animation Block: Punch-gap handoff only
+    // (Encore→Encore, FP→Encore of another segment, etc.). Skipped in static mode.
+    if (
+      !motionInstant &&
+      needsSameStageBlockHandoff(prevSlide, slide)
+    ) {
+      activeIndex = nextIndex;
+      // Step clock paused until paint — do not arm a short step from handoff start
+      cancelPresentationAdvance();
       _activeSegmentMode =
         prevSlide && prevSlide.segmentMode === "encore"
           ? "encore"
@@ -10385,6 +11825,8 @@
         });
         _prevBoardSlideType = slide.type || "";
         _prevBoardSlide = slide;
+        // Full Presentation Speed for the slide that just painted
+        if (_presentationRunning && !instant) notePresentationStepStart();
       });
       return;
     }
@@ -10399,11 +11841,420 @@
     const isBlockEntry =
       !prevSlide ||
       animationBlockId(prevSlide) !== animationBlockId(slide);
-    applyBoardSlideContent(slide, instant, prevSlide, {
-      isBlockEntry: isBlockEntry && !instant,
+    applyBoardSlideContent(slide, motionInstant, prevSlide, {
+      isBlockEntry: isBlockEntry && !motionInstant,
     });
     _prevBoardSlideType = slide.type || "";
     _prevBoardSlide = slide;
+    // One Presentation Speed from this paint (Encore = Slideshow = FP)
+    if (_presentationRunning && !instant) notePresentationStepStart();
+  }
+
+  /**
+   * STATIC presentation paint — single path for image + highlight (no legacy motion).
+   * Image swap and highlight change happen in the same commit after the asset is ready.
+   * Highlights only use opacity fade (CSS .hl-on).
+   */
+  let _staticPaintGen = 0;
+
+  function staticHighlightColor(isNew) {
+    return isNew
+      ? config.highlightSpecial || config.highlight || "#fff900"
+      : config.highlight || "#26bbcb";
+  }
+
+  /** Clear all list/box/title active rows (snap — use engineHighlightFadeOut for timed color out). */
+  function staticClearHighlights() {
+    const fadeMs = 350;
+    if (els.list) {
+      els.list.querySelectorAll(".menu-item.hl-on, .menu-item.active").forEach(
+        function (node) {
+          node.classList.remove("hl-on", "active");
+          node.style.removeProperty("--item-highlight");
+          node.style.transition = "";
+        }
+      );
+    }
+    ["protein", "sauces", "drinks", "veggies"].forEach(function (key) {
+      const body = boxBodyElByKey(key);
+      if (!body) return;
+      body
+        .querySelectorAll(
+          "[data-box-item-index].hl-on, [data-box-item-index].active"
+        )
+        .forEach(function (node) {
+          node.classList.remove("hl-on", "active");
+          node.style.removeProperty("--item-highlight");
+          node.style.transition = "";
+        });
+    });
+    if (els.title) {
+      els.title.classList.remove("hl-on", "active");
+      els.title.style.removeProperty("--item-highlight");
+      els.title.style.transition = "";
+    }
+    clearFpAlphaHeaderHighlightSnap();
+    clearFpBoxShellHighlightsSnap();
+    return fadeMs;
+  }
+
+  /**
+   * Set highlight color ease duration. Pass style.punchOut (same as fade-out).
+   * Do NOT pass entranceSec / Punch-In — that was the too-slow bug.
+   */
+  function engineArmHighlightIn(sec) {
+    const s =
+      Number.isFinite(Number(sec)) && Number(sec) > 0 ? Number(sec) : 0.45;
+    _highlightColorSec = s;
+    const root = document.documentElement;
+    if (root && root.style) {
+      root.style.setProperty("--motion-highlight", String(s) + "s");
+    }
+  }
+
+  /**
+   * Snap-clear Alpha header FP chrome (body.fp-alpha-header-hl).
+   * Drives header fill + title + logo together via CSS.
+   */
+  function clearFpAlphaHeaderHighlightSnap() {
+    if (!document.body) return;
+    document.body.classList.remove("fp-alpha-header-hl");
+    document.body.style.removeProperty("--item-highlight");
+  }
+
+  /**
+   * Timed clear of Alpha header FP chrome (header/title/logo reverse ease).
+   * Same Punch-Out clock as item highlights — one class drop, simultaneous.
+   */
+  function fadeFpAlphaHeaderHighlight(sec) {
+    if (!document.body || !document.body.classList.contains("fp-alpha-header-hl")) {
+      return;
+    }
+    const s =
+      Number.isFinite(Number(sec)) && Number(sec) > 0 ? Number(sec) : 0.45;
+    const ms = Math.round(s * 1000) + 40;
+    void document.body.offsetWidth;
+    document.body.classList.remove("fp-alpha-header-hl");
+    window.setTimeout(function () {
+      if (document.body) {
+        document.body.style.removeProperty("--item-highlight");
+      }
+    }, ms);
+  }
+
+  /**
+   * Alpha Family Portrait (header mode): simultaneous Punch-Out ease —
+   *   frame-header fill → Highlight
+   *   #menu-title + #logo → Secondary
+   * One body class; never Special. See FP_ALPHA_OVERVIEW_HL.
+   */
+  function armAlphaHeaderHighlight() {
+    if (!document.body) return;
+    const color = config.highlight || "#26bbcb";
+    // Title-mode classes off (header mode paints title via body class → Secondary)
+    if (els.title) {
+      els.title.classList.remove("hl-on", "active");
+      els.title.style.removeProperty("--item-highlight");
+      els.title.style.transition = "";
+    }
+    clearFpAlphaHeaderHighlightSnap();
+    document.body.style.setProperty("--item-highlight", color);
+    void document.body.offsetWidth;
+    document.body.classList.add("fp-alpha-header-hl");
+  }
+
+  /** Snap-clear box shell FP chrome (no transition). */
+  function clearFpBoxShellHighlightsSnap() {
+    const boxes = document.querySelectorAll(".info-box.fp-shell-hl");
+    for (let i = 0; i < boxes.length; i++) {
+      boxes[i].classList.remove("fp-shell-hl");
+      boxes[i].style.removeProperty("--item-highlight");
+    }
+  }
+
+  /**
+   * Timed clear of box shell FP chrome (fill eases Highlight → secondary via CSS).
+   * Same Punch-Out clock as text highlight fade-out.
+   */
+  function fadeFpBoxShellHighlights(sec) {
+    const s =
+      Number.isFinite(Number(sec)) && Number(sec) > 0 ? Number(sec) : 0.45;
+    const ms = Math.round(s * 1000) + 40;
+    const boxes = document.querySelectorAll(".info-box.fp-shell-hl");
+    for (let i = 0; i < boxes.length; i++) {
+      const el = boxes[i];
+      void el.offsetWidth;
+      el.classList.remove("fp-shell-hl");
+      window.setTimeout(
+        (function (node) {
+          return function () {
+            node.style.removeProperty("--item-highlight");
+          };
+        })(el),
+        ms
+      );
+    }
+  }
+
+  /**
+   * Box-segment Family Portrait: ease shell-outer shape → Highlight color.
+   * Leaves box titles / body text alone. Never Special.
+   */
+  function armBoxShellHighlight(boxKey) {
+    const boxEl = boxRootElByKey(boxKey);
+    if (!boxEl) return;
+    const color = config.highlight || "#26bbcb";
+    clearFpBoxShellHighlightsSnap();
+    boxEl.style.setProperty("--item-highlight", color);
+    // Start at base fill (secondary), then add class so fill transitions
+    void boxEl.offsetWidth;
+    boxEl.classList.add("fp-shell-hl");
+  }
+
+  /**
+   * Family Portrait overview chrome (adaptive):
+   *   Alpha → FP_ALPHA_OVERVIEW_HL:
+   *             "header" = fill→Highlight + title/logo→Secondary (simultaneous)
+   *             "title"  = menu title text→Highlight only
+   *   Box   → that box's shell shape → Highlight (title text untouched)
+   * Timing: Punch-Out color ease (same as item highlights). Never Special.
+   */
+  function armFpOverviewHighlight(slide) {
+    if (slide && slide.segment === "box" && slide.boxKey) {
+      clearFpAlphaHeaderHighlightSnap();
+      armBoxShellHighlight(slide.boxKey);
+      return;
+    }
+    if (fpAlphaOverviewIsHeader()) {
+      armAlphaHeaderHighlight();
+    } else {
+      clearFpAlphaHeaderHighlightSnap();
+      armMenuTitleHighlight();
+    }
+  }
+
+  /**
+   * Alpha Family Portrait (title mode): #menu-title → Highlight color.
+   * Same color ease + Punch-Out duration as list/box item highlights.
+   */
+  function armMenuTitleHighlight() {
+    if (!els.title) return;
+    const color = config.highlight || "#26bbcb";
+    staticArmHighlightNode(els.title, color);
+  }
+
+  function staticArmHighlightNode(node, color) {
+    if (!node) return;
+    const sec =
+      Number.isFinite(_highlightColorSec) && _highlightColorSec > 0
+        ? _highlightColorSec
+        : 0.45;
+    // COLOR only — reverse of engineHighlightFadeOut (never opacity)
+    node.style.opacity = "";
+    node.style.setProperty("--item-highlight", color);
+    node.classList.remove("hl-on", "active");
+    node.style.transition = "none";
+    void node.offsetWidth;
+    node.style.transition =
+      "color " + sec + "s var(--ease-fade, cubic-bezier(0.4, 0, 0.2, 1))";
+    void node.offsetWidth;
+    node.classList.add("active", "hl-on");
+    window.setTimeout(function () {
+      if (node.classList.contains("active")) {
+        node.style.transition = "";
+      }
+    }, Math.round(sec * 1000) + 40);
+  }
+
+  function staticSetListHighlight(itemIndex, isNew) {
+    if (!els.list || itemIndex == null || itemIndex < 0) return;
+    // Item highlight replaces FP alpha chrome / box-shell chrome
+    if (els.title) {
+      els.title.classList.remove("hl-on", "active");
+      els.title.style.removeProperty("--item-highlight");
+      els.title.style.transition = "";
+    }
+    clearFpAlphaHeaderHighlightSnap();
+    clearFpBoxShellHighlightsSnap();
+    const color = staticHighlightColor(isNew);
+    els.list.querySelectorAll(".menu-item").forEach(function (node, i) {
+      const on = i === itemIndex;
+      if (on) {
+        staticArmHighlightNode(node, color);
+      } else {
+        node.classList.remove("hl-on", "active");
+        node.style.removeProperty("--item-highlight");
+      }
+    });
+  }
+
+  function staticSetBoxHighlight(boxKey, itemIndex, isNew) {
+    staticClearHighlights();
+    if (!boxKey || itemIndex == null || itemIndex < 0) return;
+    const body = boxBodyElByKey(boxKey);
+    if (!body) return;
+    const color = staticHighlightColor(isNew);
+    body.querySelectorAll("[data-box-item-index]").forEach(function (node) {
+      const on = Number(node.dataset.boxItemIndex) === itemIndex;
+      if (on) {
+        staticArmHighlightNode(node, color);
+      } else {
+        node.classList.remove("hl-on", "active");
+        node.style.removeProperty("--item-highlight");
+      }
+    });
+  }
+
+  /** Snap hero image to item (no motion). Calls done() when visible (or no image). */
+  function staticPaintHero(item, done) {
+    const plate = els.heroPlate;
+    const img = els.hero;
+    finishHideFamilyPortrait();
+    applyEncoreSpotlightChrome(null, { forceClear: true });
+
+    if (!plate || !img || cfg.showHero === false) {
+      if (typeof done === "function") done();
+      return;
+    }
+
+    if (!item || !(item.image || itemHasMultiImages(item))) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      if (typeof done === "function") done();
+      return;
+    }
+
+    clearHeroMultiLattice(plate);
+    setHeroZoom(1, "snap");
+    plate.style.transition = "none";
+    plate.style.opacity = "1";
+    plate.hidden = false;
+    plate.classList.add("visible");
+    img.style.visibility = "";
+
+    const wantSticker = !!(item.isNew && config && config.showSticker !== false);
+    applyPlateSticker(wantSticker);
+
+    if (itemHasMultiImages(item)) {
+      applyHeroMultiLattice(item, plate);
+      if (typeof done === "function") done();
+      return;
+    }
+
+    const src = item.image;
+    const finish = function () {
+      if (typeof done === "function") done();
+    };
+
+    if (
+      img.getAttribute("src") === src &&
+      img.complete &&
+      img.naturalWidth > 0
+    ) {
+      finish();
+      return;
+    }
+
+    img.onload = function () {
+      img.onload = null;
+      img.onerror = null;
+      finish();
+    };
+    img.onerror = function () {
+      img.onload = null;
+      img.onerror = null;
+      hideHeroPlate({ clearSrc: true, instant: true });
+      finish();
+    };
+    attachWebpFallback(img);
+    img.dataset.downsampled = "";
+    img.src = src;
+    // Cached complete may not re-fire onload
+    if (img.complete && img.naturalWidth > 0) {
+      img.onload = null;
+      img.onerror = null;
+      finish();
+    }
+  }
+
+  /**
+   * Static presentation: one atomic paint for the step.
+   * Highlight is applied only when the visual for this step is ready (same frame).
+   */
+  function applyStaticPresentationSlide(slide) {
+    const gen = ++_staticPaintGen;
+    _activeSegmentMode =
+      slide.segmentMode === "encore" ? "encore" : "slideshow";
+    applyEncoreSpotlightChrome(null, { forceClear: true });
+
+    const isBoxSeg = slide.segment === "box";
+    const textOnly =
+      (slide.type === "item" || slide.type === "encore") &&
+      (!!slide.textOnly || !slide.image);
+
+    // --- Portrait overview: Alpha title | Box shell chrome (Highlight color) ---
+    if (slide.type === "portrait") {
+      staticClearHighlights();
+      engineArmHighlightIn(0.45);
+      armFpOverviewHighlight(slide);
+      hideHeroPlate({ clearSrc: true, instant: true });
+      showFamilyPortrait(slide.items || [], true, {});
+      if (cfg.showSticker !== false) updateSticker({ isNew: false }, true);
+      return;
+    }
+
+    // --- Item / encore: one hero (or collage cast without motion) + highlight together ---
+    const item = resolvePresItem(slide.itemIndex, slide) || {
+      image: slide.image,
+      images: slide.images || (slide.image ? [slide.image] : null),
+      isNew: !!slide.isNew,
+    };
+
+    // Encore-with-cast in static: still show collage snap + highlight (no bows)
+    const useCollage =
+      slide.type === "encore" &&
+      slide.withPortrait !== false &&
+      slide.items &&
+      slide.items.length > 0 &&
+      !textOnly;
+
+    const applyHighlight = function () {
+      if (gen !== _staticPaintGen) return;
+      if (isBoxSeg) {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else if (slide.itemIndex != null && slide.itemIndex >= 0) {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      } else {
+        staticClearHighlights();
+      }
+    };
+
+    if (useCollage) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      showFamilyPortrait(slide.items, true, {});
+      // Collage is sync; highlight same turn
+      applyHighlight();
+      if (cfg.showSticker !== false) updateSticker({ isNew: false }, true);
+      return;
+    }
+
+    if (textOnly || !item.image) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      finishHideFamilyPortrait();
+      applyHighlight();
+      if (cfg.showSticker !== false) updateSticker(item, true);
+      return;
+    }
+
+    // Wait for image, then highlight in the same done() — keeps them in lockstep
+    staticPaintHero(item, function () {
+      if (gen !== _staticPaintGen) return;
+      applyHighlight();
+      if (cfg.showSticker !== false) updateSticker(item, true);
+    });
   }
 
   /**
@@ -10415,6 +12266,13 @@
    */
   function applyBoardSlideContent(slide, instant, prevSlide, opts) {
     opts = opts || {};
+
+    // Real static architecture path — not a thin gate over legacy motion
+    if (isPresentationStatic()) {
+      applyStaticPresentationSlide(slide);
+      return;
+    }
+
     const prevType = (prevSlide && prevSlide.type) || _prevBoardSlideType || "";
     const isBoxSeg = slide.segment === "box";
     const segMode =
@@ -10433,18 +12291,30 @@
     const prevIsCollage =
       prevType === "portrait" || prevType === "encore";
 
-    // Encore/FP Wind-down must start *before* we flip segment mode, so veil
-    // classes stay on for Punch-out undim. Same-stage collage handoffs already
-    // ran beginCollageBlockHandoff with the previous mode held.
+    // Collage Wind-down: usually already ran between steps (leaveCurrentSlideThen).
+    // Only run here if something advanced without that path (instant / cold).
     if (prevIsCollage && !nextIsCollage) {
-      windDownCollageStage(prevType, !!instant);
+      if (_skipNextCollageWindDown) {
+        _skipNextCollageWindDown = false;
+      } else if (!instant) {
+        windDownCollageStage(prevType, false);
+      } else {
+        windDownCollageStage(prevType, true);
+      }
     }
 
     _activeSegmentMode = segMode;
 
-    // Encore chrome for THIS segment (independent of Alpha Presentation Mode).
-    // Do not pass a dummy item — preserve Special veil color during bow zoom-out.
-    applyEncoreSpotlightChrome(null);
+    // Veil only on Encore *bows* (and never in static quarantine).
+    if (
+      !isPresentationStatic() &&
+      slide.type === "encore" &&
+      !textOnly
+    ) {
+      applyEncoreSpotlightChrome(null);
+    } else {
+      applyEncoreSpotlightChrome(null, { forceClear: true });
+    }
 
     // —— Highlights ——
     const deferEncoreListHighlight =
@@ -10478,7 +12348,22 @@
           !deferEncoreListHighlight &&
           (slide.type === "item" || slide.type === "encore") &&
           i === slide.itemIndex;
-        node.classList.toggle("active", on);
+        if (isPresentationStatic()) {
+          if (on) {
+            node.style.opacity = "0.35";
+            node.classList.add("active");
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                node.style.opacity = "1";
+              });
+            });
+          } else {
+            node.classList.remove("active");
+            node.style.opacity = "";
+          }
+        } else {
+          node.classList.toggle("active", on);
+        }
         if (on) {
           const item = items[slide.itemIndex];
           const color =
@@ -10568,13 +12453,10 @@
             }, introMs);
           } else {
             showFamilyPortrait(slide.items, instant, { settle: true });
-            // After lineup portrait: short gap OK. Within bows: full punch-out/in.
-            // Never treat cold "" as instant when surface is ready (Wind-up case handled above).
+            // Same Punch gap every bow (incl. first after FP). Only hard instant
+            // paint skips the blackout — never a special “first item longer” path.
             setPortraitSpotlight(slide.itemIndex, {
-              instant:
-                !!instant ||
-                prevType === "portrait" ||
-                (prevType === "" && !_presSurfaceReady),
+              instant: !!instant,
             });
           }
         }
@@ -10697,6 +12579,8 @@
   }
 
   function heroKenBurnsOn() {
+    // Static quarantine: no Ken Burns until Beta motion engine
+    if (isPresentationStatic()) return false;
     return config.slideshowKenBurns !== false && !isDrinks;
   }
 
@@ -10776,6 +12660,8 @@
     const img = els.hero;
     const plate = heroMotionEl();
     if (!img || !plate) return;
+    // Static quarantine: snap image only (no fade/zoom choreography)
+    if (isPresentationStatic()) instant = true;
     const multi = itemHasMultiImages(item);
     if (!item || (!item.image && !multi)) {
       hideHeroPlate({ clearSrc: true });
@@ -10955,13 +12841,23 @@
   }
 
   /** Board "Presentation Mode" dropdown: Slideshow | Encore */
+  /**
+   * Presentation Mode from Settings: slideshow | encore | kenburns
+   * Maps to Motion Style via presentationModeToStructureAndMotion().
+   */
   function parsePresentationMode(raw, fallback) {
-    const fb = fallback === "encore" ? "encore" : "slideshow";
+    const fb =
+      fallback === "encore"
+        ? "encore"
+        : fallback === "kenburns"
+          ? "kenburns"
+          : "slideshow";
     if (raw === undefined || raw === null || String(raw).trim() === "") {
       return fb;
     }
     const s = String(raw).trim().toLowerCase();
     if (s.indexOf("encore") !== -1) return "encore";
+    if (s.indexOf("ken") !== -1 && s.indexOf("burn") !== -1) return "kenburns";
     if (s.indexOf("slide") !== -1) return "slideshow";
     return fb;
   }
@@ -11032,6 +12928,11 @@
       if (items.length) setActive(activeIndex, false);
       return;
     }
+    // Ken Burns engine starts in startSlideshow — no legacy opening paint
+    if (isPresentationEngine()) {
+      tokiInfo("Ken Burns engine will open from startSlideshow");
+      return;
+    }
     const slide = slides[activeIndex] || slides[0];
     if (!slide) return;
     // Treat as block entry with no previous block so Wind-up treatments run
@@ -11044,38 +12945,72 @@
   }
 
   function startSlideshow() {
-    if (slideshowTimer) clearInterval(slideshowTimer);
-    slideshowTimer = null;
+    cancelPresentationAdvance();
+    stopMotionEngine();
     const count = isDrinks || usesBoardSlides() ? slides.length : items.length;
-    if (count <= 1) return;
+    if (count <= 1) {
+      _presentationRunning = false;
+      updateDebugVisuals();
+      return;
+    }
+
+    // Motion engine: each segment uses its Presentation Mode → Motion Style
+    // (Slideshow vs Ken Burns vs Encore). Digits from Beta Motion table.
+    if (isPresentationEngine() && usesBoardSlides() && !isDrinks) {
+      const sample = getMotionStyle(
+        motionStyleNameForSlide(slides[activeIndex] || slides[0])
+      );
+      if (!(sample.hold > 0) && !(sample.punchIn > 0)) {
+        _presentationRunning = false;
+        tokiInfo("motion engine paused (Hold and Punch-In are 0)");
+        updateDebugVisuals();
+        return;
+      }
+      _presentationRunning = true;
+      startMotionEngineAt(activeIndex);
+      tokiInfo(
+        "motion engine START",
+        "blocks=",
+        count,
+        "sampleStyle=",
+        sample.name,
+        "punchIn=",
+        sample.punchIn,
+        "hold=",
+        sample.hold,
+        "punchOut=",
+        sample.punchOut,
+        "zoom=",
+        motionStyleUsesZoom(sample) ? "yes" : "no"
+      );
+      updateDebugVisuals();
+      return;
+    }
+
     const sec = parseSlideshowSpeed(config.slideshowSpeed, 3);
     // 0 = hold on current slide (Style → Presentation Speed)
     if (sec <= 0) {
+      _presentationRunning = false;
       tokiInfo("presentation paused (Presentation Speed =", sec, ")");
+      updateDebugVisuals();
       return;
     }
-    const ms = sec * 1000;
-    slideshowTimer = setInterval(function () {
-      if (_presHandoffBusy) return; // don't skip during Wind-down
-      setActive(activeIndex + 1, false);
-    }, ms);
+    _presentationRunning = true;
+    notePresentationStepStart();
     tokiInfo(
-      "presentation every",
+      "presentation step=",
       sec,
-      "s (",
+      "s (static/legacy; ",
       count,
-      "steps, mode=",
-      config.presentationMode || "slideshow",
-      ")"
+      "steps)"
     );
     updateDebugVisuals();
   }
 
   function stopSlideshow() {
-    if (slideshowTimer) {
-      clearInterval(slideshowTimer);
-      slideshowTimer = null;
-    }
+    _presentationRunning = false;
+    stopMotionEngine();
+    cancelPresentationAdvance();
     updateDebugVisuals();
   }
 
@@ -12080,6 +14015,21 @@
   // ---------- boot ----------
 
   async function init() {
+    if (isPresentationStatic()) {
+      document.body.classList.add("presentation-static");
+      tokiInfo(
+        "presentation motion: STATIC quarantine",
+        "docs/MOTION_QUARANTINE.md"
+      );
+    } else if (isPresentationEngine()) {
+      document.body.classList.add("presentation-engine");
+      document.body.classList.remove("presentation-static");
+      // Defaults until Beta Motion row loads
+      applyMotionStylesConfig({});
+      tokiInfo(
+        "presentation motion: ENGINE (Ken Burns from Beta Motion table)"
+      );
+    }
     if (isPreviewWall()) {
       document.documentElement.classList.add("preview-wall");
       document.body.classList.add("preview-wall");
