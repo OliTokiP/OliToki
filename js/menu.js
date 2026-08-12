@@ -95,12 +95,15 @@
     return String(FP_ALPHA_OVERVIEW_HL || "header").toLowerCase() !== "title";
   }
 
-  /** Defaults if Beta Motion row missing (seconds). */
+  /**
+   * Defaults only if Beta Features → Motion row is missing.
+   * Must match live Motion grid (Ken Burns / Slideshow rows), not invent longer holds.
+   */
   const MOTION_DEFAULTS_KEN_BURNS = {
     name: "Ken Burns",
     windUp: 0,
     punchIn: 3.4,
-    hold: 3,
+    hold: 1,
     punchOut: 0.45,
     windDown: 0,
     zoomMin: 0.93,
@@ -112,7 +115,7 @@
     name: "Slideshow",
     windUp: 0,
     punchIn: 3.4,
-    hold: 3,
+    hold: 1,
     punchOut: 0.45,
     windDown: 0,
     zoomMin: 1,
@@ -418,6 +421,33 @@
     isNew: 6,
     image: 7,
     include: 8,
+  };
+
+  /**
+   * Board 4 Announcements tab (gid 149404218) — Settings + message Inventory.
+   * Settings: Title | Include Footer Box (singular) | BG Color |
+   *           BG Pattern | Pattern Color 1 | Pattern Color 2
+   * Inventory (headers under Settings data; may omit "Inventory" label):
+   *   Announcement Title | Subtitle | Text | Box Color | Speed |
+   *   Motion Style | Motion Setting
+   */
+  const ANNOUNCEMENTS_REVISED_GID = "149404218";
+  const ANN_REVISED_SETTINGS = {
+    title: 0,
+    includeFooterBox: 1, // singular: "Drinks" | "Proteins" | "Sauces" | "Veggies" | blank/none
+    bgColor: 2,
+    bgPattern: 3,
+    patternColor1: 4,
+    patternColor2: 5,
+  };
+  const ANN_REVISED_INVENTORY = {
+    announcementTitle: 0,
+    announcementSubtitle: 1,
+    announcementCopy: 2,
+    announcementColor: 3,
+    announcementSpeed: 4,
+    motionStyle: 5,
+    motionSetting: 6,
   };
 
   /**
@@ -787,8 +817,17 @@
     bg: null,
     createColumns: false, // default: balanced wrap (legacy sodas)
     textAlign: "center",
+    priority: FOOTER_PRIORITY_DEFAULTS.drinks,
+    includeInPresentation: false,
+    familyPortrait: false,
+    presentationMode: "slideshow",
   };
-  /** Slideshow slides for drinks: overview + individuals */
+  /**
+   * Board 4 selected footer content key (protein|sauces|drinks|veggies).
+   * Content paints into #drink-options-box; presentation is box-only (no Alpha).
+   */
+  let _board4FooterKey = "drinks";
+  /** Slideshow / motion slides (boards 1–3 multi-segment; Board 4 box-only) */
   let slides = [];
   let activeIndex = 0;
   /** Active presentation segment mode ("slideshow"|"encore") — Box Menus may differ from Alpha */
@@ -1288,16 +1327,199 @@
   }
 
   /**
-   * Parse the central Beta Features tab (used only as fallback).
-   * Supports the "Boards" → "Include Footer Boxes" comma-separated list.
-   * Values are case-sensitive titles matching the box Settings Title cells.
-   * (Primary source is now the per-board Settings row "Include Footer Boxes" cell.)
+   * Beta Features → Veil Shadow Settings (Hard spotlight cutout only).
+   * Off = collage plates keep their one drop-shadow (as-is).
+   * On  = plates shadow off; Hard veil uses drop-shadow (sheet row under headers).
+   * Blank cells keep these defaults. Soft spotlight never gets a veil shadow.
+   */
+  const VEIL_SHADOW_DEFAULTS = {
+    enabled: false,
+    shiftRight: 18,
+    shiftDown: 22,
+    spread: 3,
+    blur: 2,
+    opacity: 0.5,
+  };
+
+  /** Hard Encore hole pinch — hardcoded (was Beta Pinch? / Pinch by: / Pinch out?). */
+  const ENCORE_HOLE_PINCH_PX = 40;
+  const ENCORE_HOLE_PINCH_OUT = false;
+
+  let veilShadowSettings = Object.assign({}, VEIL_SHADOW_DEFAULTS);
+
+  function parseVeilShadowLength(raw, fallback) {
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fallback;
+    }
+    // "20 px" / "20px" / 20
+    const n = parseFloat(String(raw).replace(/,/g, ""));
+    if (!Number.isFinite(n)) return fallback;
+    return n;
+  }
+
+  function veilShadowHeaderKey(s) {
+    return String(s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[?:]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function parseVeilShadowOpacity(raw, fallback) {
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fallback;
+    }
+    let n = Number(raw);
+    if (!Number.isFinite(n)) return fallback;
+    if (n > 1) n = n / 100;
+    if (n < 0) n = 0;
+    if (n > 1) n = 1;
+    return n;
+  }
+
+  function parseVeilShadowSettings(rows) {
+    const out = Object.assign({}, VEIL_SHADOW_DEFAULTS);
+    if (!rows || !rows.length) return out;
+
+    let headerIdx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const a = String(cell(rows[i], 0) || "").trim().toLowerCase();
+      if (a === "veil shadow settings") {
+        for (let j = i + 1; j < Math.min(i + 6, rows.length); j++) {
+          if (String(cell(rows[j], 0) || "").trim().toLowerCase() === "enabled?") {
+            headerIdx = j;
+            break;
+          }
+        }
+        break;
+      }
+      if (
+        a === "enabled?" &&
+        String(cell(rows[i], 1) || "")
+          .trim()
+          .toLowerCase()
+          .indexOf("shift") !== -1
+      ) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx < 0) return out;
+
+    const header = rows[headerIdx] || [];
+    const data = rows[headerIdx + 1] || [];
+    const col = {};
+    for (let c = 0; c < header.length; c++) {
+      const key = veilShadowHeaderKey(header[c]);
+      if (key) col[key] = c;
+    }
+
+    function colVal(name, fallbackIdx) {
+      const key = veilShadowHeaderKey(name);
+      const idx = col[key] != null ? col[key] : fallbackIdx;
+      return cell(data, idx);
+    }
+
+    out.enabled = parseYesNo(colVal("enabled", 0), false);
+    out.shiftRight = parseVeilShadowLength(
+      colVal("shift right", 1),
+      VEIL_SHADOW_DEFAULTS.shiftRight
+    );
+    out.shiftDown = parseVeilShadowLength(
+      colVal("shift down", 2),
+      VEIL_SHADOW_DEFAULTS.shiftDown
+    );
+    out.spread = Math.max(
+      0,
+      parseVeilShadowLength(colVal("spread", 3), VEIL_SHADOW_DEFAULTS.spread)
+    );
+    out.blur = Math.max(
+      0,
+      parseVeilShadowLength(colVal("blur", 4), VEIL_SHADOW_DEFAULTS.blur)
+    );
+    out.opacity = parseVeilShadowOpacity(
+      colVal("opacity", 5),
+      VEIL_SHADOW_DEFAULTS.opacity
+    );
+    return out;
+  }
+
+  /** drop-shadow follows veil alpha (Hard hole). Spread is faked — CSS filter has no spread. */
+  function buildVeilShadowFilter(s) {
+    const x = Number(s.shiftRight) || 0;
+    const y = Number(s.shiftDown) || 0;
+    const blur = Math.max(0, Number(s.blur) || 0);
+    const spread = Math.max(0, Number(s.spread) || 0);
+    const opacity = Math.max(0, Math.min(1, Number(s.opacity)));
+    const color = "rgba(0, 0, 0, " + opacity + ")";
+    const layers = [];
+    if (spread > 0) {
+      const step = Math.max(1, Math.round(spread));
+      layers.push("drop-shadow(" + (x + step) + "px " + y + "px 0 " + color + ")");
+      layers.push("drop-shadow(" + (x - step) + "px " + y + "px 0 " + color + ")");
+      layers.push("drop-shadow(" + x + "px " + (y + step) + "px 0 " + color + ")");
+      layers.push("drop-shadow(" + x + "px " + (y - step) + "px 0 " + color + ")");
+    }
+    layers.push(
+      "drop-shadow(" + x + "px " + y + "px " + blur + "px " + color + ")"
+    );
+    return layers.join(" ");
+  }
+
+  function applyVeilShadowConfig(settings) {
+    veilShadowSettings = Object.assign(
+      {},
+      VEIL_SHADOW_DEFAULTS,
+      settings && typeof settings === "object" ? settings : {}
+    );
+    const on = !!veilShadowSettings.enabled;
+    const root = document.documentElement;
+    if (root) root.classList.toggle("beta-veil-shadow", on);
+    if (document.body) document.body.classList.toggle("beta-veil-shadow", on);
+    if (root && root.style) {
+      if (on) {
+        root.style.setProperty(
+          "--veil-shadow-filter",
+          buildVeilShadowFilter(veilShadowSettings)
+        );
+      } else {
+        root.style.removeProperty("--veil-shadow-filter");
+      }
+    }
+    tokiInfo(
+      "Veil Shadow:",
+      on ? "ON (Hard veil; plates shadow off)" : "OFF (collage shadow as-is)",
+      on
+        ? "x/y/spread/blur/op=" +
+            [
+              veilShadowSettings.shiftRight,
+              veilShadowSettings.shiftDown,
+              veilShadowSettings.spread,
+              veilShadowSettings.blur,
+              veilShadowSettings.opacity,
+            ].join("/")
+        : ""
+    );
+  }
+
+  /**
+   * Parse the central Beta Features tab.
+   * Boards → Include Footer Boxes (fallback), Motion table, Veil Shadow Settings.
    */
   function parseBetaFeatures(rows) {
     if (!rows || rows.length < 3) {
-      return { footerBoxes: [], motionStyles: {} };
+      return {
+        footerBoxes: [],
+        motionStyles: {},
+        veilShadow: Object.assign({}, VEIL_SHADOW_DEFAULTS),
+      };
     }
-    const result = { footerBoxes: [], motionStyles: {} };
+    const result = {
+      footerBoxes: [],
+      motionStyles: {},
+      veilShadow: Object.assign({}, VEIL_SHADOW_DEFAULTS),
+    };
 
     // Find "Boards" section (label row, then headers, then data)
     let boardsIdx = -1;
@@ -1328,6 +1550,7 @@
     }
 
     result.motionStyles = parseMotionStylesTable(rows);
+    result.veilShadow = parseVeilShadowSettings(rows);
     return result;
   }
 
@@ -1378,6 +1601,8 @@
       if (
         lower === "boards" ||
         lower === "style and theme" ||
+        lower === "swipe up" ||
+        lower === "veil shadow settings" ||
         lower.indexOf("name of motion") === 0
       ) {
         if (lower.indexOf("name of motion") === 0) continue;
@@ -1404,7 +1629,7 @@
         explanation: String(cell(rows[i], 1) || "").trim(),
         windUp: parseMotionSeconds(cell(rows[i], 2), 0),
         punchIn: parseMotionSeconds(cell(rows[i], 3), 3.4),
-        hold: parseMotionSeconds(cell(rows[i], 4), 3),
+        hold: parseMotionSeconds(cell(rows[i], 4), 1),
         punchOut: parseMotionSeconds(cell(rows[i], 5), 0.45),
         windDown: parseMotionSeconds(cell(rows[i], 6), 0),
         notes: String(cell(rows[i], 7) || "").trim(),
@@ -1478,7 +1703,7 @@
       explanation: s.explanation || "",
       windUp: parseMotionSeconds(s.windUp, 0),
       punchIn: parseMotionSeconds(s.punchIn, 3.4),
-      hold: parseMotionSeconds(s.hold, 3),
+      hold: parseMotionSeconds(s.hold, 1),
       punchOut: parseMotionSeconds(s.punchOut, 0.45),
       windDown: parseMotionSeconds(s.windDown, 0),
       notes: s.notes || "",
@@ -3230,8 +3455,8 @@
       throw new Error("Spreadsheet has no data rows");
     }
 
-    // Drinks board has a dedicated shape
-    if (isDrinks && c.drinksOverview != null) {
+    // Drinks / Announcements board has a dedicated shape (revised or legacy)
+    if (isDrinks) {
       return parsedDrinksFromRows(rows, c);
     }
 
@@ -3485,13 +3710,276 @@
     return n;
   }
 
+  function isAnnouncementsRevisedSheet(rows) {
+    if (
+      String(cfg.googleSheetGid || "") === ANNOUNCEMENTS_REVISED_GID
+    ) {
+      return true;
+    }
+    return !!(
+      rows &&
+      rows[0] &&
+      String(rows[0][0] || "")
+        .trim()
+        .toLowerCase() === "settings"
+    );
+  }
+
+  /**
+   * First inventory data row for Announcements revised tab.
+   * Prefer labeled Inventory section; else headers after Settings data row.
+   */
+  function findAnnouncementInventoryDataStart(rows) {
+    const inv = findRevisedSectionDataStart(rows, "inventory");
+    if (inv >= 0) return inv;
+    const setData = findRevisedSectionDataStart(rows, "settings");
+    if (setData >= 0 && setData + 1 < rows.length) {
+      const hdr = rows[setData + 1] || [];
+      const blob =
+        String(hdr[0] || "") +
+        " " +
+        String(hdr[1] || "") +
+        " " +
+        String(hdr[2] || "");
+      if (/announcement/i.test(blob)) {
+        return setData + 2;
+      }
+    }
+    return 4;
+  }
+
+  /** Normalize Include Footer Box cell → protein|sauces|drinks|veggies|"" */
+  function normalizeFooterBoxSelection(raw) {
+    const s = String(raw || "")
+      .trim()
+      .toLowerCase();
+    if (!s || /^(none|off|0|false|no|-|—)$/i.test(s)) return "";
+    if (/protein/.test(s)) return "protein";
+    if (/sauce/.test(s)) return "sauces";
+    if (/veggie|vegetable|side/.test(s)) return "veggies";
+    if (/drink|soda|beverage/.test(s)) return "drinks";
+    return s;
+  }
+
   function parsedDrinksFromRows(rows, columnMap) {
     const c = columnMap || col;
-    // Walk every data row by original CSV index so Excel row numbers stay aligned
-    // with xlsx styles (G2, G3, …). Each non-empty Announcement Text (G) is one
-    // message-board slide. Title+subtitle are married: blank E inherits both
-    // previous title and subtitle; new E takes F as subtitle (blank F clears).
-    // Blank I inherits previous speed. Rich bold/color live in G runs.
+    if (isAnnouncementsRevisedSheet(rows)) {
+      return parsedAnnouncementsRevisedFromRows(rows);
+    }
+    return parsedDrinksLegacyFromRows(rows, c);
+  }
+
+  /**
+   * Announcements tab (gid 149404218): Settings + message inventory under it.
+   * Each non-empty Announcement Text is one message-board slide.
+   * Title/subtitle married; speed/box-color/shout inherit blanks.
+   * Rich bold/color from the Text cell (xlsx). Motion Style/Setting stored for later.
+   */
+  function parsedAnnouncementsRevisedFromRows(rows) {
+    if (
+      !rows ||
+      !rows.some(function (r) {
+        return r && r.some(function (v) {
+          return v != null && String(v).trim() !== "";
+        });
+      })
+    ) {
+      throw new Error("Announcements sheet has no data rows");
+    }
+
+    const rs = ANN_REVISED_SETTINGS;
+    const inv = ANN_REVISED_INVENTORY;
+    const settingsIdx = findRevisedSectionDataStart(rows, "settings");
+    const settingsRow =
+      settingsIdx >= 0 && settingsIdx < rows.length
+        ? rows[settingsIdx]
+        : rows[2] || rows[0];
+    const settingsExcelRow =
+      settingsIdx >= 0 ? settingsIdx + 1 : 3;
+
+    const invStart = findAnnouncementInventoryDataStart(rows);
+    const messages = [];
+    let lastTitle = "";
+    let lastSubtitle = "";
+    let lastSpeed = Number(config.slideshowSpeed) || 4;
+    let lastShout = false;
+    const DEFAULT_SHAKE_INTENSITY = 0.75;
+    let lastShakeIntensity = DEFAULT_SHAKE_INTENSITY;
+    let lastBgChoice = null;
+    let lastBgFill = null;
+    let lastMotionStyle = "";
+    let lastMotionSetting = null;
+
+    for (let i = invStart; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      const excelRow = i + 1;
+      const copyText = cell(row, inv.announcementCopy);
+      if (copyText == null || String(copyText).trim() === "") continue;
+
+      const ref = cellRef(inv.announcementCopy, excelRow);
+      const font = sheetFonts[ref] || {};
+      const runs = sheetRich[ref] || null;
+      const rawTitle = String(
+        cell(row, inv.announcementTitle) || ""
+      ).trim();
+      const rawSub = String(
+        cell(row, inv.announcementSubtitle) || ""
+      ).trim();
+      let title;
+      let subtitle;
+      if (rawTitle) {
+        title = rawTitle;
+        subtitle = rawSub;
+        lastTitle = title;
+        lastSubtitle = subtitle;
+      } else {
+        title = lastTitle;
+        subtitle = lastSubtitle;
+      }
+
+      const speed = parseAnnouncementSpeed(
+        cell(row, inv.announcementSpeed),
+        lastSpeed
+      );
+      const textAlign = parseTextAlign(font.align, "center");
+
+      // Per-message box color (blank inherits)
+      const colorRef = cellRef(inv.announcementColor, excelRow);
+      const rawColor = String(
+        cell(row, inv.announcementColor) || ""
+      ).trim();
+      const colorFill = sheetFills[colorRef] || null;
+      let bgChoice = lastBgChoice;
+      let bgFill = lastBgFill;
+      if (rawColor || colorFill) {
+        bgChoice = rawColor || null;
+        bgFill = colorFill;
+        lastBgChoice = bgChoice;
+        lastBgFill = bgFill;
+      }
+
+      // Motion Style / Setting — store for upcoming announcement motion (blank inherits style)
+      let motionStyle = lastMotionStyle;
+      const rawMs = String(cell(row, inv.motionStyle) || "").trim();
+      if (rawMs) {
+        motionStyle = rawMs;
+        lastMotionStyle = motionStyle;
+      }
+      let motionSetting = lastMotionSetting;
+      const rawSet = cell(row, inv.motionSetting);
+      if (rawSet != null && String(rawSet).trim() !== "") {
+        const n = Number(rawSet);
+        motionSetting = Number.isFinite(n) ? n : String(rawSet).trim();
+        lastMotionSetting = motionSetting;
+      }
+
+      messages.push({
+        title: title,
+        subtitle: subtitle,
+        text: String(copyText).trim(),
+        speedSec: speed,
+        textAlign: textAlign,
+        shout: !!lastShout,
+        shakeIntensity: lastShakeIntensity,
+        color: announcementFontColor(font.color),
+        bold: !!font.bold,
+        italic: !!font.italic,
+        runs: runs,
+        bgChoice: bgChoice,
+        bgFill: bgFill,
+        motionStyle: motionStyle,
+        motionSetting: motionSetting,
+      });
+      lastSpeed = speed;
+    }
+
+    // Settings: panel FOREGROUND pattern (#stripes), full opacity — not Style #bg-pattern
+    const patternRaw = String(
+      cell(settingsRow, rs.bgPattern) || ""
+    ).trim();
+    const patternOff = /^(none|off|0|false|no|-|—)$/i.test(patternRaw);
+    // Only "stripes" is implemented; blank defaults to on for board 4 continuity
+    const showPanelPattern =
+      !patternOff &&
+      (!patternRaw || /stripe/i.test(patternRaw) || patternRaw === "1");
+
+    const p1Choice =
+      String(cell(settingsRow, rs.patternColor1) || "").trim() || null;
+    const p2Choice =
+      String(cell(settingsRow, rs.patternColor2) || "").trim() || null;
+    const p1Fill =
+      sheetFills[cellRef(rs.patternColor1, settingsExcelRow)] || null;
+    const p2Fill =
+      sheetFills[cellRef(rs.patternColor2, settingsExcelRow)] || null;
+
+    const boardBgChoice =
+      String(cell(settingsRow, rs.bgColor) || "").trim() || null;
+    const boardBgFill =
+      sheetFills[cellRef(rs.bgColor, settingsExcelRow)] || null;
+
+    const footerSel = normalizeFooterBoxSelection(
+      cell(settingsRow, rs.includeFooterBox)
+    );
+
+    const firstMsg = messages[0] || null;
+    const annChoice =
+      (firstMsg && firstMsg.bgChoice) || lastBgChoice || null;
+    const annFill = (firstMsg && firstMsg.bgFill) || lastBgFill || null;
+
+    return {
+      title: String(cell(settingsRow, rs.title) || "").trim(),
+      items: [], // filled by attachBoard4FooterBox from shared box sheets
+      includeFooterBox: footerSel,
+      includeStripes: showPanelPattern,
+      // Panel pattern colors (map to stripe vars at apply)
+      stripeColor1Choice: p1Choice,
+      stripeColor1Fill: p1Fill,
+      stripeColor2Choice: p2Choice,
+      stripeColor2Fill: p2Fill,
+      patternColor1Choice: p1Choice,
+      patternColor2Choice: p2Choice,
+      boardBgColorChoice: boardBgChoice,
+      boardBgColorFill: boardBgFill,
+      announcementBox: {
+        title: firstMsg ? firstMsg.title : "",
+        subtitle: firstMsg ? firstMsg.subtitle : "",
+        messages: messages,
+        lines: firstMsg
+          ? firstMsg.text.split(/\n/).map(function (t) {
+              return {
+                text: t,
+                color: firstMsg.color,
+                bold: firstMsg.bold,
+                italic: firstMsg.italic,
+                runs: null,
+              };
+            })
+          : [],
+        bgChoice: annChoice,
+        bgFill: annFill,
+      },
+      drinkBox: {
+        title: "",
+        subtitle: "",
+        bgChoice: null,
+        bgFill: null,
+        createColumns: false,
+        textAlign: "center",
+      },
+      // Defaults until footer sheet attaches
+      drinksOverview: true,
+      drinksIndividual: true,
+      overviewImage: null,
+    };
+  }
+
+  /**
+   * Legacy Board 4 chrome tab (gid 1962117802) — flat columns.
+   * Walk every data row by original CSV index so Excel rows align with xlsx styles.
+   */
+  function parsedDrinksLegacyFromRows(rows, columnMap) {
+    const c = columnMap || col;
     const dataRows = rows.slice(1);
     if (
       !dataRows.some(
@@ -3511,14 +3999,12 @@
     let lastSubtitle = "";
     let lastSpeed = Number(config.slideshowSpeed) || 4;
     let lastShout = false;
-    /** Baseline shake that matched the baked keyframes before intensity column */
     const DEFAULT_SHAKE_INTENSITY = 0.75;
     let lastShakeIntensity = DEFAULT_SHAKE_INTENSITY;
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
       if (!row) continue;
-      // Excel row 1 = header; dataRows[0] → row 2
       const excelRow = i + 2;
 
       const copyText = cell(row, c.announcementCopy);
@@ -3534,9 +4020,6 @@
           c.announcementSubtitle != null
             ? String(cell(row, c.announcementSubtitle) || "").trim()
             : "";
-        // Title + subtitle are married:
-        // - new title → subtitle = F (blank F clears subtitle)
-        // - blank title → inherit previous title AND subtitle
         let title;
         let subtitle;
         if (rawTitle) {
@@ -3552,9 +4035,7 @@
           c.announcementSpeed != null ? cell(row, c.announcementSpeed) : "",
           lastSpeed
         );
-        // Body align from G cell formatting (xlsx); default center — not titles
         const textAlign = parseTextAlign(font.align, "center");
-        // J Shout: blank inherits previous (default off)
         let shout = lastShout;
         if (c.announcementShout != null) {
           const rawShout = cell(row, c.announcementShout);
@@ -3562,14 +4043,12 @@
             shout = parseYesNo(rawShout, false);
           }
         }
-        // K Shout Shake Intensity: blank inherits; default 0.75 (= current baked look)
         let shakeIntensity = lastShakeIntensity;
         if (c.announcementShakeIntensity != null) {
           const rawI = cell(row, c.announcementShakeIntensity);
           if (rawI != null && String(rawI).trim() !== "") {
             const n = Number(rawI);
             if (Number.isFinite(n) && n >= 0) {
-              // Clamp silly highs; 0 = no shake, 1 = max (crazier than baseline)
               shakeIntensity = Math.min(2, n);
             }
           }
@@ -3582,7 +4061,6 @@
           textAlign: textAlign,
           shout: !!shout,
           shakeIntensity: shakeIntensity,
-          // Cell-level font only used when no rich runs (see paintAnnouncementBody)
           color: announcementFontColor(font.color),
           bold: !!font.bold,
           italic: !!font.italic,
@@ -3614,8 +4092,14 @@
       }
     }
 
-    const s1Fill = sheetFills[cellRef(c.stripeColor1, 2)] || null;
-    const s2Fill = sheetFills[cellRef(c.stripeColor2, 2)] || null;
+    const s1Fill =
+      c.stripeColor1 != null
+        ? sheetFills[cellRef(c.stripeColor1, 2)] || null
+        : null;
+    const s2Fill =
+      c.stripeColor2 != null
+        ? sheetFills[cellRef(c.stripeColor2, 2)] || null
+        : null;
     const annChoice =
       c.announcementColor != null
         ? String(cell(first, c.announcementColor) || "").trim() || null
@@ -3633,15 +4117,22 @@
         ? sheetFills[cellRef(c.drinkBoxColor, 2)] || null
         : null;
 
-    // Blank Overview Image = no overview hero (do not invent a default file)
-    let overviewImg = String(cell(first, c.overviewImage) || "").trim();
+    let overviewImg =
+      c.overviewImage != null
+        ? String(cell(first, c.overviewImage) || "").trim()
+        : "";
     if (!overviewImg || overviewImg.toLowerCase() === "null") {
       overviewImg = null;
     }
 
-    // Stripes: Color Picker labels OR typed hex OR fill (resolved at apply)
-    const stripe1Choice = String(cell(first, c.stripeColor1) || "").trim() || null;
-    const stripe2Choice = String(cell(first, c.stripeColor2) || "").trim() || null;
+    const stripe1Choice =
+      c.stripeColor1 != null
+        ? String(cell(first, c.stripeColor1) || "").trim() || null
+        : null;
+    const stripe2Choice =
+      c.stripeColor2 != null
+        ? String(cell(first, c.stripeColor2) || "").trim() || null
+        : null;
     const includeStripes =
       c.includeStripes != null
         ? parseInclude(cell(first, c.includeStripes))
@@ -3651,6 +4142,7 @@
     return {
       title: String(cell(first, c.title) || ""),
       items: parsedItems,
+      includeFooterBox: "drinks",
       includeStripes: includeStripes,
       stripeColor1Choice: stripe1Choice,
       stripeColor1Fill: s1Fill,
@@ -3660,7 +4152,6 @@
         title: firstMsg ? firstMsg.title : "",
         subtitle: firstMsg ? firstMsg.subtitle : "",
         messages: messages,
-        // legacy lines for any leftover callers: body lines of first message
         lines: firstMsg
           ? firstMsg.text.split(/\n/).map(function (t) {
               return {
@@ -3676,13 +4167,25 @@
         bgFill: annFill,
       },
       drinkBox: {
-        title: String(cell(first, c.drinkBoxTitle) || "").trim(),
-        subtitle: String(cell(first, c.drinkBoxSubtitle) || "").trim(),
+        title:
+          c.drinkBoxTitle != null
+            ? String(cell(first, c.drinkBoxTitle) || "").trim()
+            : "",
+        subtitle:
+          c.drinkBoxSubtitle != null
+            ? String(cell(first, c.drinkBoxSubtitle) || "").trim()
+            : "",
         bgChoice: drinkChoice,
         bgFill: drinkFill,
       },
-      drinksOverview: parseInclude(cell(first, c.drinksOverview)),
-      drinksIndividual: parseInclude(cell(first, c.drinksIndividual)),
+      drinksOverview:
+        c.drinksOverview != null
+          ? parseInclude(cell(first, c.drinksOverview))
+          : true,
+      drinksIndividual:
+        c.drinksIndividual != null
+          ? parseInclude(cell(first, c.drinksIndividual))
+          : true,
       overviewImage: overviewImg,
     };
   }
@@ -4072,12 +4575,37 @@
         bgFill: parsed.drinkBox.bgFill,
         createColumns: !!parsed.drinkBox.createColumns,
         textAlign: parseTextAlign(parsed.drinkBox.textAlign, "center"),
+        priority: parsePriority(
+          parsed.drinkBox.priority,
+          FOOTER_PRIORITY_DEFAULTS.drinks
+        ),
+        includeInPresentation: !!parsed.drinkBox.includeInPresentation,
+        familyPortrait: !!parsed.drinkBox.familyPortrait,
+        presentationMode: parsePresentationMode(
+          parsed.drinkBox.presentationMode,
+          "slideshow"
+        ),
       };
+      if (parsed.includeFooterBox) {
+        _board4FooterKey = normalizeFooterBoxSelection(
+          parsed.includeFooterBox
+        ) || "drinks";
+      }
       console.info(
-        "Drinks Create Columns?",
+        "Board 4 box:",
+        _board4FooterKey,
+        "Create Columns?",
         drinkBox.createColumns ? "Yes" : "No",
         "align",
-        drinkBox.textAlign
+        drinkBox.textAlign,
+        "priority",
+        drinkBox.priority,
+        "present?",
+        drinkBox.includeInPresentation ? "Yes" : "No",
+        "FP?",
+        drinkBox.familyPortrait ? "Yes" : "No",
+        "mode",
+        drinkBox.presentationMode
       );
     }
 
@@ -4395,37 +4923,79 @@
 
   let _portraitRenderKey = "";
 
+  /**
+   * Board 4 presentation = ONE box segment only (no Alpha).
+   * Same appendPresSegment + Beta Motion digits as boards 1–3 box menus.
+   * Mode/FP/Include come from the selected box sheet Settings (G–I).
+   * Timing is NEVER local — only motionStylesByName from Beta Features → Motion.
+   */
   function buildDrinksSlides() {
     slides = [];
-    const overviewOn = config.drinksOverview !== false;
-    const individualOn = config.drinksIndividual !== false;
+    const inv = items || [];
+    if (!inv.length) return;
 
-    // Overview only when enabled AND Overview Image column has a filename
-    if (overviewOn) {
-      const img = resolveImagePath(config.overviewImage);
-      if (img) {
-        slides.push({
-          type: "overview",
-          image: img,
-          itemIndex: -1,
-          isNew: false,
-        });
-      }
+    // Same gate as buildBoardSlides boxSpecs filter
+    if (!drinkBox.includeInPresentation) {
+      tokiInfo(
+        "Board 4: box Include in Presentation? off — no motion segment"
+      );
+      return;
     }
 
-    if (individualOn) {
-      items.forEach((it, i) => {
-        slides.push({
-          type: "item",
-          image: it.image,
+    // Same displayOrder logic as boards 1–3 footer box segments
+    let order =
+      Array.isArray(drinkBox.displayOrder) && drinkBox.displayOrder.length
+        ? drinkBox.displayOrder.slice()
+        : inv.map(function (_it, i) {
+            return i;
+          });
+    const seen = {};
+    order = order.filter(function (idx) {
+      if (seen[idx] || idx < 0 || idx >= inv.length) return false;
+      seen[idx] = true;
+      return true;
+    });
+    for (let i = 0; i < inv.length; i++) {
+      if (!seen[i]) order.push(i);
+    }
+
+    const list = order
+      .map(function (idx) {
+        const it = inv[idx];
+        if (!it || !it.name || it.include === false) return null;
+        return {
+          name: it.name,
+          image: it.image || null,
           images: it.images || null,
-          itemIndex: i,
           isNew: !!it.isNew,
-        });
-      });
-    }
+          itemIndex: idx,
+          boxItemIndex: idx,
+        };
+      })
+      .filter(Boolean);
+    if (!list.length) return;
 
-    // No hardcoded hero fallback — blank overview simply means no overview slide
+    // Identical call shape to buildBoardSlides → appendPresSegment for a box
+    appendPresSegment({
+      segment: "box",
+      boxKey: "drinks",
+      mode: drinkBox.presentationMode || "slideshow",
+      familyPortrait: !!drinkBox.familyPortrait,
+      itemList: list,
+    });
+
+    tokiInfo(
+      "presentation slides (Board 4 box-only)",
+      slides.length,
+      "box=",
+      _board4FooterKey || "drinks",
+      "@",
+      drinkBox.priority,
+      ":",
+      drinkBox.presentationMode || "slideshow",
+      drinkBox.familyPortrait ? "+FP" : "",
+      "| motion from Beta Motion table"
+    );
   }
 
   /**
@@ -5392,9 +5962,10 @@
     if (isHandhelds) return loadSheetStylesByName("Handhelds", opts);
     if (!isDrinks) return { fills: {}, fonts: {}, rich: {} };
 
+    // Prefer live Announcements tab (gid 149404218); Board 4 is archive chrome
     const candidates = [
-      "Board 4",
       "Announcements",
+      "Board 4",
       "Drinks Deals",
       "Deals",
       "Announcement",
@@ -6434,59 +7005,219 @@
   }
 
   /**
-   * Load dedicated drinks content sheet (Google) and overwrite drink box + items.
-   * @param {object} [prefetched] optional { drinksRows } from parallel CSV fetch
+   * Board 4: load the single selected footer box into #drink-options-box.
+   * Selection from Announcements Settings "Include Footer Box" (singular):
+   *   Drinks | Proteins | Sauces | Veggies | blank/none
+   * Each box honors its own sheet Settings (BG color/CF, Create Columns, Align).
+   * @param {object} [prefetched] optional { drinksRows, proteinRows, saucesRows, veggiesRows }
    */
   async function attachSharedDrinksSheet(parsed, prefetched) {
     if (!parsed || !isDrinks) return parsed;
-    if (cfg.drinksSheetGid == null || cfg.drinksSheetGid === "") return parsed;
     prefetched = prefetched || {};
 
+    const sel = normalizeFooterBoxSelection(
+      parsed.includeFooterBox != null
+        ? parsed.includeFooterBox
+        : "drinks"
+    );
+
+    if (!sel) {
+      parsed.items = [];
+      parsed.drinkBox = Object.assign({}, parsed.drinkBox || {}, {
+        title: "",
+        subtitle: "",
+        items: [],
+        include: false,
+        createColumns: false,
+        textAlign: "center",
+      });
+      parsed.drinksOverview = false;
+      parsed.drinksIndividual = false;
+      console.info("Board 4 Include Footer Box: (none) — options box empty");
+      return parsed;
+    }
+
     try {
-      // Prefer tab names that aren't "Drinks Deals" (board tab).
-      // Fills come from the single cached workbook xlsx (no re-download).
-      let fills = {};
-      // Canonical tab is "Drinks" (legacy archive is "Drinks (old)").
-      const nameCandidates = [
-        "Drinks",
-        "Drink Options",
-        "Drinks Menu",
-        "Drinks Content",
-        "Drink Box",
-      ];
-      try {
-        await fetchWorkbookXlsxBuffer(false);
-      } catch (e) {
-        /* fills optional */
-      }
-      for (let i = 0; i < nameCandidates.length; i++) {
-        try {
-          fills = await loadSheetFillsByName(nameCandidates[i]);
-          if (fills && Object.keys(fills).length) break;
-        } catch (e) {
-          /* try next name on same buffer */
+      await fetchWorkbookXlsxBuffer(false);
+    } catch (e) {
+      /* fills optional */
+    }
+
+    try {
+      if (sel === "drinks") {
+        if (cfg.drinksSheetGid == null || cfg.drinksSheetGid === "") {
+          console.warn(
+            "Include Footer Box=Drinks but drinksSheetGid is not set"
+          );
+          return parsed;
         }
+        let fills = {};
+        const nameCandidates = [
+          "Drinks",
+          "Drink Options",
+          "Drinks Menu",
+          "Drinks Content",
+          "Drink Box",
+        ];
+        for (let i = 0; i < nameCandidates.length; i++) {
+          try {
+            fills = await loadSheetFillsByName(nameCandidates[i]);
+            if (fills && Object.keys(fills).length) break;
+          } catch (e) {
+            /* next */
+          }
+        }
+        const rows =
+          prefetched.drinksRows != null
+            ? prefetched.drinksRows
+            : await fetchSheetRows(cfg.drinksSheetGid);
+        if (!rows) throw new Error("no drinks content rows");
+        const content = parseDrinksContentSheetRows(rows, fills);
+        mergeDrinksContentIntoParsed(parsed, content);
+        console.info(
+          "Board 4 footer box: Drinks",
+          "items",
+          (content.items || []).length,
+          "title",
+          content.drinkBox && content.drinkBox.title
+        );
+        return parsed;
       }
-      const rows =
-        prefetched.drinksRows != null
-          ? prefetched.drinksRows
-          : await fetchSheetRows(cfg.drinksSheetGid);
-      if (!rows) throw new Error("no drinks content rows");
-      const content = parseDrinksContentSheetRows(rows, fills);
-      mergeDrinksContentIntoParsed(parsed, content);
+
+      // Proteins / Sauces / Veggies → same drink-options slot, their sheet settings
+      let box = null;
+      let items = [];
+      if (sel === "protein") {
+        if (!cfg.proteinSheetGid) {
+          console.warn("Include Footer Box=Proteins but proteinSheetGid unset");
+          return parsed;
+        }
+        let fills = {};
+        try {
+          fills = await loadSheetFillsByName("Proteins");
+        } catch (e) {
+          /* optional */
+        }
+        const rows =
+          prefetched.proteinRows != null
+            ? prefetched.proteinRows
+            : await fetchSheetRows(cfg.proteinSheetGid);
+        box = parseProteinSheetRows(rows, fills);
+        items = (box.items || []).filter(function (it) {
+          return it && it.include !== false;
+        });
+      } else if (sel === "sauces") {
+        if (!cfg.saucesSheetGid) {
+          console.warn("Include Footer Box=Sauces but saucesSheetGid unset");
+          return parsed;
+        }
+        let fills = {};
+        try {
+          fills = await loadSheetFillsByName("Sauces");
+        } catch (e) {
+          /* optional */
+        }
+        const rows =
+          prefetched.saucesRows != null
+            ? prefetched.saucesRows
+            : await fetchSheetRows(cfg.saucesSheetGid);
+        box = parseSaucesSheetRows(rows, fills);
+        items = (box.items || []).filter(function (it) {
+          return it && it.include !== false;
+        });
+      } else if (sel === "veggies") {
+        if (!cfg.veggiesSheetGid) {
+          console.warn("Include Footer Box=Veggies but veggiesSheetGid unset");
+          return parsed;
+        }
+        let fills = {};
+        try {
+          fills = await loadSheetFillsByName("Veggies");
+        } catch (e) {
+          /* optional */
+        }
+        const rows =
+          prefetched.veggiesRows != null
+            ? prefetched.veggiesRows
+            : await fetchSheetRows(cfg.veggiesSheetGid);
+        box = parseVeggiesSheetRows(rows, fills);
+        items = (box.items || []).filter(function (it) {
+          return it && it.include !== false;
+        });
+      } else {
+        console.warn(
+          "Board 4 Include Footer Box unknown selection:",
+          parsed.includeFooterBox
+        );
+        return parsed;
+      }
+
+      if (!box) return parsed;
+
+      const mappedItems = items.map(function (it) {
+        return {
+          name: it.name,
+          subtitle: it.subtitle || "",
+          price: it.price || "",
+          prices: it.prices || (it.price ? [it.price] : []),
+          description: "",
+          isNew: !!it.isNew,
+          image: it.image || null,
+          images: it.images || null,
+          include: true,
+        };
+      });
+
+      parsed.items = mappedItems;
+      parsed.includeFooterBox = sel;
+      parsed.drinkBox = {
+        title: box.title || "",
+        subtitle: box.subtitle || "",
+        bgChoice: box.bgChoice,
+        bgFill: box.bgFill,
+        createColumns: !!box.createColumns,
+        textAlign: parseTextAlign(box.textAlign, "center"),
+        priority: parsePriority(
+          box.priority,
+          sel === "protein"
+            ? FOOTER_PRIORITY_DEFAULTS.protein
+            : sel === "sauces"
+              ? FOOTER_PRIORITY_DEFAULTS.sauces
+              : sel === "veggies"
+                ? 4
+                : FOOTER_PRIORITY_DEFAULTS.drinks
+        ),
+        includeInPresentation: !!box.includeInPresentation,
+        familyPortrait: !!box.familyPortrait,
+        presentationMode: parsePresentationMode(
+          box.presentationMode,
+          "slideshow"
+        ),
+      };
+      parsed.drinksOverview = true;
+      parsed.drinksIndividual = true;
+      parsed.overviewImage = null;
       console.info(
-        "Drinks content sheet:",
-        cfg.drinksSheetGid,
+        "Board 4 footer box:",
+        sel,
         "items",
-        (content.items || []).length,
+        mappedItems.length,
         "title",
-        content.drinkBox && content.drinkBox.title
+        box.title,
+        "Create Columns?",
+        box.createColumns ? "Yes" : "No",
+        "align",
+        box.textAlign,
+        "present?",
+        box.includeInPresentation ? "Yes" : "No",
+        "FP?",
+        box.familyPortrait ? "Yes" : "No",
+        "mode",
+        box.presentationMode
       );
     } catch (err) {
       console.warn(
-        "Could not load drinks content sheet (gid=" +
-          cfg.drinksSheetGid +
-          "); using board tab drink columns:",
+        "Board 4 footer box attach failed (" + sel + "):",
         err
       );
     }
@@ -6564,17 +7295,14 @@
       // Board 4 content and/or boards 1–3 footer drinks box
       csvJobs.drinks = fetchSheetRows(cfg.drinksSheetGid);
     }
-    if (
-      !isDrinks &&
-      cfg.veggiesSheetGid != null &&
-      cfg.veggiesSheetGid !== ""
-    ) {
+    if (cfg.veggiesSheetGid != null && cfg.veggiesSheetGid !== "") {
+      // Boards 1–3 footer + Board 4 Include Footer Box=Veggies
       csvJobs.veggies = fetchSheetRows(cfg.veggiesSheetGid);
     }
-    if (!isDrinks) {
-      // Central Beta (fallback); per-board "Include Footer Boxes" is read from each board's Settings
-      csvJobs.beta = fetchSheetRows(BETA_FEATURES_GID);
-    }
+    // Beta Features on EVERY board — Motion table drives Punch/Hold/Out digits
+    // (Board 4 previously skipped this → hardcoded defaults → different timing).
+    // Boards 1–3 also use Include Footer Boxes fallback from the same tab.
+    csvJobs.beta = fetchSheetRows(BETA_FEATURES_GID);
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
       csvJobs.style = fetchSheetRows(cfg.styleThemeGid);
     }
@@ -6688,16 +7416,18 @@
       });
     }
 
-    if (cfg.drinksSheetGid) {
-      if (isDrinks) {
-        parsed = await attachSharedDrinksSheet(parsed, {
-          drinksRows: csv.drinks,
-        });
-      } else {
-        parsed = await attachFooterDrinksBox(parsed, csv.main, {
-          drinksRows: csv.drinks,
-        });
-      }
+    if (isDrinks) {
+      // Announcements Settings → single footer box (Drinks / Proteins / Sauces / Veggies)
+      parsed = await attachSharedDrinksSheet(parsed, {
+        drinksRows: csv.drinks,
+        proteinRows: csv.protein,
+        saucesRows: csv.sauces,
+        veggiesRows: csv.veggies,
+      });
+    } else if (cfg.drinksSheetGid) {
+      parsed = await attachFooterDrinksBox(parsed, csv.main, {
+        drinksRows: csv.drinks,
+      });
     }
 
     // Prefetch stash for Beta override (avoid second network round-trip / 429)
@@ -6709,12 +7439,15 @@
       if (csv.beta) {
         const betaMotion = parseBetaFeatures(csv.beta);
         applyMotionStylesConfig(betaMotion.motionStyles || {});
+        applyVeilShadowConfig(betaMotion.veilShadow);
       } else {
         applyMotionStylesConfig({});
+        applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
       }
     } catch (motionErr) {
       tokiWarn("Motion styles load failed; using Ken Burns defaults", motionErr);
       applyMotionStylesConfig({});
+      applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
     }
 
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
@@ -6943,6 +7676,31 @@
       }
     } catch (err) {
       console.warn("Local drinks content sheet unavailable:", err);
+    }
+
+    // Beta Features → Motion (same table as Google path; all boards)
+    try {
+      const betaName = pickBestSheetName(wb.SheetNames || [], {
+        exact: ["Beta Features", "Beta"],
+        match: /beta/i,
+      });
+      if (betaName && wb.Sheets[betaName]) {
+        const betaRows = XLSX.utils.sheet_to_json(wb.Sheets[betaName], {
+          header: 1,
+          defval: null,
+          raw: true,
+        });
+        const betaMotion = parseBetaFeatures(betaRows);
+        applyMotionStylesConfig(betaMotion.motionStyles || {});
+        applyVeilShadowConfig(betaMotion.veilShadow);
+      } else {
+        applyMotionStylesConfig({});
+        applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
+      }
+    } catch (err) {
+      console.warn("Local Beta Motion unavailable:", err);
+      applyMotionStylesConfig({});
+      applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
     }
 
     return parsed;
@@ -7314,6 +8072,37 @@
     const msg = msgs[i];
     const prev = opts.prev || null;
     const instant = !!opts.instant;
+
+    const titleChanged = !prev || prev.title !== msg.title;
+    const subChanged = !prev || prev.subtitle !== msg.subtitle;
+    const FADE_MS = 350;
+
+    // Per-message Announcement Box Color (inherits blanks at parse time)
+    (function applyAnnouncementBoxColor() {
+      const theme = {
+        mainColor: config.mainColor,
+        secondaryColor: config.secondaryColor,
+        highlight: config.highlight,
+        highlightSpecial: config.highlightSpecial,
+      };
+      const bg =
+        resolveNamedThemeColor(msg.bgChoice, msg.bgFill, theme) ||
+        announcementBox.bg ||
+        config.announcementBg ||
+        config.mainColor ||
+        "#000000";
+      announcementBox.bg = bg;
+      config.announcementBg = bg;
+      if (els.announcementBodyRect) {
+        els.announcementBodyRect.style.fill = bg;
+      }
+      config.announcementBodyText = pickContrastingThemeColor(
+        bg,
+        config.mainColor,
+        config.secondaryColor
+      );
+    })();
+
     const annBodyText =
       config.announcementBodyText ||
       pickContrastingThemeColor(
@@ -7324,10 +8113,6 @@
         config.mainColor,
         config.secondaryColor
       );
-
-    const titleChanged = !prev || prev.title !== msg.title;
-    const subChanged = !prev || prev.subtitle !== msg.subtitle;
-    const FADE_MS = 350;
 
     function applyTitleSub() {
       if (els.announcementTitle && (instant || titleChanged || !prev)) {
@@ -7500,6 +8285,15 @@
       if (els.announcementBody) els.announcementBody.innerHTML = "";
     }
 
+    const drinkShell = document.getElementById("drink-options-box");
+    const hasDrinkItems = Array.isArray(items) && items.length > 0;
+    const drinkBoxOn =
+      hasDrinkItems ||
+      !!(drinkBox && (drinkBox.title || drinkBox.subtitle));
+    if (drinkShell) {
+      drinkShell.hidden = !drinkBoxOn;
+    }
+
     if (els.drinkBoxTitle) {
       els.drinkBoxTitle.textContent = drinkBox.title || "";
     }
@@ -7519,6 +8313,8 @@
           ? "drink-item drink-col-item box-col-item"
           : "drink-item wrap-item";
         span.dataset.index = String(index);
+        // Presentation highlight path uses data-box-item-index (same as footer boxes)
+        span.dataset.boxItemIndex = String(index);
 
         const nameEl = document.createElement("span");
         nameEl.className = "drink-item-name";
@@ -7532,6 +8328,16 @@
           subEl.textContent =
             sub.charAt(0) === "(" ? " " + sub : " (" + sub + ")";
           span.appendChild(subEl);
+        }
+        // Proteins / priced boxes: honor Item Price from their sheet
+        const priceStr =
+          (it.price && String(it.price).trim()) ||
+          (it.prices && it.prices[0] ? String(it.prices[0]).trim() : "");
+        if (priceStr) {
+          const priceEl = document.createElement("span");
+          priceEl.className = "drink-item-price";
+          priceEl.textContent = " " + priceStr;
+          span.appendChild(priceEl);
         }
         return span;
       }
@@ -7583,6 +8389,9 @@
     }
 
     fitDrinksBoxes();
+    // Presentation cue order follows painted DOM (wrap L→R / columns)
+    captureBoxDisplayOrderFromDom(els.drinkBoxBody, drinkBox);
+    if (isDrinks) buildDrinksSlides();
   }
 
   /**
@@ -9221,10 +10030,29 @@
   const PORTRAIT_STAGE_H = 1080;
   const PORTRAIT_IMG_W = 1500;
   const PORTRAIT_IMG_H = 1000;
+  /** Board 4 hero-wrap CSS left (mirrored photo side). Keep in sync with menu.css */
+  const HERO_WRAP_LEFT_DRINKS = -255;
+  const HERO_WRAP_LEFT_DEFAULT = 870;
+  const HERO_WRAP_TOP = 133;
 
-  /** Local x of cutout edge inside portrait stage at stage y (0…1080). */
+  /**
+   * Board 4 mirrors the frame: photo on the LEFT, panel on the RIGHT.
+   * FP / Encore lattice uses flat left + diagonal right (quarantine from boards 1–3).
+   */
+  function isHeroPhotoLeft() {
+    return isDrinks;
+  }
+
+  function portraitStageLeftPx() {
+    return isHeroPhotoLeft() ? 0 : PORTRAIT_CUTOUT_X0;
+  }
+
+  function heroWrapLeftPx() {
+    return isHeroPhotoLeft() ? HERO_WRAP_LEFT_DRINKS : HERO_WRAP_LEFT_DEFAULT;
+  }
+
+  /** Local cutout inset along the diagonal (px into the photo wedge from the frame edge). */
   function portraitCutoutLocalX(y) {
-    // Global cutout x − stage left = slope * y (since stage left = x0)
     return PORTRAIT_CUTOUT_SLOPE * Math.max(0, Math.min(PORTRAIT_STAGE_H, y));
   }
 
@@ -9232,10 +10060,14 @@
    * Choose rows×cols lattice and slot positions for n photos.
    * Incomplete last row is centered (bottom shortfall).
    * Coordinates in portrait-stage-local px; origin at photo center.
+   *
+   * Boards 1–3: diagonal on LEFT of wedge (inset grows with y).
+   * Board 4: diagonal on RIGHT of wedge (flat left, right inset grows with y).
    */
   function buildPortraitLayout(n, stageW, stageH, opts) {
     opts = opts || {};
     const useCutout = opts.useCutout !== false; // default true (for family portrait)
+    const photoLeft = opts.photoLeft != null ? !!opts.photoLeft : isHeroPhotoLeft();
     stageW = stageW || PORTRAIT_STAGE_W;
     stageH = stageH || PORTRAIT_STAGE_H;
     if (n <= 0) {
@@ -9243,8 +10075,8 @@
     }
 
     // Usable width is narrower at bottom (~764) than top (~848) — use mid width for aspect
-    const midLeft = portraitCutoutLocalX(stageH * 0.5);
-    const midW = Math.max(1, stageW - midLeft);
+    const midInset = portraitCutoutLocalX(stageH * 0.5);
+    const midW = Math.max(1, stageW - midInset);
     const targetAspect = midW / stageH;
     const ideal = Math.sqrt(n);
     let best = null;
@@ -9295,9 +10127,11 @@
       const inRow = r === rows - 1 ? remaining : Math.min(cols, remaining);
       const incomplete = inRow < cols;
       const y = padY + (r + 0.5) * cellH;
-      // Row band: for family portrait use diagonal cutout; for hero lattice use full rect
-      const xLeftEdge = useCutout ? portraitCutoutLocalX(y) : 0;
-      const rowW = Math.max(1, stageW - xLeftEdge);
+      // Cutout inset along diagonal; board 4 puts it on the RIGHT (flat left edge)
+      const inset = useCutout ? portraitCutoutLocalX(y) : 0;
+      const xLeftEdge = useCutout && !photoLeft ? inset : 0;
+      const xRightInset = useCutout && photoLeft ? inset : 0;
+      const rowW = Math.max(1, stageW - xLeftEdge - xRightInset);
       const padX = rowW * padXFrac;
       const innerW = Math.max(1, rowW - 2 * padX);
       const cellW = innerW / cols;
@@ -9446,6 +10280,51 @@
     if (!stage) return;
     stage.style.setProperty("--encore-hole-x", latticeX + "px");
     stage.style.setProperty("--encore-hole-y", latticeY + "px");
+  }
+
+  /** Hard Encore only. Soft never pinches. Amount is hardcoded. */
+  function encoreHolePinchPx() {
+    if (config.encoreSpotlightType === "soft") return 0;
+    const n = Number(ENCORE_HOLE_PINCH_PX);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function encorePinchNode(stage) {
+    if (!stage) return null;
+    return stage.querySelector(".family-portrait-rig") || stage;
+  }
+
+  function snapEncoreHolePinch(stage, px) {
+    const node = encorePinchNode(stage);
+    if (!node) return;
+    const prev = node.style.transition;
+    node.style.transition = "none";
+    node.style.setProperty("--encore-hole-pinch", Math.max(0, px) + "px");
+    void node.offsetWidth;
+    node.style.transition = prev;
+  }
+
+  function setEncoreHolePinch(stage, px) {
+    const node = encorePinchNode(stage);
+    if (!node) return;
+    node.style.setProperty("--encore-hole-pinch", Math.max(0, px) + "px");
+  }
+
+  /** Same clock as the rig zoom. includePinch adds --encore-hole-pinch to the transition. */
+  function encoreRigTransition(sec, easeVar, easeFallback, includePinch) {
+    const t =
+      "transform " + sec + "s var(" + easeVar + ", " + easeFallback + ")";
+    if (!includePinch) return t;
+    return (
+      t +
+      ", --encore-hole-pinch " +
+      sec +
+      "s var(" +
+      easeVar +
+      ", " +
+      easeFallback +
+      ")"
+    );
   }
 
   function readCssDurationMs(el, prop, fallbackMs) {
@@ -9603,6 +10482,7 @@
     _lastEncoreBowItem = null;
     // Drop veil classes so a later Slideshow hero is not under leftover chrome
     applyEncoreSpotlightChrome(null, { forceClear: true });
+    snapEncoreHolePinch(stage, 0);
     // Keep render key so re-show can reuse DOM; cleared only on full re-render
   }
 
@@ -10081,6 +10961,19 @@
   }
 
   function ensureFamilyPortrait(portraitItems) {
+    // Board 4 historically lacked the stage node — create if missing so FP/Encore can paint
+    if (!els.familyPortrait) {
+      const stageRoot = els.stage || document.getElementById("stage");
+      if (stageRoot) {
+        const created = document.createElement("div");
+        created.id = "family-portrait-stage";
+        created.hidden = true;
+        created.setAttribute("aria-hidden", "true");
+        stageRoot.appendChild(created);
+        els.familyPortrait = created;
+        tokiInfo("family-portrait-stage created (was missing from page DOM)");
+      }
+    }
     // Fingerprint cast only — do not bake Alpha presentationMode (Box segments differ)
     const key =
       (_activeSegmentMode || config.presentationMode || "slideshow") +
@@ -10193,10 +11086,12 @@
     if (!stage) return;
     stage.innerHTML = "";
     stage.style.setProperty("--encore-zoom", "1");
+    // Boards 1–3: stage left = cutout; Board 4: stage left = 0 (photo left)
     stage.style.setProperty(
       "--portrait-stage-left",
-      PORTRAIT_STAGE_LEFT + "px"
+      portraitStageLeftPx() + "px"
     );
+    stage.classList.toggle("photo-left", isHeroPhotoLeft());
     setEncoreScaffoldBgActive(false);
 
     // Rig holds optional BG + plates + veil so Ken Burns keeps them locked.
@@ -10248,10 +11143,6 @@
    * is also a direct child of the plate but does not receive the scale.
    * See docs/FAMILY_PORTRAIT_LATTICE.md §4.
    */
-  // Hero wrap CSS: left 870, top 133 — keep in sync with css/menu.css #hero-wrap
-  const HERO_WRAP_LEFT = 870;
-  const HERO_WRAP_TOP = 133;
-
   function clearHeroMultiLattice(plate) {
     plate = plate || els.heroPlate;
     if (!plate) return;
@@ -10272,8 +11163,9 @@
     const plates = document.createElement("div");
     plates.className = "hero-multi-plates family-portrait-plates";
     // Align lattice origin with #family-portrait-stage in board space
+    // (Board 4: stage left 0, hero-wrap left −255 → offset +255)
     plates.style.position = "absolute";
-    plates.style.left = PORTRAIT_STAGE_LEFT - HERO_WRAP_LEFT + "px";
+    plates.style.left = portraitStageLeftPx() - heroWrapLeftPx() + "px";
     plates.style.top = 0 - HERO_WRAP_TOP + "px";
     plates.style.width = PORTRAIT_STAGE_W + "px";
     plates.style.height = PORTRAIT_STAGE_H + "px";
@@ -10349,6 +11241,8 @@
   let _encoreSpotTimer = null;
 
   function boxStateByKey(boxKey) {
+    // Board 4: selected content always lives in drinkBox / #drink-options-box
+    if (isDrinks) return drinkBox;
     if (boxKey === "protein") return proteinBox;
     if (boxKey === "sauces") return saucesBox;
     if (boxKey === "drinks") return footerDrinksBox;
@@ -10357,6 +11251,7 @@
   }
 
   function boxBodyElByKey(boxKey) {
+    if (isDrinks) return els.drinkBoxBody;
     if (boxKey === "protein") return els.proteinBody;
     if (boxKey === "sauces") return els.saucesBody;
     if (boxKey === "drinks") return els.footerDrinksBody;
@@ -10370,6 +11265,7 @@
 
   /** Footer info-box root element by segment key. */
   function boxRootElByKey(boxKey) {
+    if (isDrinks) return document.getElementById("drink-options-box");
     if (boxKey === "protein") return document.getElementById("protein-box");
     if (boxKey === "sauces") return document.getElementById("sauces-box");
     if (boxKey === "drinks") return document.getElementById("footer-drinks-box");
@@ -10826,6 +11722,9 @@
   /**
    * Family Portrait — hidden one-slide overview (full cast, no item punch).
    * Entrance: grid opacity 0→1 at zoom 1×, veil OFF.
+   * Encore same-segment loop (last bow → this lineup): grid is already at 1×
+   * after Punch-out — do not fade (that is Wind-up / Wind-down). Highlights still run.
+   * True Wind-up only at presentation / segment start (including Slideshow+FP).
    * Exit into Encore (same segment): keep grid (compose); no fade-out.
    * Exit elsewhere: grid opacity out (like Slideshow/KB wind-down).
    */
@@ -10843,18 +11742,50 @@
     return stage;
   }
 
-  function familyPortraitRunEntrance(slide, style, entranceSec, gen, done) {
+  function familyPortraitRunEntrance(slide, style, entranceSec, gen, done, flags) {
+    flags = flags || {};
     const stage = familyPortraitPrepareSurface(slide);
     // Clear item highlights; FP overview chrome (Alpha title | Box shell)
     staticClearHighlights();
     engineArmHighlightIn(style && style.punchOut);
     armFpOverviewHighlight(slide);
+
+    // Frame 0 of Encore: last bow Punch-out already zoomed to this lineup.
+    // Must NOT fade the grid — Wind-up/Wind-down are segment edges only.
+    // Clock matches first FP (Wind-up if set, else Punch-in) + Hold + Punch-out.
+    const resumeEncore =
+      !flags.isFirstInSegment &&
+      flags.prevSlide &&
+      flags.prevSlide.type === "encore" &&
+      !isPresSegmentBoundary(flags.prevSlide, slide);
+    const resumeSec = engineEntranceSec(style, true);
+
     if (!stage) {
-      afterMs(entranceSec * 1000, gen, done);
+      afterMs((resumeEncore ? resumeSec : entranceSec) * 1000, gen, done);
       return;
     }
-    const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
     const rig = stage.querySelector(".family-portrait-rig");
+
+    if (resumeEncore) {
+      engineApplyCssDurations(resumeSec, style.punchOut);
+      if (rig) rig.style.transition = "none";
+      stage.style.transition = "none";
+      setPlaneCenterOrigin(stage);
+      snapPortraitZoom(stage, 1);
+      stage.classList.remove("is-dimmed", "is-zoom-out");
+      stage.style.opacity = "1";
+      stage.classList.add("visible");
+      applyEncoreSpotlightChrome(null, { forceClear: true });
+      tokiInfo("fp entrance resume encore (same clock, no fade)", resumeSec);
+      afterMs(resumeSec * 1000, gen, function () {
+        stage.style.transition = "";
+        if (rig) rig.style.transition = "";
+        done();
+      });
+      return;
+    }
+
+    const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
     engineApplyCssDurations(entranceSec, style.punchOut);
 
     if (rig) rig.style.transition = "none";
@@ -11081,14 +12012,20 @@
       }
       stage.style.transition = "none";
       snapPortraitZoom(stage, 1);
+      snapEncoreHolePinch(stage, 0);
       stage.classList.remove("is-dimmed", "is-zoom-out");
       stage.style.opacity = "0";
       stage.classList.add("visible");
       void stage.offsetWidth;
 
+      const doPinch = encoreHolePinchPx() > 0;
       if (rig) {
-        rig.style.transition =
-          "transform " + entranceSec + "s var(--ease-out, ease-out)";
+        rig.style.transition = encoreRigTransition(
+          entranceSec,
+          "--ease-out",
+          "ease-out",
+          doPinch
+        );
       }
       stage.style.transition =
         "opacity " + opSec + "s var(--ease-fade, ease)";
@@ -11101,6 +12038,7 @@
         applyEncoreSpotlightChrome(null);
       }
       stage.style.setProperty("--encore-zoom", String(zoomTo));
+      if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
       stage.classList.add("is-dimmed");
       stage.style.opacity = "1";
       encoreArmHighlight(slide, style.punchOut);
@@ -11121,12 +12059,19 @@
     if (rig) {
       rig.style.transition = "none";
     }
+    // Reset hole while veil is undimmed, then shrink with Punch-in / zoom
+    snapEncoreHolePinch(stage, 0);
     // Retarget origin while at ~1× (under undimmed veil), then punch in
     if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
     void stage.offsetWidth;
+    const doPinch = encoreHolePinchPx() > 0;
     if (rig) {
-      rig.style.transition =
-        "transform " + entranceSec + "s var(--ease-out, ease-out)";
+      rig.style.transition = encoreRigTransition(
+        entranceSec,
+        "--ease-out",
+        "ease-out",
+        doPinch
+      );
     }
     if (presItem) {
       _lastEncoreBowItem = presItem;
@@ -11135,6 +12080,7 @@
       applyEncoreSpotlightChrome(null);
     }
     stage.style.setProperty("--encore-zoom", String(zoomTo));
+    if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
     stage.classList.add("is-dimmed");
     encoreArmHighlight(slide, style.punchOut);
     afterMs(entranceSec * 1000, gen, function () {
@@ -11166,13 +12112,19 @@
     }
 
     // Veil out + ease camera toward 1×
+    // Hole stays pinched (ENCORE_HOLE_PINCH_OUT is off).
     stage.classList.remove("is-dimmed");
     stage.classList.add("is-zoom-out");
     if (rig) {
-      rig.style.transition =
-        "transform " + exitSec + "s var(--ease-fade, ease)";
+      rig.style.transition = encoreRigTransition(
+        exitSec,
+        "--ease-fade",
+        "ease",
+        !!ENCORE_HOLE_PINCH_OUT
+      );
     }
     stage.style.setProperty("--encore-zoom", "1");
+    if (ENCORE_HOLE_PINCH_OUT) setEncoreHolePinch(stage, 0);
 
     if (isLastInSegment) {
       // Wind-down: grid opacity out (inherit KB/Slideshow full exit)
@@ -11200,13 +12152,13 @@
 
   /**
    * Entrance for Motion Style (Ken Burns / Slideshow / Encore).
-   * @param {{ isFirstInSegment?: boolean }} [flags]
+   * @param {{ isFirstInSegment?: boolean, prevSlide?: object|null }} [flags]
    */
   function motionRunEntrance(slide, style, entranceSec, gen, done, flags) {
     flags = flags || {};
     // Family Portrait overview (any segment that includes FP)
     if (slide.type === "portrait") {
-      familyPortraitRunEntrance(slide, style, entranceSec, gen, done);
+      familyPortraitRunEntrance(slide, style, entranceSec, gen, done, flags);
       return;
     }
     if (motionStyleIsEncore(style)) {
@@ -11497,19 +12449,25 @@
           );
         });
       },
-      { isFirstInSegment: isFirstInSegment }
+      { isFirstInSegment: isFirstInSegment, prevSlide: prevSlide }
     );
   }
 
   function startMotionEngineAt(index) {
     stopMotionEngine();
     if (!usesBoardSlides() || !slides.length) return;
-    if (isDrinks) return;
+    // Board 4 (left-hero box presentation) uses the same engine as boards 1–3
     _motionEngineRunning = true;
     _motionEngineColdStart = true;
     const gen = ++_motionEngineGen;
     const i = ((index % slides.length) + slides.length) % slides.length;
-    tokiInfo("motion engine START at", i, "blocks=", slides.length);
+    tokiInfo(
+      "motion engine START at",
+      i,
+      "blocks=",
+      slides.length,
+      isDrinks ? "(Board 4)" : ""
+    );
     motionEngineRunBlock(i, gen);
   }
 
@@ -11632,18 +12590,32 @@
     }
   }
 
+  /**
+   * True when slides are engine-shaped (segment / motionStyle / FP / Encore).
+   * Board 4 uses the same path when Include in Presentation? built those slides.
+   */
   function usesBoardSlides() {
-    return !isDrinks && slides.length > 0;
+    if (!slides.length) return false;
+    if (!isDrinks) return true;
+    const s0 = slides[0];
+    return !!(
+      s0 &&
+      (s0.segment ||
+        s0.motionStyle ||
+        s0.type === "portrait" ||
+        s0.type === "encore" ||
+        s0.animationBlockId)
+    );
   }
 
   function setActive(index, instant) {
+    if (usesBoardSlides()) {
+      setActiveBoardSlides(index, instant);
+      return;
+    }
     if (isDrinks) {
       setActiveDrinks(index, instant);
       if (_presentationRunning && !instant) notePresentationStepStart();
-      return;
-    }
-    if (usesBoardSlides()) {
-      setActiveBoardSlides(index, instant);
       return;
     }
     hideFamilyPortrait();
@@ -11965,7 +12937,10 @@
 
   /** Snap-clear box shell FP chrome (no transition). */
   function clearFpBoxShellHighlightsSnap() {
-    const boxes = document.querySelectorAll(".info-box.fp-shell-hl");
+    // Boards 1–3: .info-box; Board 4: .drinks-box / #drink-options-box
+    const boxes = document.querySelectorAll(
+      ".info-box.fp-shell-hl, .drinks-box.fp-shell-hl, #drink-options-box.fp-shell-hl"
+    );
     for (let i = 0; i < boxes.length; i++) {
       boxes[i].classList.remove("fp-shell-hl");
       boxes[i].style.removeProperty("--item-highlight");
@@ -11980,7 +12955,9 @@
     const s =
       Number.isFinite(Number(sec)) && Number(sec) > 0 ? Number(sec) : 0.45;
     const ms = Math.round(s * 1000) + 40;
-    const boxes = document.querySelectorAll(".info-box.fp-shell-hl");
+    const boxes = document.querySelectorAll(
+      ".info-box.fp-shell-hl, .drinks-box.fp-shell-hl, #drink-options-box.fp-shell-hl"
+    );
     for (let i = 0; i < boxes.length; i++) {
       const el = boxes[i];
       void el.offsetWidth;
@@ -12581,7 +13558,9 @@
   function heroKenBurnsOn() {
     // Static quarantine: no Ken Burns until Beta motion engine
     if (isPresentationStatic()) return false;
-    return config.slideshowKenBurns !== false && !isDrinks;
+    // Engine path owns Ken Burns for boards 1–4; legacy flag for non-engine only
+    if (isPresentationEngine()) return false;
+    return config.slideshowKenBurns !== false;
   }
 
   /** Motion target for the slideshow plate (falls back to img if plate missing). */
@@ -12947,16 +13926,20 @@
   function startSlideshow() {
     cancelPresentationAdvance();
     stopMotionEngine();
-    const count = isDrinks || usesBoardSlides() ? slides.length : items.length;
+    // One rule for all boards: engine slides use slides[]; else alpha items
+    const count = usesBoardSlides()
+      ? slides.length
+      : isDrinks
+        ? slides.length
+        : items.length;
     if (count <= 1) {
       _presentationRunning = false;
       updateDebugVisuals();
       return;
     }
 
-    // Motion engine: each segment uses its Presentation Mode → Motion Style
-    // (Slideshow vs Ken Burns vs Encore). Digits from Beta Motion table.
-    if (isPresentationEngine() && usesBoardSlides() && !isDrinks) {
+    // Motion engine ONLY — Beta Motion Punch/Hold/Out. No Board-4-only clocks.
+    if (isPresentationEngine() && usesBoardSlides()) {
       const sample = getMotionStyle(
         motionStyleNameForSlide(slides[activeIndex] || slides[0])
       );
@@ -12970,6 +13953,7 @@
       startMotionEngineAt(activeIndex);
       tokiInfo(
         "motion engine START",
+        isDrinks ? "Board4" : "board",
         "blocks=",
         count,
         "sampleStyle=",
@@ -12981,14 +13965,15 @@
         "punchOut=",
         sample.punchOut,
         "zoom=",
-        motionStyleUsesZoom(sample) ? "yes" : "no"
+        motionStyleUsesZoom(sample) ? "yes" : "no",
+        "| digits from Beta Motion (not Presentation Speed)"
       );
       updateDebugVisuals();
       return;
     }
 
     const sec = parseSlideshowSpeed(config.slideshowSpeed, 3);
-    // 0 = hold on current slide (Style → Presentation Speed)
+    // 0 = hold on current slide (Style → Presentation Speed) — non-engine only
     if (sec <= 0) {
       _presentationRunning = false;
       tokiInfo("presentation paused (Presentation Speed =", sec, ")");
@@ -14026,6 +15011,7 @@
       document.body.classList.remove("presentation-static");
       // Defaults until Beta Motion row loads
       applyMotionStylesConfig({});
+      applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
       tokiInfo(
         "presentation motion: ENGINE (Ken Burns from Beta Motion table)"
       );

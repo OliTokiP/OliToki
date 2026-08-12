@@ -1,3 +1,10 @@
+/* Interpolate Hard-spotlight hole pinch with the Encore zoom clock. */
+@property --encore-hole-pinch {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* TokiMenu — fixed 1920×1080 digital menu board */
 
 *,
@@ -64,6 +71,9 @@ body {
   /* FP / segment Wind-up Zoom Reveal (peak→1×). Snappy; was wrongly sharing 3.4s. */
   --dur-fp-windup: 0.7s;
   --encore-zoom: 1;
+  --encore-hole-pinch: 0px;
+  /* Hardcoded: veil box hangs past the stage so a near-edge Hard hole stays a circle. */
+  --veil-extend: 20px;
   /* Peak scale for Encore bows / FP intro (higher = closer push-in) */
   --encore-zoom-to: 1.24;
   /* Slideshow hero Ken Burns: max = current size; min ≈ 7% smaller */
@@ -598,6 +608,14 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
   filter: none;
 }
 
+/* Board 4: hero-wrap left −255; FP stage at 0 → lattice offset +255 */
+.board-drinks #hero-plate .hero-multi-plates {
+  left: 255px;
+  top: -133px;
+  width: 848.1px;
+  height: 1080px;
+}
+
 body.preview-wall #hero-plate {
   /* Keep wall lean; still allow subtle KB if enabled in JS */
   filter: none;
@@ -613,7 +631,7 @@ body.preview-wall #hero-plate {
 #family-portrait-stage {
   position: absolute;
   z-index: 5;
-  /* Frame cutout x at y=0 (header polygon right tip) */
+  /* Frame cutout x at y=0 (header polygon right tip) — boards 1–3 photo RIGHT */
   left: 1071.9px;
   top: 0;
   /* 1920 − 1071.9 */
@@ -628,6 +646,26 @@ body.preview-wall #hero-plate {
   -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
   /* Keep plate z-index / filters / blend modes inside this group */
   isolation: isolate;
+}
+
+/*
+  Board 4 (photo LEFT): quarantine mirrored Hero Grid.
+  Flat LEFT edge; diagonal cutout on the RIGHT (mirror of boards 1–3).
+  Stage AABB left=0 width≈848.1; bottom right inset ~9.98%.
+*/
+.board-drinks #family-portrait-stage,
+#family-portrait-stage.photo-left {
+  left: 0;
+  width: 848.1px;
+  clip-path: polygon(0 0, 100% 0, 90.02% 100%, 0 100%);
+  -webkit-clip-path: polygon(0 0, 100% 0, 90.02% 100%, 0 100%);
+  --portrait-stage-left: 0px;
+}
+
+.board-drinks #family-portrait-stage .family-portrait-bg,
+#family-portrait-stage.photo-left .family-portrait-bg {
+  /* Scaffold BG aligns with stage origin when photo is on the left */
+  left: 0;
 }
 
 /*
@@ -723,6 +761,11 @@ body.preview-wall #hero-plate {
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
 }
 
+/* Beta → Veil Shadow Settings ON: collage shadow off (solo #hero-plate .hero-anim keeps its shadow). */
+html.beta-veil-shadow #family-portrait-stage .family-portrait-plates {
+  filter: none;
+}
+
 #family-portrait-stage.visible {
   opacity: 1;
 }
@@ -770,7 +813,8 @@ body.preview-wall #family-portrait-stage {
 
 /* Wall lean path: disable shadows on plates container (and keep slot rule for revert compatibility) */
 body.preview-wall #family-portrait-stage .family-portrait-plates,
-body.preview-wall #family-portrait-stage .family-portrait-slot {
+body.preview-wall #family-portrait-stage .family-portrait-slot,
+body.preview-wall #family-portrait-stage .family-portrait-veil {
   filter: none;
 }
 
@@ -787,21 +831,33 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
 
 #family-portrait-stage .family-portrait-veil {
   position: absolute;
-  inset: 0;
+  /* Veil extend is hardcoded (--veil-extend). Hole paint is offset by the
+     same px so stage-space --encore-hole-x/y (camera + shadow) do not move. */
+  inset: calc(-1 * var(--veil-extend, 20px));
   z-index: 2;
   pointer-events: none;
   opacity: 0;
   /* Engine sets --motion-veil from Punch-In / Wind phase digits */
   transition: opacity var(--motion-veil, var(--dur-slow)) var(--ease-fade);
   transform: translateZ(0);
+  --veil-hole-x: calc(
+    var(--encore-hole-x, 50%) + var(--veil-extend, 20px)
+  );
+  --veil-hole-y: calc(
+    var(--encore-hole-y, 50%) + var(--veil-extend, 20px)
+  );
 }
 
 /* ── Hard: solid fill outside a crisp circle (great visibility) ── */
 #family-portrait-stage.encore-spot-hard .family-portrait-veil {
   mix-blend-mode: normal;
   background: radial-gradient(
-    circle var(--encore-hole-r, 160px)
-      at var(--encore-hole-x, 50%) var(--encore-hole-y, 50%),
+    circle
+      max(
+        40px,
+        calc(var(--encore-hole-r, 160px) - var(--encore-hole-pinch, 0px))
+      )
+      at var(--veil-hole-x) var(--veil-hole-y),
     rgba(0, 0, 0, 0) 0%,
     rgba(0, 0, 0, 0) 99%,
     var(--encore-veil-color, #000) 100%
@@ -812,12 +868,17 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
   opacity: 1;
 }
 
+/* Beta Veil Shadow + Hard only: drop-shadow follows the hole's alpha (cartoon cutout lip). */
+html.beta-veil-shadow #family-portrait-stage.encore-spot-hard .family-portrait-veil {
+  filter: var(--veil-shadow-filter, none);
+}
+
 /* ── Soft: smooth falloff (higher black strength than early 0.74/0.79) ── */
 #family-portrait-stage.encore-spot-soft .family-portrait-veil {
   mix-blend-mode: multiply;
   background: radial-gradient(
     circle calc(var(--encore-hole-r, 160px) * 1.85)
-      at var(--encore-hole-x, 50%) var(--encore-hole-y, 50%),
+      at var(--veil-hole-x) var(--veil-hole-y),
     transparent 0%,
     transparent 8%,
     color-mix(in srgb, var(--encore-veil-color, #000) 12%, transparent) 18%,
@@ -1855,7 +1916,9 @@ body.preview-wall #family-portrait-stage .family-portrait-slot {
     var(--stripe-1) calc(var(--stripe-period) + 0.6px)
   );
   background-size: 100% var(--stripe-period);
-  opacity: 0.92;
+  /* FOREGROUND panel pattern — full strength (no atmospheric fade).
+     Style #bg-pattern stays ~0.35 for background texture only. */
+  opacity: 1;
   transform-origin: center center;
   will-change: transform;
   animation-name: drinks-stripe-scroll;
@@ -1976,6 +2039,14 @@ body.preview-wall #bg-pattern-track {
 
 .drinks-box-shell .shell-outer {
   fill: var(--secondary-color);
+  /* Board 4 box FP overview: same shape chrome ease as footer info-boxes */
+  transition: fill var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
+}
+
+/* Family Portrait on Board 4: options box shell → Highlight (not title text) */
+.drinks-box.fp-shell-hl .drinks-box-shell .shell-outer,
+#drink-options-box.fp-shell-hl .drinks-box-shell .shell-outer {
+  fill: var(--item-highlight, var(--highlight));
 }
 
 .drinks-box-shell .shell-body {

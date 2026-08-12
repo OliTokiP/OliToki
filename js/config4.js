@@ -1,22 +1,30 @@
 /**
- * TokiMenu — Board 4 (Drinks & Deals)
- * Google Sheet tab: "Board 4" (gid=1962117802; legacy names: Announcements / Drinks Deals)
+ * TokiMenu — Board 4 (Drinks & Deals / Announcements)
  *
- * Theme / speeds / highlights from Style tab.
- * Announcement + stripes: this board tab.
- * Drink box items / title / overview: shared drinks sheet (drinksSheetGid).
- * Stripe / box colors: Color Picker labels → theme hex (or Override fill).
- * Include Stripes: 1 = animate stripes, 0 = hide completely.
+ * Sheet tab: "Announcements" (gid=149404218) — revised Settings + Inventory.
+ *   Settings: Title | Include Footer Box (singular) | BG Color |
+ *             BG Pattern | Pattern Color 1 | Pattern Color 2
+ *   Inventory (under settings): Announcement Title | Subtitle | Text |
+ *             Box Color | Speed | Motion Style | Motion Setting
+ *
+ * Footer box content (single selection): Proteins / Sauces / Drinks / Veggies
+ * sheets — each keeps its own Settings (color, columns, align, CF).
+ * Theme / speeds: Style and Theme (revised).
+ * Panel pattern (#stripes) is FOREGROUND at full opacity; Style BG Pattern
+ * remains atmospheric (lower opacity) on #bg-pattern.
+ *
+ * Legacy Board 4 chrome tab gid=1962117802 kept as archive only.
  */
 window.TOKI_CONFIG = {
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
-  googleSheetGid: "1962117802",
+  googleSheetGid: "149404218", // Announcements (revised)
   styleThemeGid: "183083022", // Style and Theme (revised)
   debugMenuGid: "1793812854",
-  /** Dedicated drink-box content (items, overview, box title/color)
-   * Now points to Drinks (gid=1145721787) with uniform Settings+Inventory.
-   */
-  drinksSheetGid: "1145721787",
+  /** Shared box content sheets (same as boards 1–3) for Include Footer Box */
+  proteinSheetGid: "1420775786",
+  saucesSheetGid: "1630545949",
+  drinksSheetGid: "1145721787", // Drinks (Settings + Inventory)
+  veggiesSheetGid: "640368705",
 
   layout: "drinks",
   showHero: true,
@@ -31,19 +39,8 @@ window.TOKI_CONFIG = {
   extraItems: [],
 
   /**
-   * Board tab (announcement + chrome only once drinksSheetGid is set):
-   * A title | B include stripes | C stripe1 | D stripe2 |
-   * E Announcement Title | F Announcement Subtitle | G Announcement Text |
-   * H Announcement Box Color | I Announcement Speed (seconds; inherit blanks) |
-   * J Shout (1/0; inherit blanks — Roboto Black + max fill + text earthquake) |
-   * K Shout Shake Intensity (0–1+; inherit blanks; baked baseline = 0.75) |
-   * Legacy drink columns below are unused when drinksSheetGid loads.
-   *
-   * Each non-empty G cell is one message-board slide.
-   * Blank E/I/J/K inherit previous title/speed/shout/intensity; blank F clears
-   * subtitle only when E sets a new title (married title/subtitle).
-   * Body text align + rich bold-color come from the G cell itself (Sheets formatting).
-   * Titles keep default alignment (not driven by G).
+   * Revised Announcements tab uses ANN_REVISED_* maps in menu.js.
+   * Column map below is legacy Board 4 chrome (gid 1962117802) fallback only.
    */
   columns: {
     title: 0,
@@ -56,9 +53,8 @@ window.TOKI_CONFIG = {
     announcementColor: 7,
     announcementSpeed: 8,
     announcementShout: 9,
-    /** K — rightmost; no column shift needed for announcements */
     announcementShakeIntensity: 10,
-    // Legacy fallback if drinks sheet fails (drinksSheetGid normally owns drinks):
+    // Legacy drink columns (unused when drinksSheetGid loads)
     drinkBoxTitle: 11,
     drinkBoxSubtitle: 12,
     drinkBoxColor: 13,
@@ -79,13 +75,8 @@ window.TOKI_CONFIG = {
   },
 
   /**
-   * Drinks content sheet (gid=1145721787, tab "Drinks"; archive "Drinks (old)"):
-   * Uses uniform structure shared with Proteins/Sauces:
-   *   Settings (row ~3): Title | Subtitle | BG Color | Create Columns? | Text Align
-   *   Inventory (after "Inventory" label): Item | Item Subtitle | Item Price | New | Image | Include
-   *
-   * Legacy flat columns below kept for fallback / reference only.
-   * Overview / Individual flags default to true in revised path (can extend Settings cols later).
+   * Drinks content sheet (gid=1145721787) — Settings + Inventory.
+   * Legacy flat indices kept for archive sheet fallback.
    */
   drinksSheetColumns: {
     drinkBoxTitle: 0,

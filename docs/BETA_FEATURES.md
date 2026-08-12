@@ -22,6 +22,24 @@ Section pattern matches other revised tabs (label → headers → data), but Bet
 | 11 | `Include Footer Boxes` (header) |
 | 12 | **Data cell** — comma-separated multi-select (Sheets data validation) |
 
+### `Veil Shadow Settings` (Hard Encore cutout)
+
+Section title `Veil Shadow Settings`. Header row then **one data row directly under it**.
+
+| Column | What it does |
+|--------|----------------|
+| **Enabled?** | `TRUE` = experiment on. `FALSE` / blank = current behavior (one collage shadow on `.family-portrait-plates`; no veil shadow). |
+| **Shift Right / Shift Down** | px offset of the veil `drop-shadow` (cartoon lip into the Hard hole). |
+| **Spread** | Extra thickness. CSS `filter: drop-shadow` has no spread — runtime fakes it with extra hard copies. |
+| **Blur** | px blur of the main drop-shadow. |
+| **Opacity** | `0–1` (values `>1` are treated as percent, e.g. `50` → `0.5`). |
+
+**Veil extend** is hardcoded at `20px` (no sheet hook). `--encore-hole-x/y` stay in stage space; only the veil box / gradient `at` are offset.
+
+**Hole pinch** is hardcoded (Hard only): shrink `40px` on Punch-in with the zoom ease; Punch-out stays pinched. Reset to full radius at the next Punch-in while the veil is undimmed. Soft is unchanged. No sheet hook.
+
+Defaults written under the headers (also in `VEIL_SHADOW_DEFAULTS`): `18 / 22 / 3 / 2 / 0.5`. Blank cells keep those. Solo heroes (`#hero-plate .hero-anim`) are never touched. Soft spotlight never gets a veil shadow. Wall preview strips the filter.
+
 ### `Include Footer Boxes` (primary control today)
 
 - The list now lives on **each board's own Settings row** (column "Include Footer Boxes", e.g. `Proteins, Sauces, Veggies`).

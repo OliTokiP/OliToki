@@ -12,11 +12,23 @@ Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on R
 | Board 1 | `1058015863` | Board 1 (old) `0` | **live** (config.js) |
 | Board 2 | `314919644` | Board 2 (old) `1959901693` | **live** (config2.js) |
 | Board 3 | `1684494006` | Board 3 (old) `1427118423` | **live** (config3.js) |
+| Announcements | `149404218` | Board 4 chrome (old) `1962117802` | **live** (config4.js) — Settings + message Inventory |
 | Proteins | `1420775786` | Proteins (old) `1191392779` | **live** (footer box) |
 | Sauces   | `1630545949` | Sauces (old) `1780619208`     | **live** (footer box) |
-| Drinks   | `1145721787` | Drinks (old) `628145419`      | **live** (board 4 + footer drinks) |
+| Drinks   | `1145721787` | Drinks (old) `628145419`      | **live** (board 4 footer box + boards 1–3) |
 | Veggies  | `640368705`  | — | **live** (4th footer box; Beta selection) |
 | Beta Features | `1710200195` | — | **live** — `Include Footer Boxes` drives boards 1–3 strip ([BETA_FEATURES.md](./BETA_FEATURES.md)) |
+
+### Announcements tab (Board 4) — revised layout
+
+| Block | Columns |
+|-------|---------|
+| **Settings** | Title · Include Footer Box *(singular)* · BG Color · BG Pattern · Pattern Color 1 · Pattern Color 2 |
+| **Inventory** (under Settings; may omit “Inventory” label) | Announcement Title · Subtitle · Text · Box Color · Speed · Motion Style · Motion Setting |
+
+- **Include Footer Box:** one of `Drinks` / `Proteins` / `Sauces` / `Veggies` / blank → paints `#drink-options-box` from that sheet’s Settings + Inventory (CF / Create Columns / Align / colors).
+- **BG Pattern + Pattern Colors:** panel FOREGROUND stripes (`#stripes`) at **100%** opacity. Style tab BG Pattern remains atmospheric on `#bg-pattern`.
+- **Motion Style / Setting:** parsed and stored on each message for the upcoming announcements motion feature (not yet applied).
 
 **Tab rename (2026-08-10):** revised tabs now use bare names (`Proteins`, `Sauces`, `Drinks`, `Board 1`…); archives are `… (old)`. Live loads use **gid** (unchanged). Name-based xlsx fill / local workbook pick prefers non-`(old)` exact titles via `pickBestSheetName`.
 
