@@ -89,7 +89,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | Feature | Impact | Primary cost | Notes / kill guidance |
 |---------|--------|--------------|------------------------|
 | **BG Blur** (`filter: blur` up to ~40px) | **High** | GPU filter on large wallpaper | **Hard kill** at 0: `filter: none`, remove `has-blur`. Percent `100%` = max cost. Wall path forces blur off. |
-| **Dual-layer galaxy pan** (seamless scroll) | **High** | Continuous RAF + 2 full-stage images | Wall uses **single-layer** pan. Kill: cancel RAF (`startGalaxyScroll` counterpart), one layer only. Frozen during Encore (`bgScrollFrozen`) — good hang pattern. |
+| **Dual-layer galaxy pan** (seamless scroll) | **High** | Continuous RAF + 2 full-stage images | Wall uses **single-layer** pan. Kill: cancel RAF (`startGalaxyScroll` counterpart), one layer only. Frozen during Encore only (`bgScrollFrozen`). Family Portrait does not freeze pan. |
 | **BG Blend Mode** (non-`normal`) | **Medium–High** | Extra compositing with Background Plate | `normal` is cheapest. Wall forces normal. |
 | **BG Opacity** | **Low–Medium** | Layer opacity | Cheap alone; stacks with blur/blend. |
 | **BG Wallpaper decode** (large masters) | **Medium** (spike) | Network + decode + memory | Prefer stage-sized / WebP. Wall uses `wallFriendlyBgPath`. Hang after load is fine. |
@@ -146,7 +146,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | `tokiLog` / `tokiInfo` / `tokiWarn` / `tokiError` | Tagged console helpers in `menu.js` |
 | `isPreviewWall()` / `body.preview-wall` | Lean multi-board path |
 | `?imgScale=` | Runtime Plate/BG downsample for cost experiments |
-| `bgScrollFrozen()` | Stops free pan during Encore / visible FP |
+| `bgScrollFrozen()` | Stops free pan during Encore only. Family Portrait does not freeze or replace the Background. |
 | Soft-refresh **fingerprint** | Skip re-render when sheet unchanged |
 | Wall: blur/blend/xlsx mostly off | Precedent for real kill-switches |
 

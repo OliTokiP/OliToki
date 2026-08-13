@@ -2103,6 +2103,75 @@
   }
 
   /**
+   * Whole Encore *segment* (FP wind-up + bows). Used to kill wallpaper / stripes.
+   * Do not use isEncoreActiveNow() for BG — that is bow-only, so wallpaper
+   * would stay up during the Encore family-portrait lineup.
+   * Box Slideshow / other modes stay false so their BG can return on handoff.
+   */
+  function isEncoreSegmentNow() {
+    if (usesBoardSlides() && slides.length) {
+      const s = slides[activeIndex];
+      if (s && String(s.segmentMode || "").toLowerCase() === "encore") {
+        return true;
+      }
+    }
+    return String(_activeSegmentMode || "").toLowerCase() === "encore";
+  }
+
+  /**
+   * Encore plate is Secondary Color. Wallpaper / stripes stay loaded and
+   * keep their pan position — we only fade them (never strip src or
+   * display:none, which snaps the dual-layer loop back to origin).
+   */
+  let _encoreSolidBg = false;
+  let _encoreBgFadeTimer = null;
+
+  function setEncoreSolidBackground(on, opts) {
+    opts = opts || {};
+    const want = !!on;
+    const instant = !!opts.instant;
+    if (_encoreSolidBg === want && !instant) return;
+    _encoreSolidBg = want;
+
+    if (_encoreBgFadeTimer) {
+      clearTimeout(_encoreBgFadeTimer);
+      _encoreBgFadeTimer = null;
+    }
+
+    const galaxy = document.getElementById("galaxy") || els.galaxy;
+    if (instant) {
+      document.body.classList.remove("encore-bg-fading");
+      document.body.classList.toggle("encore-solid-bg", want);
+    } else {
+      document.body.classList.add("encore-bg-fading");
+      void document.body.offsetWidth;
+      document.body.classList.toggle("encore-solid-bg", want);
+      const fadeMs = presentationFadeMs(
+        els.familyPortrait || document.documentElement
+      );
+      _encoreBgFadeTimer = window.setTimeout(function () {
+        _encoreBgFadeTimer = null;
+        document.body.classList.remove("encore-bg-fading");
+      }, fadeMs + 40);
+    }
+
+    if (galaxy) {
+      if (want) {
+        galaxy.style.backgroundColor = config.secondaryColor || "#000000";
+        galaxy.classList.remove("is-solid");
+        galaxy.classList.toggle("has-image", !!config.bgImage);
+      } else {
+        const plate =
+          normalizeHex(config.bgColor) ||
+          normalizeHex(config.bgSolid) ||
+          config.mainColor ||
+          "#000000";
+        galaxy.style.backgroundColor = plate;
+      }
+    }
+  }
+
+  /**
    * Style → Encore Spotlight Type/Color classes + --encore-veil-color.
    * @param {{isNew?: boolean}|null} [item] active bow item (for Highlight color).
    *   When null/omitted and already in Encore, **keep** the current veil color
@@ -2132,13 +2201,6 @@
         stage.style.removeProperty("--encore-veil-color");
         stage.style.removeProperty("background-color");
       }
-      // Leaving Encore: bring stripes / wallpaper / scroll back.
-      if (!isEncoreActiveNow()) {
-        document.body.classList.remove("encore-solid-bg");
-        applyStageBackground();
-        applyBgPattern();
-        updateStripeAnimation();
-      }
       return;
     }
 
@@ -2154,12 +2216,6 @@
       colorMode === "highlight"
     );
     stage.classList.toggle("encore-spot-color-black", colorMode === "black");
-
-    // Hide stripes/pattern (do not pause — paused + visible = frozen stripes).
-    document.body.classList.add("encore-solid-bg");
-    if (els.galaxy) {
-      els.galaxy.style.backgroundColor = config.secondaryColor || "#000000";
-    }
 
     if (colorMode === "highlight") {
       // Only update color when we know the bow item — preserve Special through zoom-out
@@ -2786,10 +2842,9 @@
       }
     }
 
-    // Encore: solid Secondary Color. Hide (do not pause) wallpaper + stripes.
-    // Box handoff restores via applyBgPattern / updateStripeAnimation.
-    if (isEncoreActiveNow()) {
-      imagePath = null;
+    // Encore: plate is Secondary, but wallpaper imgs stay loaded (hidden via
+    // CSS fade). Stripping src / display:none resets dual-layer pan to origin.
+    if (_encoreSolidBg) {
       plate = config.secondaryColor || plate;
       document.body.classList.add("encore-solid-bg");
     } else {
@@ -5245,7 +5300,7 @@
       root.style.setProperty("--stripe-1", config.stripeColor1 || main);
       root.style.setProperty("--stripe-2", config.stripeColor2 || secondary);
       // Include Stripes: 1 = show + animate, 0 = hide completely
-      const showStripes = config.includeStripes !== false && !isEncoreActiveNow();
+      const showStripes = config.includeStripes !== false;
       if (els.stripes) {
         els.stripes.hidden = !showStripes;
         els.stripes.style.display = showStripes ? "" : "none";
@@ -5323,17 +5378,6 @@
       track = tr;
     }
     if (!bp) return;
-
-    // Encore: disappear completely. Do not pause-in-place (that leaves static stripes).
-    if (isEncoreActiveNow()) {
-      document.body.classList.add("encore-solid-bg");
-      bp.hidden = true;
-      bp.style.display = "none";
-      bp.classList.remove("active");
-      document.body.classList.remove("has-bg-pattern-stripes");
-      return;
-    }
-    document.body.classList.remove("encore-solid-bg");
 
     if (isStripes) {
       bp.hidden = false;
@@ -10288,18 +10332,11 @@
   }
 
   /**
-   * Freeze free galaxy pan while Encore is on, collage is on-screen, or free
-   * layers are hidden under scaffold-pin mode.
+   * Freeze free galaxy pan only during an Encore *segment*.
+   * Family Portrait (Slideshow / Static) must not change BG scroll at all.
    */
   function bgScrollFrozen() {
-    // Segment-scoped: Alpha Encore must not freeze pan during Box Slideshow
-    if (isEncoreActiveNow()) return true;
-    const stage = els.familyPortrait;
-    if (stage && !stage.hidden && stage.classList.contains("visible")) {
-      return true;
-    }
-    const galaxy = document.getElementById("galaxy");
-    return !!(galaxy && galaxy.classList.contains("encore-scaffold-bg"));
+    return isEncoreSegmentNow();
   }
 
   let _scaffoldPinTimer = null;
@@ -10339,6 +10376,8 @@
    * gap so we never flash solid BG Color during the handoff.
    */
   function scheduleScaffoldPinAfterFadeIn(stage) {
+    // Slideshow / Static FP: leave free galaxy scrolling. Pin is Encore-only.
+    if (!isEncoreSegmentNow()) return;
     if (!stage || !stage.querySelector(".family-portrait-bg")) return;
     if (_scaffoldPinTimer) {
       clearTimeout(_scaffoldPinTimer);
@@ -10478,6 +10517,24 @@
    */
   function appendScaffoldBg(rig) {
     if (!rig) return false;
+
+    // Encore segment: color plate only (Secondary). Never copy the wallpaper
+    // onto the portrait rig — that is the image that stays visible during Encore.
+    if (isEncoreSegmentNow()) {
+      const wrap = document.createElement("div");
+      wrap.className = "family-portrait-bg";
+      wrap.setAttribute("aria-hidden", "true");
+      const plateEl = document.createElement("div");
+      plateEl.className = "family-portrait-bg-plate";
+      plateEl.style.backgroundColor = config.secondaryColor || "#000000";
+      wrap.appendChild(plateEl);
+      if (rig.firstChild) rig.insertBefore(wrap, rig.firstChild);
+      else rig.appendChild(wrap);
+      setEncoreScaffoldBgActive(true);
+      tokiInfo("scaffold BG attached (encore solid secondary, no image)");
+      return true;
+    }
+
     let imagePath = config.bgImage || null;
     if (!imagePath) return false;
     imagePath = wallFriendlyBgPath(imagePath);
@@ -10524,7 +10581,11 @@
     if (rig.firstChild) rig.insertBefore(wrap, rig.firstChild);
     else rig.appendChild(wrap);
 
-    setEncoreScaffoldBgActive(true);
+    // Wallpaper copy is unused for Slideshow FP; if we ever attach one,
+    // still do not pin/hide free galaxy except during Encore.
+    if (isEncoreSegmentNow()) {
+      setEncoreScaffoldBgActive(true);
+    }
     tokiInfo("scaffold BG attached", imagePath, "blend", blend || "normal");
     return true;
   }
@@ -10729,6 +10790,9 @@
 
       _hidePortraitTimer = window.setTimeout(function () {
         if (hideGen !== _hidePortraitGen) return;
+        // Phase 2: collage fades on --dur-mid; wallpaper/stripes fade back in
+        // on the same clock (imgs stay loaded so dual-layer pan does not reset).
+        setEncoreSolidBackground(false);
         // Phase 2: force a real opacity fade (don't rely only on .visible class)
         stage.style.transition =
           "opacity var(--dur-mid, 0.45s) var(--ease-fade, ease)";
@@ -10836,6 +10900,11 @@
     stage.style.transition =
       "opacity var(--dur-mid, 0.45s) var(--ease-fade, ease)";
 
+    // Encore Wind-up: fade wallpaper/stripes out on the same --dur-mid clock
+    if (isEncoreSegmentNow()) {
+      setEncoreSolidBackground(true);
+    }
+
     requestAnimationFrame(function () {
       stage.classList.add("visible");
       stage.style.opacity = "1";
@@ -10917,7 +10986,7 @@
       stage.setAttribute("aria-hidden", "false");
       snapPortraitZoom(stage, 1);
       stage.classList.add("visible");
-      if (stage.querySelector(".family-portrait-bg")) {
+      if (isEncoreSegmentNow() && stage.querySelector(".family-portrait-bg")) {
         setEncoreScaffoldBgActive(true);
       }
       return;
@@ -11019,7 +11088,7 @@
       stage.setAttribute("aria-hidden", "false");
       stage.style.opacity = "";
       stage.classList.add("visible");
-      if (stage.querySelector(".family-portrait-bg")) {
+      if (isEncoreSegmentNow() && stage.querySelector(".family-portrait-bg")) {
         setEncoreScaffoldBgActive(true);
       }
       if (!opts.keepDimmed) {
@@ -11037,7 +11106,7 @@
       stage.classList.remove("is-dimmed", "is-zoom-out");
       stage.style.opacity = "";
       stage.classList.add("visible");
-      if (stage.querySelector(".family-portrait-bg")) {
+      if (isEncoreSegmentNow() && stage.querySelector(".family-portrait-bg")) {
         setEncoreScaffoldBgActive(true);
       }
       return;
@@ -11212,8 +11281,11 @@
     rig.className = "family-portrait-rig";
     stage.appendChild(rig);
 
-    // Collage + BG Image: pin to scaffold (Slideshow FP overview + Encore)
-    appendScaffoldBg(rig);
+    // Encore only: solid Secondary plate on the rig. Slideshow FP does not
+    // attach or pin a BG copy — free galaxy keeps scrolling underneath.
+    if (isEncoreSegmentNow()) {
+      appendScaffoldBg(rig);
+    }
 
     const plates = document.createElement("div");
     plates.className = "family-portrait-plates";
@@ -12512,8 +12584,15 @@
 
     _prevBoardSlide = slide;
     _prevBoardSlideType = slide.type || "";
-    _activeSegmentMode =
-      slide.segmentMode === "encore" ? "encore" : "slideshow";
+    {
+      const nextSeg =
+        slide.segmentMode === "encore" ? "encore" : "slideshow";
+      const segChanged = _activeSegmentMode !== nextSeg;
+      _activeSegmentMode = nextSeg;
+      if (segChanged) {
+        setEncoreSolidBackground(nextSeg === "encore");
+      }
+    }
 
     tokiInfo(
       "motion block",
@@ -13399,7 +13478,13 @@
       }
     }
 
-    _activeSegmentMode = segMode;
+    {
+      const segChanged = _activeSegmentMode !== segMode;
+      _activeSegmentMode = segMode;
+      if (segChanged) {
+        setEncoreSolidBackground(segMode === "encore", { instant: !!instant });
+      }
+    }
 
     // Veil only on Encore *bows* (and never in static quarantine).
     if (
