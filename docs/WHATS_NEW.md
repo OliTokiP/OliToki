@@ -1,9 +1,16 @@
 # What’s New
 
-**Last updated:** 2026-08-13 21:30  
+**Last updated:** 2026-08-13 23:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-13 23:30 — Fire Stick HD is 1080p; pin AbleSign URLs
+
+**Boards / surface:** AbleSign on **Fire Stick HD** (1080p max, 1080p TVs)  
+**Summary:** Debug Display `3840×2160 dpr2` is 1920 CSS × 2, not a 4K screen. AbleSign has no resolution setting and appears to default a 2× buffer. Append `?w=1920&dpr=1` so we load 1080p assets. See [SUPPORTED_DEVICES.md](./SUPPORTED_DEVICES.md).
 
 ---
 

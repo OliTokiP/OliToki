@@ -232,10 +232,52 @@
   }
 
   /**
+   * URL pin for AbleSign / Fire Stick HD (WebView often reports 3840×2160 dpr2
+   * on a 1080p stick). ?w=1920&dpr=1 or ?display=1920x1080.
+   * See docs/SUPPORTED_DEVICES.md.
+   */
+  function displayBudgetOverrideFromUrl() {
+    try {
+      const q = new URLSearchParams(location.search || "");
+      let w = 0;
+      let h = 0;
+      let dpr = 0;
+      const disp = q.get("display") || "";
+      const dm = String(disp).match(/^(\d+)\s*[x×]\s*(\d+)/i);
+      if (dm) {
+        w = Number(dm[1]);
+        h = Number(dm[2]);
+      }
+      const wRaw = q.get("w") || q.get("width");
+      const hRaw = q.get("h") || q.get("height");
+      const dRaw = q.get("dpr");
+      if (wRaw != null && wRaw !== "") w = Number(wRaw);
+      if (hRaw != null && hRaw !== "") h = Number(hRaw);
+      if (dRaw != null && dRaw !== "") dpr = Number(dRaw);
+      if (!(w > 0) && !(h > 0) && !(dpr > 0)) return null;
+      if (!(w > 0) && h > 0) w = Math.round((h * 16) / 9);
+      if (!(h > 0) && w > 0) h = Math.round((w * 9) / 16);
+      if (!(dpr > 0)) dpr = 1;
+      if (dpr > 2) dpr = 2;
+      return { w: w, h: h, dpr: dpr };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * On-screen pixel budget (CSS box × devicePixelRatio, cap 2).
-   * 1080p TV → ~1920×1080; Mac retina window is still the painted box, not 5K.
+   * 1080p TV → ~1920×1080 unless AbleSign lies (dpr2 → 3840×2160).
    */
   function displayPixelBudget() {
+    const pinned = displayBudgetOverrideFromUrl();
+    if (pinned && pinned.w > 0 && pinned.h > 0) {
+      return {
+        w: pinned.w * pinned.dpr,
+        h: pinned.h * pinned.dpr,
+        dpr: pinned.dpr,
+      };
+    }
     let w = window.innerWidth || 1920;
     let h = window.innerHeight || 1080;
     try {
@@ -257,6 +299,7 @@
       dpr = 1;
     }
     if (dpr > 2) dpr = 2;
+    if (pinned && pinned.dpr > 0) dpr = pinned.dpr;
     return { w: w * dpr, h: h * dpr, dpr: dpr };
   }
 
