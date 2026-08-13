@@ -1,9 +1,17 @@
 # What’s New
 
-**Last updated:** 2026-08-13 18:00  
+**Last updated:** 2026-08-13 20:00  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-13 20:00 — Live Settings (Alpha vs Restaurant, Require Restart)
+
+**Boards / surface:** all four live boards  
+**Sheet:** [OliToki Menu Settings](https://docs.google.com/spreadsheets/d/1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY/edit)  
+**Summary:** `toki_server` reads Settings → **Data Source** (catalog URL) and serves that workbook on `/api/sheets/csv`. **Require restart to update?** = TRUE turns off the 30s soft refresh (load once until a human refreshes the browser).
 
 ---
 

@@ -31,11 +31,11 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 ## Data flow
 
 1. Board page loads `data-source.js` → `configN.js` → `menu-data.js` → `menu.js`
-2. Live data: Google Sheets values only (`/api/sheets/csv`) via service account proxy or public CSV export. Drive xlsx / cell fills / rich text are quarantined in `deprecated/sheet-styles/`
-3. Board 4 announcement slides: one message per non-empty **G** cell; speed **I**; **Shout** column **J**. In-cell rich text / fill colors are quarantined (plain text + typed hex only).
-4. Themes / speeds / highlights from the Style tab
-5. **Beta Features** (gid `1710200195`): boards 1–3 footer selection via `Include Footer Boxes` comma list — see [docs/BETA_FEATURES.md](docs/BETA_FEATURES.md)
-6. Soft refresh: fingerprint unchanged → skip re-render; offline keeps last good menu
+2. Live data: **OliToki Menu Settings** picks Alpha vs Restaurant workbook; boards then load that sheet via `/api/sheets/csv`. Drive xlsx / cell fills / rich text are quarantined in `deprecated/sheet-styles/`
+3. Soft refresh (30s) runs unless Settings → **Require restart to update?** is on (load once until a human refreshes). Unchanged fingerprint → skip re-render; offline keeps last good menu.
+4. Board 4 announcement slides: one message per non-empty **G** cell; speed **I**; **Shout** column **J**. In-cell rich text / fill colors are quarantined (plain text + typed hex only).
+5. Themes / speeds / highlights from the Style tab
+6. **Beta Features** (gid `1710200195`): boards 1–3 footer selection via `Include Footer Boxes` comma list — see [docs/BETA_FEATURES.md](docs/BETA_FEATURES.md)
 
 ## Important conventions
 

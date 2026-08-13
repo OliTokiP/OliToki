@@ -5037,6 +5037,12 @@
    * not running (legacy "Anyone with the link" setup).
    */
   let _sheetsApiProxy = null; // null = unknown, true/false after probe
+  /** From OliToki Menu Settings (via /api/settings). */
+  let liveSettings = {
+    dataSource: "",
+    requireRestart: false,
+    sheetId: "",
+  };
 
   async function detectSheetsApiProxy() {
     if (_sheetsApiProxy != null) return _sheetsApiProxy;
@@ -5052,7 +5058,11 @@
       const j = await res.json();
       _sheetsApiProxy = !!(j && j.sheetsApi);
       if (_sheetsApiProxy) {
-        tokiInfo("sheets proxy: yes", j.email || "");
+        tokiInfo(
+          "sheets proxy: yes",
+          j.email || "",
+          j.dataSource ? "dataSource=" + j.dataSource : ""
+        );
       } else {
         tokiInfo("sheets proxy: health ok but sheetsApi false → public export");
       }
@@ -5062,6 +5072,41 @@
       tokiInfo("sheets proxy: unreachable → public export", String(e && e.message || e));
       return false;
     }
+  }
+
+  async function fetchLiveSettings() {
+    try {
+      const useProxy = await detectSheetsApiProxy();
+      if (!useProxy) return liveSettings;
+      const res = await fetch("/api/settings?t=" + Date.now(), {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        tokiWarn("live settings: HTTP " + res.status);
+        return liveSettings;
+      }
+      const j = await res.json();
+      liveSettings = {
+        dataSource: j.dataSource || "",
+        requireRestart: !!j.requireRestart,
+        sheetId: j.sheetId || "",
+      };
+      if (liveSettings.sheetId) {
+        cfg.googleSheetId = liveSettings.sheetId;
+      }
+      tokiInfo(
+        "live settings:",
+        "dataSource=" + (liveSettings.dataSource || "?"),
+        "requireRestart=" + liveSettings.requireRestart,
+        "sheet=" + (liveSettings.sheetId || "?")
+      );
+    } catch (err) {
+      tokiWarn(
+        "live settings unavailable:",
+        err && err.message ? err.message : err
+      );
+    }
+    return liveSettings;
   }
 
   function publicSheetCsvUrl(gid) {
@@ -7275,6 +7320,7 @@
     const errors = [];
     const mode = resolvedDataSource();
     const soft = !!opts.soft;
+    await fetchLiveSettings();
 
     // —— Soft refresh: only live sources; throw on failure (caller keeps UI) ——
     if (soft) {
@@ -13884,6 +13930,16 @@
     refreshInProgress = true;
     setFeatureActive('softRefresh', true, 'refresh work starting');
     try {
+      await fetchLiveSettings();
+      if (liveSettings.requireRestart) {
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+        tokiInfo("refresh: Require restart enabled — auto-refresh stopped");
+        setFeatureActive("softRefresh", false, "require restart");
+        return;
+      }
       // Soft: re-fetch CSVs only. No embedded/xlsx fallback if offline.
       // Unchanged fingerprint → skip re-render. Network error → keep last UI.
       const source = await loadMenu({ soft: true });
@@ -13932,6 +13988,14 @@
 
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
+    if (liveSettings.requireRestart) {
+      tokiInfo(
+        "auto-refresh OFF (Require restart to update) —",
+        liveSettings.dataSource || "sheet"
+      );
+      setFeatureActive("softRefresh", false, "require restart");
+      return;
+    }
     const sec = Number(cfg.refreshSeconds) || 0;
     if (sec <= 0) return;
     // Refresh for google + local xlsx; skip only pure embedded offline

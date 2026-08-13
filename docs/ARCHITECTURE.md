@@ -274,6 +274,7 @@ Server:
 | `/api/sheets/csv` | Tab values by gid/title |
 | `/api/sheets/xlsx` | **410 Gone** — Drive workbook export retired 2026-08-13 |
 | `/api/sheets/tabs` | gid ↔ title map |
+| `/api/settings` | Live Data Source + Require Restart (from OliToki Menu Settings) |
 
 Caches: meta TTL ~120s, CSV ~90s. API calls serialized (client not thread-safe). Fills/rich-text parsers: `deprecated/sheet-styles/`.
 

@@ -3,9 +3,10 @@
 TokiMenu local server: static files + Google Sheets API proxy.
 
 Boards fetch /api/sheets/csv so the spreadsheet can stay private (no
-"Anyone with the link"). Drive xlsx export is retired (410 on
-/api/sheets/xlsx). The service account key never goes to the browser —
-only this process holds secrets/google-service-account.json.
+"Anyone with the link"). Live workbook is chosen by OliToki Menu Settings
+(Data Source). Drive xlsx export is retired (410 on /api/sheets/xlsx).
+The service account key never goes to the browser — only this process
+holds secrets/google-service-account.json.
 
 Usage:
   python3 scripts/toki_server.py
@@ -25,6 +26,7 @@ import io
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 import time
@@ -36,9 +38,12 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_KEY = ROOT / "secrets" / "google-service-account.json"
 DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
+DEFAULT_SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
 ]
+_SHEET_ID_IN_URL = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
+_BARE_SHEET_ID = re.compile(r"^[a-zA-Z0-9-_]{30,}$")
 
 # Cache: avoid hammering Google on every soft reload / multi-board open.
 # googleapiclient is serialized under _api_lock — without CSV cache, 8 parallel
@@ -56,10 +61,126 @@ META_TTL = 120.0
 CSV_TTL = 90.0
 # Concurrent boards all force-refresh in the same second → one batchGet, not four.
 CSV_FORCE_COALESCE_S = 2.5
+_settings_lock = threading.Lock()
+_settings_cache: dict = {"at": 0.0, "data": None}
+SETTINGS_TTL = 15.0
 
 
 def _log(msg: str) -> None:
     print(f"[toki_server] {msg}", flush=True)
+
+
+def _cell(row: list, idx: int) -> str:
+    if not row or idx < 0 or idx >= len(row):
+        return ""
+    v = row[idx]
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "TRUE" if v else "FALSE"
+    return str(v).strip()
+
+
+def _parse_yes(raw: str, default: bool = False) -> bool:
+    s = str(raw or "").strip().lower()
+    if not s:
+        return default
+    if s in ("1", "yes", "y", "true", "on"):
+        return True
+    if s in ("0", "no", "n", "false", "off"):
+        return False
+    return default
+
+
+def extract_spreadsheet_id(raw: str) -> str | None:
+    """Accept a full Sheets URL or a bare spreadsheet id."""
+    s = str(raw or "").strip()
+    if not s:
+        return None
+    m = _SHEET_ID_IN_URL.search(s)
+    if m:
+        return m.group(1)
+    if _BARE_SHEET_ID.match(s) and " " not in s:
+        return s
+    return None
+
+
+def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
+    """
+    Settings tab:
+      A1 Data Source | B1 Require restart to update?
+      A2 Alpha Copy / Restaurant Copy | B2 checkbox
+      A6 Gsheet name | B6 Gsheet URL
+      A7+ catalog rows
+    """
+    data_source = ""
+    require_restart = False
+    catalog: list[dict] = []
+
+    header_idx = None
+    catalog_idx = None
+    for i, row in enumerate(rows or []):
+        a = _cell(row, 0).lower()
+        b = _cell(row, 1).lower()
+        if header_idx is None and a == "data source":
+            header_idx = i
+        if catalog_idx is None and "gsheet" in (a + " " + b) and "url" in (a + " " + b):
+            catalog_idx = i
+
+    if header_idx is not None and header_idx + 1 < len(rows):
+        data_source = _cell(rows[header_idx + 1], 0)
+        require_restart = _parse_yes(_cell(rows[header_idx + 1], 1), False)
+
+    if catalog_idx is not None:
+        for row in rows[catalog_idx + 1 :]:
+            name = _cell(row, 0)
+            url = _cell(row, 1)
+            if not name and not url:
+                continue
+            catalog.append(
+                {
+                    "name": name,
+                    "url": url,
+                    "sheetId": extract_spreadsheet_id(url),
+                }
+            )
+
+    key = data_source.lower()
+    match = None
+    if key:
+        for c in catalog:
+            if (c.get("name") or "").strip().lower() == key:
+                match = c
+                break
+        if match is None:
+            for c in catalog:
+                n = (c.get("name") or "").strip().lower()
+                if n and (key in n or n in key):
+                    match = c
+                    break
+
+    sheet_id = (match and match.get("sheetId")) or fallback_sheet_id
+    return {
+        "dataSource": data_source or "Alpha Copy",
+        "requireRestart": require_restart,
+        "sheetId": sheet_id,
+        "sourceName": (match or {}).get("name") or "",
+        "sourceUrl": (match or {}).get("url") or "",
+        "catalog": catalog,
+        "resolvedFromCatalog": bool(match and match.get("sheetId")),
+    }
+
+
+def _flush_data_caches() -> None:
+    global _csv_batch_event, _csv_batch_error
+    with _csv_lock:
+        _csv_cache.clear()
+        _csv_batch_event = None
+        _csv_batch_error = None
+    with _meta_lock:
+        _meta_cache["at"] = 0
+        _meta_cache["title_by_gid"] = {}
+        _meta_cache["gid_by_title"] = {}
 
 
 def _load_creds(key_path: Path):
@@ -88,14 +209,88 @@ def _load_creds(key_path: Path):
 
 
 class SheetsBackend:
-    def __init__(self, sheet_id: str, key_path: Path):
+    def __init__(
+        self,
+        sheet_id: str,
+        key_path: Path,
+        settings_sheet_id: str | None = None,
+    ):
+        self.fallback_sheet_id = sheet_id
         self.sheet_id = sheet_id
+        self.settings_sheet_id = (settings_sheet_id or "").strip()
         self.key_path = key_path
         self.creds, self.sheets = _load_creds(key_path)
         # googleapiclient is not reliably thread-safe — serialize API calls
         self._api_lock = threading.Lock()
         _log(f"API ready as {self.creds.service_account_email}")
-        _log(f"spreadsheet={sheet_id}")
+        _log(f"fallback spreadsheet={sheet_id}")
+        if self.settings_sheet_id:
+            try:
+                live = self.apply_live_sheet(force_settings=True)
+                _log(
+                    f"Settings: dataSource={live.get('dataSource')!r} "
+                    f"requireRestart={live.get('requireRestart')} "
+                    f"sheet={self.sheet_id}"
+                )
+            except Exception as e:
+                _log(f"WARNING: Settings sheet failed ({e}); using fallback {sheet_id}")
+        else:
+            _log(f"spreadsheet={sheet_id}")
+
+    def _settings_rows(self) -> list:
+        sid = self.settings_sheet_id
+        if not sid:
+            return []
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=sid,
+                    range="Settings",
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        return result.get("values") or []
+
+    def refresh_settings(self, force: bool = False) -> dict:
+        now = time.time()
+        with _settings_lock:
+            hit = _settings_cache.get("data")
+            if (
+                not force
+                and hit
+                and now - float(_settings_cache.get("at") or 0) < SETTINGS_TTL
+            ):
+                return dict(hit)
+        if not self.settings_sheet_id:
+            data = parse_settings_rows([], self.fallback_sheet_id)
+            data["settingsSheetId"] = ""
+            return data
+        rows = self._settings_rows()
+        data = parse_settings_rows(rows, self.fallback_sheet_id)
+        data["settingsSheetId"] = self.settings_sheet_id
+        with _settings_lock:
+            _settings_cache["at"] = time.time()
+            _settings_cache["data"] = data
+        return dict(data)
+
+    def apply_live_sheet(self, force_settings: bool = False) -> dict:
+        """Point CSV/meta at the workbook chosen in Settings → Data Source."""
+        live = self.refresh_settings(force=force_settings)
+        new_id = (live.get("sheetId") or self.fallback_sheet_id).strip()
+        if new_id and new_id != self.sheet_id:
+            _log(
+                f"live data source → {live.get('dataSource')!r} "
+                f"{self.sheet_id} → {new_id}"
+            )
+            self.sheet_id = new_id
+            _flush_data_caches()
+        elif new_id:
+            self.sheet_id = new_id
+        return live
 
     def refresh_meta(self, force: bool = False) -> dict:
         now = time.time()
@@ -265,6 +460,7 @@ class SheetsBackend:
         """
         gid = str(gid)
         now = time.time()
+        self.apply_live_sheet(force_settings=force)
 
         if not force:
             with _csv_lock:
@@ -345,12 +541,20 @@ def make_handler(backend: SheetsBackend | None, root: Path):
             path = parsed.path
 
             if path == "/api/health":
+                live = None
+                if backend:
+                    try:
+                        live = backend.refresh_settings(force=False)
+                    except Exception:
+                        live = None
                 self._json(
                     200,
                     {
                         "ok": True,
                         "sheetsApi": backend is not None,
                         "sheetId": backend.sheet_id if backend else None,
+                        "dataSource": (live or {}).get("dataSource"),
+                        "requireRestart": (live or {}).get("requireRestart"),
                         "email": (
                             backend.creds.service_account_email
                             if backend
@@ -358,6 +562,33 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                         ),
                     },
                 )
+                return
+
+            if path == "/api/settings":
+                if not backend:
+                    self._json(503, {"error": "Sheets API not configured"})
+                    return
+                qs = parse_qs(parsed.query)
+                force = (qs.get("force") or ["0"])[0] in ("1", "true", "yes")
+                try:
+                    live = backend.apply_live_sheet(force_settings=force)
+                    self._json(
+                        200,
+                        {
+                            "dataSource": live.get("dataSource"),
+                            "requireRestart": bool(live.get("requireRestart")),
+                            "sheetId": backend.sheet_id,
+                            "sourceName": live.get("sourceName"),
+                            "settingsSheetId": live.get("settingsSheetId"),
+                            "resolvedFromCatalog": bool(
+                                live.get("resolvedFromCatalog")
+                            ),
+                        },
+                    )
+                except Exception as e:
+                    _log(f"settings error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
                 return
 
             if path == "/api/build":
@@ -482,6 +713,7 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                     self._json(503, {"error": "Sheets API not configured"})
                     return
                 try:
+                    backend.apply_live_sheet(force_settings=True)
                     meta = backend.refresh_meta(force=True)
                     tabs = [
                         {"gid": g, "title": t}
@@ -512,6 +744,12 @@ def main():
     ap.add_argument(
         "--sheet-id",
         default=os.environ.get("TOKI_SHEET_ID", DEFAULT_SHEET_ID),
+        help="Fallback menu workbook if Settings is missing or unreadable",
+    )
+    ap.add_argument(
+        "--settings-sheet-id",
+        default=os.environ.get("TOKI_SETTINGS_SHEET_ID", DEFAULT_SETTINGS_SHEET_ID),
+        help="OliToki Menu Settings workbook (Data Source + Require Restart)",
     )
     ap.add_argument(
         "--key",
@@ -529,7 +767,11 @@ def main():
     backend = None
     if not args.no_api:
         try:
-            backend = SheetsBackend(args.sheet_id, args.key)
+            backend = SheetsBackend(
+                args.sheet_id,
+                args.key,
+                settings_sheet_id=args.settings_sheet_id,
+            )
             # Smoke: list tabs once at startup
             tabs = backend.refresh_meta(force=True)
             _log(f"tabs: {len(tabs['title_by_gid'])}")
