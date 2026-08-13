@@ -513,6 +513,8 @@
       fail();
       return;
     }
+    const heroNeed = bakeTargetPx(1);
+    src = preferFoodPathForNeed(src, heroNeed.w, heroNeed.h);
     const baked = peekRasterBake(src, 1);
     if (baked && baked.url) {
       stampRasterMaster(img, src);
@@ -609,6 +611,15 @@
     el.addEventListener("error", function onRasterError() {
       if (el.dataset.downsampled === "1") return;
       const src = el.getAttribute("src") || "";
+      // food-pics/foo-sm.webp missing → full foo.webp
+      if (/-sm\.webp$/i.test(src)) {
+        el.src = src.replace(/-sm\.webp$/i, ".webp");
+        return;
+      }
+      if (/-sm\.(png|jpe?g)$/i.test(src)) {
+        el.src = src.replace(/-sm\.(png|jpe?g)$/i, ".webp");
+        return;
+      }
       if (/\.webp$/i.test(src)) {
         el.src = src.replace(/\.webp$/i, ".png");
         return;
@@ -619,6 +630,26 @@
       }
       el.removeEventListener("error", onRasterError);
     });
+  }
+
+  /** food-pics/foo.webp → food-pics/foo-sm.webp (750×500 masters). */
+  function toFoodSmPath(path) {
+    if (!path) return path;
+    const s = String(path);
+    if (!/food-pics\//i.test(s)) return toWebpPath(s);
+    if (/-sm\.(webp|png|jpe?g)$/i.test(s)) return s.replace(/\.(png|jpe?g)$/i, ".webp");
+    const webp = toWebpPath(s);
+    return webp.replace(/\.webp$/i, "-sm.webp");
+  }
+
+  /** Use -sm when the painted long edge fits in 750px (50% of 1500×1000). */
+  const FOOD_SM_LONG_PX = 750;
+
+  function preferFoodPathForNeed(path, needW, needH) {
+    if (!path || !/food-pics\//i.test(path)) return toWebpPath(path);
+    const need = Math.max(Number(needW) || 0, Number(needH) || 0);
+    if (need > FOOD_SM_LONG_PX * 1.08) return toWebpPath(path);
+    return toFoodSmPath(path);
   }
 
   /**
@@ -11047,8 +11078,10 @@
       img.draggable = false;
       attachWebpFallback(img);
       img.dataset.tokiGridN = String(n);
-      const src = resolveImagePath(it.image) || it.image;
-      if (!src) return;
+      const rawSrc = resolveImagePath(it.image) || it.image;
+      if (!rawSrc) return;
+      const cellNeed = bakeTargetPx(n);
+      const src = preferFoodPathForNeed(rawSrc, cellNeed.w, cellNeed.h);
       img.dataset.tokiMaster = src;
       const baked = peekRasterBake(src, n);
       if (baked && baked.url) {
@@ -15380,26 +15413,23 @@
 
     startGalaxyScroll();
 
-    // Freeze pixel budget + bake scaled rasters before first slide (no resize bake)
     whenPresentationSurfaceReady(function () {
       freezeDisplayBudget();
-      bakeRastersForPlay().then(function () {
-        if (startRaw != null) {
-          const idx = parseInt(startRaw, 10);
-          if (Number.isFinite(idx)) setActive(idx, true);
-          else setActive(0, true);
-        } else {
-          setActive(0, true);
-        }
-        playOpeningWindUp();
-        if (params.get("pause") !== "1") {
-          startSlideshow();
-          if (isDrinks) startAnnouncementSlideshow();
-        } else if (isDrinks) {
-          setAnnouncementMessage(announcementIndex, { instant: true });
-        }
-        startAutoRefresh();
-      });
+      if (startRaw != null) {
+        const idx = parseInt(startRaw, 10);
+        if (Number.isFinite(idx)) setActive(idx, true);
+        else setActive(0, true);
+      } else {
+        setActive(0, true);
+      }
+      playOpeningWindUp();
+      if (params.get("pause") !== "1") {
+        startSlideshow();
+        if (isDrinks) startAnnouncementSlideshow();
+      } else if (isDrinks) {
+        setAnnouncementMessage(announcementIndex, { instant: true });
+      }
+      startAutoRefresh();
     });
 
     // Update hybrid debug visuals (CSS vars in Computed + HUD) when gate is satisfied.
