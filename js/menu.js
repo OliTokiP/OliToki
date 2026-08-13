@@ -837,7 +837,7 @@
    *   G2 BG Color | H2 BG Image | I2 BG Blur | J2 BG Blend Mode |
    *   K2 BG Opacity | L2 BG Scroll Speed | M2 Presentation Speed
    *   N Color Picker | O Show Version |
-   *   P Encore Spotlight Type (Hard|Soft) | Q Encore Spotlight Color (Black|Highlight)
+   *   P Encore Spotlight Type (Hard|Hard_Shadow|Soft) | Q Encore Spotlight Color (Black|Highlight)
    */
   const STYLE_COLUMNS = {
     themeSelector: 0,
@@ -1068,7 +1068,7 @@
      * On by default; wire to a Style sheet column later.
      */
     slideshowKenBurns: true,
-    /** Style P: "hard" | "soft" — Encore spotlight shape */
+    /** Style P: "hard" | "hard_shadow" | "soft" — Encore spotlight shape */
     encoreSpotlightType: "hard",
     /** Style Q: "black" | "highlight" — veil color (highlight = item highlight) */
     encoreSpotlightColor: "black",
@@ -1733,10 +1733,9 @@
   }
 
   /**
-   * Beta Features → Veil Shadow Settings (Hard spotlight cutout only).
-   * Off = collage plates keep their one drop-shadow (as-is).
-   * On  = plates shadow off; Hard veil uses drop-shadow (sheet row under headers).
-   * Blank cells keep these defaults. Soft spotlight never gets a veil shadow.
+   * Beta Features → Veil Shadow Settings (Hard_Shadow cutout only).
+   * Numbers feed --veil-shadow-filter. Style type Hard_Shadow paints them;
+   * Hard is the same hole with no drop-shadow. Soft never gets a veil shadow.
    */
   const VEIL_SHADOW_DEFAULTS = {
     enabled: false,
@@ -1879,33 +1878,27 @@
       VEIL_SHADOW_DEFAULTS,
       settings && typeof settings === "object" ? settings : {}
     );
-    const on = !!veilShadowSettings.enabled;
     const root = document.documentElement;
-    if (root) root.classList.toggle("beta-veil-shadow", on);
-    if (document.body) document.body.classList.toggle("beta-veil-shadow", on);
+    // Filter numbers always live on :root. Style type Hard_Shadow is what
+    // paints them — Hard is the same hole with no drop-shadow (Fire Stick).
     if (root && root.style) {
-      if (on) {
-        root.style.setProperty(
-          "--veil-shadow-filter",
-          buildVeilShadowFilter(veilShadowSettings)
-        );
-      } else {
-        root.style.removeProperty("--veil-shadow-filter");
-      }
+      root.style.setProperty(
+        "--veil-shadow-filter",
+        buildVeilShadowFilter(veilShadowSettings)
+      );
     }
+    if (root) root.classList.remove("beta-veil-shadow");
+    if (document.body) document.body.classList.remove("beta-veil-shadow");
     tokiInfo(
-      "Veil Shadow:",
-      on ? "ON (Hard veil; plates shadow off)" : "OFF (collage shadow as-is)",
-      on
-        ? "x/y/spread/blur/op=" +
-            [
-              veilShadowSettings.shiftRight,
-              veilShadowSettings.shiftDown,
-              veilShadowSettings.spread,
-              veilShadowSettings.blur,
-              veilShadowSettings.opacity,
-            ].join("/")
-        : ""
+      "Veil Shadow params x/y/spread/blur/op=" +
+        [
+          veilShadowSettings.shiftRight,
+          veilShadowSettings.shiftDown,
+          veilShadowSettings.spread,
+          veilShadowSettings.blur,
+          veilShadowSettings.opacity,
+        ].join("/") +
+        " (applied only when Spotlight Type = Hard_Shadow)"
     );
   }
 
@@ -2647,6 +2640,7 @@
       }
       stage.classList.remove(
         "encore-spot-hard",
+        "encore-spot-hard-shadow",
         "encore-spot-soft",
         "encore-spot-color-highlight",
         "encore-spot-color-black"
@@ -2658,12 +2652,13 @@
       return;
     }
 
-    const type =
-      config.encoreSpotlightType === "soft" ? "soft" : "hard";
+    const type = normalizedEncoreSpotlightType(config.encoreSpotlightType);
     const colorMode =
       config.encoreSpotlightColor === "highlight" ? "highlight" : "black";
+    const hard = type === "hard" || type === "hard_shadow";
 
-    stage.classList.toggle("encore-spot-hard", type === "hard");
+    stage.classList.toggle("encore-spot-hard", hard);
+    stage.classList.toggle("encore-spot-hard-shadow", type === "hard_shadow");
     stage.classList.toggle("encore-spot-soft", type === "soft");
     stage.classList.toggle(
       "encore-spot-color-highlight",
@@ -13882,16 +13877,25 @@
     return fb;
   }
 
-  /** Style "Encore Spotlight Type": Hard | Soft */
+  /** Style "Encore Spotlight Type": Hard | Hard_Shadow | Soft */
   function parseEncoreSpotlightType(raw, fallback) {
-    const fb = fallback === "soft" ? "soft" : "hard";
+    const fb =
+      fallback === "soft" || fallback === "hard_shadow" ? fallback : "hard";
     if (raw === undefined || raw === null || String(raw).trim() === "") {
       return fb;
     }
-    const s = String(raw).trim().toLowerCase();
+    const s = String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_");
     if (s.indexOf("soft") !== -1) return "soft";
+    if (s.indexOf("hard_shadow") !== -1 || s === "hardshadow") {
+      return "hard_shadow";
+    }
     if (s.indexOf("hard") !== -1) return "hard";
     return fb;
+  }
+
+  function normalizedEncoreSpotlightType(raw) {
+    if (raw === "soft" || raw === "hard_shadow" || raw === "hard") return raw;
+    return parseEncoreSpotlightType(raw, "hard");
   }
 
   /** Style "Encore Spotlight Color": Black | Highlight */

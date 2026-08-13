@@ -74,6 +74,8 @@ body {
   --encore-hole-pinch: 0px;
   /* Hardcoded: veil box hangs past the stage so a near-edge Hard hole stays a circle. */
   --veil-extend: 20px;
+  /* Hard_Shadow only; set from Beta Veil Shadow Settings (defaults 18/22/3/2/0.5). */
+  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
   /* Peak scale for Encore bows / FP intro (higher = closer push-in) */
   --encore-zoom-to: 1.24;
   /* Slideshow hero Ken Burns: max = current size; min ≈ 7% smaller */
@@ -761,8 +763,8 @@ body.preview-wall #hero-plate {
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
 }
 
-/* Beta → Veil Shadow Settings ON: collage shadow off (solo #hero-plate .hero-anim keeps its shadow). */
-html.beta-veil-shadow #family-portrait-stage .family-portrait-plates {
+/* Hard_Shadow: collage shadow off so only the hole lip casts (solo hero keeps its shadow). */
+#family-portrait-stage.encore-spot-hard-shadow .family-portrait-plates {
   filter: none;
 }
 
@@ -820,7 +822,7 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
 
 /*
   Encore house lights: veil IN FRONT of every plate.
-  Style: Encore Spotlight Type (Hard|Soft) + Encore Spotlight Color (Black|Highlight).
+  Style: Encore Spotlight Type (Hard|Hard_Shadow|Soft) + Encore Spotlight Color (Black|Highlight).
   --encore-hole-x/y, --encore-hole-r set in JS; --encore-veil-color from Style/item.
 */
 /* Default veil color lives on the stage (JS may override to Highlight) —
@@ -868,9 +870,9 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
   opacity: 1;
 }
 
-/* Beta Veil Shadow + Hard only: drop-shadow follows the hole's alpha (cartoon cutout lip).
-   Same element as the veil, so a fade never reveals a second full shadow circle. */
-html.beta-veil-shadow #family-portrait-stage.encore-spot-hard .family-portrait-veil {
+/* Hard_Shadow only: drop-shadow follows the hole alpha (cartoon cutout lip).
+   Expensive during Ken Burns — Hard is the same gradient with no filter. */
+#family-portrait-stage.encore-spot-hard-shadow .family-portrait-veil {
   filter: var(--veil-shadow-filter, none);
 }
 
