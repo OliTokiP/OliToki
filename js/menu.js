@@ -372,6 +372,14 @@
     }
   }
 
+  function stampRasterMaster(img, path) {
+    if (!img) return;
+    img.dataset.tokiMaster = path || "";
+    img.dataset.tokiFrom = "";
+    img.dataset.tokiPx = "";
+    img.dataset.downsampled = "";
+  }
+
   /** Wire load → maybeDownsampleImg (idempotent). */
   function bindDownsampleOnLoad(img) {
     if (!img) return;
@@ -11523,7 +11531,7 @@
       finish(false);
     };
     attachWebpFallback(img);
-    img.dataset.downsampled = "";
+    stampRasterMaster(img, src);
     img.src = src;
     if (img.complete && img.naturalWidth > 0) {
       img.onload = null;
@@ -13418,6 +13426,7 @@
     }
     if (opts.clearSrc && img) {
       img.removeAttribute("src");
+      stampRasterMaster(img, "");
     }
     if (opts.hideSticker !== false && els.sticker) {
       els.sticker.classList.remove("visible");
@@ -13563,7 +13572,7 @@
         return;
       }
       // Swap while held at zoomMin — no scale snap (.webp preferred)
-      img.dataset.downsampled = "";
+      stampRasterMaster(img, item.image);
       img.src = item.image;
     };
 
@@ -14445,8 +14454,15 @@
     }
 
     function rasterDebugLabel(img, fallbackPath) {
-      const master =
-        (img && img.dataset && img.dataset.tokiMaster) || fallbackPath || "";
+      let master = fallbackPath || "";
+      if (img) {
+        const liveSrc = img.getAttribute("src") || "";
+        if (liveSrc && liveSrc.indexOf("data:") !== 0) {
+          master = liveSrc;
+        } else if (img.dataset && img.dataset.tokiMaster) {
+          master = img.dataset.tokiMaster;
+        }
+      }
       const file = fileNameFromPath(master);
       if (img && img.dataset && img.dataset.tokiFrom && img.dataset.tokiPx) {
         return (
@@ -14861,37 +14877,6 @@
 
     const baseRows = rows || "<tr><td colspan='4' style='color:#666'>no flags</td></tr>";
     tbody.innerHTML = baseRows;
-
-    // Special row at the very top of the table body (above all feature rows)
-    // showing the latest commit comment (push subject) from build info.
-    fetchBuildInfo().then(function (info) {
-      if (!tbody || !_debugHudEl) return;
-      const subject = info && info.subject ? String(info.subject).trim() : "";
-      if (!subject) return;
-      const safe = subject
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      const hash = (info && info.hash) || "";
-      const commitRow = `
-        <tr class="debug-commit-row">
-          <td class="flag-id" title="${hash}">commit</td>
-          <td colspan="3" class="commit-subject" title="${safe}">${safe}</td>
-        </tr>
-      `;
-
-      // Update in place if already present (from prior update), else prepend.
-      // This plays nicely with frequent ticker updates.
-      let existing = tbody.querySelector(".debug-commit-row");
-      if (existing) {
-        const idCell = existing.querySelector(".flag-id");
-        if (idCell) idCell.title = hash;
-        const subjCell = existing.querySelector(".commit-subject");
-        if (subjCell) subjCell.textContent = safe;
-        return;
-      }
-      tbody.innerHTML = commitRow + tbody.innerHTML;
-    });
   }
 
   function updateDebugVisuals() {
