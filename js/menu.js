@@ -232,13 +232,70 @@
   }
 
   /**
-   * After full-res decode, redraw at scale and swap src (once per element).
+   * On-screen pixel budget (CSS box × devicePixelRatio, cap 2).
+   * 1080p TV → ~1920×1080; Mac retina window is still the painted box, not 5K.
+   */
+  function displayPixelBudget() {
+    let w = window.innerWidth || 1920;
+    let h = window.innerHeight || 1080;
+    try {
+      const stage = document.getElementById("stage");
+      if (stage && stage.getBoundingClientRect) {
+        const r = stage.getBoundingClientRect();
+        if (r.width > 8 && r.height > 8) {
+          w = r.width;
+          h = r.height;
+        }
+      }
+    } catch (e) {
+      /* keep inner* */
+    }
+    let dpr = 1;
+    try {
+      dpr = window.devicePixelRatio || 1;
+    } catch (e2) {
+      dpr = 1;
+    }
+    if (dpr > 2) dpr = 2;
+    return { w: w * dpr, h: h * dpr, dpr: dpr };
+  }
+
+  /**
+   * How many texels this <img> actually paints (Ken Burns slack applied later).
+   */
+  function displayNeedForImg(img) {
+    const b = displayPixelBudget();
+    try {
+      const r = img.getBoundingClientRect();
+      if (r.width > 2 && r.height > 2) {
+        return { dw: r.width * b.dpr, dh: r.height * b.dpr };
+      }
+    } catch (e) {
+      /* fall through */
+    }
+    const id = img.id || "";
+    const cls = img.className || "";
+    if (
+      id === "galaxy-a" ||
+      id === "galaxy-b" ||
+      (typeof cls === "string" && cls.indexOf("family-portrait-bg-img") !== -1)
+    ) {
+      return { dw: b.w, dh: b.h };
+    }
+    // Hero / plate: most of the photo column, not the full stage
+    return { dw: b.w * 0.58, dh: b.h * 0.88 };
+  }
+
+  /**
+   * After decode, redraw to painted size and swap src (once per element).
+   * ?imgScale= still forces a debug fraction. Otherwise shrink only when the
+   * bitmap is meaningfully larger than the window (e.g. 3600px galaxy on 1080p).
    * @param {HTMLImageElement} img
-   * @param {function():void} [then] called after downsample (or immediately if skipped)
+   * @param {function():void} [then]
    */
   function maybeDownsampleImg(img, then) {
     const done = typeof then === "function" ? then : function () {};
-    if (!img || !(DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1)) {
+    if (!img) {
       done();
       return;
     }
@@ -252,8 +309,35 @@
       done();
       return;
     }
-    const w = Math.max(1, Math.round(nw * DEBUG_IMG_SCALE));
-    const h = Math.max(1, Math.round(nh * DEBUG_IMG_SCALE));
+    let w;
+    let h;
+    const debug = DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1;
+    if (debug) {
+      w = Math.max(1, Math.round(nw * DEBUG_IMG_SCALE));
+      h = Math.max(1, Math.round(nh * DEBUG_IMG_SCALE));
+    } else {
+      if (nw < 256 && nh < 256) {
+        done();
+        return;
+      }
+      const need = displayNeedForImg(img);
+      const slack = 1.28; // Encore / Ken Burns zoom headroom
+      if (nw <= need.dw * slack && nh <= need.dh * slack) {
+        done();
+        return;
+      }
+      const scale = Math.min(
+        1,
+        (need.dw * slack) / nw,
+        (need.dh * slack) / nh
+      );
+      if (!(scale > 0) || scale >= 0.92) {
+        done();
+        return;
+      }
+      w = Math.max(1, Math.round(nw * scale));
+      h = Math.max(1, Math.round(nh * scale));
+    }
     try {
       const c = document.createElement("canvas");
       c.width = w;
@@ -266,10 +350,9 @@
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(img, 0, 0, w, h);
       img.dataset.downsampled = "1";
-      // Prefer webp data URL; fall back to png if tainted/unsupported
       let dataUrl;
       try {
-        dataUrl = c.toDataURL("image/webp", 0.8);
+        dataUrl = c.toDataURL("image/webp", 0.82);
         if (!dataUrl || dataUrl.indexOf("image/webp") === -1) {
           dataUrl = c.toDataURL("image/png");
         }
@@ -289,7 +372,7 @@
 
   /** Wire load → maybeDownsampleImg (idempotent). */
   function bindDownsampleOnLoad(img) {
-    if (!img || !(DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1)) return;
+    if (!img) return;
     if (img.dataset.downsampled === "1") return;
     if (img.complete && img.naturalWidth) {
       maybeDownsampleImg(img);
@@ -305,14 +388,13 @@
   }
 
   /**
-   * Downsample stickers / scaffold BG / any missed rasters when imgScale is on.
-   * (Board sticker HTML is static; portrait stickers + scaffold are JS-built.)
+   * Downsample stickers / scaffold BG / galaxy layers after paint.
    */
   function downsampleAuxRasters(root) {
-    if (!(DEBUG_IMG_SCALE > 0 && DEBUG_IMG_SCALE < 1)) return;
     const scope = root || document;
     const sel =
       "#galaxy-a, #galaxy-b, .family-portrait-bg-img, " +
+      ".family-portrait-item, #hero, " +
       ".new-sticker-shadow, .new-sticker-body-img, " +
       "#family-portrait-stage .new-sticker-shadow, " +
       "#family-portrait-stage .new-sticker-body-img";
@@ -343,15 +425,26 @@
     });
   }
 
-  /** Prefer stage-sized galaxy in the wall (not 3600× masters ×4). */
-  function wallFriendlyBgPath(path) {
-    if (!path || !isPreviewWall()) return path;
+  /**
+   * Wallpaper path for this window. 1080p / wall / modest viewports get
+   * galaxy-bg-sm (1920×1280) instead of the 3600×2400 master.
+   */
+  function displayFriendlyBgPath(path) {
+    if (!path) return path;
     const s = String(path);
-    if (s.indexOf("galaxy-bg") === -1) return path;
-    if (s.indexOf("galaxy-bg-sm") !== -1 || s.indexOf("galaxy-bg-xs") !== -1) {
-      return toWebpPath(s);
+    if (/galaxy-bg-sm|galaxy-bg-xs/i.test(s)) return toWebpPath(s);
+    const b = displayPixelBudget();
+    const need = Math.max(b.w, b.h);
+    const useSm = isPreviewWall() || need <= 1920 * 1.15;
+    if (useSm && /galaxy-bg/i.test(s)) {
+      return toWebpPath("assets/bgs/galaxy-bg-sm.jpg");
     }
-    return toWebpPath("assets/bgs/galaxy-bg-sm.jpg");
+    return toWebpPath(s);
+  }
+
+  /** @deprecated name kept — same as displayFriendlyBgPath */
+  function wallFriendlyBgPath(path) {
+    return displayFriendlyBgPath(path);
   }
 
   const STAGE_W = 1920;
@@ -2957,7 +3050,19 @@
       normalizeHex(config.bgSolid) ||
       main;
     let imagePath = config.bgImage || null;
-    if (imagePath) imagePath = wallFriendlyBgPath(imagePath);
+    if (imagePath) {
+      const rawPath = imagePath;
+      imagePath = displayFriendlyBgPath(imagePath);
+      if (rawPath !== imagePath) {
+        tokiInfo(
+          "bg master → display size",
+          rawPath,
+          "→",
+          imagePath,
+          displayPixelBudget()
+        );
+      }
+    }
 
     // Multi-board wall: still per-board BG (4 copies), but leaner:
     // no CSS blur/blend, stage-sized galaxy asset, single-layer pan.
@@ -2994,9 +3099,13 @@
     // See applyBgEffects below.
     applyBgEffects(galaxy, blur01, opacity01, blend);
 
-    // Wall: one layer only. Solo: both for pan crossfade.
-    const layerEls = wall ? [els.galaxyA] : [els.galaxyA, els.galaxyB];
-    if (wall && els.galaxyB) {
+    // One layer when not scrolling (or wall). Dual only for seamless pan.
+    const scrollOn =
+      !wall && parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0;
+    const layerEls = scrollOn
+      ? [els.galaxyA, els.galaxyB]
+      : [els.galaxyA];
+    if (!scrollOn && els.galaxyB) {
       els.galaxyB.hidden = true;
       els.galaxyB.classList.remove("active", "fading-in", "fading-out");
       els.galaxyB.style.opacity = "0";
@@ -12839,7 +12948,7 @@
     img.onload = function () {
       img.onload = null;
       img.onerror = null;
-      finish();
+      maybeDownsampleImg(img, finish);
     };
     img.onerror = function () {
       img.onload = null;
@@ -12854,7 +12963,7 @@
     if (img.complete && img.naturalWidth > 0) {
       img.onload = null;
       img.onerror = null;
-      finish();
+      maybeDownsampleImg(img, finish);
     }
   }
 
@@ -13728,9 +13837,13 @@
     if (galaxyStarted) return; // idempotent — softReload must not re-enter
     galaxyStarted = true;
 
-    // Wall: single-layer pan (scroll on). Solo: dual-layer crossfade when B exists.
+    // Wall, or scroll=0: one layer. Dual only when the wallpaper actually pans.
+    const scrollOn = parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0;
     const singleLayer =
-      isPreviewWall() || !els.galaxyB || els.galaxyB.hidden;
+      isPreviewWall() ||
+      !scrollOn ||
+      !els.galaxyB ||
+      els.galaxyB.hidden;
 
     const layers = singleLayer
       ? [{ el: els.galaxyA, x: 0 }]
