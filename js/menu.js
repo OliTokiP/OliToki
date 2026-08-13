@@ -265,6 +265,10 @@
    */
   function displayNeedForImg(img) {
     const b = displayPixelBudget();
+    const gridN = parseInt(
+      (img && img.dataset && img.dataset.tokiGridN) || "0",
+      10
+    );
     try {
       const r = img.getBoundingClientRect();
       if (r.width > 2 && r.height > 2) {
@@ -283,7 +287,14 @@
       return { dw: b.w, dh: b.h };
     }
     // Hero / plate: most of the photo column, not the full stage
-    return { dw: b.w * 0.58, dh: b.h * 0.88 };
+    let dw = b.w * 0.58;
+    let dh = b.h * 0.88;
+    // Lattice onload often fires before layout — split the hero budget by cell count
+    if (gridN >= 2) {
+      dw = dw / gridN;
+      dh = dh / gridN;
+    }
+    return { dw: dw, dh: dh };
   }
 
   /**
@@ -380,6 +391,60 @@
     img.dataset.downsampled = "";
   }
 
+  /**
+   * Load one hero bitmap, then downsample. Uses addEventListener so
+   * maybeDownsampleImg cannot overwrite img.onload and stall the engine.
+   */
+  function loadHeroRaster(img, src, onOk, onFail) {
+    const ok = typeof onOk === "function" ? onOk : function () {};
+    const fail = typeof onFail === "function" ? onFail : function () {};
+    if (!img || !src) {
+      fail();
+      return;
+    }
+    const sameFile =
+      (img.dataset.tokiMaster || "") === src &&
+      img.complete &&
+      img.naturalWidth > 0;
+    if (sameFile) {
+      ok();
+      return;
+    }
+    let settled = false;
+    function succeed() {
+      if (settled) return;
+      settled = true;
+      img.removeEventListener("load", onLoad);
+      img.removeEventListener("error", onErr);
+      maybeDownsampleImg(img, ok);
+    }
+    function onLoad() {
+      succeed();
+    }
+    function onErr() {
+      if (settled) return;
+      // webp fallback may still recover — only fail if src is not a candidate
+      const now = img.getAttribute("src") || "";
+      if (/\.webp$/i.test(now) || /\.png$/i.test(now)) return;
+      settled = true;
+      img.removeEventListener("load", onLoad);
+      img.removeEventListener("error", onErr);
+      fail();
+    }
+    img.addEventListener("load", onLoad);
+    img.addEventListener("error", onErr);
+    attachWebpFallback(img);
+    stampRasterMaster(img, src);
+    img.src = src;
+    if (
+      img.getAttribute("src") === src &&
+      img.complete &&
+      img.naturalWidth > 0
+    ) {
+      succeed();
+    }
+  }
+
   /** Wire load → maybeDownsampleImg (idempotent). */
   function bindDownsampleOnLoad(img) {
     if (!img) return;
@@ -404,7 +469,7 @@
     const scope = root || document;
     const sel =
       "#galaxy-a, #galaxy-b, .family-portrait-bg-img, " +
-      ".family-portrait-item, #hero, " +
+      ".family-portrait-item, " +
       ".new-sticker-shadow, .new-sticker-body-img, " +
       "#family-portrait-stage .new-sticker-shadow, " +
       "#family-portrait-stage .new-sticker-body-img";
@@ -10860,9 +10925,15 @@
       img.alt = "";
       img.draggable = false;
       attachWebpFallback(img);
+      img.dataset.tokiGridN = String(n);
       img.onload = function onPlateLoad() {
         if (img.dataset.downsampled === "1") return;
-        maybeDownsampleImg(img);
+        // Wait for slot layout so we downsample to the cell, not a full-hero guess
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            maybeDownsampleImg(img);
+          });
+        });
       };
       // Resolve at paint — never put a bare sheet token in src.
       const src = resolveImagePath(it.image) || it.image;
@@ -10969,6 +11040,12 @@
       els.hero.style.visibility = "";
       els.hero.hidden = false;
     }
+  }
+
+  function heroMultiRoot() {
+    const plate = els.heroPlate || document.getElementById("hero-plate");
+    if (!plate || plate.hidden) return null;
+    return plate.querySelector(".hero-multi-plates");
   }
 
   function applyHeroMultiLattice(item, plate) {
@@ -11509,35 +11586,17 @@
     }
 
     const src = item.image;
-    const finish = function (ok) {
-      if (typeof done === "function") done(!!ok);
-    };
-    if (
-      img.getAttribute("src") === src &&
-      img.complete &&
-      img.naturalWidth > 0
-    ) {
-      finish(true);
-      return;
-    }
-    img.onload = function () {
-      img.onload = null;
-      img.onerror = null;
-      finish(true);
-    };
-    img.onerror = function () {
-      img.onload = null;
-      img.onerror = null;
-      finish(false);
-    };
-    attachWebpFallback(img);
-    stampRasterMaster(img, src);
-    img.src = src;
-    if (img.complete && img.naturalWidth > 0) {
-      img.onload = null;
-      img.onerror = null;
-      finish(true);
-    }
+    loadHeroRaster(
+      img,
+      src,
+      function () {
+        if (typeof done === "function") done(true);
+      },
+      function () {
+        hideHeroPlate({ clearSrc: true, instant: true });
+        if (typeof done === "function") done(false);
+      }
+    );
   }
 
   /**
@@ -12948,43 +13007,17 @@
       return;
     }
 
-    const src = item.image;
-    const finish = function () {
-      if (typeof done === "function") done();
-    };
-
-    if (
-      img.getAttribute("src") === src &&
-      img.complete &&
-      img.naturalWidth > 0
-    ) {
-      finish();
-      return;
-    }
-
-    img.onload = function () {
-      img.onload = null;
-      img.onerror = null;
-      maybeDownsampleImg(img, finish);
-    };
-    img.onerror = function () {
-      img.onload = null;
-      img.onerror = null;
-      hideHeroPlate({ clearSrc: true, instant: true });
-      finish();
-    };
-    attachWebpFallback(img);
-    img.dataset.downsampled = "";
-    img.dataset.tokiMaster = src;
-    img.dataset.tokiFrom = "";
-    img.dataset.tokiPx = "";
-    img.src = src;
-    // Cached complete may not re-fire onload
-    if (img.complete && img.naturalWidth > 0) {
-      img.onload = null;
-      img.onerror = null;
-      maybeDownsampleImg(img, finish);
-    }
+    loadHeroRaster(
+      img,
+      item.image,
+      function () {
+        if (typeof done === "function") done();
+      },
+      function () {
+        hideHeroPlate({ clearSrc: true, instant: true });
+        if (typeof done === "function") done();
+      }
+    );
   }
 
   /**
@@ -13538,42 +13571,21 @@
       // Single image — clear any prior multi lattice first
       clearHeroMultiLattice(plate);
 
-      const afterReady = function () {
-        maybeDownsampleImg(img, show);
-      };
-
-      attachWebpFallback(img);
-      img.onerror = function () {
-        // Missing asset → treat as text-only (no broken icon on hero)
-        hideHeroPlate({ clearSrc: true, hideSticker: !wantSticker });
-        if (wantSticker) {
-          // presentTextOnly-style sticker if New
-          plate.hidden = false;
-          applyPlateSticker(true);
-          requestAnimationFrame(function () {
-            plate.classList.add("visible");
-          });
+      loadHeroRaster(
+        img,
+        item.image,
+        show,
+        function () {
+          hideHeroPlate({ clearSrc: true, hideSticker: !wantSticker });
+          if (wantSticker) {
+            plate.hidden = false;
+            applyPlateSticker(true);
+            requestAnimationFrame(function () {
+              plate.classList.add("visible");
+            });
+          }
         }
-      };
-      img.onload = function () {
-        if (img.dataset.downsampled === "1") {
-          show();
-          return;
-        }
-        afterReady();
-      };
-      if (
-        img.getAttribute("src") === item.image &&
-        img.complete &&
-        img.naturalWidth
-      ) {
-        if (img.dataset.downsampled === "1") show();
-        else afterReady();
-        return;
-      }
-      // Swap while held at zoomMin — no scale snap (.webp preferred)
-      stampRasterMaster(img, item.image);
-      img.src = item.image;
+      );
     };
 
     if (instant) {
@@ -14291,6 +14303,7 @@
       { id: "bgBlend", label: "BG Blend", impact: "Medium-High" },
       { id: "bgPattern", label: "Pattern", impact: "Medium" },
       { id: "heroPlate", label: "Hero Plate", impact: "Medium" },
+      { id: "heroMulti", label: "Hero Multi", impact: "High" },
       { id: "softRefresh", label: "Soft Refresh", impact: "Medium" },
       { id: "requireRestart", label: "Require Restart", impact: "Info" },
     ];
@@ -14340,6 +14353,7 @@
 
           case "heroPlate": {
             const plate = heroMotionEl();
+            if (heroMultiRoot()) return false;
             return !!(
               plate &&
               !plate.hidden &&
@@ -14347,6 +14361,9 @@
               els.hero.src
             );
           }
+
+          case "heroMulti":
+            return !!heroMultiRoot();
 
           case "newSticker":
             const sticker = document.getElementById("new-sticker");
@@ -14536,6 +14553,19 @@
               : "scroll 0";
           case "heroPlate":
             return rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src"));
+          case "heroMulti": {
+            const root = heroMultiRoot();
+            if (!root) return "none";
+            const imgs = root.querySelectorAll(".family-portrait-item");
+            if (!imgs.length) return "empty";
+            const bits = [];
+            for (let i = 0; i < imgs.length; i++) {
+              bits.push(
+                rasterDebugLabel(imgs[i], imgs[i].dataset.tokiMaster)
+              );
+            }
+            return bits.join(", ");
+          }
           case "softRefresh":
             if (liveSettings && liveSettings.requireRestart) return "settings";
             if (refreshInProgress) return "fetching";
