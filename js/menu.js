@@ -72,8 +72,20 @@
   const PRESENTATION_MOTION_MODE = "engine";
 
   /**
+   * Family Portrait overview highlight (Alpha header/title + Box shell).
+   * false = off (current). true = restore the old chrome.
+   * Implementation: armFpOverviewHighlight / fadeFp* / CSS
+   *   body.fp-alpha-header-hl  (Alpha header fill + title/logo → Secondary)
+   *   .fp-shell-hl             (Box shell fill → Highlight)
+   *   FP_ALPHA_OVERVIEW_HL     ("header" | "title") when this is on
+   * See docs/FAMILY_PORTRAIT_LATTICE.md §7.
+   */
+  const FP_OVERVIEW_HIGHLIGHT = false;
+
+  /**
    * Alpha Family Portrait overview chrome (easy flip — Alpha only).
    * Box-segment FP always uses box shell shape (not this switch).
+   * Ignored while FP_OVERVIEW_HIGHLIGHT is false.
    *
    *   "header" — simultaneous Punch-Out ease (default, bold):
    *                #frame .frame-header fill → Highlight
@@ -82,6 +94,9 @@
    *   "title"  — only #menu-title color → Highlight (legacy title-only)
    */
   const FP_ALPHA_OVERVIEW_HL = "header";
+
+  /** Separator used when a menu item has multiple prices (e.g. S $7.95 | M $12.45) */
+  const MULTI_PRICE_SEPARATOR = " | ";
 
   function isPresentationStatic() {
     return PRESENTATION_MOTION_MODE === "static";
@@ -1157,7 +1172,7 @@
     const prices = getItemPrices(item);
     // Bowls/handhelds: plain "Name - $x.xx"
     if (prices.length === 0) return item.name;
-    return item.name + " - " + prices.join(" · ");
+    return item.name + " - " + prices.join(MULTI_PRICE_SEPARATOR);
   }
 
   /** Build structured munchies line: Name (sub) - prices with size hierarchy */
@@ -1186,7 +1201,7 @@
 
       const priceEl = document.createElement("span");
       priceEl.className = "item-prices";
-      priceEl.textContent = prices.join(" · ");
+      priceEl.textContent = prices.join(MULTI_PRICE_SEPARATOR);
       line.appendChild(priceEl);
     }
 
@@ -12997,6 +13012,8 @@
    * Timing: Punch-Out color ease (same as item highlights). Never Special.
    */
   function armFpOverviewHighlight(slide) {
+    // Master switch — flip FP_OVERVIEW_HIGHLIGHT to restore overview chrome
+    if (!FP_OVERVIEW_HIGHLIGHT) return;
     if (slide && slide.segment === "box" && slide.boxKey) {
       clearFpAlphaHeaderHighlightSnap();
       armBoxShellHighlight(slide.boxKey);

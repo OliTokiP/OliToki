@@ -135,6 +135,21 @@ So a 2-image item stacks **exactly** like a 2-plate Family Portrait, but **fades
 
 ---
 
+## 7. Overview highlight chrome (parked)
+
+Family Portrait used to recolor the **Alpha header** (fill → Highlight, title/logo → Secondary) or a **Box shell** during the overview beat.
+
+**Off by default.** Restore with `FP_OVERVIEW_HIGHLIGHT = true` in `js/menu.js` (next to `FP_ALPHA_OVERVIEW_HL`).
+
+| Piece | Where |
+|-------|--------|
+| Master switch | `FP_OVERVIEW_HIGHLIGHT` |
+| Alpha look | `FP_ALPHA_OVERVIEW_HL` (`"header"` or `"title"`) |
+| Arm / fade | `armFpOverviewHighlight`, `fadeFpAlphaHeaderHighlight`, `fadeFpBoxShellHighlights` |
+| CSS | `body.fp-alpha-header-hl`, `.info-box.fp-shell-hl`, `.drinks-box.fp-shell-hl` |
+
+---
+
 ## 7. Related docs
 
 - [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) — Plate, Portrait Slot, Hero Panel
