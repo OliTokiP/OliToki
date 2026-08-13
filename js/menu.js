@@ -2629,6 +2629,19 @@
   /** Park/unpark from the live segment — not only on a mode *change*. */
   function syncEncoreWallpaperPark(opts) {
     setEncoreSolidBackground(isEncoreSegmentNow(), opts);
+    syncEncoreHardShadowMode();
+  }
+
+  /**
+   * Hard_Shadow: kill collage plate shadows for the whole Encore segment,
+   * even while Wind-up forceClears veil classes. Hole lip is the only shadow.
+   */
+  function syncEncoreHardShadowMode() {
+    const type = normalizedEncoreSpotlightType(config.encoreSpotlightType);
+    const on = type === "hard_shadow" && isEncoreSegmentNow();
+    const root = document.documentElement;
+    if (root) root.classList.toggle("encore-hard-shadow", on);
+    if (document.body) document.body.classList.toggle("encore-hard-shadow", on);
   }
 
   function setEncoreSolidBackground(on, opts) {
@@ -2715,6 +2728,7 @@
         stage.style.removeProperty("--encore-veil-color");
         stage.style.removeProperty("background-color");
       }
+      syncEncoreHardShadowMode();
       return;
     }
 
@@ -2726,6 +2740,7 @@
     stage.classList.toggle("encore-spot-hard", hard);
     stage.classList.toggle("encore-spot-hard-shadow", type === "hard_shadow");
     stage.classList.toggle("encore-spot-soft", type === "soft");
+    syncEncoreHardShadowMode();
     stage.classList.toggle(
       "encore-spot-color-highlight",
       colorMode === "highlight"
