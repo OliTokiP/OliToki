@@ -906,6 +906,12 @@ html.beta-veil-shadow #family-portrait-stage.encore-spot-hard .family-portrait-v
   opacity: 0.9;
 }
 
+/* Encore: hide stripes + Style BG pattern (siblings of #galaxy, not inside the FP stage). */
+body.encore-solid-bg #stripes,
+body.encore-solid-bg #bg-pattern {
+  display: none !important;
+}
+
 /* Mini New! stickers on Family Portrait items (isNew) */
 #family-portrait-stage .family-portrait-sticker {
   position: absolute;

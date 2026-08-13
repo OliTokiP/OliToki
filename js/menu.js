@@ -69,7 +69,7 @@
    * "engine" — Beta Features → Motion table drives Ken Burns (and later Encore).
    * Legacy motion remains in-file for inspiration; live path is engine or static.
    */
-  const PRESENTATION_MOTION_MODE = "engine";
+  let PRESENTATION_MOTION_MODE = "engine";
 
   /**
    * Family Portrait overview highlight (Alpha header/title + Box shell).
@@ -420,7 +420,7 @@
   const BOARD_REVISED_SETTINGS = {
     title: 0,
     familyPortrait: 1,
-    presentationMode: 2,
+    presentationMode: 2, // Slideshow | Encore | Static (grid of all photos, ignores FP)
     includeFooterBoxes: 3,   // comma list e.g. "Proteins, Sauces, Veggies" — replaces the old individual Include*? flags
     // columns 4 and 5 are currently empty/spacers in the Settings row
     includeDescriptions: 6,
@@ -487,7 +487,7 @@
     priority: 5, // F — strip + presentation order (lower = higher priority)
     includeInPresentation: 6, // G
     familyPortrait: 7, // H
-    presentationMode: 8, // I — Slideshow | Encore
+    presentationMode: 8, // I — Slideshow | Encore | Static (grid of all photos, ignores FP)
   };
   const BOX_REVISED_INVENTORY = {
     item: 0,
@@ -1317,6 +1317,9 @@
       cell(srow, bs.presentationMode),
       "slideshow"
     );
+    if (box.presentationMode === "static") {
+      box.familyPortrait = true; // static = force + hold Family Portrait multiview forever (ignores sheet FP flag)
+    }
     return box;
   }
 
@@ -1804,6 +1807,9 @@
     if (m === "encore") {
       return { structure: "encore", motionStyle: "Encore" };
     }
+    if (m === "static") {
+      return { structure: "static", motionStyle: "Static" };
+    }
     if (m === "kenburns" || m.indexOf("ken") !== -1) {
       // Same slide list as Slideshow (items + optional FP); motion is Ken Burns
       return { structure: "slideshow", motionStyle: "Ken Burns" };
@@ -2124,6 +2130,14 @@
       );
       if (opts.forceClear || !isEncoreActiveNow()) {
         stage.style.removeProperty("--encore-veil-color");
+        stage.style.removeProperty("background-color");
+      }
+      // Leaving Encore: bring stripes / wallpaper / scroll back.
+      if (!isEncoreActiveNow()) {
+        document.body.classList.remove("encore-solid-bg");
+        applyStageBackground();
+        applyBgPattern();
+        updateStripeAnimation();
       }
       return;
     }
@@ -2140,6 +2154,12 @@
       colorMode === "highlight"
     );
     stage.classList.toggle("encore-spot-color-black", colorMode === "black");
+
+    // Hide stripes/pattern (do not pause — paused + visible = frozen stripes).
+    document.body.classList.add("encore-solid-bg");
+    if (els.galaxy) {
+      els.galaxy.style.backgroundColor = config.secondaryColor || "#000000";
+    }
 
     if (colorMode === "highlight") {
       // Only update color when we know the bow item — preserve Special through zoom-out
@@ -2764,6 +2784,16 @@
       if (cachedAvg) {
         plate = cachedAvg;
       }
+    }
+
+    // Encore: solid Secondary Color. Hide (do not pause) wallpaper + stripes.
+    // Box handoff restores via applyBgPattern / updateStripeAnimation.
+    if (isEncoreActiveNow()) {
+      imagePath = null;
+      plate = config.secondaryColor || plate;
+      document.body.classList.add("encore-solid-bg");
+    } else {
+      document.body.classList.remove("encore-solid-bg");
     }
 
     // Color plate always under the image
@@ -3639,6 +3669,10 @@
 
       familyPortrait = parseInclude(cell(settingsRow, rs.familyPortrait));
       presentationMode = parsePresentationMode(cell(settingsRow, rs.presentationMode), "slideshow");
+      if (presentationMode === "static") {
+        familyPortrait = true; // static = force + hold Family Portrait multiview forever (ignores sheet FP flag)
+        PRESENTATION_MOTION_MODE = "static";
+      }
       includeDescriptions = parseInclude(cell(settingsRow, rs.includeDescriptions));
       // Columns?
       const colRaw = cell(settingsRow, rs.menuColumns);
@@ -5211,7 +5245,7 @@
       root.style.setProperty("--stripe-1", config.stripeColor1 || main);
       root.style.setProperty("--stripe-2", config.stripeColor2 || secondary);
       // Include Stripes: 1 = show + animate, 0 = hide completely
-      const showStripes = config.includeStripes !== false;
+      const showStripes = config.includeStripes !== false && !isEncoreActiveNow();
       if (els.stripes) {
         els.stripes.hidden = !showStripes;
         els.stripes.style.display = showStripes ? "" : "none";
@@ -5289,6 +5323,17 @@
       track = tr;
     }
     if (!bp) return;
+
+    // Encore: disappear completely. Do not pause-in-place (that leaves static stripes).
+    if (isEncoreActiveNow()) {
+      document.body.classList.add("encore-solid-bg");
+      bp.hidden = true;
+      bp.style.display = "none";
+      bp.classList.remove("active");
+      document.body.classList.remove("has-bg-pattern-stripes");
+      return;
+    }
+    document.body.classList.remove("encore-solid-bg");
 
     if (isStripes) {
       bp.hidden = false;
@@ -10511,6 +10556,7 @@
   }
 
   function finishHideFamilyPortrait() {
+    if (isPresentationStatic()) return; // static = hold multiview forever
     const stage = els.familyPortrait;
     if (_hidePortraitTimer) {
       clearTimeout(_hidePortraitTimer);
@@ -10610,6 +10656,7 @@
    * @param {{instant?: boolean, reverseZoom?: boolean, encoreWindDown?: boolean}} [opts]
    */
   function hideFamilyPortrait(opts) {
+    if (isPresentationStatic()) return; // static = hold multiview forever
     opts = opts || {};
     const stage = els.familyPortrait;
     if (!stage) return;
@@ -11138,6 +11185,17 @@
   function renderFamilyPortrait(portraitItems) {
     const stage = els.familyPortrait;
     if (!stage) return;
+
+    if (isPresentationStatic()) {
+      // Static = play FP multiview and hold forever (no further presentation, no highlights)
+      _presHandoffBusy = true;
+      if (slideshowTimer) {
+        clearTimeout(slideshowTimer);
+        slideshowTimer = null;
+      }
+      _presentationRunning = false;
+    }
+
     stage.innerHTML = "";
     stage.style.setProperty("--encore-zoom", "1");
     // Boards 1–3: stage left = cutout; Board 4: stage left = 0 (photo left)
@@ -13081,6 +13139,7 @@
   }
 
   function staticArmHighlightNode(node, color) {
+    if (isPresentationStatic()) return; // static FP hold = NEVER HIGHLIGHT ITEMS
     if (!node) return;
     const sec =
       Number.isFinite(_highlightColorSec) && _highlightColorSec > 0
@@ -13890,13 +13949,16 @@
         ? "encore"
         : fallback === "kenburns"
           ? "kenburns"
-          : "slideshow";
+          : fallback === "static"
+            ? "static"
+            : "slideshow";
     if (raw === undefined || raw === null || String(raw).trim() === "") {
       return fb;
     }
     const s = String(raw).trim().toLowerCase();
     if (s.indexOf("encore") !== -1) return "encore";
     if (s.indexOf("ken") !== -1 && s.indexOf("burn") !== -1) return "kenburns";
+    if (s.indexOf("static") !== -1) return "static";
     if (s.indexOf("slide") !== -1) return "slideshow";
     return fb;
   }
@@ -15062,8 +15124,14 @@
   async function init() {
     if (isPresentationStatic()) {
       document.body.classList.add("presentation-static");
+      _presHandoffBusy = true; // block all further handoff/advance
+      if (slideshowTimer) {
+        clearTimeout(slideshowTimer);
+        slideshowTimer = null;
+      }
+      _presentationRunning = false;
       tokiInfo(
-        "presentation motion: STATIC quarantine",
+        "presentation motion: STATIC FP hold forever (never advances, no highlights)",
         "docs/MOTION_QUARANTINE.md"
       );
     } else if (isPresentationEngine()) {
