@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
-"""Toki Git Commit — checkpoint code + snapshot the Google Sheet.
+"""Toki Git Commit — fast by default.
 
-What it does (in parallel where possible):
-  1. Commit any dirty worktree (optional message)
-  2. Pull BOTH sheet exports we need for a full restore:
-       • Menu.xlsx  — Drive export (fills, fonts, rich text / formatting)
-       • values/*.csv — Sheets API values (what the boards read live)
-  3. Pack both into one zip named with the git commit SHA, then delete
-     the loose files outside the zip
-  4. git push to origin
+When using Toki Git Commit.app (or python with UI):
 
-Zip naming (links to GitHub forever):
-  backups/sheet-snapshots/Menu-sheet-<12-char-sha>.zip
+  Single dialog with:
+  - Commit message text field
+  - Buttons:
+      "Cancel"
+      "Commit (fast)"               (default — no sheet snapshot)
+      "Commit + full GSheet backup" (does the full Menu.xlsx + CSVs snapshot)
 
-  The 12-char prefix is unique for this repo in practice. Full 40-char SHA,
-  branch, remote URL, and timestamp live in MANIFEST.txt inside the zip.
-  On GitHub:  https://github.com/<user>/<repo>/commit/<full-sha>
+The full Google Sheet backup (for restore pairing) only happens when you
+choose that button or pass --sheet.
 
-Usage:
+Snapshots are saved locally as backups/sheet-snapshots/Menu-sheet-<sha>.zip
+(these are gitignored, not pushed).
+
+Usage (CLI):
   python3 scripts/toki_git_commit.py
-  python3 scripts/toki_git_commit.py --message "describe checkpoint"
-  python3 scripts/toki_git_commit.py --no-commit   # snapshot + push only
-  python3 scripts/toki_git_commit.py --no-push
-  python3 scripts/toki_git_commit.py --no-ui        # no dialogs (CLI only)
+  python3 scripts/toki_git_commit.py -m "describe change"
+  python3 scripts/toki_git_commit.py --sheet -m "full checkpoint"
+  python3 scripts/toki_git_commit.py --all -m "changed images"
 """
 
 from __future__ import annotations
@@ -104,20 +102,33 @@ def dialog(message: str, title: str = "Toki Git Commit", ui: bool = True, fatal:
         pass
 
 
-def prompt_commit_message(default: str, ui: bool) -> str | None:
-    """Return commit message, or None to cancel."""
+def prompt_commit_options(default: str, ui: bool):
+    """Single dialog for commit message + choice of full GSheet backup.
+
+    Returns (message: str | None, include_sheet: bool)
+    If user cancels, returns (None, False)
+    """
     if not ui:
-        return default
+        # non-UI: respect CLI flags later, no prompt
+        return default, False
     try:
         def esc(s: str) -> str:
             return s.replace("\\", "\\\\").replace('"', '\\"')
 
         script = f'''
 try
-  set r to display dialog "Commit message (code checkpoint):" default answer "{esc(default)}" buttons {{"Cancel", "Commit"}} default button "Commit" with title "Toki Git Commit"
-  return text returned of r
+  set r to display dialog "Commit message:" default answer "{esc(default)}" buttons {{"Cancel", "Commit (fast)", "Commit + full GSheet backup"}} default button "Commit (fast)" with title "Toki Git Commit"
+  set btn to button returned of r
+  set txt to text returned of r
+  if btn is "Cancel" then
+    return "CANCEL"
+  else if btn is "Commit + full GSheet backup" then
+    return "SHEET|" & txt
+  else
+    return "FAST|" & txt
+  end if
 on error
-  return ""
+  return "CANCEL"
 end try
 '''
         out = subprocess.run(
@@ -126,12 +137,21 @@ end try
             text=True,
             check=False,
         )
-        msg = (out.stdout or "").strip()
-        if not msg:
-            return None
-        return msg
+        result = (out.stdout or "").strip()
+        if not result or result == "CANCEL":
+            return None, False
+        if result.startswith("SHEET|"):
+            msg = result[6:].strip()
+            return (msg if msg else None), True
+        else:
+            # FAST| or plain
+            if result.startswith("FAST|"):
+                msg = result[5:].strip()
+            else:
+                msg = result.strip()
+            return (msg if msg else None), False
     except Exception:
-        return default
+        return default, False
 
 
 # ── Git helpers ─────────────────────────────────────────────────────────────
@@ -223,13 +243,31 @@ def write_build_info() -> Path | None:
         return None
 
 
-def git_commit(message: str) -> bool:
-    """Stage all + commit. Returns True if a commit was created."""
-    run_git(["add", "-A"], check=False)
+def git_commit(message: str, full: bool = False) -> bool:
+    """Stage + commit.
+
+    Default (full=False): selective add for normal code files + git add -u.
+    This avoids pushing the whole database/images every time.
+
+    full=True: full git add -A (use --all or when you mean to include big assets).
+    """
+    if full:
+        run_git(["add", "-A"], check=False)
+    else:
+        run_git([
+            "add",
+            "js/", "css/",
+            "index.html", "index2.html", "index3.html", "index4.html",
+            "preview-all.html", "glossary.html",
+            "docs/", "scripts/", "AGENTS.md",
+            "*.command", "Start Toki Menu.command",
+            "Open Toki Menus.app/", "Toki Git Commit.app/"
+        ], check=False)
+        run_git(["add", "-u"], check=False)
+
     # Re-check after add (nothing staged?)
     r = run_git(["diff", "--cached", "--quiet"], check=False)
     if r.returncode == 0:
-        # also untracked already added; if still nothing:
         r2 = run_git(["status", "--porcelain"], check=False)
         if not (r2.stdout or "").strip():
             return False
@@ -469,11 +507,13 @@ Zip filename encodes the short SHA so you can match any snapshot to
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Toki Git Commit — push + sheet snapshot")
+    ap = argparse.ArgumentParser(description="Toki Git Commit — fast by default + checkbox for sheet")
     ap.add_argument("-m", "--message", default="", help="Commit message")
     ap.add_argument("--no-commit", action="store_true", help="Skip commit even if dirty")
     ap.add_argument("--no-push", action="store_true", help="Skip git push")
-    ap.add_argument("--no-sheet", action="store_true", help="Skip Google Sheet snapshot")
+    ap.add_argument("--sheet", action="store_true", help="Force full sheet snapshot (same as checking the box)")
+    ap.add_argument("--no-sheet", action="store_true", help="Force skip sheet snapshot")
+    ap.add_argument("--all", action="store_true", help="Stage everything (git add -A) — use if changing photos etc.")
     ap.add_argument("--no-ui", action="store_true", help="No macOS dialogs/notifications")
     ap.add_argument("--sheet-id", default=DEFAULT_SHEET_ID)
     ap.add_argument("--key", type=Path, default=DEFAULT_KEY)
@@ -489,23 +529,29 @@ def main() -> int:
     errors: list[str] = []
     notes: list[str] = []
 
-    # ── Parallel: start sheet pull while we commit ──────────────────────────
+    # ── Sheet snapshot decision (default off, checkbox in UI) ───────────────
     sheet_future = None
     executor = ThreadPoolExecutor(max_workers=2)
-    try:
-        if not args.no_sheet:
-            def _pull():
-                xlsx = fetch_xlsx_bytes(args.sheet_id, args.key)
-                tabs = fetch_tabs_and_csvs(args.sheet_id, args.key)
-                # email for manifest
-                try:
-                    creds, *_ = _load_google(args.key)
-                    email = creds.service_account_email
-                except Exception:
-                    email = ""
-                return xlsx, tabs, email
+    pull_func = None
 
-            sheet_future = executor.submit(_pull)
+    # Prepare the pull function (expensive Google work only happens if we decide yes)
+    def _pull():
+        xlsx = fetch_xlsx_bytes(args.sheet_id, args.key)
+        tabs = fetch_tabs_and_csvs(args.sheet_id, args.key)
+        try:
+            creds, *_ = _load_google(args.key)
+            email = creds.service_account_email
+        except Exception:
+            email = ""
+        return xlsx, tabs, email
+    pull_func = _pull
+
+    want_sheet = args.sheet and not args.no_sheet
+
+    try:
+        if want_sheet:
+            # CLI forced --sheet: start the work early in parallel
+            sheet_future = executor.submit(pull_func)
 
         # ── Commit ──────────────────────────────────────────────────────────
         committed = False
@@ -513,18 +559,26 @@ def main() -> int:
             default_msg = args.message.strip() or (
                 "checkpoint " + datetime.now().strftime("%Y-%m-%d %H:%M")
             )
-            msg = (
-                args.message.strip()
-                if args.message.strip()
-                else prompt_commit_message(default_msg, ui)
-            )
+            cli_msg = args.message.strip()
+            if cli_msg:
+                msg = cli_msg
+                do_sheet = args.sheet and not args.no_sheet
+            else:
+                msg, do_sheet = prompt_commit_options(default_msg, ui)
+
             if msg is None:
                 dialog("Cancelled — nothing committed or pushed.", ui=ui)
                 if sheet_future:
                     sheet_future.cancel()
                 return 0
+
+            if do_sheet:
+                want_sheet = True
+                if pull_func is not None and sheet_future is None:
+                    sheet_future = executor.submit(pull_func)
+
             try:
-                committed = git_commit(msg)
+                committed = git_commit(msg, full=args.all)
                 if committed:
                     notes.append(f"Committed: {msg}")
                     # Stamp build-info and amend into the same commit so HEAD
@@ -628,13 +682,19 @@ def main() -> int:
                 errors.append(f"Sheet snapshot failed:\n{e}")
                 traceback.print_exc()
         else:
-            notes.append("Skipped sheet snapshot (--no-sheet).")
+            # Normal fast path — no sheet snapshot performed.
+            if want_sheet:
+                notes.append("Sheet snapshot requested but did not run.")
 
         # ── Push ────────────────────────────────────────────────────────────
         if not args.no_push:
             try:
                 push_out = git_push()
-                notes.append("Push: " + push_out.splitlines()[-1] if push_out else "Push OK")
+                last = (push_out.splitlines()[-1] if push_out else "Push OK").strip()
+                if "up-to-date" not in last.lower():
+                    notes.append("Push: " + last)
+                else:
+                    notes.append("Pushed (up to date).")
             except Exception as e:
                 errors.append(str(e))
         else:
