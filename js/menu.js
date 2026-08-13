@@ -2626,6 +2626,11 @@
     tokiInfo("encore wallpaper unparked");
   }
 
+  /** Park/unpark from the live segment — not only on a mode *change*. */
+  function syncEncoreWallpaperPark(opts) {
+    setEncoreSolidBackground(isEncoreSegmentNow(), opts);
+  }
+
   function setEncoreSolidBackground(on, opts) {
     opts = opts || {};
     const want = !!on;
@@ -3380,7 +3385,13 @@
 
     // Global Style-driven effects (never per-wallpaper).
     // See applyBgEffects below.
-    applyBgEffects(galaxy, blur01, opacity01, blend);
+    // Encore holds wallpaper off. Do not re-apply blur onto parked layers.
+    applyBgEffects(
+      galaxy,
+      _encoreSolidBg ? 0 : blur01,
+      opacity01,
+      _encoreSolidBg ? "normal" : blend
+    );
 
     // One layer when not scrolling (or wall). Dual only for seamless pan.
     const scrollOn =
@@ -3418,7 +3429,7 @@
       el.hidden = false;
       attachWebpFallback(el);
       el.dataset.tokiMaster = imagePath;
-      if (el.dataset.tokiParked === "1") return;
+      if (el.dataset.tokiParked === "1" || _encoreSolidBg) return;
       if (el.getAttribute("src") !== imagePath) {
         tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
         el.dataset.downsampled = "";
@@ -12519,13 +12530,9 @@
     _prevBoardSlide = slide;
     _prevBoardSlideType = slide.type || "";
     {
-      const nextSeg =
+      _activeSegmentMode =
         slide.segmentMode === "encore" ? "encore" : "slideshow";
-      const segChanged = _activeSegmentMode !== nextSeg;
-      _activeSegmentMode = nextSeg;
-      if (segChanged) {
-        setEncoreSolidBackground(nextSeg === "encore");
-      }
+      syncEncoreWallpaperPark();
     }
 
     tokiInfo(
@@ -12889,6 +12896,7 @@
       _prevBoardSlideType = slide.type || "";
       _activeSegmentMode =
         slide.segmentMode === "encore" ? "encore" : "slideshow";
+      syncEncoreWallpaperPark({ instant: !!instant });
       if (instant || !_presentationRunning) {
         // Soft reload / pause: one static frame; engine restarts on startSlideshow
         applyStaticPresentationSlide(slide);
@@ -13270,6 +13278,7 @@
     const gen = ++_staticPaintGen;
     _activeSegmentMode =
       slide.segmentMode === "encore" ? "encore" : "slideshow";
+    syncEncoreWallpaperPark({ instant: true });
     applyEncoreSpotlightChrome(null, { forceClear: true });
 
     const isBoxSeg = slide.segment === "box";
@@ -13390,11 +13399,8 @@
     }
 
     {
-      const segChanged = _activeSegmentMode !== segMode;
       _activeSegmentMode = segMode;
-      if (segChanged) {
-        setEncoreSolidBackground(segMode === "encore", { instant: !!instant });
-      }
+      syncEncoreWallpaperPark({ instant: !!instant });
     }
 
     // Veil only on Encore *bows* (and never in static quarantine).
