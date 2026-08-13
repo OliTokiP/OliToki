@@ -259,18 +259,17 @@ def git_commit(message: str, full: bool = False) -> bool:
             "js/", "css/",
             "index.html", "index2.html", "index3.html", "index4.html",
             "preview-all.html", "glossary.html",
-            "docs/", "scripts/", "AGENTS.md",
+            "docs/", "scripts/", "deprecated/",
+            "AGENTS.md", "Agents.md",
             "*.command", "Start Toki Menu.command",
             "Open Toki Menus.app/", "Toki Git Commit.app/"
         ], check=False)
         run_git(["add", "-u"], check=False)
 
-    # Re-check after add (nothing staged?)
+    # Nothing staged → do not run `git commit` (it errors if only untracked leftovers).
     r = run_git(["diff", "--cached", "--quiet"], check=False)
     if r.returncode == 0:
-        r2 = run_git(["status", "--porcelain"], check=False)
-        if not (r2.stdout or "").strip():
-            return False
+        return False
     try:
         run_git(["commit", "-m", message])
         return True
@@ -632,7 +631,15 @@ def main() -> int:
                                         "build-info written (commit separately)"
                                     )
                 else:
-                    notes.append("Nothing to commit (clean after stage).")
+                    leftover = run_git(["status", "--porcelain"], check=False)
+                    extra = (leftover.stdout or "").strip()
+                    if extra:
+                        notes.append(
+                            "Nothing new staged. Leftover untracked files were not "
+                            "in the usual commit set:\n" + extra
+                        )
+                    else:
+                        notes.append("Nothing to commit (clean after stage).")
             except Exception as e:
                 errors.append(str(e))
         elif args.no_commit:
