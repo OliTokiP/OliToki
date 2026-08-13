@@ -440,8 +440,8 @@
 
   /**
    * Board 4 Announcements tab (gid 149404218) — Settings + message Inventory.
-   * Settings: Title | Include Footer Box (singular) | BG Color |
-   *           BG Pattern | Pattern Color 1 | Pattern Color 2
+   * Live Settings only: A Title | B Include Footer Box | C BG Pattern (None|Stripes).
+   * Old C BG Color / D Pattern / E–F stripe colors are dead — do not read.
    * Inventory (headers under Settings data; may omit "Inventory" label):
    *   Announcement Title | Subtitle | Text | Box Color | Speed |
    *   Motion Style | Motion Setting
@@ -450,10 +450,7 @@
   const ANN_REVISED_SETTINGS = {
     title: 0,
     includeFooterBox: 1, // singular: "Drinks" | "Proteins" | "Sauces" | "Veggies" | blank/none
-    bgColor: 2,
-    bgPattern: 3,
-    patternColor1: 4,
-    patternColor2: 5,
+    bgPattern: 2, // None | Stripes
   };
   const ANN_REVISED_INVENTORY = {
     announcementTitle: 0,
@@ -731,7 +728,7 @@
     highlightSpecial: "#fff900",
     stripeColor1: "#000000",
     stripeColor2: "#ffffff",
-    includeStripes: true,
+    includeStripes: false,
     bgPattern: null,
     patternColor1: "#000000",
     patternColor2: "#ffffff",
@@ -4056,6 +4053,14 @@
    * Title/subtitle married; speed/box-color/shout inherit blanks.
    * Rich bold/color from the Text cell (xlsx). Motion Style/Setting stored for later.
    */
+  /** Style / Announcements BG Pattern: "Stripes" vs None. Blank → None. */
+  function isStripesPatternToken(raw) {
+    const s = String(raw == null ? "" : raw).trim().toLowerCase();
+    if (!s) return false;
+    if (/^(none|off|0|false|no|-|—)$/i.test(s)) return false;
+    return s.indexOf("stripe") !== -1;
+  }
+
   function parsedAnnouncementsRevisedFromRows(rows) {
     if (
       !rows ||
@@ -4075,8 +4080,6 @@
       settingsIdx >= 0 && settingsIdx < rows.length
         ? rows[settingsIdx]
         : rows[2] || rows[0];
-    const settingsExcelRow =
-      settingsIdx >= 0 ? settingsIdx + 1 : 3;
 
     const invStart = findAnnouncementInventoryDataStart(rows);
     const messages = [];
@@ -4175,29 +4178,10 @@
       lastSpeed = speed;
     }
 
-    // Settings: panel FOREGROUND pattern (#stripes), full opacity — not Style #bg-pattern
-    const patternRaw = String(
-      cell(settingsRow, rs.bgPattern) || ""
-    ).trim();
-    const patternOff = /^(none|off|0|false|no|-|—)$/i.test(patternRaw);
-    // Only "stripes" is implemented; blank defaults to on for board 4 continuity
-    const showPanelPattern =
-      !patternOff &&
-      (!patternRaw || /stripe/i.test(patternRaw) || patternRaw === "1");
-
-    const p1Choice =
-      String(cell(settingsRow, rs.patternColor1) || "").trim() || null;
-    const p2Choice =
-      String(cell(settingsRow, rs.patternColor2) || "").trim() || null;
-    const p1Fill =
-      sheetFills[cellRef(rs.patternColor1, settingsExcelRow)] || null;
-    const p2Fill =
-      sheetFills[cellRef(rs.patternColor2, settingsExcelRow)] || null;
-
-    const boardBgChoice =
-      String(cell(settingsRow, rs.bgColor) || "").trim() || null;
-    const boardBgFill =
-      sheetFills[cellRef(rs.bgColor, settingsExcelRow)] || null;
+    // Live Settings: A Title | B Include Footer Box | C BG Pattern only.
+    const showPanelPattern = isStripesPatternToken(
+      cell(settingsRow, rs.bgPattern)
+    );
 
     const footerSel = normalizeFooterBoxSelection(
       cell(settingsRow, rs.includeFooterBox)
@@ -4213,15 +4197,6 @@
       items: [], // filled by attachBoard4FooterBox from shared box sheets
       includeFooterBox: footerSel,
       includeStripes: showPanelPattern,
-      // Panel pattern colors (map to stripe vars at apply)
-      stripeColor1Choice: p1Choice,
-      stripeColor1Fill: p1Fill,
-      stripeColor2Choice: p2Choice,
-      stripeColor2Fill: p2Fill,
-      patternColor1Choice: p1Choice,
-      patternColor2Choice: p2Choice,
-      boardBgColorChoice: boardBgChoice,
-      boardBgColorFill: boardBgFill,
       announcementBox: {
         title: firstMsg ? firstMsg.title : "",
         subtitle: firstMsg ? firstMsg.subtitle : "",
@@ -4533,20 +4508,22 @@
       };
     }
 
+    // Frame / Style stripe pair — always Style & Theme Pattern Color 1/2.
+    // Announcement-tab stripe colors are dead (spoof cells ignored).
     const stripe1 =
       resolveNamedThemeColor(
-        parsed.stripeColor1Choice != null
-          ? parsed.stripeColor1Choice
-          : parsed.stripeColor1,
-        parsed.stripeColor1Fill,
+        parsed.patternColor1Choice != null
+          ? parsed.patternColor1Choice
+          : "main color",
+        null,
         themeColors
       ) || main;
     const stripe2 =
       resolveNamedThemeColor(
-        parsed.stripeColor2Choice != null
-          ? parsed.stripeColor2Choice
-          : parsed.stripeColor2,
-        parsed.stripeColor2Fill,
+        parsed.patternColor2Choice != null
+          ? parsed.patternColor2Choice
+          : "secondary color",
+        null,
         themeColors
       ) || secondary;
 
@@ -4596,6 +4573,10 @@
     } else {
       // No theme image key → keep current (often null); never force galaxy
       bgImage = config.bgImage || null;
+    }
+    // Style BG Pattern owns the hero texture — wallpaper is not part of that theme.
+    if (isStripesPatternToken(parsed.bgPattern)) {
+      bgImage = null;
     }
     const bgBlur = parseUnit01(
       parsed.bgBlur != null ? parsed.bgBlur : config.bgBlur,
@@ -4649,10 +4630,7 @@
       stripeColor2: stripe2,
       patternColor1: patternColor1,
       patternColor2: patternColor2,
-      includeStripes:
-        parsed.includeStripes !== undefined
-          ? !!parsed.includeStripes
-          : config.includeStripes !== false,
+      includeStripes: isDrinks ? !!parsed.includeStripes : false,
       announcementBg: annSurf.color,
       announcementBgImage: annSurf.image,
       announcementBodyText: annSurf.text,
@@ -5433,16 +5411,20 @@
     );
 
     if (isDrinks) {
+      // Frame stripes: raw Style & Theme hex — never Pattern Bake.
       root.style.setProperty(
         "--stripe-1",
-        patternBakeHex(config.stripeColor1, main)
+        normalizeHex(config.stripeColor1) ||
+          normalizeHex(config.patternColor1) ||
+          main
       );
       root.style.setProperty(
         "--stripe-2",
-        patternBakeHex(config.stripeColor2, secondary)
+        normalizeHex(config.stripeColor2) ||
+          normalizeHex(config.patternColor2) ||
+          secondary
       );
-      // Include Stripes: 1 = show + animate, 0 = hide completely
-      const showStripes = config.includeStripes !== false;
+      const showStripes = !!config.includeStripes;
       if (els.stripes) {
         els.stripes.hidden = !showStripes;
         els.stripes.style.display = showStripes ? "" : "none";
@@ -5483,7 +5465,7 @@
   function applyBgPattern() {
     const root = document.documentElement;
     const pat = config && config.bgPattern;
-    const isStripes = pat === "stripes";
+    const isStripes = isStripesPatternToken(pat);
     let bp = els.bgPattern;
     let track = els.bgPatternTrack;
 
@@ -5521,6 +5503,15 @@
     }
     if (!bp) return;
 
+    // Board 4 frame stripes already own the only stripe animation.
+    if (isDrinks && config.includeStripes) {
+      bp.hidden = true;
+      bp.style.display = "none";
+      bp.classList.remove("active");
+      document.body.classList.remove("has-bg-pattern-stripes");
+      return;
+    }
+
     if (isStripes) {
       bp.hidden = false;
       bp.style.display = "block";
@@ -5546,7 +5537,7 @@
     if (!track) return;
     const mult = parseBgScrollSpeed(config && config.bgScrollSpeed, 1);
     const pat = config && config.bgPattern;
-    if (!pat || pat !== "stripes" || mult <= 0) {
+    if (!pat || !isStripesPatternToken(pat) || mult <= 0) {
       track.style.animationPlayState = "paused";
       return;
     }
@@ -15393,7 +15384,7 @@
       document.body.classList.add("board-munchies");
     }
     if (isDrinks) {
-      document.body.classList.add("board-drinks");
+      document.body.classList.add("board-drinks", "stripes-off");
     }
     if (cfg.showHero === false && els.heroWrap) {
       els.heroWrap.hidden = true;

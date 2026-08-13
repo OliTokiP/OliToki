@@ -2,16 +2,16 @@
  * TokiMenu — Board 4 (Drinks & Deals / Announcements)
  *
  * Sheet tab: "Announcements" (gid=149404218) — revised Settings + Inventory.
- *   Settings: Title | Include Footer Box (singular) | BG Color |
- *             BG Pattern | Pattern Color 1 | Pattern Color 2
+ *   Live Settings: Title | Include Footer Box | BG Pattern (None|Stripes)
+ *   Dead (do not read): old BG Color, old Pattern column, stripe color cells.
  *   Inventory (under settings): Announcement Title | Subtitle | Text |
  *             Box Color | Speed | Motion Style | Motion Setting
  *
  * Footer box content (single selection): Proteins / Sauces / Drinks / Veggies
  * sheets — each keeps its own Settings (color, columns, align, CF).
  * Theme / speeds: Style and Theme (revised).
- * Panel pattern (#stripes) is FOREGROUND at full opacity; Style BG Pattern
- * remains atmospheric (lower opacity) on #bg-pattern.
+ * Announcements Stripes = frame/Main panel, raw Style Pattern Color 1/2.
+ * Style BG Pattern (if any) is suppressed while Announcements Stripes is on.
  *
  * Legacy Board 4 chrome tab gid=1962117802 kept as archive only.
  */

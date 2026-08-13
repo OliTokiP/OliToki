@@ -906,9 +906,8 @@ html.beta-veil-shadow #family-portrait-stage.encore-spot-hard .family-portrait-v
   opacity: 0.9;
 }
 
-/* Encore: fade wallpaper + stripes out (keep them in the tree so dual-layer
-   pan position is not reset). Same clock as collage Wind-up / Wind-down fade. */
-body.encore-bg-fading #stripes,
+/* Encore: fade wallpaper + Style #bg-pattern out. Frame #stripes stay
+   (Announcements Stripes live on the Main panel during Encore). */
 body.encore-bg-fading #bg-pattern,
 body.encore-bg-fading #galaxy-a,
 body.encore-bg-fading #galaxy-b,
@@ -916,7 +915,6 @@ body.encore-bg-fading .family-portrait-bg-img {
   transition: opacity var(--dur-mid, 0.45s) var(--ease-fade, ease) !important;
 }
 
-body.encore-solid-bg #stripes,
 body.encore-solid-bg #bg-pattern,
 body.encore-solid-bg #galaxy-a,
 body.encore-solid-bg #galaxy-b,
