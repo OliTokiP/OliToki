@@ -1998,11 +1998,24 @@ body.encore-solid-bg .family-portrait-bg-img {
   animation-duration: 6s;
 }
 
+/* Pattern Bake: opaque bands; hex already = stripe×0.35 + BG×0.65 */
+html.pattern-bake #bg-pattern-track,
+body.pattern-bake #bg-pattern-track,
+html.pattern-bake #stripes-track,
+body.pattern-bake #stripes-track {
+  opacity: 1;
+}
+
 /* Lean path for wall preview */
 body.preview-wall #bg-pattern-track {
   will-change: auto;
   opacity: 0.18;
   animation-duration: 12s;
+}
+
+html.pattern-bake.preview-wall #bg-pattern-track,
+body.pattern-bake.preview-wall #bg-pattern-track {
+  opacity: 1;
 }
 
 /* Content boxes on the right panel */

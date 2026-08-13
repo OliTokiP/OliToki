@@ -1,6 +1,6 @@
 # Beta Features — injection guide
 
-**Last updated:** 2026-08-13 12:00 (Hard veil shadow restored to d03b4de drop-shadow)  
+**Last updated:** 2026-08-13 (Pattern Bake checkbox — opaque 0.35-over-BG-Color hex)  
 
 **Tab:** `Beta Features` · **GID:** `1710200195` · constant `BETA_FEATURES_GID` in `js/menu.js`  
 
@@ -41,6 +41,17 @@ Section title `Veil Shadow Settings`. Header row then **one data row directly un
 **Hole pinch** is hardcoded (Hard only): shrink `40px` on Punch-in with the zoom ease; Punch-out stays pinched. Reset to full radius at the next Punch-in while the veil is undimmed. Soft is unchanged. No sheet hook.
 
 Defaults written under the headers (also in `VEIL_SHADOW_DEFAULTS`): `18 / 22 / 3 / 2 / 0.5`. Blank cells keep those. Solo heroes (`#hero-plate .hero-anim`) are never touched. Soft spotlight never gets a veil shadow. Wall preview strips the filter.
+
+### `Pattern Transparency Bake`
+
+Checkbox at **A7** on the Beta Features tab (title **Pattern Transparency Bake**).
+
+| State | Look |
+|-------|------|
+| **OFF** (default) | Old `#bg-pattern-track` at **opacity 0.35** over whatever is behind (plate / wallpaper). |
+| **ON** | Opacity **1**. Each stripe hex is pre-composited: `stripe × 0.35 + BG Color × 0.65` (same math as CSS src-over). No translucent layer. |
+
+A/B the Fire Stick cost of a 0.35 overlay vs an opaque baked fill. Console: `Pattern Bake: ON (opaque bands = 0.35 over #……)`.
 
 ### `Include Footer Boxes` (primary control today)
 

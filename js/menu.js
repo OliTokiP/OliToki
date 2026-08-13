@@ -916,6 +916,35 @@
     return "#" + s.toLowerCase();
   }
 
+  function hexToRgb(hex) {
+    const h = normalizeHex(hex);
+    if (!h) return null;
+    return {
+      r: parseInt(h.slice(1, 3), 16),
+      g: parseInt(h.slice(3, 5), 16),
+      b: parseInt(h.slice(5, 7), 16),
+    };
+  }
+
+  function rgbToHex(r, g, b) {
+    function to2(n) {
+      const x = Math.max(0, Math.min(255, Math.round(n)));
+      return (x < 16 ? "0" : "") + x.toString(16);
+    }
+    return "#" + to2(r) + to2(g) + to2(b);
+  }
+
+  /** src at `alpha` over dst — same look as CSS opacity without a translucent layer. */
+  function blendHexOver(srcHex, dstHex, alpha) {
+    const src = hexToRgb(srcHex);
+    const dst = hexToRgb(dstHex);
+    if (!src) return srcHex;
+    if (!dst) return normalizeHex(srcHex) || srcHex;
+    const a = Math.max(0, Math.min(1, Number(alpha)));
+    const ia = 1 - a;
+    return rgbToHex(src.r * a + dst.r * ia, src.g * a + dst.g * ia, src.b * a + dst.b * ia);
+  }
+
   /**
    * Font colors left over from sheet hyperlinks should not override the board's
    * contrast announcement text. Intentional colors (e.g. orange Halloween,
@@ -1563,6 +1592,104 @@
   }
 
   /**
+   * Beta Features → Pattern Bake (checkbox).
+   * ON  = paint #bg-pattern at opacity 1 using hex = stripe @ 0.35 over BG Color.
+   * OFF = old look (true 0.35 opacity over whatever is behind).
+   */
+  const PATTERN_BAKE_ALPHA = 0.35;
+  let patternBakeOn = false;
+
+  function isPatternBakeFlagCell(raw) {
+    if (typeof raw === "boolean") return true;
+    if (raw === 1 || raw === 0) return true;
+    const s = String(raw == null ? "" : raw).trim().toLowerCase();
+    return /^(1|0|yes|no|y|n|true|false|on|off|checked|unchecked)$/.test(s);
+  }
+
+  function parsePatternBake(rows) {
+    if (!rows || !rows.length) return false;
+
+    // Beta Features sheet: checkbox is A7 (1-based) = rows[6][0]
+    if (rows.length >= 7) {
+      const a7 = cell(rows[6], 0);
+      if (isPatternBakeFlagCell(a7)) return parseYesNo(a7, false);
+      const b7 = cell(rows[6], 1);
+      if (isPatternBakeFlagCell(b7)) return parseYesNo(b7, false);
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || [];
+      const width = Math.max(row.length, 10);
+      for (let c = 0; c < width; c++) {
+        const label = String(cell(row, c) || "").trim().toLowerCase();
+        if (
+          label.indexOf("pattern transparency bake") === -1 &&
+          label.indexOf("pattern bake") === -1
+        ) {
+          continue;
+        }
+        for (let k = c + 1; k < width; k++) {
+          const v = cell(row, k);
+          if (isPatternBakeFlagCell(v)) return parseYesNo(v, false);
+        }
+        for (let j = i + 1; j <= i + 3 && j < rows.length; j++) {
+          const nr = rows[j] || [];
+          const nw = Math.max(nr.length, 10);
+          for (let k = 0; k < nw; k++) {
+            const v = cell(nr, k);
+            if (isPatternBakeFlagCell(v)) return parseYesNo(v, false);
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function patternPlateHex() {
+    return (
+      normalizeHex(config.bgColor) ||
+      normalizeHex(config.bgSolid) ||
+      normalizeHex(config.mainColor) ||
+      "#000000"
+    );
+  }
+
+  function patternBakeHex(fgHex, fallback) {
+    const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
+    if (!patternBakeOn) return fg;
+    // stripe×0.35 + BG×0.65  (identical to CSS opacity 0.35 over the plate)
+    return blendHexOver(fg, patternPlateHex(), 0.35);
+  }
+
+  function applyPatternBakeConfig(on) {
+    patternBakeOn = !!on;
+    config.patternBake = patternBakeOn;
+    if (document.documentElement) {
+      document.documentElement.classList.toggle("pattern-bake", patternBakeOn);
+    }
+    if (document.body) {
+      document.body.classList.toggle("pattern-bake", patternBakeOn);
+    }
+    const plate = patternPlateHex();
+    tokiInfo(
+      "Pattern Bake:",
+      patternBakeOn ? "ON" : "OFF",
+      patternBakeOn
+        ? "out = stripe*0.35 + " + plate + "*0.65, opacity 1"
+        : "raw hex, opacity 0.35"
+    );
+    try {
+      applyConfigColors();
+    } catch (e) {
+      try {
+        applyBgPattern();
+      } catch (e2) {
+        /* theme/pattern may not be ready yet */
+      }
+    }
+  }
+
+  /**
    * Parse the central Beta Features tab.
    * Boards → Include Footer Boxes (fallback), Motion table, Veil Shadow Settings.
    */
@@ -1572,12 +1699,14 @@
         footerBoxes: [],
         motionStyles: {},
         veilShadow: Object.assign({}, VEIL_SHADOW_DEFAULTS),
+        patternBake: false,
       };
     }
     const result = {
       footerBoxes: [],
       motionStyles: {},
       veilShadow: Object.assign({}, VEIL_SHADOW_DEFAULTS),
+      patternBake: false,
     };
 
     // Find "Boards" section (label row, then headers, then data)
@@ -1610,6 +1739,13 @@
 
     result.motionStyles = parseMotionStylesTable(rows);
     result.veilShadow = parseVeilShadowSettings(rows);
+    result.patternBake = parsePatternBake(rows);
+    tokiInfo(
+      "Pattern Transparency Bake A7=",
+      rows[6] ? cell(rows[6], 0) : "(no row 7)",
+      "→",
+      result.patternBake
+    );
     return result;
   }
 
@@ -5297,8 +5433,14 @@
     );
 
     if (isDrinks) {
-      root.style.setProperty("--stripe-1", config.stripeColor1 || main);
-      root.style.setProperty("--stripe-2", config.stripeColor2 || secondary);
+      root.style.setProperty(
+        "--stripe-1",
+        patternBakeHex(config.stripeColor1, main)
+      );
+      root.style.setProperty(
+        "--stripe-2",
+        patternBakeHex(config.stripeColor2, secondary)
+      );
       // Include Stripes: 1 = show + animate, 0 = hide completely
       const showStripes = config.includeStripes !== false;
       if (els.stripes) {
@@ -5386,8 +5528,8 @@
       document.body.classList.add("has-bg-pattern-stripes");
       const main = config.mainColor || "#000000";
       const secondary = config.secondaryColor || "#ffffff";
-      const c1 = config.patternColor1 || main;
-      const c2 = config.patternColor2 || secondary;
+      const c1 = patternBakeHex(config.patternColor1, main);
+      const c2 = patternBakeHex(config.patternColor2, secondary);
       root.style.setProperty("--bg-pattern-1", c1);
       root.style.setProperty("--bg-pattern-2", c2);
       updateBgPatternAnimation(track);
@@ -7584,14 +7726,17 @@
         const betaMotion = parseBetaFeatures(csv.beta);
         applyMotionStylesConfig(betaMotion.motionStyles || {});
         applyVeilShadowConfig(betaMotion.veilShadow);
+        applyPatternBakeConfig(betaMotion.patternBake);
       } else {
         applyMotionStylesConfig({});
         applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
+        applyPatternBakeConfig(false);
       }
     } catch (motionErr) {
       tokiWarn("Motion styles load failed; using Ken Burns defaults", motionErr);
       applyMotionStylesConfig({});
       applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
+      applyPatternBakeConfig(false);
     }
 
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
@@ -7837,14 +7982,17 @@
         const betaMotion = parseBetaFeatures(betaRows);
         applyMotionStylesConfig(betaMotion.motionStyles || {});
         applyVeilShadowConfig(betaMotion.veilShadow);
+        applyPatternBakeConfig(betaMotion.patternBake);
       } else {
         applyMotionStylesConfig({});
         applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
+        applyPatternBakeConfig(false);
       }
     } catch (err) {
       console.warn("Local Beta Motion unavailable:", err);
       applyMotionStylesConfig({});
       applyVeilShadowConfig(VEIL_SHADOW_DEFAULTS);
+      applyPatternBakeConfig(false);
     }
 
     return parsed;
@@ -14484,6 +14632,7 @@
       bgPattern: config.bgPattern,
       pat1: config.patternColor1,
       pat2: config.patternColor2,
+      patBake: !!config.patternBake,
       bg: config.bgScrollSpeed,
       speed: config.slideshowSpeed,
       hl: config.highlight,
