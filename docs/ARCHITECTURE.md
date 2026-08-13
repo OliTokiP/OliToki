@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-08-10 (multi-image hero lattice shares Family Portrait grid; see FAMILY_PORTRAIT_LATTICE.md)
+**Last updated:** 2026-08-13 21:30 (Remote = public Viewer sheets; hosted private API is future — FUTURE_HOSTED_API.md)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -57,7 +57,7 @@ The Sheets **API + service account** exists so a **trusted program** can read a 
 | Does **Local** use the API or public export? | **API**, when `toki_server.py` is up (`/api/sheets/*`). Public `/export` is only a fallback if the proxy is missing. |
 | Can the sheet stay private? | **Yes**, with Local (or a hosted backend). Share the sheet with the service account email as Viewer (or Editor if the app writes). |
 | Can **GitHub Pages alone** use that private API path? | **No.** Pages is static files only — no Python process, nowhere safe for the key. |
-| Is “market Remote = private sheet + live boards via API” possible? | **Yes.** Same as Local: host the proxy; frontend stays static. Pages is fine as the **frontend** host. |
+| Is “market Remote = private sheet + live boards via API” possible? | **Yes, later.** Same proxy, hosted 24/7. Not built — [FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md). Pages stays the frontend. |
 | Dropbox / iCloud as the API server? | **No.** They sync files; they do not run code or serve `/api/sheets/*`. This repo *lives* in Dropbox; that is storage, not a backend. |
 | Mac + tunnel (Cloudflare / ngrok / Tailscale)? | Possible for demos: tunnel exposes local `toki_server` to the internet. Mac must stay awake; not a product host. |
 | Put the service account JSON in the website/repo? | **Don’t.** Public repo scrapers steal keys; that is not “private sheet.” |
@@ -67,7 +67,7 @@ The Sheets **API + service account** exists so a **trusted program** can read a 
 | Choice | Meaning |
 |--------|---------|
 | **Local** | `http://127.0.0.1:8765` + start `toki_server` → private sheet API path |
-| **Remote** | GitHub Pages static site → no proxy unless you later point boards at a hosted API |
+| **Remote** | GitHub Pages. **Today:** public CSV — Settings + the chosen Alpha/Restaurant workbook must be **Anyone with the link → Viewer**. **Future:** hosted `toki_server` so those sheets can stay private ([FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md)). A git push does not change Data Source — the Settings sheet does. |
 
 Service account email is a **robot identity** for *your software*, not a substitute for making the whole internet a Viewer of the sheet.
 
@@ -280,6 +280,7 @@ Caches: meta TTL ~120s, CSV ~90s. API calls serialized (client not thread-safe).
 
 Future:
 
+- **Hosted API for Remote + private sheets** — [FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md)  
 - Restaurant registry resolution  
 - Toast proxy  
 - Optional `schemaVersion` check endpoint  

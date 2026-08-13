@@ -1,9 +1,17 @@
 # What’s New
 
-**Last updated:** 2026-08-13 20:00  
+**Last updated:** 2026-08-13 21:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-13 21:30 — Remote stays on public Viewer sheets
+
+**Boards / surface:** GitHub Pages (Remote)  
+**Sheet:** Settings + Alpha / Restaurant copies — **Anyone with the link → Viewer** for now  
+**Summary:** Remote cannot read a private sheet by itself (no place to hide the robot key). A hosted `toki_server` for that is a **future** feature: [FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md). Local still uses the service account and can stay private. Until the hosted API exists, share Settings and the chosen live workbook as Viewer.
 
 ---
 

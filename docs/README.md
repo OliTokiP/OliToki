@@ -1,10 +1,11 @@
 # TokiMenu documentation
 
-**Last updated:** 2026-08-11 13:15  
+**Last updated:** 2026-08-13 21:30  
 
 | Doc | Purpose |
 |-----|---------|
 | [WHATS_NEW.md](./WHATS_NEW.md) | **Major features & changes** (timestamped; newest first) |
+| [FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md) | **Future:** hosted proxy so Remote can keep sheets private |
 | [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md) | How to update docs + required timestamps |
 | [PRODUCT.md](./PRODUCT.md) | What TokiMenu is, goals, boards, success criteria |
 | [STYLE_GUIDE.md](./STYLE_GUIDE.md) | Stage geometry, frame vectors, box width rules, SVG snippets, QA checklist |

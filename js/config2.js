@@ -10,6 +10,7 @@
  * Per-box tabs use Settings (Title|Subtitle|BG|Cols?|Align|Priority) + Inventory. Beta overrides board flags.
  */
 window.TOKI_CONFIG = {
+  // Fallback only. Live workbook comes from OliToki Menu Settings → Data Source.
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "314919644", // Board 2 Revised (restructured)
   styleThemeGid: "183083022", // Style and Theme (revised)

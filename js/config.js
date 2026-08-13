@@ -14,6 +14,7 @@
  * Priority lower number = higher (1 leftmost). Board Settings includes are overridden by Beta for boards 1-3.
  */
 window.TOKI_CONFIG = {
+  // Fallback only. Live workbook comes from OliToki Menu Settings → Data Source.
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "1058015863", // Board 1 Revised (restructured: Settings at top, Inventory headers below)
   styleThemeGid: "183083022", // Style and Theme (revised)

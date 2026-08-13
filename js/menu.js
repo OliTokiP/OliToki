@@ -5074,35 +5074,139 @@
     }
   }
 
+  function settingsSheetId() {
+    const fromWin =
+      typeof window !== "undefined" && window.TOKI_SETTINGS_SHEET_ID
+        ? String(window.TOKI_SETTINGS_SHEET_ID).trim()
+        : "";
+    return fromWin || "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY";
+  }
+
+  function extractSpreadsheetId(raw) {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (m) return m[1];
+    if (/^[a-zA-Z0-9-_]{30,}$/.test(s) && s.indexOf(" ") === -1) return s;
+    return "";
+  }
+
+  function parseSettingsRows(rows) {
+    let dataSource = "";
+    let requireRestart = false;
+    const catalog = [];
+    let headerIdx = -1;
+    let catalogIdx = -1;
+    for (let i = 0; i < (rows || []).length; i++) {
+      const a = String((rows[i] && rows[i][0]) || "")
+        .trim()
+        .toLowerCase();
+      const b = String((rows[i] && rows[i][1]) || "")
+        .trim()
+        .toLowerCase();
+      if (headerIdx < 0 && a === "data source") headerIdx = i;
+      if (catalogIdx < 0 && (a + " " + b).indexOf("gsheet") !== -1 && (a + " " + b).indexOf("url") !== -1) {
+        catalogIdx = i;
+      }
+    }
+    if (headerIdx >= 0 && headerIdx + 1 < rows.length) {
+      dataSource = String((rows[headerIdx + 1] && rows[headerIdx + 1][0]) || "").trim();
+      requireRestart = parseYesNo(
+        rows[headerIdx + 1] && rows[headerIdx + 1][1],
+        false
+      );
+    }
+    if (catalogIdx >= 0) {
+      for (let i = catalogIdx + 1; i < rows.length; i++) {
+        const name = String((rows[i] && rows[i][0]) || "").trim();
+        const url = String((rows[i] && rows[i][1]) || "").trim();
+        if (!name && !url) continue;
+        catalog.push({
+          name: name,
+          url: url,
+          sheetId: extractSpreadsheetId(url),
+        });
+      }
+    }
+    const key = dataSource.toLowerCase();
+    let match = null;
+    if (key) {
+      for (let i = 0; i < catalog.length; i++) {
+        if (String(catalog[i].name || "").trim().toLowerCase() === key) {
+          match = catalog[i];
+          break;
+        }
+      }
+    }
+    return {
+      dataSource: dataSource || "Alpha Copy",
+      requireRestart: requireRestart,
+      sheetId: (match && match.sheetId) || "",
+      sourceName: (match && match.name) || "",
+    };
+  }
+
+  function applyLiveSettingsPayload(j) {
+    liveSettings = {
+      dataSource: j.dataSource || "",
+      requireRestart: !!j.requireRestart,
+      sheetId: j.sheetId || "",
+    };
+    if (liveSettings.sheetId) {
+      cfg.googleSheetId = liveSettings.sheetId;
+    }
+    tokiInfo(
+      "live settings:",
+      "dataSource=" + (liveSettings.dataSource || "?"),
+      "requireRestart=" + liveSettings.requireRestart,
+      "sheet=" + (liveSettings.sheetId || "?")
+    );
+  }
+
+  async function fetchLiveSettingsFromPublicExport() {
+    const sid = settingsSheetId();
+    const url =
+      "https://docs.google.com/spreadsheets/d/" +
+      encodeURIComponent(sid) +
+      "/export?format=csv&gid=0&cachebust=" +
+      Date.now();
+    const res = await fetch(url, { cache: "no-store", mode: "cors" });
+    if (!res.ok) {
+      throw new Error("Settings export HTTP " + res.status);
+    }
+    const text = await res.text();
+    if (/^\s*</.test(text)) {
+      throw new Error(
+        "Settings sheet is not public (Google returned a login page). Share OliToki Menu Settings as Anyone with the link → Viewer."
+      );
+    }
+    return parseSettingsRows(parseCsv(text));
+  }
+
   async function fetchLiveSettings() {
     try {
       const useProxy = await detectSheetsApiProxy();
-      if (!useProxy) return liveSettings;
-      const res = await fetch("/api/settings?t=" + Date.now(), {
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        tokiWarn("live settings: HTTP " + res.status);
-        return liveSettings;
+      if (useProxy) {
+        try {
+          const res = await fetch("/api/settings?t=" + Date.now(), {
+            cache: "no-store",
+          });
+          if (res.ok) {
+            applyLiveSettingsPayload(await res.json());
+            return liveSettings;
+          }
+          tokiWarn("live settings: proxy HTTP " + res.status + " — trying public Settings");
+        } catch (proxyErr) {
+          tokiWarn(
+            "live settings: proxy failed — trying public Settings",
+            proxyErr && proxyErr.message ? proxyErr.message : proxyErr
+          );
+        }
       }
-      const j = await res.json();
-      liveSettings = {
-        dataSource: j.dataSource || "",
-        requireRestart: !!j.requireRestart,
-        sheetId: j.sheetId || "",
-      };
-      if (liveSettings.sheetId) {
-        cfg.googleSheetId = liveSettings.sheetId;
-      }
-      tokiInfo(
-        "live settings:",
-        "dataSource=" + (liveSettings.dataSource || "?"),
-        "requireRestart=" + liveSettings.requireRestart,
-        "sheet=" + (liveSettings.sheetId || "?")
-      );
+      applyLiveSettingsPayload(await fetchLiveSettingsFromPublicExport());
     } catch (err) {
       tokiWarn(
-        "live settings unavailable:",
+        "live settings unavailable (staying on config.js sheet):",
         err && err.message ? err.message : err
       );
     }

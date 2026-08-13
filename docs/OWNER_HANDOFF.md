@@ -1,7 +1,7 @@
 # TokiMenu — Owner handoff & authoring strategy
 
 Living context for product direction (not a coding checklist).  
-Last updated: 2026-08-09.
+Last updated: 2026-08-13 21:30.
 
 Also see: [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) (screen part names) · [SHEET_MIGRATION.md](./SHEET_MIGRATION.md) (revised tabs + percent fields).
 
@@ -32,6 +32,8 @@ TokiMenu started as a **Photoshop + DaVinci Resolve** digital menu: it looked ri
 
 **Boss workflow:** edit sheet → boards soft-refresh → done.  
 **You still own:** assets, deploy, Fire Stick setup, “don’t break these columns” guidance.
+
+**Remote vs private sheets (2026-08-13):** GitHub Pages can only load workbooks shared as **Anyone with the link → Viewer**. Local can stay private (service account). A hosted API so Remote can stay private is parked — [FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md).
 
 ### Tier B — Owner-facing authoring UI (goal)
 

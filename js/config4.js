@@ -16,6 +16,7 @@
  * Legacy Board 4 chrome tab gid=1962117802 kept as archive only.
  */
 window.TOKI_CONFIG = {
+  // Fallback only. Live workbook comes from OliToki Menu Settings → Data Source.
   googleSheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
   googleSheetGid: "149404218", // Announcements (revised)
   styleThemeGid: "183083022", // Style and Theme (revised)
