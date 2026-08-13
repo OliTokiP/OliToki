@@ -924,6 +924,16 @@ body.encore-solid-bg .family-portrait-bg-img {
   opacity: 0 !important;
 }
 
+/* After the fade: drop wallpaper/pattern from the compositor (src parked in JS). */
+body.encore-wallpaper-parked #bg-pattern,
+body.encore-wallpaper-parked #galaxy-a,
+body.encore-wallpaper-parked #galaxy-b,
+body.encore-wallpaper-parked .family-portrait-bg-img {
+  display: none !important;
+  filter: none !important;
+  will-change: auto !important;
+}
+
 /* Mini New! stickers on Family Portrait items (isNew) */
 #family-portrait-stage .family-portrait-sticker {
   position: absolute;

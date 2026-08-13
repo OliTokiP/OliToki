@@ -610,7 +610,9 @@
     el.dataset.webpFbBound = "1";
     el.addEventListener("error", function onRasterError() {
       if (el.dataset.downsampled === "1") return;
+      if (el.dataset.tokiParked === "1") return;
       const src = el.getAttribute("src") || "";
+      if (!src) return;
       // food-pics/foo-sm.webp missing → full foo.webp
       if (/-sm\.webp$/i.test(src)) {
         el.src = src.replace(/-sm\.webp$/i, ".webp");
@@ -2566,12 +2568,63 @@
   }
 
   /**
-   * Encore plate is Secondary Color. Wallpaper / stripes stay loaded and
-   * keep their pan position — we only fade them (never strip src or
-   * display:none, which snaps the dual-layer loop back to origin).
+   * Encore plate is Secondary Color. Wallpaper fades out, then we park it
+   * (drop src + stop pan RAF) so Fire Stick is not compositing two invisible
+   * full-stage bitmaps under a solid veil. Pan X stays on the img transform
+   * so unpark resumes where it left off. Pattern is display:none while parked.
    */
   let _encoreSolidBg = false;
   let _encoreBgFadeTimer = null;
+
+  function encoreWallpaperEls() {
+    const out = [];
+    if (els.galaxyA) out.push(els.galaxyA);
+    if (els.galaxyB) out.push(els.galaxyB);
+    return out;
+  }
+
+  function parkEncoreWallpaper() {
+    pauseGalaxyScroll();
+    document.body.classList.add("encore-wallpaper-parked");
+    const galaxy = document.getElementById("galaxy") || els.galaxy;
+    if (galaxy) {
+      galaxy.style.setProperty("--bg-image-blur", "none");
+      galaxy.classList.remove("has-blur");
+    }
+    encoreWallpaperEls().forEach(function (el) {
+      const src = el.getAttribute("src") || "";
+      if (src && !el.dataset.tokiParkedSrc) {
+        el.dataset.tokiParkedSrc = src;
+      }
+      el.dataset.tokiParked = "1";
+      if (src) el.removeAttribute("src");
+    });
+    tokiInfo("encore wallpaper parked (scroll off, bitmaps dropped)");
+  }
+
+  function unparkEncoreWallpaper() {
+    document.body.classList.remove("encore-wallpaper-parked");
+    encoreWallpaperEls().forEach(function (el) {
+      const parked = el.dataset.tokiParkedSrc || "";
+      el.dataset.tokiParked = "";
+      if (parked && el.getAttribute("src") !== parked) {
+        el.src = parked;
+      }
+      if (el.dataset.tokiParkedSrc) delete el.dataset.tokiParkedSrc;
+    });
+    const galaxy = document.getElementById("galaxy") || els.galaxy;
+    if (galaxy && config.bgImage) {
+      const wall = isPreviewWall();
+      applyBgEffects(
+        galaxy,
+        wall ? 0 : parseUnit01(config.bgBlur, 0),
+        parseUnit01(config.bgOpacity, 1),
+        wall ? "normal" : parseBgBlendMode(config.bgBlendMode)
+      );
+    }
+    resumeGalaxyScroll();
+    tokiInfo("encore wallpaper unparked");
+  }
 
   function setEncoreSolidBackground(on, opts) {
     opts = opts || {};
@@ -2585,13 +2638,20 @@
       _encoreBgFadeTimer = null;
     }
 
+    // Scroll is unused under Encore — stop the RAF immediately (src drops after fade).
+    if (want) pauseGalaxyScroll();
+
     const galaxy = document.getElementById("galaxy") || els.galaxy;
     if (instant) {
       document.body.classList.remove("encore-bg-fading");
+      if (!want) unparkEncoreWallpaper();
       document.body.classList.toggle("encore-solid-bg", want);
+      if (want) parkEncoreWallpaper();
     } else {
       document.body.classList.add("encore-bg-fading");
       void document.body.offsetWidth;
+      // Restore bitmaps while still opacity-0, then fade the solid class off.
+      if (!want) unparkEncoreWallpaper();
       document.body.classList.toggle("encore-solid-bg", want);
       const fadeMs = presentationFadeMs(
         els.familyPortrait || document.documentElement
@@ -2599,6 +2659,7 @@
       _encoreBgFadeTimer = window.setTimeout(function () {
         _encoreBgFadeTimer = null;
         document.body.classList.remove("encore-bg-fading");
+        if (want) parkEncoreWallpaper();
       }, fadeMs + 40);
     }
 
@@ -3303,8 +3364,8 @@
       }
     }
 
-    // Encore: plate is Secondary, but wallpaper imgs stay loaded (hidden via
-    // CSS fade). Stripping src / display:none resets dual-layer pan to origin.
+    // Encore: plate is Secondary. Wallpaper is faded then parked (src dropped).
+    // Do not restore src here while tokiParked — that would undo the GPU win.
     if (_encoreSolidBg) {
       plate = config.secondaryColor || plate;
       document.body.classList.add("encore-solid-bg");
@@ -3357,6 +3418,7 @@
       el.hidden = false;
       attachWebpFallback(el);
       el.dataset.tokiMaster = imagePath;
+      if (el.dataset.tokiParked === "1") return;
       if (el.getAttribute("src") !== imagePath) {
         tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
         el.dataset.downsampled = "";
@@ -10634,8 +10696,8 @@
 
       _hidePortraitTimer = window.setTimeout(function () {
         if (hideGen !== _hidePortraitGen) return;
-        // Phase 2: collage fades on --dur-mid; wallpaper/stripes fade back in
-        // on the same clock (imgs stay loaded so dual-layer pan does not reset).
+        // Phase 2: collage fades on --dur-mid; wallpaper/stripes unpark + fade
+        // back in on the same clock (pan X kept on the img transform).
         setEncoreSolidBackground(false);
         // Phase 2: force a real opacity fade (don't rely only on .visible class)
         stage.style.transition =
@@ -14188,6 +14250,25 @@
   // Module-level so we never stack multiple rAF loops (load race used to).
   let galaxyRaf = 0;
   let galaxyStarted = false;
+  let galaxyPaused = false;
+  let galaxyTick = null;
+  let galaxyResetClock = false;
+
+  function pauseGalaxyScroll() {
+    galaxyPaused = true;
+    galaxyResetClock = true;
+    if (galaxyRaf) {
+      cancelAnimationFrame(galaxyRaf);
+      galaxyRaf = 0;
+    }
+  }
+
+  function resumeGalaxyScroll() {
+    if (!galaxyStarted || !config.bgImage || !galaxyTick) return;
+    galaxyPaused = false;
+    galaxyResetClock = true;
+    if (!galaxyRaf) galaxyRaf = requestAnimationFrame(galaxyTick);
+  }
 
   function startGalaxyScroll() {
     applyStageBackground();
@@ -14304,7 +14385,12 @@
       }
       lastTs = null;
       if (galaxyRaf) cancelAnimationFrame(galaxyRaf);
-      galaxyRaf = requestAnimationFrame(tick);
+      galaxyTick = tick;
+      if (galaxyPaused) {
+        galaxyRaf = 0;
+      } else {
+        galaxyRaf = requestAnimationFrame(tick);
+      }
 
       setFeatureActive('bgDualPan', true, 'pan started');
       updateDebugVisuals();
@@ -14370,9 +14456,15 @@
     }
 
     function tick(ts) {
+      if (galaxyPaused) {
+        galaxyRaf = 0;
+        return;
+      }
       galaxyRaf = requestAnimationFrame(tick);
+      galaxyTick = tick;
 
-      if (lastTs == null) {
+      if (galaxyResetClock || lastTs == null) {
+        galaxyResetClock = false;
         lastTs = ts;
         return;
       }
@@ -14421,6 +14513,8 @@
         }
       }
     }
+
+    galaxyTick = tick;
   }
 
   /**
