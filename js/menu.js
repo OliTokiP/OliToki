@@ -1129,6 +1129,47 @@
     return parts.map(function (p) { return p.replace(/^\/+/, ""); });
   }
 
+  /**
+   * All photo URLs for one menu item. Every token is run through
+   * resolveImagePath so a leftover basename ("PorkDumplings.png") never
+   * becomes img.src (that 404s, flashes the broken-image icon, then vanishes).
+   */
+  function itemImagePaths(item, folderOverride) {
+    if (!item) return [];
+    const tokens = [];
+    function pushToken(x) {
+      if (x == null || x === "") return;
+      const s = String(x).trim();
+      if (!s || s.toLowerCase() === "null") return;
+      if (s.indexOf("food-pics/") === 0) {
+        tokens.push(s);
+        return;
+      }
+      const parts = parseImageCell(s);
+      if (parts.length) {
+        for (let i = 0; i < parts.length; i++) tokens.push(parts[i]);
+      } else {
+        tokens.push(s);
+      }
+    }
+    if (Array.isArray(item.rawImages) && item.rawImages.length) {
+      item.rawImages.forEach(pushToken);
+    } else if (Array.isArray(item.images) && item.images.length) {
+      item.images.forEach(pushToken);
+    } else {
+      pushToken(item.image);
+    }
+    const paths = [];
+    const seen = {};
+    for (let i = 0; i < tokens.length; i++) {
+      const p = resolveImagePath(tokens[i], folderOverride);
+      if (!p || seen[p]) continue;
+      seen[p] = true;
+      paths.push(p);
+    }
+    return paths;
+  }
+
   function formatPrice(value) {
     if (value == null || value === "") return "";
     const n = Number(String(value).replace(/[^0-9.-]/g, ""));
@@ -4646,8 +4687,7 @@
     const rawItems = (parsed.items || []).concat(cfg.extraItems || []);
     items = rawItems
       .map((it) => {
-        const rawImgs = Array.isArray(it.rawImages) ? it.rawImages : (it.image ? [it.image] : []);
-        const images = rawImgs.map(resolveImagePath).filter(Boolean);
+        const images = itemImagePaths(it);
         const image = images[0] || null;
 
         // Prefer multi-price list; fall back to single price
@@ -11076,11 +11116,10 @@
         if (img.dataset.downsampled === "1") return;
         maybeDownsampleImg(img);
       };
-      // Missing file → remove slot entirely (no broken-image glyph)
-      img.onerror = function () {
-        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-      };
-      img.src = it.image;
+      // Resolve at paint — never put a bare sheet token in src.
+      const src = resolveImagePath(it.image) || it.image;
+      if (!src) return;
+      img.src = src;
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
 
@@ -11171,7 +11210,8 @@
 
   function applyHeroMultiLattice(item, plate) {
     plate = plate || els.heroPlate;
-    if (!plate || !item || !item.images || item.images.length < 2) return false;
+    const paths = itemImagePaths(item);
+    if (!plate || paths.length < 2) return false;
 
     clearHeroMultiLattice(plate);
 
@@ -11187,16 +11227,19 @@
     plates.style.pointerEvents = "none";
     plates.setAttribute("aria-hidden", "true");
 
-    const cast = item.images.map(function (src, i) {
-      return {
-        name: String(item.name || "") + (item.images.length > 1 ? " (" + (i + 1) + ")" : ""),
-        image: src,
+    const cast = [];
+    for (let i = 0; i < paths.length; i++) {
+      cast.push({
+        name: String(item.name || "") + " (" + (i + 1) + ")",
+        image: paths[i],
         isNew: !!item.isNew && i === 0,
-      };
-    });
+      });
+    }
+
+    tokiInfo("hero multi lattice", item.name, paths);
 
     fillPortraitPlates(plates, cast, {
-      stickers: false, // multi lattice: use stage #new-sticker, not per-slot
+      stickers: false,
       resolveItemIndex: function () {
         return -1;
       },
@@ -12579,7 +12622,7 @@
   }
 
   function itemHasMultiImages(item) {
-    return !!(item && Array.isArray(item.images) && item.images.length > 1);
+    return itemImagePaths(item).length > 1;
   }
 
   /**
