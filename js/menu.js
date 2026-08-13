@@ -266,10 +266,10 @@
   }
 
   /**
-   * On-screen pixel budget (CSS box × devicePixelRatio, cap 2).
-   * 1080p TV → ~1920×1080 unless AbleSign lies (dpr2 → 3840×2160).
+   * Live measure (CSS box × dpr). Playtime uses freezeDisplayBudget() so
+   * window drag does not rebuild rasters.
    */
-  function displayPixelBudget() {
+  function computeDisplayPixelBudget() {
     const pinned = displayBudgetOverrideFromUrl();
     if (pinned && pinned.w > 0 && pinned.h > 0) {
       return {
@@ -303,41 +303,89 @@
     return { w: w * dpr, h: h * dpr, dpr: dpr };
   }
 
+  let _displayBudgetFrozen = null;
+
+  function freezeDisplayBudget() {
+    if (_displayBudgetFrozen) return _displayBudgetFrozen;
+    _displayBudgetFrozen = computeDisplayPixelBudget();
+    tokiInfo("display budget frozen", _displayBudgetFrozen);
+    return _displayBudgetFrozen;
+  }
+
+  function displayPixelBudget() {
+    return _displayBudgetFrozen || computeDisplayPixelBudget();
+  }
+
+  const _rasterBakeCache = {};
+
+  function rasterBakeKey(path, tw, th) {
+    return String(path || "") + "|" + tw + "x" + th;
+  }
+
+  /** Canonical texel target. gridN 0 = full stage; 1 = solo hero; 2+ = lattice cell. */
+  function bakeTargetPx(gridN) {
+    const b = displayPixelBudget();
+    const slack = 1.28;
+    const n = Number(gridN) || 0;
+    if (n <= 0) {
+      return {
+        w: Math.max(1, Math.round(b.w * slack)),
+        h: Math.max(1, Math.round(b.h * slack)),
+      };
+    }
+    if (n >= 2 && typeof buildPortraitLayout === "function") {
+      const layout = buildPortraitLayout(n, PORTRAIT_STAGE_W, PORTRAIT_STAGE_H);
+      const sx = b.w / STAGE_W;
+      const sy = b.h / STAGE_H;
+      return {
+        w: Math.max(
+          1,
+          Math.round(PORTRAIT_IMG_W * layout.scale * sx * slack)
+        ),
+        h: Math.max(
+          1,
+          Math.round(PORTRAIT_IMG_H * layout.scale * sy * slack)
+        ),
+      };
+    }
+    return {
+      w: Math.max(1, Math.round(b.w * 0.58 * slack)),
+      h: Math.max(1, Math.round(b.h * 0.88 * slack)),
+    };
+  }
+
+  function peekRasterBake(path, gridN) {
+    if (!path) return null;
+    const t = bakeTargetPx(gridN);
+    return _rasterBakeCache[rasterBakeKey(path, t.w, t.h)] || null;
+  }
+
+  function putRasterBake(path, gridN, entry) {
+    if (!path || !entry) return;
+    const t = bakeTargetPx(gridN);
+    _rasterBakeCache[rasterBakeKey(path, t.w, t.h)] = entry;
+  }
+
   /**
-   * How many texels this <img> actually paints (Ken Burns slack applied later).
+   * How many texels this <img> should hold (frozen budget, not live resize).
    */
   function displayNeedForImg(img) {
-    const b = displayPixelBudget();
     const gridN = parseInt(
       (img && img.dataset && img.dataset.tokiGridN) || "0",
       10
     );
-    try {
-      const r = img.getBoundingClientRect();
-      if (r.width > 2 && r.height > 2) {
-        return { dw: r.width * b.dpr, dh: r.height * b.dpr };
-      }
-    } catch (e) {
-      /* fall through */
-    }
-    const id = img.id || "";
-    const cls = img.className || "";
+    const id = (img && img.id) || "";
+    const cls = (img && img.className) || "";
     if (
       id === "galaxy-a" ||
       id === "galaxy-b" ||
       (typeof cls === "string" && cls.indexOf("family-portrait-bg-img") !== -1)
     ) {
-      return { dw: b.w, dh: b.h };
+      const t = bakeTargetPx(0);
+      return { dw: t.w, dh: t.h };
     }
-    // Hero / plate: most of the photo column, not the full stage
-    let dw = b.w * 0.58;
-    let dh = b.h * 0.88;
-    // Lattice onload often fires before layout — split the hero budget by cell count
-    if (gridN >= 2) {
-      dw = dw / gridN;
-      dh = dh / gridN;
-    }
-    return { dw: dw, dh: dh };
+    const t = bakeTargetPx(gridN >= 2 ? gridN : 1);
+    return { dw: t.w, dh: t.h };
   }
 
   /**
@@ -355,6 +403,24 @@
     }
     if (img.dataset.downsampled === "1") {
       done();
+      return;
+    }
+    const master0 = (img.dataset && img.dataset.tokiMaster) || "";
+    const grid0 = parseInt((img.dataset && img.dataset.tokiGridN) || "1", 10) || 1;
+    const baked0 = peekRasterBake(master0, grid0 >= 2 ? grid0 : 1);
+    if (baked0 && baked0.url) {
+      img.dataset.downsampled = "1";
+      if (baked0.from) img.dataset.tokiFrom = baked0.from;
+      if (baked0.px) img.dataset.tokiPx = baked0.px;
+      if ((img.getAttribute("src") || "") !== baked0.url) {
+        img.onload = function () {
+          img.onload = null;
+          done();
+        };
+        img.src = baked0.url;
+      } else {
+        done();
+      }
       return;
     }
     const nw = img.naturalWidth || 0;
@@ -375,16 +441,11 @@
         return;
       }
       const need = displayNeedForImg(img);
-      const slack = 1.28; // Encore / Ken Burns zoom headroom
-      if (nw <= need.dw * slack && nh <= need.dh * slack) {
+      if (nw <= need.dw * 1.05 && nh <= need.dh * 1.05) {
         done();
         return;
       }
-      const scale = Math.min(
-        1,
-        (need.dw * slack) / nw,
-        (need.dh * slack) / nh
-      );
+      const scale = Math.min(1, need.dw / nw, need.dh / nh);
       if (!(scale > 0) || scale >= 0.92) {
         done();
         return;
@@ -415,6 +476,13 @@
       } catch (e1) {
         dataUrl = c.toDataURL("image/png");
       }
+      if (master0) {
+        putRasterBake(master0, grid0 >= 2 ? grid0 : 1, {
+          url: dataUrl,
+          from: nw + "x" + nh,
+          px: w + "x" + h,
+        });
+      }
       img.onload = function () {
         img.onload = null;
         done();
@@ -443,6 +511,16 @@
     const fail = typeof onFail === "function" ? onFail : function () {};
     if (!img || !src) {
       fail();
+      return;
+    }
+    const baked = peekRasterBake(src, 1);
+    if (baked && baked.url) {
+      stampRasterMaster(img, src);
+      img.dataset.downsampled = "1";
+      if (baked.from) img.dataset.tokiFrom = baked.from;
+      if (baked.px) img.dataset.tokiPx = baked.px;
+      img.src = baked.url;
+      ok();
       return;
     }
     const sameFile =
@@ -10969,20 +11047,22 @@
       img.draggable = false;
       attachWebpFallback(img);
       img.dataset.tokiGridN = String(n);
-      img.onload = function onPlateLoad() {
-        if (img.dataset.downsampled === "1") return;
-        // Wait for slot layout so we downsample to the cell, not a full-hero guess
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            maybeDownsampleImg(img);
-          });
-        });
-      };
-      // Resolve at paint — never put a bare sheet token in src.
       const src = resolveImagePath(it.image) || it.image;
       if (!src) return;
       img.dataset.tokiMaster = src;
-      img.src = src;
+      const baked = peekRasterBake(src, n);
+      if (baked && baked.url) {
+        img.dataset.downsampled = "1";
+        if (baked.from) img.dataset.tokiFrom = baked.from;
+        if (baked.px) img.dataset.tokiPx = baked.px;
+        img.src = baked.url;
+      } else {
+        img.onload = function onPlateLoad() {
+          if (img.dataset.downsampled === "1") return;
+          maybeDownsampleImg(img);
+        };
+        img.src = src;
+      }
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
 
@@ -11074,11 +11154,26 @@
    * is also a direct child of the plate but does not receive the scale.
    * See docs/FAMILY_PORTRAIT_LATTICE.md §4.
    */
+  const _heroMultiCache = {};
+
+  function hideSoloHeroForMulti() {
+    if (!els.hero) return;
+    els.hero.style.visibility = "hidden";
+    els.hero.removeAttribute("src");
+  }
+
+  function stashHeroMultiLattice(el) {
+    if (!el) return;
+    const key = el.dataset.tokiMultiKey || "";
+    if (el.parentNode) el.parentNode.removeChild(el);
+    if (key) _heroMultiCache[key] = el;
+  }
+
   function clearHeroMultiLattice(plate) {
     plate = plate || els.heroPlate;
     if (!plate) return;
     const multi = plate.querySelector(".hero-multi-plates");
-    if (multi) multi.remove();
+    if (multi) stashHeroMultiLattice(multi);
     if (els.hero) {
       els.hero.style.visibility = "";
       els.hero.hidden = false;
@@ -11096,10 +11191,29 @@
     const paths = itemImagePaths(item);
     if (!plate || paths.length < 2) return false;
 
-    clearHeroMultiLattice(plate);
+    const key = paths.join("\0");
+    const anim = plate.querySelector(".hero-anim") || plate;
+    const showing = plate.querySelector(".hero-multi-plates");
+    if (showing && showing.dataset.tokiMultiKey === key) {
+      showing.hidden = false;
+      hideSoloHeroForMulti();
+      return true;
+    }
+    if (showing) stashHeroMultiLattice(showing);
+
+    const cached = _heroMultiCache[key];
+    if (cached) {
+      anim.appendChild(cached);
+      cached.hidden = false;
+      hideSoloHeroForMulti();
+      applyStickerTint();
+      tokiInfo("hero multi lattice reuse", item.name);
+      return true;
+    }
 
     const plates = document.createElement("div");
     plates.className = "hero-multi-plates family-portrait-plates";
+    plates.dataset.tokiMultiKey = key;
     // Align lattice origin with #family-portrait-stage in board space
     // (Board 4: stage left 0, hero-wrap left −255 → offset +255)
     plates.style.position = "absolute";
@@ -11128,14 +11242,9 @@
       },
     });
 
-    // Hide single hero img while multi lattice is the content
-    if (els.hero) {
-      els.hero.style.visibility = "hidden";
-      els.hero.removeAttribute("src");
-    }
-
-    const anim = plate.querySelector('.hero-anim') || plate;
+    hideSoloHeroForMulti();
     anim.appendChild(plates);
+    _heroMultiCache[key] = plates;
     applyStickerTint();
     return true;
   }
@@ -13766,6 +13875,145 @@
     return fb;
   }
 
+  function collectRasterBakeJobs() {
+    const seen = {};
+    const jobs = [];
+    function add(path, gridN) {
+      if (!path) return;
+      const n = gridN == null ? 1 : gridN;
+      const id = path + "|n" + n;
+      if (seen[id]) return;
+      seen[id] = true;
+      jobs.push({ path: path, gridN: n });
+    }
+    const list = items || [];
+    for (let i = 0; i < list.length; i++) {
+      const paths = itemImagePaths(list[i]);
+      if (paths.length > 1) {
+        for (let j = 0; j < paths.length; j++) add(paths[j], paths.length);
+      } else if (paths.length === 1) {
+        add(paths[0], 1);
+      }
+    }
+    return jobs;
+  }
+
+  function bakeRasterJob(job) {
+    return new Promise(function (resolve) {
+      const target = bakeTargetPx(job.gridN);
+      const key = rasterBakeKey(job.path, target.w, target.h);
+      if (_rasterBakeCache[key]) {
+        resolve();
+        return;
+      }
+      const img = new Image();
+      let done = false;
+      const finish = function () {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      const t = window.setTimeout(finish, 7000);
+      img.onload = function () {
+        window.clearTimeout(t);
+        const nw = img.naturalWidth || 0;
+        const nh = img.naturalHeight || 0;
+        if (nw < 2 || nh < 2) {
+          finish();
+          return;
+        }
+        if (nw <= target.w * 1.05 && nh <= target.h * 1.05) {
+          _rasterBakeCache[key] = {
+            url: job.path,
+            from: nw + "x" + nh,
+            px: nw + "x" + nh,
+            skipped: true,
+          };
+          finish();
+          return;
+        }
+        try {
+          const sc = Math.min(target.w / nw, target.h / nh, 1);
+          const cw = Math.max(1, Math.round(nw * sc));
+          const ch = Math.max(1, Math.round(nh * sc));
+          const c = document.createElement("canvas");
+          c.width = cw;
+          c.height = ch;
+          const ctx = c.getContext("2d");
+          if (!ctx) {
+            finish();
+            return;
+          }
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(img, 0, 0, cw, ch);
+          let url;
+          try {
+            url = c.toDataURL("image/webp", 0.82);
+            if (!url || url.indexOf("image/webp") === -1) {
+              url = c.toDataURL("image/png");
+            }
+          } catch (e1) {
+            url = c.toDataURL("image/png");
+          }
+          _rasterBakeCache[key] = {
+            url: url,
+            from: nw + "x" + nh,
+            px: cw + "x" + ch,
+          };
+        } catch (e) {
+          tokiWarn("raster bake fail", job.path, e);
+        }
+        finish();
+      };
+      img.onerror = function () {
+        window.clearTimeout(t);
+        finish();
+      };
+      img.src = job.path;
+    });
+  }
+
+  function bakeRastersForPlay() {
+    const jobs = collectRasterBakeJobs();
+    tokiInfo("raster bake start", jobs.length);
+    const t0 =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const limit = 4;
+    return new Promise(function (resolve) {
+      let i = 0;
+      let live = 0;
+      function next() {
+        if (i >= jobs.length && live === 0) {
+          const ms =
+            (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+            t0;
+          tokiInfo(
+            "raster bake done",
+            jobs.length,
+            "in",
+            Math.round(ms) + "ms"
+          );
+          resolve();
+          return;
+        }
+        while (live < limit && i < jobs.length) {
+          live++;
+          bakeRasterJob(jobs[i++]).then(
+            function () {
+              live--;
+              next();
+            },
+            function () {
+              live--;
+              next();
+            }
+          );
+        }
+      }
+      next();
+    });
+  }
+
   /**
    * Wait until the board surface is visible enough for the first Wind-up
    * (fonts, layout paint, stage scaled). Avoids Animation Blocks running off-screen.
@@ -14545,6 +14793,17 @@
       return file || "none";
     }
 
+    function latticeDebugLabel(root) {
+      if (!root) return "none";
+      const imgs = root.querySelectorAll(".family-portrait-item");
+      if (!imgs.length) return "empty";
+      const bits = [];
+      for (let i = 0; i < imgs.length; i++) {
+        bits.push(rasterDebugLabel(imgs[i], imgs[i].dataset.tokiMaster));
+      }
+      return bits.join(", ");
+    }
+
     function flagDetail(id) {
       try {
         switch (id) {
@@ -14596,18 +14855,14 @@
               : "scroll 0";
           case "heroPlate":
             return rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src"));
-          case "heroMulti": {
-            const root = heroMultiRoot();
-            if (!root) return "none";
-            const imgs = root.querySelectorAll(".family-portrait-item");
-            if (!imgs.length) return "empty";
-            const bits = [];
-            for (let i = 0; i < imgs.length; i++) {
-              bits.push(
-                rasterDebugLabel(imgs[i], imgs[i].dataset.tokiMaster)
-              );
-            }
-            return bits.join(", ");
+          case "heroMulti":
+            return latticeDebugLabel(heroMultiRoot());
+          case "familyPortrait": {
+            if (!computeActive("familyPortrait")) return "";
+            const stage = els.familyPortrait;
+            if (!stage) return "none";
+            const plates = stage.querySelector(".family-portrait-plates");
+            return latticeDebugLabel(plates || stage);
           }
           case "softRefresh":
             if (liveSettings && liveSettings.requireRestart) return "settings";
@@ -15122,27 +15377,29 @@
     const params = new URLSearchParams(window.location.search);
     const hashMatch = (window.location.hash || "").match(/item=(\d+)/i);
     const startRaw = params.get("item") || (hashMatch ? hashMatch[1] : null);
-    // Instant paint for layout/first frame (no Wind-up yet — wait until visible)
-    if (startRaw != null) {
-      const idx = parseInt(startRaw, 10);
-      if (Number.isFinite(idx)) setActive(idx, true);
-      else setActive(0, true);
-    } else {
-      setActive(0, true);
-    }
 
     startGalaxyScroll();
 
-    // Opening Wind-up only after fonts/layout/stage are visible to the viewer
+    // Freeze pixel budget + bake scaled rasters before first slide (no resize bake)
     whenPresentationSurfaceReady(function () {
-      playOpeningWindUp();
-      if (params.get("pause") !== "1") {
-        startSlideshow();
-        if (isDrinks) startAnnouncementSlideshow();
-      } else if (isDrinks) {
-        setAnnouncementMessage(announcementIndex, { instant: true });
-      }
-      startAutoRefresh();
+      freezeDisplayBudget();
+      bakeRastersForPlay().then(function () {
+        if (startRaw != null) {
+          const idx = parseInt(startRaw, 10);
+          if (Number.isFinite(idx)) setActive(idx, true);
+          else setActive(0, true);
+        } else {
+          setActive(0, true);
+        }
+        playOpeningWindUp();
+        if (params.get("pause") !== "1") {
+          startSlideshow();
+          if (isDrinks) startAnnouncementSlideshow();
+        } else if (isDrinks) {
+          setAnnouncementMessage(announcementIndex, { instant: true });
+        }
+        startAutoRefresh();
+      });
     });
 
     // Update hybrid debug visuals (CSS vars in Computed + HUD) when gate is satisfied.
