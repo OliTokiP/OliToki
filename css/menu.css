@@ -2507,8 +2507,8 @@ body.preview-wall #stripes-track {
   border: 1px solid #555;
   border-radius: 3px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-  min-width: 260px;
-  max-width: 320px;
+  min-width: 280px;
+  max-width: 400px;
   overflow: hidden;
   opacity: 0.95;
   pointer-events: auto;
@@ -2599,7 +2599,9 @@ body.preview-wall #stripes-track {
 #toki-debug-hud .flag-source {
   color: #777;
   font-size: 8px;
-  width: 38%;
+  width: 42%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 #toki-debug-hud .flag-impact {

@@ -350,6 +350,8 @@
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(img, 0, 0, w, h);
       img.dataset.downsampled = "1";
+      img.dataset.tokiFrom = nw + "x" + nh;
+      img.dataset.tokiPx = w + "x" + h;
       let dataUrl;
       try {
         dataUrl = c.toDataURL("image/webp", 0.82);
@@ -3125,15 +3127,21 @@
         el.style.mixBlendMode = "";
         if (el.getAttribute("src")) {
           el.removeAttribute("src");
+          el.dataset.tokiMaster = "";
+          el.dataset.tokiFrom = "";
+          el.dataset.tokiPx = "";
           tokiLog("bg image cleared (solid / unused)");
         }
         return;
       }
       el.hidden = false;
       attachWebpFallback(el);
+      el.dataset.tokiMaster = imagePath;
       if (el.getAttribute("src") !== imagePath) {
         tokiLog("bg image load", imagePath, wall ? "(preview-wall)" : "");
         el.dataset.downsampled = "";
+        el.dataset.tokiFrom = "";
+        el.dataset.tokiPx = "";
         bindDownsampleOnLoad(el);
         el.src = imagePath;
       } else {
@@ -10851,6 +10859,7 @@
       // Resolve at paint — never put a bare sheet token in src.
       const src = resolveImagePath(it.image) || it.image;
       if (!src) return;
+      img.dataset.tokiMaster = src;
       img.src = src;
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";
@@ -12958,6 +12967,9 @@
     };
     attachWebpFallback(img);
     img.dataset.downsampled = "";
+    img.dataset.tokiMaster = src;
+    img.dataset.tokiFrom = "";
+    img.dataset.tokiPx = "";
     img.src = src;
     // Cached complete may not re-fire onload
     if (img.complete && img.naturalWidth > 0) {
@@ -14257,24 +14269,21 @@
 
   (function setupTokiDebugAPI() {
     const FEATURE_DEFS = [
+      { id: "displayRes", label: "Display", impact: "Info" },
+      { id: "dataSource", label: "Data Source", impact: "Info" },
       { id: "encore", label: "Encore", impact: "Very High" },
       { id: "familyPortrait", label: "Family Portrait", impact: "Very High" },
       { id: "kenBurns", label: "Ken Burns zoom", impact: "High" },
       { id: "spotlightVeil", label: "Spotlight Veil", impact: "High" },
       { id: "scaffoldBg", label: "Scaffold BG", impact: "High" },
-      { id: "heroPlate", label: "Hero Plate", impact: "Medium" },
-      { id: "newSticker", label: "New Sticker", impact: "Low" },
-      { id: "listHighlight", label: "List Highlight", impact: "Low" },
-      { id: "slideshowTimer", label: "Slideshow Timer", impact: "Very Low" },
-      { id: "bgBlur", label: "BG Blur", impact: "High" },
+      { id: "bgWallpaper", label: "BG Wallpaper", impact: "High" },
       { id: "bgDualPan", label: "BG Dual Pan", impact: "High" },
-      { id: "bgBlend", label: "BG Blend Mode", impact: "Medium-High" },
-      { id: "bgWallpaper", label: "BG Wallpaper", impact: "Medium" },
+      { id: "bgBlur", label: "BG Blur", impact: "High" },
+      { id: "bgBlend", label: "BG Blend", impact: "Medium-High" },
+      { id: "bgPattern", label: "Pattern", impact: "Medium" },
+      { id: "heroPlate", label: "Hero Plate", impact: "Medium" },
       { id: "softRefresh", label: "Soft Refresh", impact: "Medium" },
-      { id: "xlsxStyles", label: "XLSX Styles", impact: "High" },
-      { id: "footerBoxes", label: "Footer Boxes", impact: "Low-Medium" },
-      { id: "stripes", label: "Stripes (Board 4)", impact: "Medium" },
-      { id: "versionStamp", label: "Version Stamp", impact: "Very Low" },
+      { id: "requireRestart", label: "Require Restart", impact: "Info" },
     ];
 
     const overrides = {}; // id -> boolean forced via console API
@@ -14348,18 +14357,53 @@
             return !!(g && g.classList.contains("has-blur"));
           }
 
-          case "bgDualPan":
-            return !!(typeof galaxyStarted !== "undefined" && galaxyStarted && config.bgImage);
+          case "bgDualPan": {
+            const scrollOn = parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0;
+            const b = els.galaxyB;
+            const bLive = !!(
+              b &&
+              !b.hidden &&
+              b.getAttribute("src")
+            );
+            return !!(scrollOn && bLive && config.bgImage);
+          }
 
           case "bgBlend": {
             const g = document.getElementById("galaxy");
             if (!g || !config.bgImage) return false;
-            const mode = g.style.mixBlendMode || "";
+            const mode =
+              g.style.getPropertyValue("--bg-image-blend") ||
+              g.style.mixBlendMode ||
+              "";
             return mode && mode !== "normal";
           }
 
-          case "bgWallpaper":
-            return !!config.bgImage;
+          case "bgWallpaper": {
+            const a = els.galaxyA;
+            return !!(
+              config.bgImage &&
+              a &&
+              !a.hidden &&
+              a.getAttribute("src")
+            );
+          }
+
+          case "bgPattern": {
+            if (config.bgPattern && isStripesPatternToken(config.bgPattern)) {
+              return true;
+            }
+            const st = document.getElementById("stripes");
+            return !!(st && !st.hidden);
+          }
+
+          case "displayRes":
+            return true;
+
+          case "dataSource":
+            return !!(liveSettings && (liveSettings.dataSource || liveSettings.sheetId));
+
+          case "requireRestart":
+            return !!(liveSettings && liveSettings.requireRestart);
 
           case "softRefresh":
             // Require Restart = Settings hard-off: no poll, no "active".
@@ -14393,6 +14437,102 @@
       }
     }
 
+    function fileNameFromPath(path) {
+      if (!path) return "";
+      const s = String(path).split("?")[0];
+      const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+      return i >= 0 ? s.slice(i + 1) : s;
+    }
+
+    function rasterDebugLabel(img, fallbackPath) {
+      const master =
+        (img && img.dataset && img.dataset.tokiMaster) || fallbackPath || "";
+      const file = fileNameFromPath(master);
+      if (img && img.dataset && img.dataset.tokiFrom && img.dataset.tokiPx) {
+        return (
+          (file || "bitmap") +
+          " " +
+          img.dataset.tokiFrom +
+          "→" +
+          img.dataset.tokiPx
+        );
+      }
+      if (img && img.naturalWidth) {
+        return (
+          (file || "bitmap") +
+          " " +
+          img.naturalWidth +
+          "×" +
+          img.naturalHeight
+        );
+      }
+      return file || "none";
+    }
+
+    function flagDetail(id) {
+      try {
+        switch (id) {
+          case "displayRes": {
+            const b = displayPixelBudget();
+            return (
+              Math.round(b.w) +
+              "×" +
+              Math.round(b.h) +
+              " dpr" +
+              (Math.round(b.dpr * 100) / 100)
+            );
+          }
+          case "dataSource": {
+            const name = (liveSettings && liveSettings.dataSource) || "config.js";
+            const sid = (liveSettings && liveSettings.sheetId) || "";
+            return sid ? name + " · " + sid.slice(0, 8) : name;
+          }
+          case "requireRestart":
+            return liveSettings && liveSettings.requireRestart
+              ? "settings ON"
+              : "settings OFF";
+          case "bgWallpaper": {
+            if (!config.bgImage) {
+              if (config.bgPattern && isStripesPatternToken(config.bgPattern)) {
+                return "none (pattern owns BG)";
+              }
+              return "none";
+            }
+            return rasterDebugLabel(els.galaxyA, config.bgImage);
+          }
+          case "bgPattern": {
+            if (config.bgPattern && String(config.bgPattern).trim()) {
+              return String(config.bgPattern).trim();
+            }
+            const st = document.getElementById("stripes");
+            if (st && !st.hidden) return "stripes (announcements)";
+            return "none";
+          }
+          case "bgBlur": {
+            const v = parseUnit01(config.bgBlur, 0);
+            return v <= 0 ? "0%" : Math.round(v * 100) + "%";
+          }
+          case "bgBlend":
+            return parseBgBlendMode(config.bgBlendMode) || "normal";
+          case "bgDualPan":
+            return parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0
+              ? "scroll on"
+              : "scroll 0";
+          case "heroPlate":
+            return rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src"));
+          case "softRefresh":
+            if (liveSettings && liveSettings.requireRestart) return "settings";
+            if (refreshInProgress) return "fetching";
+            if (refreshTimer) return "timer " + (Number(cfg.refreshSeconds) || 30) + "s";
+            return "off";
+          default:
+            return "";
+        }
+      } catch (e) {
+        return "";
+      }
+    }
+
     function getSource(id, active) {
       if (overrides.hasOwnProperty(id)) return "console";
       if (isPreviewWall()) return "wall-lean";
@@ -14408,8 +14548,6 @@
         const forced = overrides.hasOwnProperty(def.id) ? overrides[def.id] : null;
         const live = liveDebugState[def.id];
         const computed = computeActive(def.id);
-        // Observer wins when it can prove the expensive path is off (e.g. Settings
-        // Require Restart). Sticky liveDebugState must not keep Soft Refresh "on".
         const liveActive =
           live && !(def.id === "softRefresh" && !computed)
             ? live.active
@@ -14421,6 +14559,7 @@
             : live
               ? live.reason
               : "";
+        const detail = flagDetail(def.id);
         flags[def.id] = {
           id: def.id,
           label: def.label,
@@ -14429,11 +14568,12 @@
           source:
             forced != null
               ? "console"
-              : liveSettings.requireRestart && def.id === "softRefresh"
-                ? "settings"
-                : live
-                  ? "live"
-                  : getSource(def.id, liveActive),
+              : detail ||
+                (liveSettings.requireRestart && def.id === "softRefresh"
+                  ? "settings"
+                  : live
+                    ? "live"
+                    : getSource(def.id, liveActive)),
           forced: forced != null,
           reason: reason,
         };
@@ -14689,13 +14829,14 @@
     if (!tbody) return;
 
     const impactOrder = {
-      'Very High': 1,
-      'High': 2,
-      'Medium-High': 3,
-      'Medium': 4,
-      'Low-Medium': 5,
-      'Low': 6,
-      'Very Low': 7
+      Info: 0,
+      "Very High": 1,
+      High: 2,
+      "Medium-High": 3,
+      Medium: 4,
+      "Low-Medium": 5,
+      Low: 6,
+      "Very Low": 7,
     };
 
     const sorted = Object.keys(flagsObj || {}).map(id => flagsObj[id]).sort((a, b) => {

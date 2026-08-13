@@ -128,15 +128,17 @@ These only affect the current browser tab/session.
 
 ## 6. What "active" really means (examples)
 
-| Flag | `active = YES` when... |
-|------|------------------------|
-| `bgDualPan` | Galaxy scroll RAF is running and wallpaper image exists |
-| `bgBlur` | `#galaxy.has-blur` + filter is applied |
-| `encore` | Presentation mode is encore + family-portrait stage is visible with content |
-| `spotlightVeil` | Encore veil hard or soft class is present on the stage |
-| `softRefresh` | The `setInterval` for sheet polling is armed. **NO** when Settings → Require restart is on |
-| `heroPlate` | The Plate container (`#hero-plate`) is visible and contains an active image |
-| `xlsxStyles` | Always **NO** — Drive xlsx / fills / rich text are quarantined (2026-08-13) |
+| Flag | `active = YES` when... | Source column |
+|------|------------------------|---------------|
+| `displayRes` | Always (info) | Painted stage pixels × dpr |
+| `dataSource` | Settings resolved | Alpha / Restaurant + sheet id prefix |
+| `bgWallpaper` | Galaxy A actually has a `src` | **Filename + pixel size** (`3600×2400→1920×1280` if downsampled) |
+| `bgPattern` | Style pattern or Board 4 stripes on | Pattern name (`stripes`, `none`, …) |
+| `bgDualPan` | Scroll &gt; 0 **and** layer B has a src | `scroll on` / `scroll 0` |
+| `bgBlur` | `#galaxy.has-blur` | Sheet percent (`0%` = hard off) |
+| `softRefresh` | Poll timer armed. **NO** if Require restart | `settings` / timer |
+| `encore` | Encore stage visible with content | config / live |
+| `heroPlate` | Hero plate visible with an image | Hero filename + pixels |
 
 This is deliberately "is the expensive thing actually happening right now", not "the config asked for it".
 
