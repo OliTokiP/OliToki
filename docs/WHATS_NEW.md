@@ -1,9 +1,20 @@
 # What’s New
 
-**Last updated:** 2026-08-11 16:20  
+**Last updated:** 2026-08-13 12:00  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-13 12:00 — Hard Veil Shadow restored (d03b4de)
+
+**Boards / surface:** boards 1–3 Encore Hard spotlight  
+**Sheet:** Beta Features → Veil Shadow Settings (unchanged columns)  
+**Summary:** Restored the pre-geometry Hard veil from `d03b4de`: `filter: drop-shadow` on the real veil. The extra translated gradient copy is gone, so a fading / semi-transparent veil no longer shows a second full shadow circle.
+
+### Docs updated
+- [BETA_FEATURES.md](./BETA_FEATURES.md)
 
 ---
 

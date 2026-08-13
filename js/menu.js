@@ -1385,15 +1385,15 @@
   /**
    * Beta Features → Veil Shadow Settings (Hard spotlight cutout only).
    * Off = collage plates keep their one drop-shadow (as-is).
-   * On  = plates shadow off; Hard veil uses a duplicate veil behind (no filter).
-   * Shift / Opacity from the sheet row under the headers. Soft never gets a copy.
+   * On  = plates shadow off; Hard veil uses drop-shadow (sheet row under headers).
+   * Blank cells keep these defaults. Soft spotlight never gets a veil shadow.
    */
   const VEIL_SHADOW_DEFAULTS = {
     enabled: false,
     shiftRight: 18,
-    shiftDown: 30,
-    spread: 0,
-    blur: 0,
+    shiftDown: 22,
+    spread: 3,
+    blur: 2,
     opacity: 0.5,
   };
 
@@ -1501,6 +1501,28 @@
     return out;
   }
 
+  /** drop-shadow follows veil alpha (Hard hole). Spread is faked — CSS filter has no spread. */
+  function buildVeilShadowFilter(s) {
+    const x = Number(s.shiftRight) || 0;
+    const y = Number(s.shiftDown) || 0;
+    const blur = Math.max(0, Number(s.blur) || 0);
+    const spread = Math.max(0, Number(s.spread) || 0);
+    const opacity = Math.max(0, Math.min(1, Number(s.opacity)));
+    const color = "rgba(0, 0, 0, " + opacity + ")";
+    const layers = [];
+    if (spread > 0) {
+      const step = Math.max(1, Math.round(spread));
+      layers.push("drop-shadow(" + (x + step) + "px " + y + "px 0 " + color + ")");
+      layers.push("drop-shadow(" + (x - step) + "px " + y + "px 0 " + color + ")");
+      layers.push("drop-shadow(" + x + "px " + (y + step) + "px 0 " + color + ")");
+      layers.push("drop-shadow(" + x + "px " + (y - step) + "px 0 " + color + ")");
+    }
+    layers.push(
+      "drop-shadow(" + x + "px " + y + "px " + blur + "px " + color + ")"
+    );
+    return layers.join(" ");
+  }
+
   function applyVeilShadowConfig(settings) {
     veilShadowSettings = Object.assign(
       {},
@@ -1508,41 +1530,29 @@
       settings && typeof settings === "object" ? settings : {}
     );
     const on = !!veilShadowSettings.enabled;
-    const x = Number(veilShadowSettings.shiftRight);
-    const y = Number(veilShadowSettings.shiftDown);
-    const op = Math.max(
-      0,
-      Math.min(1, Number(veilShadowSettings.opacity))
-    );
     const root = document.documentElement;
     if (root) root.classList.toggle("beta-veil-shadow", on);
     if (document.body) document.body.classList.toggle("beta-veil-shadow", on);
     if (root && root.style) {
-      root.style.removeProperty("--veil-shadow-filter");
       if (on) {
         root.style.setProperty(
-          "--veil-shadow-x",
-          (Number.isFinite(x) ? x : 18) + "px"
+          "--veil-shadow-filter",
+          buildVeilShadowFilter(veilShadowSettings)
         );
-        root.style.setProperty(
-          "--veil-shadow-y",
-          (Number.isFinite(y) ? y : 30) + "px"
-        );
-        root.style.setProperty("--veil-shadow-opacity", String(op));
       } else {
-        root.style.removeProperty("--veil-shadow-x");
-        root.style.removeProperty("--veil-shadow-y");
-        root.style.removeProperty("--veil-shadow-opacity");
+        root.style.removeProperty("--veil-shadow-filter");
       }
     }
     tokiInfo(
       "Veil Shadow:",
-      on ? "ON (Hard duplicate veil; no filter)" : "OFF (collage shadow as-is)",
+      on ? "ON (Hard veil; plates shadow off)" : "OFF (collage shadow as-is)",
       on
-        ? "x/y/op=" +
+        ? "x/y/spread/blur/op=" +
             [
               veilShadowSettings.shiftRight,
               veilShadowSettings.shiftDown,
+              veilShadowSettings.spread,
+              veilShadowSettings.blur,
               veilShadowSettings.opacity,
             ].join("/")
         : ""
@@ -11139,7 +11149,7 @@
     setEncoreScaffoldBgActive(false);
 
     // Rig holds optional BG + plates + veil so Ken Burns keeps them locked.
-    // Stack: bg (z=0) · plates (z=1) · shadow veil · main veil (z=2).
+    // Stack: bg (z=0) · plates (z=1) · veil (z=2).
     const rig = document.createElement("div");
     rig.className = "family-portrait-rig";
     stage.appendChild(rig);
@@ -11150,14 +11160,6 @@
     const plates = document.createElement("div");
     plates.className = "family-portrait-plates";
     rig.appendChild(plates);
-
-    // Hard-only cartoon lip: same hole as the main veil, translated, behind.
-    // No filter: drop-shadow — Fire Stick dies on that + stripes.
-    const veilShadow = document.createElement("div");
-    veilShadow.className =
-      "family-portrait-veil family-portrait-veil-shadow";
-    veilShadow.setAttribute("aria-hidden", "true");
-    rig.appendChild(veilShadow);
 
     const veil = document.createElement("div");
     veil.className = "family-portrait-veil";
