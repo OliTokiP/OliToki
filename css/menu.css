@@ -868,9 +868,46 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
   opacity: 1;
 }
 
-/* Beta Veil Shadow + Hard only: drop-shadow follows the hole's alpha (cartoon cutout lip). */
-html.beta-veil-shadow #family-portrait-stage.encore-spot-hard .family-portrait-veil {
-  filter: var(--veil-shadow-filter, none);
+/* Hard shadow = a second veil behind the real one (same hole, then translate).
+   Visible lip is the copy's opaque card showing through the real hole.
+   No filter: drop-shadow — that full-HD pass + stripes kills Fire Stick. */
+.family-portrait-veil-shadow {
+  display: none;
+  z-index: 2;
+}
+
+html.beta-veil-shadow
+  #family-portrait-stage.encore-spot-hard
+  .family-portrait-veil-shadow {
+  display: block;
+  mix-blend-mode: normal;
+  background: radial-gradient(
+    circle
+      max(
+        40px,
+        calc(var(--encore-hole-r, 160px) - var(--encore-hole-pinch, 0px))
+      )
+      at var(--veil-hole-x) var(--veil-hole-y),
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 99%,
+    #000000 100%
+  );
+  transform: translate3d(
+    var(--veil-shadow-x, 18px),
+    var(--veil-shadow-y, 30px),
+    0
+  );
+}
+
+html.beta-veil-shadow
+  #family-portrait-stage.encore-spot-hard.is-dimmed
+  .family-portrait-veil-shadow {
+  opacity: var(--veil-shadow-opacity, 0.5);
+}
+
+#family-portrait-stage.encore-spot-soft .family-portrait-veil-shadow,
+body.preview-wall .family-portrait-veil-shadow {
+  display: none !important;
 }
 
 /* ── Soft: smooth falloff (higher black strength than early 0.74/0.79) ── */

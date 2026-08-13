@@ -28,11 +28,13 @@ Section title `Veil Shadow Settings`. Header row then **one data row directly un
 
 | Column | What it does |
 |--------|----------------|
-| **Enabled?** | `TRUE` = experiment on. `FALSE` / blank = current behavior (one collage shadow on `.family-portrait-plates`; no veil shadow). |
+| **Enabled?** | `TRUE` = experiment on. `FALSE` / blank = collage plates keep their one drop-shadow; no Hard veil copy. |
 | **Shift Right / Shift Down** | px offset of the veil `drop-shadow` (cartoon lip into the Hard hole). |
 | **Spread** | Extra thickness. CSS `filter: drop-shadow` has no spread — runtime fakes it with extra hard copies. |
 | **Blur** | px blur of the main drop-shadow. |
 | **Opacity** | `0–1` (values `>1` are treated as percent, e.g. `50` → `0.5`). |
+
+**Hard veil shadow** is a second `.family-portrait-veil-shadow` behind the real veil (same hole, then `translate` by Shift Right/Down). No CSS `filter: drop-shadow` — that full-HD pass plus stripes hangs Fire Stick. Soft never gets a copy.
 
 **Veil extend** is hardcoded at `20px` (no sheet hook). `--encore-hole-x/y` stay in stage space; only the veil box / gradient `at` are offset.
 
