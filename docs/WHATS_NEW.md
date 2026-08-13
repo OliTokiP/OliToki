@@ -1,9 +1,22 @@
 # What’s New
 
-**Last updated:** 2026-08-13 12:00  
+**Last updated:** 2026-08-13 18:00  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-13 18:00 — API-only live boards (no Drive xlsx)
+
+**Boards / surface:** all four live boards + wall preview  
+**Sheet:** typed hex / text still work. Cell **fill colors** and in-cell **rich text** (bold/color runs) do not.  
+**Summary:** Live menus load Google values only (`/api/sheets/csv`). The Drive workbook export used for fills and rich text is gone — server returns **410** on `/api/sheets/xlsx`. Parsers live in `deprecated/sheet-styles/` so we can reconnect later. Proof: [deprecated/sheet-styles/PROOF.md](../deprecated/sheet-styles/PROOF.md).
+
+### Docs updated
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [DATA_MODEL.md](./DATA_MODEL.md)
+- [DEBUG_CONSOLE.md](./DEBUG_CONSOLE.md)
 
 ---
 

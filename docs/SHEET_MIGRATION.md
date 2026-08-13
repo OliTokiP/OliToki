@@ -104,7 +104,7 @@ One values row under Settings (excel row 3 / 0-based index 2):
 | E | Highlight Color (Special) | 4 | `highlightSpecial` |
 | F+ | Styles Glossary lists | — | **Ignore** for theme application (Wallpaper Options, Blend Modes, Color Picker, Motion Styles, Patterns, …) |
 
-Toki Default may have **empty hex** — fills are the source of truth (`resolveColor` + xlsx fills).
+Toki Default may have **empty hex**. Live boards are API-only (2026-08-13): **type the hex**. Cell-fill-as-color is quarantined in `deprecated/sheet-styles/`.
 
 ### Style and Theme (revised) — what broke when we first cut over (lessons)
 
@@ -178,12 +178,12 @@ When reviewing sheets with `spreadsheets.values.get` (formatted strings only), s
 |----------|----------------------------|--------------------|
 | **Checkbox** columns | Often `"0"` / `"1"` (or TRUE/FALSE) | Boolean via `parseYesNo` / `parseInclude` — already supported |
 | **Percent** cells | `"100%"` | Unformatted `0`–`1` (see §2) |
-| **Cell fill** as color | Empty string if no hex typed | Background fill from grid / xlsx styles (already used for theme + box colors) |
+| **Cell fill** as color | Empty string if no hex typed | Quarantined 2026-08-13 — type the hex. Old pipeline: `deprecated/sheet-styles/` |
 | **Data validation** lists | Just the chosen string | Glossary columns supply the list; code does not need the validation rule |
 
 **Toki Default example:** Main/Secondary text may be blank; Highlight / Special can be fill-only (`#26BBCB`, `#FFB703` on fills). That is intentional — the Sheets color picker is more layperson-friendly than typing hex. Runtime already resolves **text hex first, then cell fill**.
 
-**Implication for reviews and tools:** prefer `includeGridData` (or the existing xlsx style pipeline) when judging “is this theme row empty?”
+**Implication for reviews and tools:** live boards ignore cell fills. Prefer typed hex. The old xlsx style pipeline is in `deprecated/sheet-styles/`.
 
 ### Capturing fills back into cell values (recommended workflow)
 

@@ -64,7 +64,7 @@ Shared content sheets today:
 
 - Visual parity with mockups in `mockups/` and verification screenshots in `screenshots/`.
 - Toggling Include flags for boxes never corrupts the main item list.
-- Private sheet works via `/api/sheets/*` without exposing the service account to the browser.
+- Private sheet works via `/api/sheets/csv` without exposing the service account to the browser.
 - After multi-tenant work: a second restaurant can ship with a new `restaurant.json` + assets + sheet, same JS/CSS.
 
 ---

@@ -2,9 +2,10 @@
 """
 TokiMenu local server: static files + Google Sheets API proxy.
 
-Boards fetch /api/sheets/csv and /api/sheets/xlsx so the spreadsheet can stay
-private (no "Anyone with the link"). The service account key never goes to the
-browser — only this process holds secrets/google-service-account.json.
+Boards fetch /api/sheets/csv so the spreadsheet can stay private (no
+"Anyone with the link"). Drive xlsx export is retired (410 on
+/api/sheets/xlsx). The service account key never goes to the browser —
+only this process holds secrets/google-service-account.json.
 
 Usage:
   python3 scripts/toki_server.py
@@ -37,7 +38,6 @@ DEFAULT_KEY = ROOT / "secrets" / "google-service-account.json"
 DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
 ]
 
 # Cache: avoid hammering Google on every soft reload / multi-board open.
@@ -45,8 +45,6 @@ SCOPES = [
 # board fetches become 8 sequential Google round-trips (20–45s each when slow).
 _meta_lock = threading.Lock()
 _meta_cache = {"at": 0, "title_by_gid": {}, "gid_by_title": {}}
-_xlsx_lock = threading.Lock()
-_xlsx_cache = {"at": 0, "bytes": None}
 _csv_lock = threading.Lock()
 # gid -> {"at": float, "text": str}
 _csv_cache: dict[str, dict] = {}
@@ -54,7 +52,6 @@ _csv_cache: dict[str, dict] = {}
 _csv_batch_event: threading.Event | None = None
 _csv_batch_error: BaseException | None = None
 META_TTL = 120.0
-XLSX_TTL = 90.0
 # Opportunistic cache only (non-force). Menu loads pass force=1 for live sheet edits.
 CSV_TTL = 90.0
 # Concurrent boards all force-refresh in the same second → one batchGet, not four.
@@ -69,7 +66,6 @@ def _load_creds(key_path: Path):
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
-        from googleapiclient.http import MediaIoBaseDownload
     except ImportError as e:
         raise SystemExit(
             "Missing Google libraries. Install with:\n"
@@ -88,17 +84,14 @@ def _load_creds(key_path: Path):
         str(key_path), scopes=SCOPES
     )
     sheets = build("sheets", "v4", credentials=creds, cache_discovery=False)
-    drive = build("drive", "v3", credentials=creds, cache_discovery=False)
-    return creds, sheets, drive, MediaIoBaseDownload
+    return creds, sheets
 
 
 class SheetsBackend:
     def __init__(self, sheet_id: str, key_path: Path):
         self.sheet_id = sheet_id
         self.key_path = key_path
-        self.creds, self.sheets, self.drive, self.MediaIoBaseDownload = _load_creds(
-            key_path
-        )
+        self.creds, self.sheets = _load_creds(key_path)
         # googleapiclient is not reliably thread-safe — serialize API calls
         self._api_lock = threading.Lock()
         _log(f"API ready as {self.creds.service_account_email}")
@@ -315,42 +308,6 @@ class SheetsBackend:
         )
         return text
 
-    def xlsx_bytes(self, force: bool = False) -> bytes:
-        now = time.time()
-        with _xlsx_lock:
-            if (
-                not force
-                and _xlsx_cache["bytes"] is not None
-                and now - _xlsx_cache["at"] < XLSX_TTL
-            ):
-                return _xlsx_cache["bytes"]
-
-        # Drive export → .xlsx (needs Drive API enabled + sheet shared with SA)
-        with self._api_lock:
-            request = self.drive.files().export_media(
-                fileId=self.sheet_id,
-                mimeType=(
-                    "application/vnd.openxmlformats-officedocument"
-                    ".spreadsheetml.sheet"
-                ),
-            )
-            fh = io.BytesIO()
-            downloader = self.MediaIoBaseDownload(fh, request)
-            done = False
-            while not done:
-                _status, done = downloader.next_chunk()
-            data = fh.getvalue()
-        if len(data) < 100 or data[:2] != b"PK":
-            raise RuntimeError(
-                "Drive export did not return xlsx. "
-                "Enable Google Drive API and ensure the sheet is shared "
-                "with the service account."
-            )
-        with _xlsx_lock:
-            _xlsx_cache["at"] = time.time()
-            _xlsx_cache["bytes"] = data
-        return data
-
 
 def make_handler(backend: SheetsBackend | None, root: Path):
     class Handler(SimpleHTTPRequestHandler):
@@ -506,26 +463,18 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                 return
 
             if path == "/api/sheets/xlsx":
-                if not backend:
-                    self._json(
-                        503,
-                        {"error": "Sheets API not configured"},
-                    )
-                    return
-                qs = parse_qs(parsed.query)
-                force = (qs.get("force") or ["0"])[0] in ("1", "true", "yes")
-                try:
-                    data = backend.xlsx_bytes(force=force)
-                    self._send(
-                        200,
-                        data,
-                        "application/vnd.openxmlformats-officedocument"
-                        ".spreadsheetml.sheet",
-                    )
-                except Exception as e:
-                    _log(f"xlsx error: {e}")
-                    traceback.print_exc()
-                    self._json(500, {"error": str(e)})
+                # Retired 2026-08-13 — boards are API-only (CSV/values).
+                # Reconnect: deprecated/sheet-styles/README.md
+                self._json(
+                    410,
+                    {
+                        "error": "xlsx export retired",
+                        "detail": (
+                            "Live boards are API-only. Cell fills and rich "
+                            "text live in deprecated/sheet-styles/."
+                        ),
+                    },
+                )
                 return
 
             if path == "/api/sheets/tabs":
@@ -596,7 +545,7 @@ def main():
     httpd = ThreadingHTTPServer((args.bind, args.port), handler)
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
     if backend:
-        _log("Sheets API proxy: /api/sheets/csv?gid=…  /api/sheets/xlsx")
+        _log("Sheets API proxy: /api/sheets/csv?gid=…  (/api/sheets/xlsx → 410)")
         # Warm CSV cache in background so first board open isn't 8× Google latency
         def _bg_warm() -> None:
             try:

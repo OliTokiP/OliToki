@@ -28,8 +28,10 @@ Your spreadsheet ID:
 2. Search for **Google Sheets API**.
 3. Open it → **Enable**.
 
-Enable **Google Drive API** as well if boards should get xlsx styles (cell
-fills, announcement font colors). CSV item text works with Sheets API alone.
+**Drive API is not required for live boards.** Cell fills and announcement
+rich text were retired 2026-08-13 (see `deprecated/sheet-styles/`). CSV /
+Sheets `values.batchGet` is enough. Drive export is only used by optional
+backup tools (`Toki Git Commit.app` sheet snapshot, `pull-menu-xlsx.py`).
 
 ---
 

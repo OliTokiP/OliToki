@@ -124,7 +124,7 @@ GID `1962117802` — announcement + stripes (drink items come from drinks sheet 
 | D | Stripe Color 2 | 3 | |
 | E | Announcement Title | 4 | |
 | F | Announcement Subtitle | 5 | |
-| G | Announcement Copy | 6 | Multi-line / rich via xlsx styles when available |
+| G | Announcement Copy | 6 | Multi-line plain text (xlsx rich-text runs quarantined 2026-08-13) |
 | H | Announcement Color | 7 | Body fill |
 | I–S | Legacy drink columns | 8+ | Fallback only if drinks sheet fails |
 
@@ -315,9 +315,9 @@ Board columns after migrate:
 
 | Source | How | When |
 |--------|-----|------|
-| `google` | `/api/sheets/csv`, `/api/sheets/xlsx`, `/api/sheets/tabs` via `toki_server.py` | Production displays |
-| `local` | `Menu.xlsx` + SheetJS in browser | Offline / stress / no network |
-| Fallbacks | public export URLs (legacy), then `menu-data.js` embedded | Only if proxy/xlsx fail |
+| `google` | `/api/sheets/csv` + `/api/sheets/tabs` via `toki_server.py` (no xlsx) | Production displays |
+| `local` | `Menu.xlsx` cell values (SheetJS not loaded on live boards) | Offline / stress if you re-add the script |
+| Fallbacks | public CSV export URLs (legacy), then `menu-data.js` embedded | Only if proxy fails |
 
 Toggle: `js/data-source.js` → `TOKI_DATA_SOURCE`.
 

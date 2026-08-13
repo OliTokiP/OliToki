@@ -136,7 +136,7 @@ These only affect the current browser tab/session.
 | `spotlightVeil` | Encore veil hard or soft class is present on the stage |
 | `softRefresh` | The `setInterval` for sheet polling is armed |
 | `heroPlate` | The Plate container (`#hero-plate`) is visible and contains an active image |
-| `xlsxStyles` | Fills or rich text from xlsx were successfully loaded |
+| `xlsxStyles` | Always **NO** — Drive xlsx / fills / rich text are quarantined (2026-08-13) |
 
 This is deliberately "is the expensive thing actually happening right now", not "the config asked for it".
 

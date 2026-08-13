@@ -26,10 +26,10 @@
 | `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, Plate objects (hero + portrait), hero motion, stickers, stripes |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
-| `scripts/toki_server.py` | Static file server + Sheets/Drive proxy + caches |
+| `scripts/toki_server.py` | Static file server + Sheets CSV proxy + caches |
 | `scripts/gsheet_client.py` | CLI read/write for migrations / tooling |
 | `Open Toki Menus.app` | Launches server + tiles board windows |
-| `vendor/xlsx.full.min.js` | Local workbook + style fills when needed |
+| `vendor/xlsx.full.min.js` | Not loaded on live boards (API-only). Kept for optional local reconnect |
 
 **Current Plate model (implemented):**
 - Slideshow hero: `#hero-wrap > #hero-plate` (container) contains the food `<img id="hero">` + `#new-sticker` (decoration).
@@ -272,10 +272,10 @@ Server:
 | static `/*` | HTML/CSS/JS/assets |
 | `/api/health` | API + SA readiness |
 | `/api/sheets/csv` | Tab values by gid/title |
-| `/api/sheets/xlsx` | Workbook bytes for fills/fonts |
+| `/api/sheets/xlsx` | **410 Gone** — Drive workbook export retired 2026-08-13 |
 | `/api/sheets/tabs` | gid ↔ title map |
 
-Caches: meta TTL ~120s, xlsx ~90s. API calls serialized (client not thread-safe).
+Caches: meta TTL ~120s, CSV ~90s. API calls serialized (client not thread-safe). Fills/rich-text parsers: `deprecated/sheet-styles/`.
 
 Future:
 

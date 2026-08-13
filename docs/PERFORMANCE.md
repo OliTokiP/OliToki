@@ -113,7 +113,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | Feature | Impact | Primary cost | Notes / kill guidance |
 |---------|--------|--------------|------------------------|
 | **Soft refresh** (poll sheet ~30s) | **Medium** (periodic) | Network + parse; re-render if fingerprint changes | Wall: refresh disabled/lean. Kill timer for FPS debug. Fingerprint skip = good hang. |
-| **xlsx styles** (fills, fonts, announcement rich text) | **High** (spike) | Download + inflate + parse | Wall disables most xlsx. Kill: CSV-only path. |
+| **xlsx styles** (fills, fonts, announcement rich text) | **Off (2026-08-13)** | — | Hard-killed. Live boards are CSV/API-only. Code in `deprecated/sheet-styles/`. |
 | **CSV sheet fetch** (items only) | **Low–Medium** | Network + parse | Baseline. |
 | **Protein / Sauces / Drinks shared sheets** | **Low** | Extra small fetches | Parallel; cache with board payload. |
 | **WebP prefer + PNG fallback** | **Low** (usually wins) | One failed request if WebP missing | Net savings when WebP exists. |
@@ -123,7 +123,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 
 | Feature | Impact | Primary cost | Notes / kill guidance |
 |---------|--------|--------------|------------------------|
-| **Preview wall** (`preview-all` / `?preview=all`) | **Very High** if full quality ×4; **mitigated** by lean path | 4× everything | Lean path: no blur/blend/xlsx (mostly), single-layer pan, no soft refresh thrash. Still 4 stages. |
+| **Preview wall** (`preview-all` / `?preview=all`) | **Very High** if full quality ×4; **mitigated** by lean path | 4× everything | Lean path: no blur/blend, no xlsx, single-layer pan, no soft refresh thrash. Still 4 stages. |
 | **Four solo Fire Stick windows** | **Very High** aggregate | 4 processes/WebViews | Prefer one stick per board or wall lean; don’t assume desktop FPS. |
 | **Stage CSS scale to viewport** | **Low** | One transform on `#stage` | Fine. |
 | **Shadow / heavy effects on wall** | **High** when enabled | Extra paint | Intentionally reduced on wall when FPS concerns. |
@@ -231,7 +231,7 @@ REQUIREMENTS
    - bgBlend
    - bgWallpaper         (image layer; solid plate may remain)
    - softRefresh         (auto sheet poll)
-   - xlsxStyles          (remote/local xlsx style path when skippable)
+   - xlsxStyles          (always off — Drive xlsx quarantined 2026-08-13)
    - footerBoxes
    - stripes             (board 4)
    - announcementMotion  (if shout/motion gated; else stub)

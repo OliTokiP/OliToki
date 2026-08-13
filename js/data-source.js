@@ -2,9 +2,11 @@
  * TokiMenu — data source switch
  *
  * "google" → live Google Sheet via local toki_server.py API proxy when available
- *            (/api/sheets/* + service account = private sheet OK).
- *            Falls back to public /export URLs if the proxy is not running.
- * "local"  → Menu.xlsx in this folder (full workbook: all tabs, fills, fonts)
+ *            (/api/sheets/csv + service account = private sheet OK).
+ *            Falls back to public CSV export if the proxy is not running.
+ *            Drive xlsx (fills / rich text) is quarantined — see
+ *            deprecated/sheet-styles/.
+ * "local"  → Menu.xlsx in this folder (cell values only; no fills/fonts)
  *
  * Flip DATA_SOURCE, hard-refresh the boards. Stress tests / offline work use "local".
  * Re-pull a fresh copy anytime:
