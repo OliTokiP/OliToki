@@ -134,7 +134,7 @@ These only affect the current browser tab/session.
 | `bgBlur` | `#galaxy.has-blur` + filter is applied |
 | `encore` | Presentation mode is encore + family-portrait stage is visible with content |
 | `spotlightVeil` | Encore veil hard or soft class is present on the stage |
-| `softRefresh` | The `setInterval` for sheet polling is armed |
+| `softRefresh` | The `setInterval` for sheet polling is armed. **NO** when Settings → Require restart is on |
 | `heroPlate` | The Plate container (`#hero-plate`) is visible and contains an active image |
 | `xlsxStyles` | Always **NO** — Drive xlsx / fills / rich text are quarantined (2026-08-13) |
 

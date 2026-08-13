@@ -13987,7 +13987,10 @@
   }
 
   function startAutoRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
     if (liveSettings.requireRestart) {
       tokiInfo(
         "auto-refresh OFF (Require restart to update) —",
@@ -14142,6 +14145,8 @@
             return !!config.bgImage;
 
           case "softRefresh":
+            // Require Restart = Settings hard-off: no poll, no "active".
+            if (liveSettings && liveSettings.requireRestart) return false;
             // Prefer transient "work in progress" (the actual network/parse cost spike).
             // Falls back to timer armed if no transient tracked.
             return refreshInProgress || !!refreshTimer;
@@ -14185,15 +14190,33 @@
       FEATURE_DEFS.forEach(function (def) {
         const forced = overrides.hasOwnProperty(def.id) ? overrides[def.id] : null;
         const live = liveDebugState[def.id];
-        const liveActive = live ? live.active : computeActive(def.id);
+        const computed = computeActive(def.id);
+        // Observer wins when it can prove the expensive path is off (e.g. Settings
+        // Require Restart). Sticky liveDebugState must not keep Soft Refresh "on".
+        const liveActive =
+          live && !(def.id === "softRefresh" && !computed)
+            ? live.active
+            : computed;
         const active = forced != null ? !!forced : liveActive;
-        const reason = live ? live.reason : '';
+        const reason =
+          def.id === "softRefresh" && liveSettings.requireRestart
+            ? "require restart"
+            : live
+              ? live.reason
+              : "";
         flags[def.id] = {
           id: def.id,
           label: def.label,
           impact: def.impact,
           active: active,
-          source: forced != null ? 'console' : (live ? 'live' : getSource(def.id, liveActive)),
+          source:
+            forced != null
+              ? "console"
+              : liveSettings.requireRestart && def.id === "softRefresh"
+                ? "settings"
+                : live
+                  ? "live"
+                  : getSource(def.id, liveActive),
           forced: forced != null,
           reason: reason,
         };
