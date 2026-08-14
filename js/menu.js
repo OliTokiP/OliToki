@@ -6301,7 +6301,8 @@
    * Structure:
    *   A1: "Debug Mode"   A2: TRUE/FALSE
    *   Then "Debug Features"
-   *   Next row: column headers (Performance Console, Version History, ...)
+   *   Next row: column headers (Performance Console, Full View,
+   *   Hide Inactive Features?, ...)
    *   Next row: values (TRUE/FALSE or 1/0 or checkboxes)
    *
    * Only when debugMode && features["Performance Console"] are both true
@@ -6350,6 +6351,26 @@
       debugConfig.features["FullView"] ||
       debugConfig.features["full view"];
     return !!fv;
+  }
+
+  /** Debug Menu → Hide Inactive Features?: drop inactive HUD rows. */
+  function isDebugHideInactive() {
+    if (!debugConfig || !debugConfig.debugMode || !debugConfig.features) {
+      return false;
+    }
+    const names = [
+      "Hide Inactive Features?",
+      "Hide Inactive Features",
+      "Hide Inactive",
+    ];
+    for (let i = 0; i < names.length; i++) {
+      if (
+        Object.prototype.hasOwnProperty.call(debugConfig.features, names[i])
+      ) {
+        return !!debugConfig.features[names[i]];
+      }
+    }
+    return false;
   }
 
   /** True only when both the master Debug Mode and "Performance Console" are enabled in the sheet. */
@@ -10513,6 +10534,7 @@
 
   /** Same clock as the rig zoom. includePinch adds --encore-hole-pinch to the transition. */
   function encoreRigTransition(sec, easeVar, easeFallback, includePinch) {
+    if (encoreHardShadowFpsCap()) return "none";
     const t =
       "transform " + sec + "s var(" + easeVar + ", " + easeFallback + ")";
     if (!includePinch) return t;
@@ -10526,6 +10548,136 @@
       easeFallback +
       ")"
     );
+  }
+
+  /** Hard_Shadow camera cap. CSS transitions still vsync; we step --encore-zoom. */
+  const ENCORE_SHADOW_FPS_CAP = 30;
+  let _fpsEma = 0;
+  let _fpsLastTs = 0;
+  let _fpsSampleRaf = 0;
+  let _encoreZoomRaf = 0;
+  let _encoreZoomGen = 0;
+
+  function encoreHardShadowFpsCap() {
+    if (!isEncoreSegmentNow()) return 0;
+    if (
+      normalizedEncoreSpotlightType(config.encoreSpotlightType) !==
+      "hard_shadow"
+    ) {
+      return 0;
+    }
+    return ENCORE_SHADOW_FPS_CAP;
+  }
+
+  function noteFrameTs(now) {
+    if (_fpsLastTs > 0) {
+      const inst = 1000 / Math.max(8, now - _fpsLastTs);
+      _fpsEma = _fpsEma > 0 ? _fpsEma * 0.82 + inst * 0.18 : inst;
+    }
+    _fpsLastTs = now;
+  }
+
+  function startFpsSampler() {
+    if (_fpsSampleRaf) return;
+    function loop(now) {
+      _fpsSampleRaf = requestAnimationFrame(loop);
+      noteFrameTs(now);
+    }
+    _fpsSampleRaf = requestAnimationFrame(loop);
+  }
+
+  function stopFpsSampler() {
+    if (_fpsSampleRaf) cancelAnimationFrame(_fpsSampleRaf);
+    _fpsSampleRaf = 0;
+  }
+
+  function cancelEncoreZoomStepper() {
+    _encoreZoomGen++;
+    if (_encoreZoomRaf) {
+      cancelAnimationFrame(_encoreZoomRaf);
+      _encoreZoomRaf = 0;
+    }
+  }
+
+  function easeUnit(easeVar, t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    const out = easeVar === "--ease-out";
+    const p1x = out ? 0.22 : 0.4;
+    const p1y = out ? 1 : 0;
+    const p2x = out ? 0.36 : 0.2;
+    const p2y = out ? 1 : 1;
+    let x = t;
+    for (let i = 0; i < 5; i++) {
+      const cx = 3 * p1x;
+      const bx = 3 * (p2x - p1x) - cx;
+      const ax = 1 - cx - bx;
+      const yo = ((ax * x + bx) * x + cx) * x - t;
+      const d = (3 * ax * x + 2 * bx) * x + cx;
+      if (Math.abs(d) < 1e-5) break;
+      x -= yo / d;
+    }
+    const cy = 3 * p1y;
+    const by = 3 * (p2y - p1y) - cy;
+    const ay = 1 - cy - by;
+    return ((ay * x + by) * x + cy) * x;
+  }
+
+  function readEncoreZoomNow(stage) {
+    if (!stage) return 1;
+    const n = parseFloat(stage.style.getPropertyValue("--encore-zoom"));
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  }
+
+  function readEncorePinchNow(stage) {
+    const node = encorePinchNode(stage);
+    if (!node) return 0;
+    const n = parseFloat(node.style.getPropertyValue("--encore-hole-pinch"));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * Step the Encore camera at 30fps (Hard_Shadow only) so the hole
+   * drop-shadow is not re-rasterized on every vsync. false = use CSS.
+   */
+  function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo) {
+    const cap = encoreHardShadowFpsCap();
+    if (!cap || !stage || !(durationSec > 0)) return false;
+    const rig = stage.querySelector(".family-portrait-rig");
+    if (rig) rig.style.transition = "none";
+    const from = readEncoreZoomNow(stage);
+    const pinchFrom = readEncorePinchNow(stage);
+    const wantPinch = pinchTo != null && Number.isFinite(Number(pinchTo));
+    const gen = ++_encoreZoomGen;
+    const t0 = performance.now();
+    const dur = durationSec * 1000;
+    const minDt = 1000 / cap;
+    let lastPaint = -1e9;
+    function frame(now) {
+      if (gen !== _encoreZoomGen) return;
+      _encoreZoomRaf = requestAnimationFrame(frame);
+      if (now - lastPaint < minDt - 1) return;
+      lastPaint = now;
+      let u = (now - t0) / dur;
+      if (u >= 1) {
+        u = 1;
+        _encoreZoomGen++;
+        _encoreZoomRaf = 0;
+      }
+      const e = easeUnit(easeVar, u);
+      stage.style.setProperty(
+        "--encore-zoom",
+        String(from + (toScale - from) * e)
+      );
+      if (wantPinch) {
+        setEncoreHolePinch(
+          stage,
+          pinchFrom + (Number(pinchTo) - pinchFrom) * e
+        );
+      }
+    }
+    _encoreZoomRaf = requestAnimationFrame(frame);
+    return true;
   }
 
   function readCssDurationMs(el, prop, fallbackMs) {
@@ -10560,6 +10712,7 @@
 
   /** Snap scale with no transition (origin changes only safe at ~1× or under cover). */
   function snapPortraitZoom(stage, scale) {
+    cancelEncoreZoomStepper();
     if (!stage) return;
     const rig = stage.querySelector(".family-portrait-rig");
     if (rig) {
@@ -11748,7 +11901,10 @@
     const rig = stage.querySelector(".family-portrait-rig");
     if (rig) rig.style.transition = ""; // CSS .is-zoom-out handles duration
     stage.classList.add("is-zoom-out");
-    stage.style.setProperty("--encore-zoom", "1");
+    const sec = readCssDurationMs(stage, "--dur-slow", 1050) / 1000;
+    if (!tryEncoreFpsZoom(stage, 1, sec, "--ease-fade", null)) {
+      stage.style.setProperty("--encore-zoom", "1");
+    }
   }
 
   function clearPortraitSpotlight() {
@@ -11850,7 +12006,10 @@
       stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
       setEncoreVeilDimmed(stage, true);
-      stage.style.setProperty("--encore-zoom", String(zoomTo));
+      const zoomSec = readCssDurationMs(stage, "--dur-encore-zoom", 3400) / 1000;
+      if (!tryEncoreFpsZoom(stage, zoomTo, zoomSec, "--ease-out", null)) {
+        stage.style.setProperty("--encore-zoom", String(zoomTo));
+      }
       // List/box highlight arrives with the zoom-in (Encore only)
       if (segEncore) {
         setEncoreListHighlight(itemIndex);
@@ -12308,8 +12467,18 @@
       } else {
         applyEncoreSpotlightChrome(null);
       }
-      stage.style.setProperty("--encore-zoom", String(zoomTo));
-      if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
+      if (
+        !tryEncoreFpsZoom(
+          stage,
+          zoomTo,
+          entranceSec,
+          "--ease-out",
+          doPinch ? encoreHolePinchPx() : null
+        )
+      ) {
+        stage.style.setProperty("--encore-zoom", String(zoomTo));
+        if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
+      }
       setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
       encoreArmHighlight(slide, style.punchOut);
@@ -12350,8 +12519,18 @@
     } else {
       applyEncoreSpotlightChrome(null);
     }
-    stage.style.setProperty("--encore-zoom", String(zoomTo));
-    if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
+    if (
+      !tryEncoreFpsZoom(
+        stage,
+        zoomTo,
+        entranceSec,
+        "--ease-out",
+        doPinch ? encoreHolePinchPx() : null
+      )
+    ) {
+      stage.style.setProperty("--encore-zoom", String(zoomTo));
+      if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
+    }
     setEncoreVeilDimmed(stage, true);
     encoreArmHighlight(slide, style.punchOut);
     afterMs(entranceSec * 1000, gen, function () {
@@ -12394,8 +12573,18 @@
         !!ENCORE_HOLE_PINCH_OUT
       );
     }
-    stage.style.setProperty("--encore-zoom", "1");
-    if (ENCORE_HOLE_PINCH_OUT) setEncoreHolePinch(stage, 0);
+    if (
+      !tryEncoreFpsZoom(
+        stage,
+        1,
+        exitSec,
+        "--ease-fade",
+        ENCORE_HOLE_PINCH_OUT ? 0 : null
+      )
+    ) {
+      stage.style.setProperty("--encore-zoom", "1");
+      if (ENCORE_HOLE_PINCH_OUT) setEncoreHolePinch(stage, 0);
+    }
 
     if (isLastInSegment) {
       // Wind-down: grid opacity out (inherit KB/Slideshow full exit)
@@ -14857,6 +15046,7 @@
   (function setupTokiDebugAPI() {
     const FEATURE_DEFS = [
       { id: "displayRes", label: "Display", impact: "Info" },
+      { id: "frameRate", label: "Frame Rate", impact: "Info" },
       { id: "dataSource", label: "Data Source", impact: "Info" },
       { id: "encore", label: "Encore", impact: "Very High" },
       { id: "familyPortrait", label: "Family Portrait", impact: "Very High" },
@@ -14991,6 +15181,9 @@
           case "displayRes":
             return true;
 
+          case "frameRate":
+            return true;
+
           case "dataSource":
             return !!(liveSettings && (liveSettings.dataSource || liveSettings.sheetId));
 
@@ -15111,6 +15304,15 @@
               " dpr" +
               (Math.round(b.dpr * 100) / 100)
             );
+          }
+          case "frameRate": {
+            const cap = encoreHardShadowFpsCap();
+            const measured =
+              _fpsEma > 0 ? "~" + Math.round(_fpsEma) + " rAF" : "…";
+            if (cap) {
+              return cap + " cam cap (Hard_Shadow) · " + measured;
+            }
+            return "uncapped · " + measured;
           }
           case "dataSource": {
             const name = (liveSettings && liveSettings.dataSource) || "config.js";
@@ -15487,11 +15689,22 @@
       "Very Low": 7,
     };
 
-    const sorted = Object.keys(flagsObj || {}).map(id => flagsObj[id]).sort((a, b) => {
-      const prioA = impactOrder[a.impact] || 99;
-      const prioB = impactOrder[b.impact] || 99;
-      return prioA - prioB;
-    });
+    const hideInactive = isDebugHideInactive();
+    const sorted = Object.keys(flagsObj || {})
+      .map(function (id) {
+        return flagsObj[id];
+      })
+      .filter(function (f) {
+        if (!hideInactive) return true;
+        if (!f || f.active) return true;
+        // Keep info rows (Display, Frame Rate, Data Source, …)
+        return f.impact === "Info";
+      })
+      .sort(function (a, b) {
+        const prioA = impactOrder[a.impact] || 99;
+        const prioB = impactOrder[b.impact] || 99;
+        return prioA - prioB;
+      });
 
     const rows = sorted.map(function (f) {
       const stateClass = f.active ? "active" : "inactive";
@@ -15522,8 +15735,11 @@
       root.style.removeProperty("--debug-encore"); // representative cleanup
       if (_debugHudEl) _debugHudEl.style.display = "none";
       stopVisualsTicker();
+      stopFpsSampler();
       return;
     }
+
+    startFpsSampler();
 
     const flags = window.TokiMenuDebug.snapshot();
 
