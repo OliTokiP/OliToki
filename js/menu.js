@@ -634,24 +634,97 @@
     });
   }
 
+  /** foo.webp → foo-sm.webp (50% masters). */
+  function toSmWebpPath(path) {
+    if (!path) return path;
+    const s = String(path);
+    if (/-sm\.(webp|png|jpe?g)$/i.test(s)) {
+      return s.replace(/\.(png|jpe?g)$/i, ".webp");
+    }
+    const webp = toWebpPath(s);
+    return webp.replace(/\.webp$/i, "-sm.webp");
+  }
+
   /** food-pics/foo.webp → food-pics/foo-sm.webp (750×500 masters). */
   function toFoodSmPath(path) {
     if (!path) return path;
     const s = String(path);
     if (!/food-pics\//i.test(s)) return toWebpPath(s);
-    if (/-sm\.(webp|png|jpe?g)$/i.test(s)) return s.replace(/\.(png|jpe?g)$/i, ".webp");
-    const webp = toWebpPath(s);
-    return webp.replace(/\.webp$/i, "-sm.webp");
+    return toSmWebpPath(s);
   }
 
   /** Use -sm when the painted long edge fits in 750px (50% of 1500×1000). */
   const FOOD_SM_LONG_PX = 750;
+  /** Sticker masters are 1024²; -sm is 512². */
+  const STICKER_SM_LONG_PX = 512;
+  const STICKER_HERO_CSS_PX = 524;
+  const STICKER_PORTRAIT_CSS_PX = 560;
+
+  function preferSmPathForNeed(path, needW, needH, smLongPx) {
+    const need = Math.max(Number(needW) || 0, Number(needH) || 0);
+    const cap = (Number(smLongPx) || FOOD_SM_LONG_PX) * 1.08;
+    if (need > cap) return toWebpPath(path);
+    return toSmWebpPath(path);
+  }
 
   function preferFoodPathForNeed(path, needW, needH) {
     if (!path || !/food-pics\//i.test(path)) return toWebpPath(path);
-    const need = Math.max(Number(needW) || 0, Number(needH) || 0);
-    if (need > FOOD_SM_LONG_PX * 1.08) return toWebpPath(path);
-    return toFoodSmPath(path);
+    return preferSmPathForNeed(path, needW, needH, FOOD_SM_LONG_PX);
+  }
+
+  function preferStickerPathForNeed(path, needW, needH) {
+    if (!path || !/stickers\//i.test(path)) return toWebpPath(path);
+    return preferSmPathForNeed(path, needW, needH, STICKER_SM_LONG_PX);
+  }
+
+  function stickerHeroNeedPx() {
+    const b = displayPixelBudget();
+    const s = Math.max(b.w / STAGE_W, b.h / STAGE_H);
+    const px = Math.max(1, Math.round(STICKER_HERO_CSS_PX * s));
+    return { w: px, h: px };
+  }
+
+  function stickerPortraitNeedPx(photoScale) {
+    const b = displayPixelBudget();
+    const s = Math.max(b.w / STAGE_W, b.h / STAGE_H);
+    const stickScale = Math.max(0.16, Math.min(0.4, Number(photoScale) * 0.9));
+    const px = Math.max(
+      1,
+      Math.round(STICKER_PORTRAIT_CSS_PX * stickScale * s)
+    );
+    return { w: px, h: px };
+  }
+
+  function applyStickerRasters(root, needW, needH) {
+    if (!root) return;
+    const bodyPath = preferStickerPathForNeed(STICKER_BODY_SRC, needW, needH);
+    const shadowPath = preferStickerPathForNeed(
+      STICKER_SHADOW_SRC,
+      needW,
+      needH
+    );
+    function setImg(img, path) {
+      if (!img || !path) return;
+      attachWebpFallback(img);
+      stampRasterMaster(img, path);
+      if (img.getAttribute("src") !== path) img.src = path;
+      bindDownsampleOnLoad(img);
+    }
+    setImg(root.querySelector(".new-sticker-body-img"), bodyPath);
+    setImg(root.querySelector(".new-sticker-shadow"), shadowPath);
+    const tint = root.querySelector(".new-sticker-tint");
+    if (tint) {
+      const url = "url(\"" + bodyPath + "\")";
+      tint.style.webkitMaskImage = url;
+      tint.style.maskImage = url;
+    }
+  }
+
+  function applyHeroStickerRasters() {
+    const root = document.getElementById("new-sticker");
+    if (!root) return;
+    const need = stickerHeroNeedPx();
+    applyStickerRasters(root, need.w, need.h);
   }
 
   /**
@@ -2522,6 +2595,7 @@
     // Alias for any leftover CSS/rules that still reference the old name
     root.style.setProperty("--highlight-new", config.highlightSpecial);
     applyStickerTint();
+    applyHeroStickerRasters();
     applyStageBackground();
     applyBgPattern();
     // Box overrides + contrast text (all boards that have boxes)
@@ -2642,6 +2716,44 @@
     const root = document.documentElement;
     if (root) root.classList.toggle("encore-hard-shadow", on);
     if (document.body) document.body.classList.toggle("encore-hard-shadow", on);
+  }
+
+  /**
+   * Hard_Shadow filter stays on during the veil opacity fade, then parks
+   * after transitionend so an invisible veil is not still drop-shadowed.
+   */
+  function setEncoreVeilDimmed(stage, on) {
+    if (!stage) return;
+    if (on) {
+      stage.classList.remove("veil-filter-parked");
+      stage.classList.add("is-dimmed");
+      return;
+    }
+    const wasOn = stage.classList.contains("is-dimmed");
+    stage.classList.remove("is-dimmed");
+    if (!wasOn) return;
+    const type = normalizedEncoreSpotlightType(config.encoreSpotlightType);
+    if (type !== "hard_shadow") {
+      stage.classList.add("veil-filter-parked");
+      return;
+    }
+    const veil = stage.querySelector(".family-portrait-veil");
+    let settled = false;
+    function finish() {
+      if (settled) return;
+      settled = true;
+      if (stage.classList.contains("is-dimmed")) return;
+      stage.classList.add("veil-filter-parked");
+      if (veil) veil.removeEventListener("transitionend", onEnd);
+    }
+    function onEnd(e) {
+      if (e.target !== veil) return;
+      if (e.propertyName && e.propertyName !== "opacity") return;
+      finish();
+    }
+    if (veil) veil.addEventListener("transitionend", onEnd);
+    const ms = readCssDurationMs(stage, "--motion-veil", 1050);
+    window.setTimeout(finish, (Number(ms) || 1050) + 60);
   }
 
   function setEncoreSolidBackground(on, opts) {
@@ -10705,7 +10817,7 @@
     // Phase 2 (fade):   real opacity fade at full spread (must not be cancelled
     //                   by the next Wind-up — handoff waits zoom+fade total)
     if (opts.encoreWindDown && !fadingOut) {
-      stage.classList.remove("is-dimmed");
+      setEncoreVeilDimmed(stage, false);
       clearAllPresentationHighlights();
       const zoomMs = encoreWindDownZoomMs(stage);
       const fadeMs = presentationFadeMs(stage);
@@ -11374,21 +11486,14 @@
     el.className = "family-portrait-sticker";
     el.setAttribute("aria-hidden", "true");
     el.innerHTML =
-      '<img class="new-sticker-shadow" src="' +
-      STICKER_SHADOW_SRC +
-      '" alt="" draggable="false" />' +
+      '<img class="new-sticker-shadow" alt="" draggable="false" />' +
       '<div class="new-sticker-body">' +
-      '<img class="new-sticker-body-img" src="' +
-      STICKER_BODY_SRC +
-      '" alt="" draggable="false" />' +
+      '<img class="new-sticker-body-img" alt="" draggable="false" />' +
       '<span class="new-sticker-tint"></span>' +
       "</div>" +
       '<span class="new-sticker-label">New!</span>';
-    // imgScale debug: shrink sticker bitmaps too
-    el.querySelectorAll("img").forEach(function (im) {
-      attachWebpFallback(im);
-      bindDownsampleOnLoad(im);
-    });
+    const stickNeed = stickerPortraitNeedPx(photoScale);
+    applyStickerRasters(el, stickNeed.w, stickNeed.h);
 
     // Offset toward lower-right of the scaled plate (1500×1000 native)
     const ox = 280 * photoScale;
@@ -11639,7 +11744,7 @@
     if (_lastEncoreBowItem) {
       applyEncoreSpotlightChrome(_lastEncoreBowItem);
     }
-    stage.classList.remove("is-dimmed");
+    setEncoreVeilDimmed(stage, false);
     easePortraitZoomOut(stage);
     if (isEncoreActiveNow()) {
       // Punch-out: fade highlight with veil, do not blink off
@@ -11693,7 +11798,7 @@
     } else {
       applyEncoreSpotlightChrome(null);
     }
-    stage.classList.remove("is-dimmed");
+    setEncoreVeilDimmed(stage, false);
     easePortraitZoomOut(stage);
     if (segEncore) {
       // Same clock as veil / zoom-out — not an instant class strip
@@ -11726,7 +11831,7 @@
       if (rig) rig.style.transition = "";
       stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
-      stage.classList.add("is-dimmed");
+      setEncoreVeilDimmed(stage, true);
       stage.style.setProperty("--encore-zoom", String(zoomTo));
       // List/box highlight arrives with the zoom-in (Encore only)
       if (segEncore) {
@@ -12187,7 +12292,7 @@
       }
       stage.style.setProperty("--encore-zoom", String(zoomTo));
       if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
-      stage.classList.add("is-dimmed");
+      setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
       encoreArmHighlight(slide, style.punchOut);
 
@@ -12229,7 +12334,7 @@
     }
     stage.style.setProperty("--encore-zoom", String(zoomTo));
     if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
-    stage.classList.add("is-dimmed");
+    setEncoreVeilDimmed(stage, true);
     encoreArmHighlight(slide, style.punchOut);
     afterMs(entranceSec * 1000, gen, function () {
       if (rig) rig.style.transition = "";
@@ -12261,7 +12366,7 @@
 
     // Veil out + ease camera toward 1×
     // Hole stays pinched (ENCORE_HOLE_PINCH_OUT is off).
-    stage.classList.remove("is-dimmed");
+    setEncoreVeilDimmed(stage, false);
     stage.classList.add("is-zoom-out");
     if (rig) {
       rig.style.transition = encoreRigTransition(
@@ -14913,6 +15018,26 @@
       return i >= 0 ? s.slice(i + 1) : s;
     }
 
+    function stickerDebugSuffix(root) {
+      if (!root) return "";
+      const imgs = root.querySelectorAll(
+        ".new-sticker-body-img, .new-sticker-shadow"
+      );
+      if (!imgs.length) return "";
+      const parts = [];
+      const seen = {};
+      for (let i = 0; i < imgs.length; i++) {
+        const lab = rasterDebugLabel(
+          imgs[i],
+          imgs[i].getAttribute("src") || imgs[i].dataset.tokiMaster
+        );
+        if (!lab || lab === "none" || seen[lab]) continue;
+        seen[lab] = true;
+        parts.push(lab);
+      }
+      return parts.length ? " · sticker " + parts.join(", ") : "";
+    }
+
     function rasterDebugLabel(img, fallbackPath) {
       let master = fallbackPath || "";
       if (img) {
@@ -15006,15 +15131,24 @@
               ? "scroll on"
               : "scroll 0";
           case "heroPlate":
-            return rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src"));
+            return (
+              rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src")) +
+              stickerDebugSuffix(document.getElementById("new-sticker"))
+            );
           case "heroMulti":
-            return latticeDebugLabel(heroMultiRoot());
+            return (
+              latticeDebugLabel(heroMultiRoot()) +
+              stickerDebugSuffix(document.getElementById("new-sticker"))
+            );
           case "familyPortrait": {
             if (!computeActive("familyPortrait")) return "";
             const stage = els.familyPortrait;
             if (!stage) return "none";
             const plates = stage.querySelector(".family-portrait-plates");
-            return latticeDebugLabel(plates || stage);
+            return (
+              latticeDebugLabel(plates || stage) +
+              stickerDebugSuffix(stage)
+            );
           }
           case "softRefresh":
             if (liveSettings && liveSettings.requireRestart) return "settings";
@@ -15534,6 +15668,7 @@
 
     whenPresentationSurfaceReady(function () {
       freezeDisplayBudget();
+      applyHeroStickerRasters();
       if (startRaw != null) {
         const idx = parseInt(startRaw, 10);
         if (Number.isFinite(idx)) setActive(idx, true);

@@ -875,13 +875,13 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
   opacity: 1;
 }
 
-/* Hard_Shadow lip: only while the veil is actually up. Opacity 0 + filter
-   still composites on Fire Stick (translateZ promoted layer). */
+/* Hard_Shadow lip lives on the veil so opacity fade carries the shadow.
+   .veil-filter-parked drops the filter after fade-out (opacity 0). */
 #family-portrait-stage.encore-spot-hard-shadow .family-portrait-veil {
-  filter: none;
-}
-#family-portrait-stage.encore-spot-hard-shadow.is-dimmed .family-portrait-veil {
   filter: var(--veil-shadow-filter, none);
+}
+#family-portrait-stage.veil-filter-parked .family-portrait-veil {
+  filter: none;
 }
 
 /* ── Soft: smooth falloff (higher black strength than early 0.74/0.79) ── */
