@@ -262,7 +262,11 @@ def git_commit(message: str, full: bool = False) -> bool:
             "docs/", "scripts/", "deprecated/",
             "AGENTS.md", "Agents.md",
             "*.command", "Start Toki Menu.command",
-            "Open Toki Menus.app/", "Toki Git Commit.app/"
+            "Open Toki Menus.app/", "Toki Git Commit.app/",
+            # Display-size rasters (untracked *-sm.webp are skipped by `git add -u`)
+            ":(glob)food-pics/**/*-sm.webp",
+            ":(glob)assets/**/*-sm.webp",
+            ":(glob)assets/stickers/*",
         ], check=False)
         run_git(["add", "-u"], check=False)
 
