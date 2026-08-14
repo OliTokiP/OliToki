@@ -703,21 +703,39 @@
       needW,
       needH
     );
+    const tint = root.querySelector(".new-sticker-tint");
+    function setTintMask(path) {
+      if (!tint || !path) return;
+      let href = path;
+      try {
+        href = new URL(path, document.baseURI).href;
+      } catch (e) {}
+      const url = "url(" + JSON.stringify(href) + ")";
+      tint.style.webkitMaskImage = url;
+      tint.style.maskImage = url;
+    }
+    // Mask has no 404 fallback. Always start on the full body (on live).
+    // After the <img> actually loads, match that file (sm when present).
+    setTintMask(STICKER_BODY_SRC);
     function setImg(img, path) {
       if (!img || !path) return;
       attachWebpFallback(img);
       stampRasterMaster(img, path);
+      if (img.classList.contains("new-sticker-body-img")) {
+        img.addEventListener(
+          "load",
+          function () {
+            const live = img.currentSrc || img.getAttribute("src") || path;
+            if (live && live.indexOf("data:") !== 0) setTintMask(live);
+          },
+          { once: true }
+        );
+      }
       if (img.getAttribute("src") !== path) img.src = path;
       bindDownsampleOnLoad(img);
     }
     setImg(root.querySelector(".new-sticker-body-img"), bodyPath);
     setImg(root.querySelector(".new-sticker-shadow"), shadowPath);
-    const tint = root.querySelector(".new-sticker-tint");
-    if (tint) {
-      const url = "url(\"" + bodyPath + "\")";
-      tint.style.webkitMaskImage = url;
-      tint.style.maskImage = url;
-    }
   }
 
   function applyHeroStickerRasters() {
