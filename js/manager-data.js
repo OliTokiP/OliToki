@@ -81,6 +81,15 @@
     { id: "no", label: "No" },
   ];
 
+  var ZERO_ONE = [
+    { id: "1", label: "On" },
+    { id: "0", label: "Off" },
+  ];
+
+  /* Sheet boolean chrome (manager picks the control from how the cell is stored):
+     trueFalse — cell accepts TRUE/FALSE → two-button popup
+     zeroOne   — cell accepts 0/1       → inline checkbox (look TBD) */
+
   var BOARDS = [
     { id: "1", title: "Board 1", menuTitle: "Bowls & Salads" },
     { id: "2", title: "Board 2", menuTitle: "Handhelds" },
@@ -141,6 +150,7 @@
     encoreSpotColors: ENCORE_SPOT_COLORS,
     fonts: FONTS,
     yesNo: YES_NO,
+    zeroOne: ZERO_ONE,
     boards: BOARDS,
     comingSoonFeatures: COMING_SOON_FEATURES,
     previewItems: PREVIEW_ITEMS,

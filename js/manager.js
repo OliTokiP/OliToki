@@ -12,8 +12,8 @@
     return;
   }
 
-  var LOGO_PATH =
-    "M124.5,61.3s3.2-6.5,14.6-20.7c0,0,11.8-11-2.5-22.2,0,0-8.8-9.6-20.5-2.6,0,0-33.6,18.4-34.2,56.4,0,0-14.1-8.7-32.8,2.1,0,0-4.4-14.6,12.8-42.4,0,0,11.4-13.7-2.5-24.4,0,0-12.3-12.7-28.3,4.7,0,0-18.2,17.4-22.3,43.3,0,0-4.3,31.7,6.1,47.4,0,0-19.8,17.9-8.3,51.5,11.5,33.6,59.7,36.5,59.7,36.5,0,0,45.5,2.6,67.2-32.6,21.1-34.1-15.7-69.2-15.7-69.2-2.1-13.8,7.5-29.1,7.5-29.1";
+  var CHECK_SVG =
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.4 8.2l3.6 3.6 7.6-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   var state = {
     screen: "home",
@@ -129,16 +129,10 @@
     if (meta) meta.setAttribute("content", t.highlight);
   }
 
-  function logoSvg() {
-    return (
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 146.7 193.9" aria-hidden="true">' +
-      '<path class="logo-outline" d="' +
-      LOGO_PATH +
-      '"/>' +
-      '<circle class="logo-eye" cx="100.8" cy="136.6" r="7"/>' +
-      '<circle class="logo-eye" cx="44.3" cy="136.6" r="7"/>' +
-      "</svg>"
-    );
+  function buildVersionLabel() {
+    var b = window.TOKI_BUILD;
+    var hash = b && (b.hash || (b.hashFull && String(b.hashFull).slice(0, 7)));
+    return hash ? "Version " + hash : "Version " + D.version;
   }
 
   function backBtn() {
@@ -175,6 +169,23 @@
 
   function row(opts) {
     var cls = "row" + (opts.child ? " is-child" : "");
+    if (opts.control === "zeroOne") {
+      var on = !!opts.on;
+      return (
+        '<button class="' +
+        cls +
+        ' row-check" type="button" data-act="toggle" data-key="' +
+        opts.key +
+        '">' +
+        '<span class="row-label">' +
+        escapeHtml(opts.label) +
+        '</span><span class="row-check-box' +
+        (on ? " is-on" : "") +
+        '" role="checkbox" aria-checked="' +
+        (on ? "true" : "false") +
+        '"></span></button>'
+      );
+    }
     return (
       '<button class="' +
       cls +
@@ -234,17 +245,17 @@
     return (
       '<section class="screen screen-home">' +
       '<div class="home-hero">' +
+      '<div class="home-cluster">' +
+      '<div class="home-logo" aria-hidden="true"><span class="home-logo-mark"></span></div>' +
+      '<div class="home-copy">' +
       '<p class="home-brand">OliToki</p>' +
       '<p class="home-kicker">MENU MANAGER</p>' +
       '<p class="home-tag">Edit the look, feel and behavior of the OliToki Menu System.</p>' +
-      '<p class="home-ver">Version ' +
-      D.version +
+      '<p class="home-ver">' +
+      escapeHtml(buildVersionLabel()) +
       "</p>" +
-      "</div>" +
+      "</div></div></div>" +
       '<div class="home-body">' +
-      '<div class="home-logo">' +
-      logoSvg() +
-      "</div>" +
       '<div class="home-actions">' +
       '<button class="btn-primary" type="button" data-act="go" data-to="system">System Settings</button>' +
       '<button class="btn-primary" type="button" data-act="go" data-to="menu">Menu Settings</button>' +
@@ -273,15 +284,15 @@
         label: "System Font",
         value: labelOf(D.fonts, state.draft.systemFont),
       }) +
-      "</div>" +
-      '<div class="sheet-wrap">' +
-      '<button class="btn-sheet" type="button" data-act="open-sheet">Google Sheet</button>' +
+      '<button class="row row-sheet" type="button" data-act="open-sheet">' +
+      '<span class="row-value row-value-link">Google Sheet</span>' +
+      "</button>" +
       "</div></section>"
     );
   }
 
   function screenMenu() {
-    var items = '<div class="nav-list">';
+    var items = '<div class="nav-wrap"><div class="nav-list">';
     items +=
       '<button class="nav-item" type="button" data-act="go" data-to="style">Style and Theme</button>';
     D.boards.forEach(function (b) {
@@ -292,7 +303,7 @@
         escapeHtml(b.title) +
         "</button>";
     });
-    items += "</div>";
+    items += "</div></div>";
     return (
       '<section class="screen">' +
       header("Menu Settings") +
@@ -637,6 +648,7 @@
     if (key === "requireRestart") {
       return {
         title: "Require restart to update?",
+        kind: "trueFalse",
         options: D.yesNo,
         get: function () {
           return state.draft.requireRestart;
@@ -668,28 +680,70 @@
       els.picker.innerHTML = "";
       return;
     }
+    var shroud = '<div class="picker-shroud" data-act="picker-dismiss"></div>';
+    if (spec.kind === "trueFalse") {
+      var btns = spec.options
+        .map(function (o) {
+          var on = String(o.id) === String(spec.get());
+          return (
+            '<button class="btn-primary' +
+            (on ? " is-on" : "") +
+            '" type="button" data-act="choose" data-id="' +
+            escapeHtml(o.id) +
+            '">' +
+            escapeHtml(o.label) +
+            "</button>"
+          );
+        })
+        .join("");
+      els.picker.hidden = false;
+      els.picker.innerHTML =
+        shroud +
+        '<div class="picker-card is-binary" role="dialog" aria-labelledby="picker-title">' +
+        '<h2 class="picker-title" id="picker-title">' +
+        escapeHtml(spec.title) +
+        "</h2>" +
+        '<div class="dialog-actions">' +
+        btns +
+        "</div></div>";
+      applyTheme();
+      return;
+    }
     var current = spec.get();
     var note = spec.note
       ? '<p class="picker-note">' + escapeHtml(spec.note) + "</p>"
       : "";
+    var long = spec.options.length >= 6 ? " is-long" : "";
     var opts = spec.options
       .map(function (o) {
         var on = String(o.id) === String(current);
+        var fontStyle = "";
+        if (state.picker === "systemFont") {
+          if (o.id === "poppins") fontStyle = "font-family:Poppins,sans-serif;";
+          if (o.id === "roboto") fontStyle = "font-family:Roboto,sans-serif;";
+        }
         return (
           '<button class="picker-option' +
           (on ? " is-on" : "") +
           '" type="button" data-act="choose" data-id="' +
           escapeHtml(o.id) +
-          '"><span class="picker-label">' +
+          '"' +
+          (fontStyle ? ' style="' + fontStyle + '"' : "") +
+          '><span class="picker-label">' +
           escapeHtml(o.label) +
-          "</span></button>"
+          "</span>" +
+          (on ? '<span class="picker-check">' + CHECK_SVG + "</span>" : "") +
+          "</button>"
         );
       })
       .join("");
     els.picker.hidden = false;
     els.picker.innerHTML =
-      '<div class="picker-panel">' +
-      "<h2 class=\"picker-title\">" +
+      shroud +
+      '<div class="picker-card' +
+      long +
+      '" role="dialog" aria-labelledby="picker-title">' +
+      '<h2 class="picker-title" id="picker-title">' +
       escapeHtml(spec.title) +
       "</h2>" +
       note +
@@ -798,10 +852,28 @@
   }
 
   function openPicker(key) {
-    if (!pickerSpec(key)) return;
+    var spec = pickerSpec(key);
+    if (!spec) return;
+    if (spec.kind === "zeroOne") {
+      toggleZeroOne(key);
+      return;
+    }
     rememberStyleScroll();
     state.picker = key;
     renderPicker();
+  }
+
+  function toggleZeroOne(key) {
+    var spec = pickerSpec(key);
+    if (!spec || !spec.options || spec.options.length < 2) return;
+    var cur = String(spec.get());
+    var next =
+      cur === String(spec.options[0].id)
+        ? spec.options[1].id
+        : spec.options[0].id;
+    spec.set(next);
+    rememberStyleScroll();
+    renderAll();
   }
 
   function choose(id) {
@@ -964,6 +1036,8 @@
       back();
     } else if (act === "pick") {
       openPicker(t.getAttribute("data-key"));
+    } else if (act === "toggle") {
+      toggleZeroOne(t.getAttribute("data-key"));
     } else if (act === "choose") {
       choose(t.getAttribute("data-id"));
     } else if (act === "pill") {
@@ -978,6 +1052,9 @@
     } else if (act === "create-cancel") {
       state.dialog = null;
       renderDialog();
+    } else if (act === "picker-dismiss") {
+      state.picker = null;
+      renderPicker();
     } else if (act === "open-sheet") {
       openSheet();
     } else if (act === "toast-add") {
