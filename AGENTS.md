@@ -48,6 +48,9 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - Prefer existing patterns: `parseTextAlign`, `parseYesNo`, `fitBoxScale`, `setBoxTextAlign`
 - **Beta / footer boxes:** inject via `applyBetaFooterBoxesOverride` only — prefetch sheets in `csvJobs`, **await** attach, outer-scope helpers only, full HTML/CSS/layout/render slice for new box types (see BETA_FEATURES.md). Beta errors must not fail the whole Google load.
 - Footer **Priority**: lower number = higher priority (1 = leftmost / major). Max **3** boxes; rest are **exiled** (not painted).
+- QA lives in the iCloud Obsidian vault **OliToki Menu → QA**. Never edit Apple Notes originals. Ticket shape is being chosen (`QA/Ticket styles/` — A Ticket, B Pass table, C Critique thread, D Spec card). Don’t invent a fifth format. See [docs/QA_Protocol.md](docs/QA_Protocol.md).
+- **Menu Manager Style preview = the live board.** Measure mock geometry in native page units (PDF 400×300). Stay within ~5% of those numbers. Motion *times* come from `js/motion-presets.js` (same digits as `menu.js`); zoom *sizes* scale to the preview form factor. Active list color is Highlight; New items use Highlight Special. Never invent preview-only timings or unmeasured rectangles.
+- Motion styles: implement [docs/MOTION_GLOSSARY.md](docs/MOTION_GLOSSARY.md). Do not approximate Encore/Ken Burns/Slideshow.
 
 ## Safety
 

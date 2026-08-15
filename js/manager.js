@@ -23,6 +23,7 @@
     draft: clone(D.defaultDraft),
     committed: clone(D.defaultDraft),
     previewIndex: 0,
+    holdGrid: false,
     previewTimer: null,
     toastTimer: null,
     styleScroll: 0,
@@ -40,6 +41,8 @@
     itemIndex: 0,
     stripeY: 0,
     wp: null,
+    lattice: null,
+    encoreFirst: true,
   };
 
   var els = {};
@@ -490,6 +493,15 @@
     return paper;
   }
 
+  function encoreStageClass(d) {
+    var type = d.encoreStyle === "soft" ? "soft" : "hard";
+    var cls = "encore-spot-" + (d.encoreStyle === "hard_shadow" ? "hard-shadow" : type);
+    if (d.encoreStyle === "hard_shadow") cls += " encore-spot-hard";
+    if (d.encoreSpot === "highlight") cls += " encore-spot-color-highlight";
+    else cls += " encore-spot-color-black";
+    return cls;
+  }
+
   function wallpaperSrc() {
     var paper = wallpaperPaper();
     return paper && paper.src ? paper.src : "";
@@ -508,28 +520,35 @@
       : d.background === "pattern" || d.background === "wallpaper"
         ? roleHex("main")
         : roleHex(d.background);
-    var veilKind =
-      d.encoreStyle === "soft"
-        ? "soft"
-        : d.encoreStyle === "hard"
-          ? "hard"
-          : "hard-shadow";
-    var veilFill =
-      d.encoreSpot === "highlight" ? currentTheme().highlight : "#000000";
     var wp = wallpaperSrc();
     var wpFb = wallpaperFallback();
     var first = D.previewItems[0] || { src: "", isNew: false };
+    var n;
+    var nums = "";
+    for (n = 0; n < D.previewItems.length; n++) {
+      var on = n === (state.previewIndex || 0);
+      var neu = !!(D.previewItems[n] && D.previewItems[n].isNew);
+      var cls = (on ? " is-on" : "") + (on && neu ? " is-new" : "");
+      nums +=
+        '<span data-n="' +
+        n +
+        '"' +
+        (cls ? ' class="' + cls.trim() + '"' : "") +
+        ">" +
+        (n + 1) +
+        "</span>";
+    }
     return (
-      '<div class="preview" style="--preview-fill:' +
+      '<div class="preview' +
+      (encore ? " is-encore" : "") +
+      '" style="--preview-fill:' +
       fill +
       ";--pattern-a:" +
       bakePatternHex(roleHex(d.patternColor1)) +
       ";--pattern-b:" +
       bakePatternHex(roleHex(d.patternColor2)) +
-      ";--veil-fill:" +
-      veilFill +
       '">' +
-      '<div class="preview-clip">' +
+      '<div class="preview-stage">' +
       '<div class="preview-layer preview-solid"></div>' +
       '<div class="preview-layer preview-pattern"' +
       (encore || d.background !== "pattern" ? " hidden" : "") +
@@ -551,7 +570,17 @@
       '<div class="preview-anim">' +
       '<img class="preview-food" alt="" src="' +
       escapeHtml(first.src) +
-      '"></div>' +
+      '"></div></div>' +
+      '<div class="preview-fp-world' +
+      (encore ? " " + encoreStageClass(d) : "") +
+      '">' +
+      '<div class="family-portrait-rig">' +
+      '<div class="family-portrait-plates"></div></div></div>' +
+      '<div class="preview-encore-shroud' +
+      (encore ? " " + encoreStageClass(d) : "") +
+      '"' +
+      (encore ? "" : " hidden") +
+      "></div></div>" +
       '<div class="preview-sticker"' +
       (first.isNew ? "" : " hidden") +
       ">" +
@@ -563,13 +592,15 @@
       D.sticker.body +
       '">' +
       '<span class="preview-sticker-tint"></span></div>' +
-      '<span class="preview-sticker-label">New!</span>' +
-      "</div></div></div>" +
-      '<div class="preview-layer preview-veil is-' +
-      veilKind +
-      '"' +
-      (encore ? "" : " hidden") +
-      "></div></div>"
+      '<span class="preview-sticker-label">New!</span></div>' +
+      '<div class="preview-frame" aria-hidden="true">' +
+      '<div class="preview-frame-header"></div>' +
+      '<div class="preview-frame-panel"></div></div>' +
+      '<div class="preview-logo" aria-hidden="true">' +
+      '<img src="assets/TokiLogoFix.svg?v=20260815qa4" alt=""></div>' +
+      '<div class="preview-nums" aria-hidden="true">' +
+      nums +
+      "</div></div>"
     );
   }
 
@@ -875,7 +906,6 @@
         '<div class="dialog-card" role="dialog">' +
         "<h2>Create New Theme</h2>" +
         '<input class="dialog-input" id="theme-name" type="text" maxlength="32" placeholder="Theme name" value="Custom Theme">' +
-        '<p class="dialog-gate" id="theme-gate" hidden>Theme Authoring Coming Soon</p>' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="create-save">Create</button>' +
         '<button class="btn-primary" type="button" data-act="create-cancel">Cancel</button>' +
@@ -892,12 +922,22 @@
   }
 
   function toast(msg) {
-    els.toast.hidden = false;
-    els.toast.textContent = msg;
+    var el = els.toast;
+    el.hidden = false;
+    el.textContent = msg;
+    el.classList.remove("is-out");
+    el.classList.remove("is-on");
+    void el.offsetWidth;
+    el.classList.add("is-on");
     clearTimeout(state.toastTimer);
     state.toastTimer = setTimeout(function () {
-      els.toast.hidden = true;
-    }, 2400);
+      el.classList.remove("is-on");
+      el.classList.add("is-out");
+      state.toastTimer = setTimeout(function () {
+        el.hidden = true;
+        el.classList.remove("is-out");
+      }, 380);
+    }, 4000);
   }
 
   function rememberStyleScroll() {
@@ -996,7 +1036,7 @@
     inp.setAttribute("data-bound", "1");
     inp.addEventListener("change", function () {
       if (inp.files && inp.files.length) {
-        toast("Theme Authoring Coming Soon");
+        toast("Upload coming soon");
       }
       inp.value = "";
     });
@@ -1085,8 +1125,6 @@
   }
 
   function gateNewTheme() {
-    var gate = document.getElementById("theme-gate");
-    if (gate) gate.hidden = false;
     toast("Theme Authoring Coming Soon");
   }
 
@@ -1099,15 +1137,27 @@
   }
 
   function motionPhases() {
-    var m = D.motionDefaults;
+    var TM = window.TOKI_MOTION;
+    var mode = state.draft.presentation;
+    var style = TM
+      ? TM.styleByMode(mode)
+      : D.motionDefaults;
     var speed = Number(state.draft.presentationSpeed) || 0;
-    var scale = (m.previewScale || 0.7) / Math.max(1, speed);
+    var encore = mode === "encore";
+    var kb = mode === "kenburns";
+    var punchIn = style.punchIn != null ? style.punchIn : 3.4;
+    var punchOut = style.punchOut != null ? style.punchOut : 0.45;
+    var holdRaw = style.hold != null ? style.hold : 1;
+    var hold = encore && TM ? TM.encoreHold(holdRaw) : holdRaw;
+    var veilIn = encore && TM ? TM.encoreVeilIn(punchIn) : Math.min(0.45, punchIn);
     return {
-      punchIn: m.punchIn * scale,
-      hold: m.hold * scale,
-      punchOut: m.punchOut * scale,
-      zoomMin: m.zoomMin,
-      zoomMax: m.zoomMax,
+      punchIn: punchIn,
+      hold: hold,
+      punchOut: punchOut,
+      veilIn: veilIn,
+      opacityDur: TM ? TM.OPACITY_DUR : 0.45,
+      zoomMin: kb ? 0.93 : 1,
+      zoomMax: kb ? 1 : encore ? (style.zoomTo || 1.24) : 1,
       paused: speed <= 0,
     };
   }
@@ -1120,20 +1170,263 @@
     previewCtl.timers.push(id);
   }
 
+  function spotlightHex(item) {
+    if (state.draft.encoreSpot === "highlight") {
+      return item && item.isNew ? currentTheme().special : currentTheme().highlight;
+    }
+    return "#000000";
+  }
+
+  function armHighlightClock(sec) {
+    var s = sec > 0 ? sec : 0.45;
+    document.documentElement.style.setProperty("--motion-highlight", s + "s");
+  }
+
+  function highlightColorForItem(item) {
+    return item && item.isNew ? currentTheme().special : currentTheme().highlight;
+  }
+
+  function syncPreviewNums(index, fadeOut) {
+    var nums = els.app.querySelectorAll(".preview-nums [data-n]");
+    var items = D.previewItems;
+    var item = items[index];
+    var color = highlightColorForItem(item);
+    var preview = els.app.querySelector(".preview");
+    if (preview) preview.style.setProperty("--item-highlight", color);
+    for (var i = 0; i < nums.length; i++) {
+      var n = Number(nums[i].getAttribute("data-n"));
+      nums[i].classList.toggle("is-on", !fadeOut && n === index);
+    }
+  }
+
+  function encoreWorldEl() {
+    return els.app.querySelector(".preview-fp-world");
+  }
+
+  function encoreShroudEl() {
+    return els.app.querySelector(".preview-encore-shroud");
+  }
+
+  function encoreRigEl() {
+    return els.app.querySelector(".preview-fp-world .family-portrait-rig");
+  }
+
+  function imageBoxOrigin() {
+    var preview = els.app.querySelector(".preview");
+    var h = preview && preview.clientHeight ? preview.clientHeight : 0;
+    var u = h / 300;
+    return {
+      x: 250 * u,
+      y: 150 * u,
+      u: u,
+      h: h,
+      w: preview ? preview.clientWidth : 0,
+    };
+  }
+
+  function encorePinchPx() {
+    if (state.draft.encoreStyle === "soft") return 0;
+    var TM = window.TOKI_MOTION;
+    var o = imageBoxOrigin();
+    var holeR = 0.42 * 300 * o.u;
+    if (TM && TM.scaledHolePinch) return TM.scaledHolePinch(holeR);
+    return holeR ? 40 * (holeR / 160) : 40;
+  }
+
+  function currentLatticeSlot() {
+    var layout = previewCtl.lattice;
+    if (!layout || !layout.slots || !layout.slots.length) return null;
+    var i = state.previewIndex || 0;
+    return layout.slots[i] || layout.slots[0] || null;
+  }
+
+  function placeEncoreWorld() {
+    var world = encoreWorldEl();
+    var slot = currentLatticeSlot();
+    var o = imageBoxOrigin();
+    if (!world || o.h <= 0) return;
+    var s = o.h / 1080;
+    world.style.transform = "scale(" + s + ")";
+    if (!slot) return;
+    world.style.left = o.x - slot.x * s + "px";
+    world.style.top = o.y - slot.y * s + "px";
+    world.style.setProperty("--encore-hole-x", slot.x + "px");
+    world.style.setProperty("--encore-hole-y", slot.y + "px");
+  }
+
+  function setEncoreOrigin() {
+    var preview = els.app.querySelector(".preview");
+    var o = imageBoxOrigin();
+    if (preview) {
+      preview.style.setProperty("--encore-hole-x", o.x + "px");
+      preview.style.setProperty("--encore-hole-y", o.y + "px");
+      preview.style.setProperty("--encore-hole-r", 0.42 * 300 * o.u + "px");
+    }
+    placeEncoreWorld();
+  }
+
+  function appendPreviewPortraitSticker(slotEl, photoScale) {
+    var el = document.createElement("div");
+    el.className = "family-portrait-sticker";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML =
+      '<img class="new-sticker-shadow" alt="" src="' +
+      D.sticker.shadow +
+      '">' +
+      '<div class="new-sticker-body">' +
+      '<img class="new-sticker-body-img" alt="" src="' +
+      D.sticker.body +
+      '">' +
+      '<span class="new-sticker-tint"></span></div>' +
+      '<span class="new-sticker-label">New!</span>';
+    var ox = 280 * photoScale;
+    var oy = 160 * photoScale;
+    el.style.left = "calc(50% + " + ox + "px)";
+    el.style.top = "calc(50% + " + oy + "px)";
+    var stickScale = Math.max(0.16, Math.min(0.4, photoScale * 0.9));
+    el.style.transform = "translate(-50%, -50%) scale(" + stickScale + ")";
+    slotEl.appendChild(el);
+  }
+
+  function fillPortraitGrid() {
+    var host = els.app.querySelector(
+      ".preview-fp-world .family-portrait-plates"
+    );
+    var world = encoreWorldEl();
+    var L = window.TOKI_LATTICE;
+    if (!host || !L) return null;
+    host.innerHTML = "";
+    var items = D.previewItems;
+    var layout = L.buildPortraitLayout(items.length);
+    previewCtl.lattice = layout;
+    var i;
+    for (i = 0; i < items.length; i++) {
+      var slot = layout.slots[i];
+      var it = items[i];
+      if (!slot || !it) continue;
+      var wrap = document.createElement("div");
+      wrap.className = "family-portrait-slot";
+      wrap.style.left = slot.x + "px";
+      wrap.style.top = slot.y + "px";
+      wrap.style.zIndex = String(slot.zIndex);
+      var img = document.createElement("img");
+      img.className = "family-portrait-item";
+      img.alt = "";
+      img.draggable = false;
+      img.src = it.src;
+      img.style.transform =
+        "translate(-50%, -50%) scale(" + layout.scale + ")";
+      wrap.appendChild(img);
+      if (it.isNew) appendPreviewPortraitSticker(wrap, layout.scale);
+      host.appendChild(wrap);
+    }
+    try {
+      var q = new URLSearchParams(location.hash.split("?")[1] || location.search || "");
+      if (world && (q.get("portraitDebug") === "1" || q.get("portraitDebug") === "true")) {
+        world.classList.add("portrait-debug");
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    setEncoreOrigin();
+    return layout;
+  }
+
+  function applyEncoreChrome(item) {
+    var world = encoreWorldEl();
+    var shroud = encoreShroudEl();
+    var nodes = [world, shroud];
+    var d = state.draft;
+    var n;
+    for (n = 0; n < nodes.length; n++) {
+      if (!nodes[n]) continue;
+      nodes[n].classList.remove(
+        "encore-spot-hard",
+        "encore-spot-hard-shadow",
+        "encore-spot-soft",
+        "encore-spot-color-highlight",
+        "encore-spot-color-black"
+      );
+      if (d.encoreStyle === "soft") nodes[n].classList.add("encore-spot-soft");
+      else if (d.encoreStyle === "hard_shadow") {
+        nodes[n].classList.add("encore-spot-hard", "encore-spot-hard-shadow");
+      } else {
+        nodes[n].classList.add("encore-spot-hard");
+      }
+      if (d.encoreSpot === "highlight") {
+        nodes[n].classList.add("encore-spot-color-highlight");
+      } else {
+        nodes[n].classList.add("encore-spot-color-black");
+      }
+    }
+    var preview = els.app.querySelector(".preview");
+    if (preview) {
+      preview.style.setProperty("--encore-veil-color", spotlightHex(item));
+    }
+    setEncoreOrigin();
+  }
+
+  function setEncoreZoom(scale) {
+    var world = encoreWorldEl();
+    if (world) world.style.setProperty("--encore-zoom", String(scale));
+  }
+
+  function setEncorePinch(px) {
+    var preview = els.app.querySelector(".preview");
+    var shroud = encoreShroudEl();
+    var v = Math.max(0, px) + "px";
+    if (preview) preview.style.setProperty("--encore-hole-pinch", v);
+    if (shroud) shroud.style.setProperty("--encore-hole-pinch", v);
+  }
+
+  function snapEncoreCamera(zoom, pinch) {
+    var rig = encoreRigEl();
+    var shroud = encoreShroudEl();
+    if (rig) rig.style.transition = "none";
+    if (shroud) shroud.style.transition = "none";
+    setEncoreZoom(zoom);
+    setEncorePinch(pinch);
+    void (rig && rig.offsetWidth);
+  }
+
+  function encoreRigTransition(sec, easeVar, includePinch) {
+    var t = "transform " + sec + "s var(" + easeVar + ", ease)";
+    if (includePinch) {
+      t += ", --encore-hole-pinch " + sec + "s var(" + easeVar + ", ease)";
+    }
+    return t;
+  }
+
+  function setEncoreDimmed(on, veilSec) {
+    var shroud = encoreShroudEl();
+    var preview = els.app.querySelector(".preview");
+    if (veilSec != null && preview) {
+      preview.style.setProperty("--motion-veil", veilSec + "s");
+    }
+    if (shroud) {
+      if (veilSec != null) {
+        shroud.style.transition =
+          "opacity " + veilSec + "s var(--ease-fade, ease)";
+      }
+      shroud.classList.toggle("is-dimmed", !!on);
+    }
+  }
+
+  function setEncoreStageVisible(on) {
+    var world = encoreWorldEl();
+    if (world) world.classList.toggle("is-visible", !!on);
+  }
+
   function applyPreviewItem(item) {
     var img = els.app.querySelector(".preview-food");
     var sticker = els.app.querySelector(".preview-sticker");
-    var veil = els.app.querySelector(".preview-veil");
     if (img) img.src = item.src;
     if (sticker) sticker.hidden = !item.isNew;
-    if (veil) {
-      var fill = item.isNew
-        ? currentTheme().special
-        : state.draft.encoreSpot === "highlight"
-          ? currentTheme().highlight
-          : "#000000";
-      veil.style.setProperty("--veil-fill", fill);
+    if (state.draft.presentation === "encore") {
+      applyEncoreChrome(item);
     }
+    armHighlightClock(motionPhases().punchOut);
+    syncPreviewNums(state.previewIndex || 0, false);
   }
 
   function currentScale(el) {
@@ -1147,29 +1440,33 @@
     return 1;
   }
 
-  function setPlate(opacity, zoom, dur) {
+  function setPlate(opacity, zoom, dur, kind) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
     if (!plate) return;
-    var fade = Math.min(0.45, Math.max(0.02, dur || 0.45));
-    var move = Math.max(0.02, dur || 0.45);
-    plate.style.transition = "opacity " + fade + "s ease";
+    var phases = motionPhases();
+    var fade = phases.opacityDur;
+    var move = Math.max(0.02, dur || phases.punchIn);
+    var ease =
+      kind === "out"
+        ? "var(--ease-fade, cubic-bezier(0.4, 0, 0.2, 1))"
+        : "var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1))";
+    plate.style.transition = "opacity " + fade + "s " + ease;
     if (anim) {
-      anim.style.transition = "transform " + move + "s ease-out";
+      anim.style.transition = "transform " + move + "s " + ease;
       anim.style.setProperty("--hero-zoom", String(zoom));
     }
     plate.style.opacity = String(opacity);
-    var veil = els.app.querySelector(".preview-veil");
-    if (veil && state.draft.presentation === "encore") {
-      veil.style.transition = "opacity " + fade + "s ease";
-      veil.style.opacity = String(opacity);
+    var sticker = els.app.querySelector(".preview-sticker");
+    if (sticker && !sticker.hidden) {
+      sticker.style.transition = "opacity " + fade + "s " + ease;
+      sticker.style.opacity = String(opacity);
     }
   }
 
   function snapPlate(opacity, zoom) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
-    var veil = els.app.querySelector(".preview-veil");
     if (plate) {
       plate.style.transition = "none";
       plate.style.opacity = String(opacity);
@@ -1178,10 +1475,10 @@
       anim.style.transition = "none";
       anim.style.setProperty("--hero-zoom", String(zoom));
     }
-    if (veil) {
-      veil.style.transition = "none";
-      veil.style.opacity =
-        state.draft.presentation === "encore" ? String(opacity) : "0";
+    var sticker = els.app.querySelector(".preview-sticker");
+    if (sticker) {
+      sticker.style.transition = "none";
+      sticker.style.opacity = sticker.hidden ? "0" : String(opacity);
     }
     void (plate && plate.offsetWidth);
   }
@@ -1297,24 +1594,112 @@
     if (gen !== previewCtl.gen) return;
     var phases = motionPhases();
     var mode = state.draft.presentation;
+    var encore = mode === "encore";
+    var TM = window.TOKI_MOTION;
+    var zoomTo = TM && TM.ENCORE ? TM.ENCORE.zoomTo : 1.24;
     previewCtl.phase = phase;
     var tgt = phaseTarget(phase, phases, mode);
+    var rig = encoreRigEl();
+
     if (phases.paused) {
       previewCtl.phaseDur = 0;
-      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.25);
+      if (encore) {
+        setEncoreOrigin(currentLatticeSlot());
+        setEncoreStageVisible(true);
+        if (state.holdGrid) {
+          snapEncoreCamera(1, 0);
+          setEncoreDimmed(false, 0);
+        } else {
+          snapEncoreCamera(zoomTo, encorePinchPx());
+          setEncoreDimmed(true, 0.2);
+        }
+      } else {
+        setPlate(1, tgt.zoom, 0.25, "in");
+      }
+      armHighlightClock(phases.punchOut);
+      syncPreviewNums(state.previewIndex || 0, false);
       return;
     }
+
     previewCtl.phaseDur = Math.max(0.03, tgt.dur);
     previewCtl.phaseT0 = performance.now();
-    if (snap) snapPlate(phase === "out" ? 1 : 0, phase === "out" ? tgt.zoom : (mode === "slideshow" ? 1 : phases.zoomMin));
-    if (phase === "in" && snap) {
+    armHighlightClock(phases.punchOut);
+
+    if (encore && phase === "in") {
+      var first = !!previewCtl.encoreFirst;
+      previewCtl.encoreFirst = false;
+      setEncoreOrigin(currentLatticeSlot());
+      if (first) {
+        snapEncoreCamera(1, 0);
+        setEncoreDimmed(false, 0);
+        setEncoreStageVisible(false);
+        void (encoreWorldEl() && encoreWorldEl().offsetWidth);
+        setEncoreStageVisible(true);
+      } else {
+        setEncoreDimmed(false, 0);
+        snapEncoreCamera(1, 0);
+        setEncoreOrigin(currentLatticeSlot());
+      }
       previewAfter(20, gen, function () {
-        setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur);
+        var preview = els.app.querySelector(".preview");
+        if (rig) {
+          rig.style.transition = encoreRigTransition(
+            phases.punchIn,
+            "--ease-out",
+            false
+          );
+        }
+        if (preview) {
+          preview.style.transition =
+            "--encore-hole-pinch " +
+            phases.punchIn +
+            "s var(--ease-out, ease)";
+        }
+        setEncoreZoom(zoomTo);
+        setEncorePinch(encorePinchPx());
+        setEncoreDimmed(true, phases.veilIn);
+        syncPreviewNums(state.previewIndex || 0, false);
         schedulePhaseEnd(gen);
       });
       return;
     }
-    setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur);
+
+    if (encore && phase === "out") {
+      setEncoreDimmed(false, phases.punchOut);
+      if (rig) {
+        rig.style.transition = encoreRigTransition(
+          phases.punchOut,
+          "--ease-fade",
+          false
+        );
+      }
+      setEncoreZoom(1);
+      syncPreviewNums(state.previewIndex || 0, true);
+      schedulePhaseEnd(gen);
+      return;
+    }
+
+    if (encore && phase === "hold") {
+      schedulePhaseEnd(gen);
+      return;
+    }
+
+    if (snap) {
+      snapPlate(
+        phase === "out" ? 1 : 0,
+        phase === "out" ? tgt.zoom : phases.zoomMin
+      );
+    }
+    if (phase === "in" && snap) {
+      previewAfter(20, gen, function () {
+        setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur, "in");
+        syncPreviewNums(state.previewIndex || 0, false);
+        schedulePhaseEnd(gen);
+      });
+      return;
+    }
+    if (phase === "out") syncPreviewNums(state.previewIndex || 0, true);
+    setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur, phase === "out" ? "out" : "in");
     schedulePhaseEnd(gen);
   }
 
@@ -1339,6 +1724,18 @@
     previewCtl.timers = [];
     if (!previewCtl.phase) {
       runPreviewBlock(state.previewIndex || 0, gen);
+      return;
+    }
+    if (mode === "encore") {
+      if (phases.paused) {
+        setEncoreOrigin(currentLatticeSlot());
+        setEncoreStageVisible(true);
+        snapEncoreCamera(phases.zoomMax, encorePinchPx());
+        setEncoreDimmed(true, 0.2);
+        syncPreviewNums(state.previewIndex || 0, false);
+        return;
+      }
+      beginPhase(previewCtl.phase, gen, false);
       return;
     }
     if (phases.paused) {
@@ -1384,6 +1781,11 @@
 
   function startPreviewCycle() {
     stopPreviewCycle();
+    previewCtl.encoreFirst = true;
+    previewCtl.lattice = null;
+    if (state.draft.presentation === "encore") {
+      fillPortraitGrid();
+    }
     var gen = previewCtl.gen;
     previewCtl.wp = null;
     bindPillDrag();
@@ -1517,6 +1919,8 @@
     }
     if (params.get("bg")) state.draft.background = params.get("bg");
     if (params.get("pres")) state.draft.presentation = params.get("pres");
+    if (params.get("spot")) state.draft.encoreSpot = params.get("spot");
+    if (params.get("ebg")) state.draft.encoreBg = params.get("ebg");
     if (params.get("item")) {
       var n = parseInt(params.get("item"), 10);
       if (!isNaN(n)) state.previewIndex = n;
@@ -1524,6 +1928,11 @@
     if (params.get("speed") != null && params.get("speed") !== "") {
       var sp = parseInt(params.get("speed"), 10);
       if (!isNaN(sp)) state.draft.presentationSpeed = sp;
+    }
+    if (params.get("holdGrid") === "1") {
+      state.draft.presentation = "encore";
+      state.draft.presentationSpeed = 0;
+      state.holdGrid = true;
     }
   }
 

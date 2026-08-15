@@ -1,6 +1,18 @@
 /* OliToki Menu Manager — mobile-first layout prototype.
    Theme tokens are live CSS variables; chrome restyles with the draft theme. */
 
+@property --encore-hole-pinch {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --encore-zoom {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 :root {
   --main: #000000;
   --secondary: #ffffff;
@@ -496,29 +508,132 @@ img {
   background: var(--secondary);
 }
 
+/* Same top slot as every other page (--top-slot-h = device-w × 2/3).
+   PDF mock is 400×300; --u maps one PDF point into that slot (fit by height). */
 .preview {
   position: relative;
-  z-index: 4;
+  z-index: 1;
+  width: 100%;
   flex: 0 0 var(--top-slot-h);
   height: var(--top-slot-h);
-  overflow: visible;
+  overflow: hidden;
   background: var(--main);
   touch-action: none;
   overscroll-behavior: none;
-  --stripe-width: 93px;
-  --stripe-period: 186px;
+  --u: calc(var(--top-slot-h) / 300);
+  --stripe-width: 69.75px;
+  --stripe-period: 139.5px;
   --stripe-angle: -51.5deg;
-  --veil-extra-top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
-  --veil-hole-x: 50%;
-  --veil-hole-y: calc(var(--veil-extra-top) + var(--top-slot-h) * 0.5);
-  --veil-hole-r: min(118px, calc(var(--top-slot-h) * 0.42));
+  --ease-fade: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* 400×300 panel ÷ 4 columns × 3 rows. Green tile = col 3, row 2 (1-based). */
+  --cell: calc(100 * var(--u));
+  --origin-x: calc(var(--cell) * 2.5);
+  --origin-y: calc(var(--cell) * 1.5);
+  --plate-w: calc(var(--cell) * 3);
+  --plate-h: calc(var(--cell) * 2);
+  --encore-hole-x: var(--origin-x);
+  --encore-hole-y: var(--origin-y);
+  --encore-hole-r: calc(var(--plate-w) * 0.42);
+  --encore-hole-pinch: 0px;
+  --encore-veil-color: #000000;
+  --motion-veil: 1.7s;
+  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
 }
 
-.preview-clip {
+.preview-stage {
   position: absolute;
   inset: 0;
   overflow: hidden;
   z-index: 0;
+}
+
+/* One trapezoid (PDF objects 01+02). White band is a section of that shape. */
+.preview-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  clip-path: polygon(
+    0 0,
+    calc(103.332 * var(--u)) 0,
+    calc(120.793 * var(--u)) 100%,
+    0 100%
+  );
+}
+
+.preview-frame-header {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: calc(77.5 * var(--u));
+  background: var(--secondary);
+}
+
+.preview-frame-panel {
+  position: absolute;
+  left: 0;
+  top: calc(77.5 * var(--u));
+  right: 0;
+  bottom: 0;
+  background: var(--main);
+}
+
+.preview-logo {
+  position: absolute;
+  z-index: 6;
+  left: calc(30.13 * var(--u));
+  top: calc(8.89 * var(--u));
+  width: calc(43.33 * var(--u));
+  height: calc(57.15 * var(--u));
+  pointer-events: none;
+}
+
+.preview-logo img,
+.preview-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.preview-nums {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  color: var(--secondary);
+  font-weight: 700;
+  font-size: calc(22 * var(--u));
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.preview-nums span {
+  position: absolute;
+  left: calc(36 * var(--u));
+  width: calc(32 * var(--u));
+  text-align: center;
+  transform: translateY(-50%);
+  color: var(--secondary);
+  transition: color var(--motion-highlight, 0.45s) var(--ease-fade);
+}
+
+.preview-nums span[data-n="0"] {
+  top: calc(121.49 * var(--u));
+}
+
+.preview-nums span[data-n="1"] {
+  top: calc(188.13 * var(--u));
+}
+
+.preview-nums span[data-n="2"] {
+  top: calc(255.08 * var(--u));
+}
+
+.preview-nums span.is-on {
+  color: var(--item-highlight, var(--highlight));
 }
 
 .preview-layer {
@@ -581,46 +696,274 @@ img {
   user-select: none;
 }
 
+/* Hero plate: 3:2 box, 3 cells × 2 cells, centered on the green tile. */
 .preview-plate {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+  left: calc(var(--origin-x) - var(--plate-w) / 2);
+  top: calc(var(--origin-y) - var(--plate-h) / 2);
+  width: var(--plate-w);
+  height: var(--plate-h);
   overflow: visible;
   opacity: 0;
   z-index: 1;
 }
 
-.preview-anim {
-  position: relative;
+.preview-plate .preview-anim {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+}
+
+.preview.is-encore .preview-plate,
+.preview.is-encore .preview-sticker {
+  display: none;
+}
+
+/* Live Family Portrait lattice (848.1×1080). JS scales it and parks the
+   active slot on --origin-x/y so the camera and the image box share an origin. */
+.preview-fp-world {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 848.1px;
+  height: 1080px;
+  transform-origin: 0 0;
+  transform: scale(calc(var(--top-slot-h) / 1080px));
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+  isolation: isolate;
+  opacity: 0;
+  --encore-zoom: 1;
+  --encore-hole-x: 50%;
+  --encore-hole-y: 50%;
+}
+
+.preview.is-encore .preview-fp-world {
+  display: block;
+}
+
+.preview-fp-world.is-visible {
+  opacity: 1;
+  transition: opacity 0.45s var(--ease-fade);
+}
+
+.preview-fp-world .family-portrait-rig {
+  position: absolute;
+  inset: 0;
+  transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
+  transform: scale(var(--encore-zoom, 1));
+}
+
+.preview-fp-world .family-portrait-plates {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+}
+
+.preview-fp-world.encore-spot-hard-shadow .family-portrait-plates {
+  filter: none;
+}
+
+.preview-fp-world .family-portrait-slot {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.preview-fp-world .family-portrait-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1500px;
+  height: 1000px;
+  max-width: none;
+  object-fit: fill;
+  transform-origin: center center;
+  user-select: none;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.preview-fp-world .family-portrait-sticker {
+  position: absolute;
+  width: 560px;
+  aspect-ratio: 1 / 1;
+  font-size: 560px;
+  pointer-events: none;
+  user-select: none;
+  transform-origin: center center;
+  z-index: 3;
+}
+
+.preview-fp-world .family-portrait-sticker .new-sticker-shadow {
+  display: none;
+}
+
+.preview-fp-world .family-portrait-sticker .new-sticker-body,
+.preview-fp-world .family-portrait-sticker .new-sticker-body-img,
+.preview-fp-world .family-portrait-sticker .new-sticker-tint {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-fp-world .family-portrait-sticker .new-sticker-body {
+  z-index: 1;
+  isolation: isolate;
+}
+
+.preview-fp-world .family-portrait-sticker .new-sticker-body-img {
+  object-fit: contain;
+  z-index: 0;
+}
+
+.preview-fp-world .family-portrait-sticker .new-sticker-tint {
+  z-index: 1;
+  background-color: var(--special);
+  mix-blend-mode: color;
+  pointer-events: none;
+  -webkit-mask-image: url("../assets/stickers/Sticker-Body.webp");
+  mask-image: url("../assets/stickers/Sticker-Body.webp");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+.preview-fp-world .family-portrait-sticker .new-sticker-label {
+  position: absolute;
+  z-index: 2;
+  left: 48.05%;
+  top: 54.1%;
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(-7.25deg) translateX(2px);
+  font-family: "Roboto", var(--font);
+  font-weight: 900;
+  font-size: 0.257em;
+  line-height: 1;
+  color: #fff;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+/* Shroud = photo trapezoid (complement of the frame). Four corners, no gap. */
+.preview-encore-shroud {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-veil, 1.7s) var(--ease-fade);
+  clip-path: polygon(
+    calc(103.332 * var(--u)) 0,
+    100% 0,
+    100% 100%,
+    calc(120.793 * var(--u)) 100%
+  );
+  -webkit-clip-path: polygon(
+    calc(103.332 * var(--u)) 0,
+    100% 0,
+    100% 100%,
+    calc(120.793 * var(--u)) 100%
+  );
+}
+
+.preview.is-encore .preview-encore-shroud {
+  display: block;
+}
+
+.preview-encore-shroud.encore-spot-hard,
+.preview-encore-shroud.encore-spot-hard-shadow {
+  mix-blend-mode: normal;
+  background: radial-gradient(
+    circle
+      max(
+        40px,
+        calc(var(--encore-hole-r) - var(--encore-hole-pinch, 0px))
+      )
+      at var(--encore-hole-x) var(--encore-hole-y),
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 99%,
+    var(--encore-veil-color, #000) 100%
+  );
+}
+
+.preview-encore-shroud.encore-spot-hard-shadow {
+  filter: var(--veil-shadow-filter);
+}
+
+.preview-encore-shroud.encore-spot-soft {
+  mix-blend-mode: multiply;
+  background: radial-gradient(
+    circle calc(var(--encore-hole-r) * 1.85) at var(--encore-hole-x)
+      var(--encore-hole-y),
+    transparent 0%,
+    transparent 8%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 12%, transparent) 18%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 28%, transparent) 30%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 48%, transparent) 42%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 68%, transparent) 55%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 85%, transparent) 70%,
+    var(--encore-veil-color, #000) 88%,
+    var(--encore-veil-color, #000) 100%
+  );
+}
+
+.preview-encore-shroud.is-dimmed {
+  opacity: 1;
+}
+
+.preview-encore-shroud.encore-spot-soft.is-dimmed {
+  opacity: 0.88;
+}
+
+.preview-encore-shroud.encore-spot-color-highlight {
+  mix-blend-mode: normal;
+}
+
+.preview-encore-shroud.encore-spot-soft.encore-spot-color-highlight.is-dimmed {
+  opacity: 0.9;
+}
+
+.preview-fp-world.portrait-debug {
+  outline: 2px solid rgba(0, 255, 120, 0.85);
+  outline-offset: -2px;
+  background: rgba(0, 255, 120, 0.06);
+}
+
+.preview-anim {
+  position: absolute;
+  inset: 0;
   transform: scale(var(--hero-zoom, 1));
   transform-origin: 50% 50%;
 }
 
 .preview-food {
-  width: 72%;
-  height: 84%;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
   user-select: none;
   pointer-events: none;
 }
 
 .preview-sticker {
   position: absolute;
-  z-index: 2;
-  /* Asset is a 1024 pad; visual badge sits lower-right of that canvas. */
-  left: 24%;
-  top: 30%;
-  right: auto;
-  bottom: auto;
-  width: 58%;
-  aspect-ratio: 1 / 1;
-  font-size: calc(var(--device-w) * 0.58);
+  z-index: 4;
+  left: calc(257.8 * var(--u));
+  top: calc(179.66 * var(--u));
+  width: calc(148.04 * var(--u));
+  height: calc(148.04 * var(--u));
+  font-size: calc(148.04 * var(--u));
   pointer-events: none;
   user-select: none;
 }
@@ -681,42 +1024,6 @@ img {
   white-space: nowrap;
 }
 
-.preview-veil {
-  pointer-events: none;
-  z-index: 3;
-  top: calc(-1 * var(--veil-extra-top));
-  left: -20px;
-  right: -20px;
-  bottom: 0;
-  opacity: 0;
-}
-
-.preview-veil.is-hard {
-  background: radial-gradient(
-    circle var(--veil-hole-r) at var(--veil-hole-x) var(--veil-hole-y),
-    transparent calc(var(--veil-hole-r) - 1px),
-    var(--veil-fill) var(--veil-hole-r)
-  );
-}
-
-.preview-veil.is-hard-shadow {
-  background: radial-gradient(
-    circle var(--veil-hole-r) at var(--veil-hole-x) var(--veil-hole-y),
-    transparent calc(var(--veil-hole-r) - 1px),
-    var(--veil-fill) var(--veil-hole-r)
-  );
-  filter: drop-shadow(16px 22px 0 rgba(0, 0, 0, 0.45));
-}
-
-.preview-veil.is-soft {
-  background: radial-gradient(
-    circle calc(var(--veil-hole-r) * 1.6) at var(--veil-hole-x) var(--veil-hole-y),
-    transparent calc(var(--veil-hole-r) * 0.72),
-    color-mix(in srgb, var(--veil-fill) 45%, transparent) calc(var(--veil-hole-r) * 1.15),
-    var(--veil-fill) calc(var(--veil-hole-r) * 1.6)
-  );
-}
-
 .pills {
   display: flex;
   gap: 8px;
@@ -760,6 +1067,8 @@ img {
 }
 
 .style-scroll {
+  position: relative;
+  z-index: 2;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: scroll;
@@ -769,6 +1078,8 @@ img {
 }
 
 .footer-bar {
+  position: relative;
+  z-index: 3;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -1074,6 +1385,17 @@ img {
   font-weight: 500;
   text-align: center;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.toast.is-on {
+  opacity: 1;
+}
+
+.toast.is-out {
+  opacity: 0;
+  transition-duration: 0.35s;
 }
 
 /* —— Motion —— */

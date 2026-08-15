@@ -143,15 +143,20 @@
     presentation: { min: 0, max: 7 },
   };
 
-  /* Live Motion table defaults (Ken Burns / Slideshow). Preview scales these
-     down for the small hero. Higher Presentation Speed = faster (1/speed). */
+  /* Must match js/menu.js MOTION_DEFAULTS_* and ENCORE_* exactly.
+     Style preview is a 1:1 look-alike — do not scale these down. */
   var MOTION_DEFAULTS = {
     punchIn: 3.4,
     hold: 1,
     punchOut: 0.45,
     zoomMin: 0.93,
     zoomMax: 1,
-    previewScale: 0.7,
+    opacityDur: 0.45,
+    encoreZoomTo: 1.24,
+    encoreVeilInMult: 0.5,
+    encoreHoldMult: 0.5,
+    encoreHolePinch: 40,
+    encoreHoleRef: 160,
   };
 
   var STICKER = {

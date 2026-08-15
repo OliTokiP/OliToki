@@ -66,9 +66,9 @@ Context-driven children (same idea as the mockup):
 | Background = Wallpaper | Wallpaper Type, BG Scroll Speed |
 | Presentation Style = Encore | Spotlight Style, Spotlight Color, Encore Background |
 
-Preview (sticky under the header) shows the current plate image, optional New sticker, stripes / wallpaper / scroll, Ken Burns, and a simplified Encore veil (hole + optional soft falloff — no family-portrait grid).
+Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns / Encore must match [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md). Shared digits: `js/motion-presets.js`. Top slot height is the same `--top-slot-h` as System Settings.
 
-Presentation Speed `0` pauses the preview cycle. Create New Theme clones the current palette into the local catalog only.
+Presentation Speed `0` = stop, `≥1` = go until sheets are wired. Create New Theme is gated (toast only).
 
 ---
 
@@ -79,6 +79,7 @@ Presentation Speed `0` pauses the preview cycle. Create New Theme clones the cur
 | `manager.html` | Shell |
 | `css/manager.css` | Layout + theme tokens |
 | `js/manager-data.js` | Catalogs, defaults, asset paths |
+| `js/motion-presets.js` | Shared motion digits (also for live boards) |
 | `js/manager.js` | Router, draft/commit, preview |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Do not teach this UI raw column indexes; map **field names** when a write adapter lands.

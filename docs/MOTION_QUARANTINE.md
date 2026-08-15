@@ -35,6 +35,7 @@
 
 - Git history on `js/menu.js` before static mode  
 - Phase model: [UI_NOMENCLATURE.md §4](UI_NOMENCLATURE.md), [MOTION_REFACTOR.md](MOTION_REFACTOR.md)  
+- **Behavior grid:** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md) — implement that, do not approximate  
 - Sheet-driven rebuild: Beta Features → **Motion** table (Wind-up / Punch-in / Hold / Punch-out / Wind-down + Grok's Notes)
 
 ## Next engine
