@@ -92,6 +92,7 @@ One values row under Settings (excel row 3 / 0-based index 2):
 | J | Show Github Version | 9 | `showVersion` | checkbox / 0–1 |
 | K | Encore Spotlight Type | 10 | `encoreSpotlightType` | Hard \| Soft |
 | L | Encore Spotlight Color | 11 | `encoreSpotlightColor` | Black \| Highlight |
+| M | Encore Background Color | 12 | `encoreBackgroundColor` | Color Picker / hex; blank → Secondary |
 
 ### Style and Theme (revised) — Themes Database columns (verified live)
 

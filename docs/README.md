@@ -1,9 +1,10 @@
 # TokiMenu documentation
 
-**Last updated:** 2026-08-13 23:30  
+**Last updated:** 2026-08-14 16:40  
 
 | Doc | Purpose |
 |-----|---------|
+| [MENU_MANAGER.md](./MENU_MANAGER.md) | **Mobile Menu Manager** layout prototype (`manager.html`) |
 | [SUPPORTED_DEVICES.md](./SUPPORTED_DEVICES.md) | **Fire Stick HD = 1080p max.** AbleSign `3840×2160 dpr2` lie + URL pin |
 | [WHATS_NEW.md](./WHATS_NEW.md) | **Major features & changes** (timestamped; newest first) |
 | [FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md) | **Future:** hosted proxy so Remote can keep sheets private |

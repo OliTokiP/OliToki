@@ -1,9 +1,22 @@
 # What’s New
 
-**Last updated:** 2026-08-13 23:30  
+**Last updated:** 2026-08-14 16:40  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-14 16:40 — Menu Manager mobile layout prototype
+
+**Boards / surface:** `manager.html` (phone UI — not the TV boards)  
+**Sheet:** none (local draft only; no writes)  
+**Summary:** First cut of the boss-facing Menu Manager from `mockups/TokiSettings.pdf`. Splash, System Settings, Menu Settings, Style and Theme (live app chrome + presentation preview), and Coming Soon board screens. Theme draft restyles the app immediately; Confirm on back keeps or discards the session. Sheet push and board item editing are not wired.
+
+### Docs updated
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
+- [PRODUCT.md](./PRODUCT.md)
+- [README.md](./README.md)
 
 ---
 

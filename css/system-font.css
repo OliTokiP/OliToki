@@ -1,0 +1,23 @@
+/* System Font (OliToki Menu Settings → System Font).
+   Swap Roboto / Poppins app-wide via html[data-system-font]. */
+
+:root {
+  --toki-font: "Roboto", system-ui, sans-serif;
+  --toki-font-condensed: "Roboto Condensed", "Roboto", system-ui, sans-serif;
+  --toki-font-scale: 1;
+}
+
+html[data-system-font="poppins"] {
+  --toki-font: "Poppins", "Roboto", system-ui, sans-serif;
+  --toki-font-condensed: "Poppins", "Roboto", system-ui, sans-serif;
+  /* Poppins reads larger than Roboto at the same px (~8%). */
+  --toki-font-scale: 0.92;
+}
+
+html,
+body {
+  font-family: var(--toki-font);
+}
+
+/* Do not use zoom here — it shrinks whole boxes and shifts #menu-list / footer. */
+

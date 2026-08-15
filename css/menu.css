@@ -21,11 +21,14 @@ body {
   height: 100%;
   overflow: hidden;
   background: #000;
-  font-family: "Roboto", system-ui, sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
 }
 
 :root {
+  --toki-font: "Roboto", system-ui, sans-serif;
+  --toki-font-condensed: "Roboto Condensed", "Roboto", system-ui, sans-serif;
+  --toki-font-scale: 1;
   /* Theme (Style sheet): Main was black, Secondary was white */
   --main-color: #000000;
   --secondary-color: #ffffff;
@@ -267,9 +270,9 @@ body.fp-alpha-header-hl #logo .logo-eye {
   width: 600px;
   height: calc(var(--header-h) - 28px);
   color: var(--main-color);
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
-  font-size: 104px;
+  font-size: calc(104px * var(--toki-font-scale, 1));
   line-height: 0.92;
   letter-spacing: -0.025em;
   display: flex;
@@ -302,9 +305,9 @@ body.fp-alpha-header-hl #logo .logo-eye {
   width: max-content;
   margin: 0;
   color: var(--disclaimer-color, #ffffff);
-  font-family: "Roboto Condensed", "Roboto", sans-serif;
+  font-family: var(--toki-font-condensed);
   font-weight: 300;
-  font-size: 16px;
+  font-size: calc(16px * var(--toki-font-scale, 1));
   line-height: 1.25;
   letter-spacing: 0.01em;
   text-align: right;
@@ -347,7 +350,7 @@ body.fp-alpha-header-hl #logo .logo-eye {
 
 .menu-item {
   color: var(--secondary-color);
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
   /* Engine sets --motion-highlight to Punch-Out / Punch-In duration */
   transition: color var(--motion-highlight, var(--dur-mid)) var(--ease-fade);
@@ -478,7 +481,7 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
 }
 
 .menu-item .item-line {
-  font-size: calc(40px * var(--menu-scale));
+  font-size: calc(40px * var(--menu-scale) * var(--toki-font-scale, 1));
   line-height: 1.12;
   letter-spacing: -0.015em;
   /* One line only — fitMenuText shrinks --menu-scale for the longest name */
@@ -487,7 +490,7 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
 
 .menu-item .item-desc {
   margin-top: calc(2px * var(--menu-scale));
-  font-size: calc(22px * var(--menu-scale));
+  font-size: calc(22px * var(--menu-scale) * var(--toki-font-scale, 1));
   line-height: 1.28;
   letter-spacing: 0;
   max-width: 1020px;
@@ -509,14 +512,14 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
 
 .board-munchies .menu-item .item-line {
   /* Base name size; fitMenuText scales --menu-scale to fill panel */
-  font-size: calc(38px * var(--menu-scale));
+  font-size: calc(38px * var(--menu-scale) * var(--toki-font-scale, 1));
   line-height: 1.08;
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
 .board-munchies .item-name {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
   font-size: 1em;
 }
@@ -524,7 +527,7 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
 /* Subtitles + prices: smaller than name (PS 9.14 / 12.84) */
 .board-munchies .item-paren-sub,
 .board-munchies .item-prices {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
   font-size: 0.712em;
   letter-spacing: -0.01em;
@@ -1070,7 +1073,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   margin: 0;
   padding: 0;
   border: 0;
-  font-family: "Roboto", system-ui, sans-serif;
+  font-family: var(--toki-font);
   font-weight: 900;
   font-size: 0.25714em; /* ~144px when wrapper is 560px */
   line-height: 1;
@@ -1230,7 +1233,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
   display: flex;
   flex-direction: column;
@@ -1373,8 +1376,8 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 }
 
 .info-box-title {
-  font-family: "Roboto", sans-serif;
-  font-size: 48px;
+  font-family: var(--toki-font);
+  font-size: calc(48px * var(--toki-font-scale, 1));
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--main-color);
@@ -1384,8 +1387,8 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 
 /* ~75% of companion title (48px → 36px) — Protein Options, Sauces, etc. */
 .info-box-subtitle {
-  font-family: "Roboto", sans-serif;
-  font-size: 36px;
+  font-family: var(--toki-font);
+  font-size: calc(36px * var(--toki-font-scale, 1));
   font-weight: 400;
   letter-spacing: -0.02em;
   color: var(--main-color);
@@ -1394,8 +1397,8 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 }
 
 #sauces-box .info-box-title {
-  font-family: "Roboto", sans-serif;
-  font-size: 48px;
+  font-family: var(--toki-font);
+  font-size: calc(48px * var(--toki-font-scale, 1));
   font-weight: 700;
 }
 
@@ -1451,13 +1454,13 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 }
 
 #protein-box .info-box-body.layout-columns {
-  font-size: calc(34px * var(--box-scale));
+  font-size: calc(34px * var(--box-scale) * var(--toki-font-scale, 1));
   padding: 8px 14px 10px;
 }
 
 #sauces-box .info-box-body.layout-columns {
-  font-family: "Roboto", sans-serif;
-  font-size: calc(30px * var(--box-scale));
+  font-family: var(--toki-font);
+  font-size: calc(30px * var(--box-scale) * var(--toki-font-scale, 1));
   padding: 10px 12px 12px;
 }
 
@@ -1490,7 +1493,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #footer-drinks-box .box-item-name,
 #veggies-box .box-item-name,
 #protein-box .protein-name {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700; /* overridden by typo-name → Thin */
   /* non-New items inherit the box text color (Secondary) */
 }
@@ -1579,7 +1582,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #footer-drinks-box .box-item-price,
 #veggies-box .box-item-price,
 #protein-box .protein-price {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 400; /* Regular */
 }
 
@@ -1593,7 +1596,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #sauces-box .box-item-sub,
 #footer-drinks-box .box-item-sub,
 #veggies-box .box-item-sub {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 400; /* Regular */
   opacity: 0.8;
   font-size: 0.82em;
@@ -1734,9 +1737,9 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 }
 
 #protein-box .info-box-body.layout-wrap {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
-  font-size: calc(30px * var(--box-scale));
+  font-size: calc(30px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.25;
   padding: 8px 14px 10px;
 }
@@ -1767,8 +1770,8 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #sauces-box .info-box-body.layout-wrap,
 #footer-drinks-box .info-box-body.layout-wrap,
 #veggies-box .info-box-body.layout-wrap {
-  font-family: "Roboto", sans-serif;
-  font-size: calc(32px * var(--box-scale));
+  font-family: var(--toki-font);
+  font-size: calc(32px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.1;
   padding: 6px 10px 8px;
   row-gap: calc(2px * var(--box-scale));
@@ -1780,7 +1783,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   packs land ~34–38px (not huge) with full row fill.
 */
 #sauces-box.footer-major .info-box-body.layout-wrap {
-  font-size: calc(34px * var(--box-scale));
+  font-size: calc(34px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.1;
   padding: 8px 14px 10px;
   row-gap: calc(4px * var(--box-scale));
@@ -1790,9 +1793,9 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 
 #footer-drinks-box .info-box-body.layout-columns,
 #veggies-box .info-box-body.layout-columns {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 400;
-  font-size: calc(30px * var(--box-scale));
+  font-size: calc(30px * var(--box-scale) * var(--toki-font-scale, 1));
   padding: 10px 12px 12px;
 }
 
@@ -1887,7 +1890,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   width: 780px;
   top: 0;
   height: var(--header-h);
-  font-size: 96px;
+  font-size: calc(96px * var(--toki-font-scale, 1));
   line-height: 1;
   justify-content: flex-start;
   align-items: center;
@@ -2056,7 +2059,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   position: absolute;
   box-sizing: border-box;
   overflow: hidden;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
   display: flex;
   flex-direction: column;
@@ -2123,7 +2126,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 
 /* Match Protein Options / Sauces header type (info-box-*) */
 .drinks-box-title {
-  font-size: 48px;
+  font-size: calc(48px * var(--toki-font-scale, 1));
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--main-color);
@@ -2133,7 +2136,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 
 /* ~75% of companion title (48px → 36px), same as .info-box-subtitle */
 .drinks-box-subtitle {
-  font-size: 36px;
+  font-size: calc(36px * var(--toki-font-scale, 1));
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--main-color);
@@ -2157,7 +2160,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   /* Extra side padding so type sits farther from box edges */
   padding: 20px 40px 24px;
   color: var(--announcement-body-text, var(--secondary-color));
-  font-size: calc(36px * var(--box-scale));
+  font-size: calc(36px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.22;
   letter-spacing: -0.02em;
   display: flex;
@@ -2178,7 +2181,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
    Bold → Roboto 700; not bold → Roboto 400. Color → font color or contrast default. */
 #announcement-box .announcement-line {
   margin: 0;
-  font-family: "Roboto", system-ui, sans-serif;
+  font-family: var(--toki-font);
   font-weight: 400;
 }
 
@@ -2230,7 +2233,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 #announcement-box .drinks-box-body.is-shout-type,
 #announcement-box .drinks-box-body.is-shout {
   --shout-shake-amp: 1;
-  font-family: "Roboto", system-ui, sans-serif;
+  font-family: var(--toki-font);
   font-weight: 900;
   line-height: 1.05;
   letter-spacing: -0.035em;
@@ -2243,7 +2246,7 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 #announcement-box .drinks-box-body.is-shout-type .announcement-run,
 #announcement-box .drinks-box-body.is-shout .announcement-line,
 #announcement-box .drinks-box-body.is-shout .announcement-run {
-  font-family: "Roboto", system-ui, sans-serif;
+  font-family: var(--toki-font);
   font-weight: 900 !important;
   font-style: normal !important;
 }
@@ -2359,10 +2362,10 @@ body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line
 #drink-options-box .drinks-box-body {
   padding: 14px 22px 16px;
   color: var(--drink-box-text, var(--secondary-color));
-  font-size: calc(34px * var(--box-scale));
+  font-size: calc(34px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.28;
   letter-spacing: -0.02em;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
 }
 
@@ -2389,7 +2392,7 @@ body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line
   display: inline-block;
   white-space: nowrap;
   color: inherit;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
   transition: color var(--dur-instant) var(--ease-standard);
   max-width: 100%;
@@ -2427,7 +2430,7 @@ body.preview-wall #announcement-box .drinks-box-body.is-shout .announcement-line
   display: inline-block;
   white-space: pre;
   color: inherit;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--toki-font);
   font-weight: 700;
 }
 

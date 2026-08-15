@@ -10,6 +10,7 @@ One launch dialog:
   • Private browser — incognito / private window (default on)
   • Open data sheet — Google Sheet in Chrome (normal window; default off)
   • Open glossary — glossary.html board index (default off)
+  • Open Menu Manager — manager.html (mobile authoring UI; default off)
 
 Local server runs in a visible Terminal window titled “Toki Menu Server”
 (Ctrl+C or close the window to stop it).
@@ -23,6 +24,7 @@ Skip UI with env:
   TOKI_PRIVATE=0|1
   TOKI_OPEN_SHEET=0|1
   TOKI_OPEN_GLOSSARY=0|1
+  TOKI_OPEN_MANAGER=0|1
   TOKI_BOARDS=1,2,3,4
   TOKI_REMOTE_BASE=https://absrdst.github.io/TokiMenu
   TOKI_PORT=8765
@@ -40,7 +42,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-PORT = int(os.environ.get("TOKI_PORT", "8765"))
+PREFERRED_PORT = int(os.environ.get("TOKI_PORT", "8765"))
+PORT = PREFERRED_PORT
 DEFAULT_REMOTE_BASE = os.environ.get(
     "TOKI_REMOTE_BASE", "https://absrdst.github.io/TokiMenu"
 ).rstrip("/")
@@ -356,14 +359,20 @@ def open_data_sheet_in_chrome() -> None:
         )
 
 
-def open_glossary_url(url: str, family: str, app_name: str, binary: str | None) -> None:
-    """Open glossary.html in the selected board browser (respects Private)."""
+def open_glossary_url(
+    url: str,
+    family: str,
+    app_name: str,
+    binary: str | None,
+    label: str = "glossary",
+) -> None:
+    """Open an extra HTML page in the selected board browser (respects Private)."""
     if not url:
-        print("open glossary: no URL", flush=True)
+        print(f"open {label}: no URL", flush=True)
         return
     private = LAUNCH_PRIVATE
     hard = LAUNCH_HARD_REFRESH
-    print("open glossary:", url, "private=", private, flush=True)
+    print(f"open {label}:", url, "private=", private, flush=True)
 
     if family == "chrome" or family == "chromium":
         args = chromium_extra_args(private, hard) + ["--new-window", url]
@@ -460,16 +469,80 @@ def resolve_browser(key: str):
 
 # ── Server (Local environment) ──────────────────────────────────────────────
 
-def api_health() -> dict | None:
+def api_health(port: int | None = None) -> dict | None:
     try:
         with urllib.request.urlopen(
-            f"http://127.0.0.1:{PORT}/api/health", timeout=2
+            f"http://127.0.0.1:{port or PORT}/api/health", timeout=2
         ) as res:
             import json
 
             return json.loads(res.read().decode("utf-8"))
     except Exception:
         return None
+
+
+def _http_status(url: str, timeout: float = 2.0) -> int | None:
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            return int(res.status)
+    except urllib.error.HTTPError as e:
+        return int(e.code)
+    except Exception:
+        return None
+
+
+def _same_checkout(root: Path, port: int, health: dict | None) -> bool:
+    """True if the listener on `port` is serving this project folder."""
+    if not health or not health.get("ok"):
+        return False
+    reported = str(health.get("root") or "").strip()
+    if reported:
+        try:
+            return Path(reported).resolve() == root.resolve()
+        except Exception:
+            return False
+    # Older server (no root in /api/health): treat as ours only if it
+    # actually has this checkout's distinctive files.
+    if (root / "manager.html").is_file():
+        return _http_status(f"http://127.0.0.1:{port}/manager.html") == 200
+    return True
+
+
+def _server_log_path(port: int) -> Path:
+    env = os.environ.get("TOKI_SERVER_LOG", "").strip()
+    if env:
+        return Path(env)
+    return Path(f"/tmp/toki-menu-server-{port}.log")
+
+
+def claim_local_port(root: Path) -> str:
+    """Pick a port for this checkout. Never steal another tree's toki_server.
+
+    Returns 'reuse' or 'start'. Sets PORT (and LOG).
+    """
+    global PORT, LOG
+    preferred = PREFERRED_PORT
+    last_busy = preferred
+    for port in range(preferred, preferred + 20):
+        health = api_health(port)
+        if health and health.get("ok"):
+            if _same_checkout(root, port, health):
+                PORT = port
+                LOG = _server_log_path(port)
+                return "reuse"
+            last_busy = port
+            continue
+        if _port_in_use(port):
+            last_busy = port
+            continue
+        PORT = port
+        LOG = _server_log_path(port)
+        return "start"
+    raise RuntimeError(
+        f"No free Toki port in {preferred}–{preferred + 19} "
+        f"(last busy {last_busy}). Close a Toki Menu Server window or set TOKI_PORT."
+    )
 
 
 def _shell_quote(s: str) -> str:
@@ -482,12 +555,16 @@ def start_server_in_terminal(root: Path, server: Path, py: str) -> bool:
     Open a visible Terminal window running toki_server.
     Close that window (or Ctrl+C) to stop the server.
     """
-    intro = "Toki Menu local server — close this window or Ctrl+C to stop."
+    short = root.name
+    intro = (
+        f"Toki Menu local server ({short}) — "
+        "close this window or Ctrl+C to stop."
+    )
     bye = "Server stopped. You can close this window."
     # Title the tab, cd to project, run server in foreground so close = stop
     cmd = " ".join(
         [
-            f"printf '\\e]0;Toki Menu Server :{PORT}\\a';",
+            f"printf '\\e]0;Toki Menu Server :{PORT} · {short}\\a';",
             f"cd {_shell_quote(str(root))} &&",
             f"echo {_shell_quote(intro)} &&",
             "echo &&",
@@ -506,7 +583,7 @@ tell application "Terminal"
   do script "{as_cmd}"
   delay 0.2
   try
-    set custom title of front window to "Toki Menu Server"
+    set custom title of front window to "Toki Menu Server :{PORT}"
   end try
 end tell
 '''
@@ -533,24 +610,37 @@ end tell
 
 def ensure_local_server(root: Path) -> bool:
     """Start toki_server in a Terminal window if needed. Returns True if healthy."""
-    health = api_health()
-    if health and health.get("ok") and health.get("sheetsApi"):
+    try:
+        action = claim_local_port(root)
+    except RuntimeError as e:
+        alert(str(e), stop=True)
+        return False
+
+    if action == "reuse":
+        health = api_health()
         print(
-            f"toki_server already healthy on :{PORT} "
+            f"toki_server already serving this folder on :{PORT} "
             "(close its Terminal window to stop)",
             flush=True,
         )
+        if health and health.get("ok") and not health.get("sheetsApi"):
+            alert(
+                "Server is up but Sheets API is off.\n\n"
+                "Menus need either:\n"
+                "• secrets/google-service-account.json + sheet shared "
+                "with that email, and Drive API enabled\n"
+                "• or sheet General access = Anyone with the link (Viewer)\n\n"
+                "See scripts/gsheet_api.md\n"
+                f"Server log: {LOG}",
+                stop=False,
+            )
         return True
-    if health and health.get("ok") and not health.get("sheetsApi"):
-        # Wrong/old server on port — replace
-        _kill_port(PORT)
-        time.sleep(0.4)
-    elif health and health.get("ok"):
-        return True
-    elif _port_in_use(PORT):
-        # Something on port without /api/health
-        _kill_port(PORT)
-        time.sleep(0.4)
+
+    print(
+        f"starting toki_server for {root} on :{PORT} "
+        f"(other checkouts keep their own port)",
+        flush=True,
+    )
 
     server = root / "scripts" / "toki_server.py"
     if not server.is_file():
@@ -580,27 +670,30 @@ def ensure_local_server(root: Path) -> bool:
                 start_new_session=True,
             )
 
-    for _ in range(40):
+    for _ in range(80):
         h = api_health()
         if h and h.get("ok"):
-            if not h.get("sheetsApi"):
+            served = str(h.get("root") or "").strip()
+            if served and Path(served).resolve() != root.resolve():
                 alert(
-                    "Server is up but Sheets API is off.\n\n"
-                    "Menus need either:\n"
-                    "• secrets/google-service-account.json + sheet shared "
-                    "with that email, and Drive API enabled\n"
-                    "• or sheet General access = Anyone with the link (Viewer)\n\n"
-                    f"See scripts/gsheet_api.md\n"
-                    f"Server log: {LOG}",
-                    stop=False,
+                    f"Port {PORT} is serving a different folder:\n{served}\n\n"
+                    f"This app is:\n{root}",
+                    stop=True,
                 )
+                return False
             return True
         time.sleep(0.25)
 
+    tail = ""
+    try:
+        lines = LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+        tail = "\n".join(lines[-12:])
+    except Exception:
+        tail = "(could not read log)"
     alert(
-        f"Could not start Toki server on port {PORT}.\n\n"
-        "Look for a Terminal window titled “Toki Menu Server”.\n"
-        f"Also check: {LOG}",
+        f"Could not start Toki server on port {PORT}.\n"
+        f"Folder: {root}\n\n"
+        f"Log: {LOG}\n\n{tail}",
         stop=True,
     )
     return False
@@ -771,6 +864,10 @@ def _env_open_glossary() -> bool | None:
     return _env_bool("TOKI_OPEN_GLOSSARY")
 
 
+def _env_open_manager() -> bool | None:
+    return _env_bool("TOKI_OPEN_MANAGER")
+
+
 def _env_boards() -> list[bool] | None:
     raw = os.environ.get("TOKI_BOARDS", "").strip()
     if not raw:
@@ -799,13 +896,14 @@ def _default_launch_opts() -> dict[str, Any]:
         "private": True,
         "open_sheet": False,
         "open_glossary": False,
+        "open_manager": False,
     }
 
 
 def prompt_launch_options() -> dict[str, Any] | None:
     """
     Dedicated Toki Menus window: browser, env, boards, layout, chrome,
-    hard refresh, private, open data sheet, open glossary.
+    hard refresh, private, open data sheet, open glossary, open Menu Manager.
 
     Returns options dict or None if cancelled.
     """
@@ -817,6 +915,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
     env_private = _env_private()
     env_open_sheet = _env_open_sheet()
     env_open_glossary = _env_open_glossary()
+    env_open_manager = _env_open_manager()
     env_boards = _env_boards()
 
     # Fully non-interactive when browser + layout forced
@@ -835,6 +934,8 @@ def prompt_launch_options() -> dict[str, Any] | None:
             opts["open_sheet"] = env_open_sheet
         if env_open_glossary is not None:
             opts["open_glossary"] = env_open_glossary
+        if env_open_manager is not None:
+            opts["open_manager"] = env_open_manager
         if env_boards is not None:
             opts["boards"] = env_boards
         return opts
@@ -850,9 +951,10 @@ def prompt_launch_options() -> dict[str, Any] | None:
     chrome_default = "true" if env_chrome is True else "false"
     hard_default = "false" if env_hard is False else "true"
     private_default = "false" if env_private is False else "true"
-    # Open data sheet / glossary: off unless env forces on
+    # Open data sheet / glossary / manager: off unless env forces on
     sheet_default = "true" if env_open_sheet is True else "false"
     glossary_default = "true" if env_open_glossary is True else "false"
+    manager_default = "true" if env_open_manager is True else "false"
     boards = env_boards or [True, True, True, True]
     bdefs = ["true" if b else "false" for b in boards]
     env_default = (
@@ -872,6 +974,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         private_default,
         sheet_default,
         glossary_default,
+        manager_default,
         bdefs,
     )
     if out is None:
@@ -890,6 +993,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         env_private=env_private,
         env_open_sheet=env_open_sheet,
         env_open_glossary=env_open_glossary,
+        env_open_manager=env_open_manager,
         env_boards=env_boards,
     )
 
@@ -903,6 +1007,7 @@ def _prompt_nsalert_dialog(
     private_default: str,
     sheet_default: str,
     glossary_default: str,
+    manager_default: str,
     bdefs: list[str],
 ) -> str | None:
     """NSAlert accessory with launch switches."""
@@ -943,7 +1048,7 @@ function run() {{
   alert.addButtonWithTitle("Cancel");
 
   var width = 380;
-  var height = 302;
+  var height = 330;
   var view = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, width, height));
   var y = height - 28;
 
@@ -982,7 +1087,9 @@ function run() {{
   var sheetBox = makeSwitch("Open data sheet", 0, y, width, {sheet_default});
   view.addSubview(sheetBox); y -= 24;
   var glossaryBox = makeSwitch("Open glossary", 0, y, width, {glossary_default});
-  view.addSubview(glossaryBox);
+  view.addSubview(glossaryBox); y -= 24;
+  var managerBox = makeSwitch("Open Menu Manager", 0, y, width, {manager_default});
+  view.addSubview(managerBox);
 
   alert.setAccessoryView(view);
   try {{ app.activateIgnoringOtherApps(true); }} catch (e3) {{}}
@@ -1003,7 +1110,8 @@ function run() {{
     (Number(hardBox.state) === 1 ? "1" : "0") + "|" +
     (Number(privateBox.state) === 1 ? "1" : "0") + "|" +
     (Number(sheetBox.state) === 1 ? "1" : "0") + "|" +
-    (Number(glossaryBox.state) === 1 ? "1" : "0");
+    (Number(glossaryBox.state) === 1 ? "1" : "0") + "|" +
+    (Number(managerBox.state) === 1 ? "1" : "0");
 }}
 '''
     r = subprocess.run(
@@ -1028,6 +1136,7 @@ def _parse_launch_result(
     env_private: bool | None,
     env_open_sheet: bool | None,
     env_open_glossary: bool | None,
+    env_open_manager: bool | None,
     env_boards: list[bool] | None,
 ) -> dict[str, Any] | None:
     parts = out.split("|")
@@ -1048,6 +1157,7 @@ def _parse_launch_result(
     private_flag = parts[6].strip() if len(parts) > 6 else "1"
     sheet_flag = parts[7].strip() if len(parts) > 7 else "0"
     glossary_flag = parts[8].strip() if len(parts) > 8 else "0"
+    manager_flag = parts[9].strip() if len(parts) > 9 else "0"
 
     if layout not in ("tiled", "single"):
         layout = "tiled"
@@ -1057,12 +1167,13 @@ def _parse_launch_result(
     private = private_flag in ("1", "true", "yes")
     open_sheet = sheet_flag in ("1", "true", "yes")
     open_glossary = glossary_flag in ("1", "true", "yes")
+    open_manager = manager_flag in ("1", "true", "yes")
 
     boards = [False, False, False, False]
     bits = (boards_bits + "0000")[:4]
     for i, ch in enumerate(bits):
         boards[i] = ch == "1"
-    # Keep all-off: main() treats that as extras-only when sheet/glossary on
+    # Keep all-off: main() treats that as extras-only when sheet/glossary/manager on
 
     browser_key = None
     for blabel, key in BROWSER_CHOICES:
@@ -1089,6 +1200,8 @@ def _parse_launch_result(
         open_sheet = env_open_sheet
     if env_open_glossary is not None:
         open_glossary = env_open_glossary
+    if env_open_manager is not None:
+        open_manager = env_open_manager
     if env_boards is not None:
         boards = env_boards
     if env_browser:
@@ -1104,6 +1217,7 @@ def _parse_launch_result(
         "private": private,
         "open_sheet": open_sheet,
         "open_glossary": open_glossary,
+        "open_manager": open_manager,
     }
 
 
@@ -1542,6 +1656,7 @@ def main():
     private = picked["private"]
     open_sheet = bool(picked.get("open_sheet"))
     open_glossary = bool(picked.get("open_glossary"))
+    open_manager = bool(picked.get("open_manager"))
     LAUNCH_PRIVATE = private
     LAUNCH_HARD_REFRESH = hard_refresh
 
@@ -1564,23 +1679,28 @@ def main():
         open_sheet,
         "open_glossary=",
         open_glossary,
+        "open_manager=",
+        open_manager,
         flush=True,
     )
 
     any_boards = any(boards) if boards else False
-    any_extras = open_sheet or open_glossary
+    any_extras = open_sheet or open_glossary or open_manager
     # Extras-only: no boards (and not single-window wall)
     extras_only = any_extras and not any_boards and layout != "single"
 
     if not any_boards and not any_extras and layout != "single":
         alert(
-            "Select at least one board, or check Open data sheet / Open glossary.",
+            "Select at least one board, or check Open data sheet / "
+            "Open glossary / Open Menu Manager.",
             stop=True,
         )
         sys.exit(1)
 
-    # Glossary needs the local/remote base; sheet-only does not need the server.
-    needs_menu_server = any_boards or open_glossary or layout == "single"
+    # Glossary + Menu Manager need the local/remote base; sheet-only does not.
+    needs_menu_server = (
+        any_boards or open_glossary or open_manager or layout == "single"
+    )
 
     if extras_only and not needs_menu_server:
         print("sheet-only launch — skipping boards and local server", flush=True)
@@ -1616,7 +1736,13 @@ def main():
         flush=True,
     )
 
-    if not URLS and layout != "single" and not open_glossary and not open_sheet:
+    if (
+        not URLS
+        and layout != "single"
+        and not open_glossary
+        and not open_manager
+        and not open_sheet
+    ):
         alert("No boards selected.", stop=True)
         sys.exit(1)
 
@@ -1658,17 +1784,35 @@ def main():
         else:
             open_chromium_family(app_name, binary, quads)
 
-    # Optional glossary (same browser / private settings as boards)
+    # Optional extras (same browser / private settings as boards)
+    bust = f"_toki={int(time.time())}" if hard_refresh else ""
+
+    def extra_url(path: str) -> str:
+        url = f"{BASE}/{path}"
+        return url + "?" + bust if bust else url
+
     if open_glossary:
-        bust = f"_toki={int(time.time())}" if hard_refresh else ""
-        gloss = f"{BASE}/glossary.html"
-        if bust:
-            gloss = gloss + "?" + bust
         try:
-            open_glossary_url(gloss, family, app_name, binary)
+            open_glossary_url(extra_url("glossary.html"), family, app_name, binary)
         except Exception as err:
             print("open glossary failed:", err, flush=True)
             alert(f"Could not open glossary.\n\n{err}", stop=False)
+
+    if open_manager:
+        if not (root / "manager.html").is_file():
+            alert(f"Missing manager.html in:\n{root}", stop=False)
+        else:
+            try:
+                open_glossary_url(
+                    extra_url("manager.html"),
+                    family,
+                    app_name,
+                    binary,
+                    label="menu manager",
+                )
+            except Exception as err:
+                print("open menu manager failed:", err, flush=True)
+                alert(f"Could not open Menu Manager.\n\n{err}", stop=False)
 
     # Optional data sheet in normal Chrome (never private)
     if open_sheet:

@@ -115,6 +115,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     """
     data_source = ""
     require_restart = False
+    system_font = "roboto"
     catalog: list[dict] = []
 
     header_idx = None
@@ -130,6 +131,15 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     if header_idx is not None and header_idx + 1 < len(rows):
         data_source = _cell(rows[header_idx + 1], 0)
         require_restart = _parse_yes(_cell(rows[header_idx + 1], 1), False)
+        header = rows[header_idx] or []
+        for c, cell in enumerate(header):
+            if "system font" in str(cell or "").strip().lower():
+                raw = _cell(rows[header_idx + 1], c).lower()
+                if "poppin" in raw:
+                    system_font = "poppins"
+                elif "roboto" in raw:
+                    system_font = "roboto"
+                break
 
     if catalog_idx is not None:
         for row in rows[catalog_idx + 1 :]:
@@ -163,6 +173,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     return {
         "dataSource": data_source or "Alpha Copy",
         "requireRestart": require_restart,
+        "systemFont": system_font,
         "sheetId": sheet_id,
         "sourceName": (match or {}).get("name") or "",
         "sourceUrl": (match or {}).get("url") or "",
@@ -505,10 +516,13 @@ class SheetsBackend:
         return text
 
 
-def make_handler(backend: SheetsBackend | None, root: Path):
+def make_handler(api: dict, root: Path):
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(root), **kwargs)
+
+        def _backend(self):
+            return api.get("backend")
 
         def log_message(self, fmt, *args):
             # Quieter access log
@@ -539,6 +553,7 @@ def make_handler(backend: SheetsBackend | None, root: Path):
         def do_GET(self):
             parsed = urlparse(self.path)
             path = parsed.path
+            backend = self._backend()
 
             if path == "/api/health":
                 live = None
@@ -555,6 +570,7 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                         "sheetId": backend.sheet_id if backend else None,
                         "dataSource": (live or {}).get("dataSource"),
                         "requireRestart": (live or {}).get("requireRestart"),
+                        "root": str(ROOT),
                         "email": (
                             backend.creds.service_account_email
                             if backend
@@ -577,6 +593,7 @@ def make_handler(backend: SheetsBackend | None, root: Path):
                         {
                             "dataSource": live.get("dataSource"),
                             "requireRestart": bool(live.get("requireRestart")),
+                            "systemFont": live.get("systemFont") or "roboto",
                             "sheetId": backend.sheet_id,
                             "sourceName": live.get("sourceName"),
                             "settingsSheetId": live.get("settingsSheetId"),
@@ -764,40 +781,50 @@ def main():
     args = ap.parse_args()
 
     os.chdir(ROOT)
-    backend = None
-    if not args.no_api:
+    api: dict = {"backend": None}
+
+    def _resolve_key(key_path: Path) -> Path:
+        if key_path.is_file():
+            return key_path
+        sibling = (
+            Path.home()
+            / "Library/CloudStorage/Dropbox/2026/8/TokiMenu/secrets"
+            / "google-service-account.json"
+        )
+        if sibling.is_file():
+            _log(f"no key at {key_path}; using {sibling}")
+            return sibling
+        return key_path
+
+    def _init_sheets() -> None:
+        if args.no_api:
+            _log("Sheets API disabled (--no-api)")
+            return
         try:
             backend = SheetsBackend(
                 args.sheet_id,
-                args.key,
+                _resolve_key(args.key),
                 settings_sheet_id=args.settings_sheet_id,
             )
-            # Smoke: list tabs once at startup
             tabs = backend.refresh_meta(force=True)
+            api["backend"] = backend
             _log(f"tabs: {len(tabs['title_by_gid'])}")
-        except SystemExit:
-            raise
+            _log("Sheets API proxy: /api/sheets/csv?gid=…  (/api/sheets/xlsx → 410)")
+            t0 = time.time()
+            backend.warm_csv_cache(force=True)
+            _log(f"startup csv warm done in {time.time() - t0:.2f}s")
+        except SystemExit as e:
+            _log(f"WARNING: Sheets API unavailable: {e}")
+            _log("Serving static files only (Menu Manager still works).")
         except Exception as e:
             _log(f"WARNING: Sheets API init failed: {e}")
             _log("Serving static files only; boards need public sheet or fix credentials.")
             traceback.print_exc()
-            backend = None
 
-    handler = make_handler(backend, ROOT)
-    httpd = ThreadingHTTPServer((args.bind, args.port), handler)
+    # Bind first so the launcher health-check does not time out while Google loads.
+    httpd = ThreadingHTTPServer((args.bind, args.port), make_handler(api, ROOT))
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
-    if backend:
-        _log("Sheets API proxy: /api/sheets/csv?gid=…  (/api/sheets/xlsx → 410)")
-        # Warm CSV cache in background so first board open isn't 8× Google latency
-        def _bg_warm() -> None:
-            try:
-                t0 = time.time()
-                backend.warm_csv_cache(force=True)
-                _log(f"startup csv warm done in {time.time() - t0:.2f}s")
-            except Exception as e:
-                _log(f"startup csv warm failed: {e}")
-
-        threading.Thread(target=_bg_warm, name="csv-warm", daemon=True).start()
+    threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

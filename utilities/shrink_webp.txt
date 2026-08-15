@@ -1,0 +1,4 @@
+for f in **/*.webp; do
+  [[ "$f" == *"-sm.webp"* ]] && continue
+  magick "$f" -resize 50% "${f%.webp}-sm.webp"
+done

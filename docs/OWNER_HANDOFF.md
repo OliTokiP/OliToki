@@ -1,7 +1,7 @@
 # TokiMenu — Owner handoff & authoring strategy
 
 Living context for product direction (not a coding checklist).  
-Last updated: 2026-08-13 21:30.
+Last updated: 2026-08-14 16:50.
 
 Also see: [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md) (screen part names) · [SHEET_MIGRATION.md](./SHEET_MIGRATION.md) (revised tabs + percent fields).
 
@@ -14,6 +14,8 @@ TokiMenu started as a **Photoshop + DaVinci Resolve** digital menu: it looked ri
 **Near-term purpose:** give the restaurant owner (the boss) control over menu boards at work — without needing design software or the original author on call.
 
 **Status today:** functionally a solid **C / low-expectations ship** — boards look like the design, spreadsheet-driven updates work, Local + Remote paths exist. Obsessive polish (Encore, WebP, Fire Stick) is aiming at **A+**, not blocking a first handoff.
+
+**Tier B prototype (2026-08-14):** mobile Menu Manager layout at [`manager.html`](../manager.html) — see [MENU_MANAGER.md](./MENU_MANAGER.md). Chrome theming and Style/Theme navigation only; sheet writes and board item editors are not wired.
 
 **Disclosure:** the boss has not been told about the system yet. Handoff is intentional and staged.
 

@@ -962,7 +962,8 @@
    *   A Theme Selector | B BG Color | C BG Pattern | D BG Wallpaper |
    *   E BG Blur | F BG Blend Mode | G BG Opacity | H BG Scroll Speed |
    *   I Presentation Speed | J Show Github Version |
-   *   K Encore Spotlight Type | L Encore Spotlight Color
+   *   K Encore Spotlight Type | L Encore Spotlight Color |
+   *   M Encore Background Color
    *
    * Themes Database (rows: section label → headers → theme rows):
    *   A Theme Name | B Main | C Secondary | D Highlight | E Highlight Special
@@ -986,6 +987,7 @@
     showVersion: 9,
     encoreSpotlightType: 10,
     encoreSpotlightColor: 11,
+    encoreBackgroundColor: 12, // M — Color Picker / hex (Encore plate)
   };
   const STYLE_REVISED_THEME = {
     themeName: 0,
@@ -1165,6 +1167,8 @@
     encoreSpotlightType: "hard",
     /** Style Q: "black" | "highlight" — veil color (highlight = item highlight) */
     encoreSpotlightColor: "black",
+    /** Style M: Encore plate (Color Picker / hex). Blank → Secondary. */
+    encoreBackgroundColor: "#ffffff",
   };
   let items = [];
   let proteinBox = {
@@ -1997,7 +2001,8 @@
 
   /**
    * Beta Features → Pattern Bake (checkbox).
-   * ON  = paint #bg-pattern at opacity 1 using hex = stripe @ 0.35 over BG Color.
+   * ON  = paint #bg-pattern at opacity 1 using hex = stripe @ 0.35 over
+   *       theme Secondary Color (forced plate; not Style BG Color).
    * OFF = old look (true 0.35 opacity over whatever is behind).
    */
   const PATTERN_BAKE_ALPHA = 0.35;
@@ -2051,17 +2056,15 @@
 
   function patternPlateHex() {
     return (
-      normalizeHex(config.bgColor) ||
-      normalizeHex(config.bgSolid) ||
-      normalizeHex(config.mainColor) ||
-      "#000000"
+      normalizeHex(config.secondaryColor) ||
+      "#ffffff"
     );
   }
 
   function patternBakeHex(fgHex, fallback) {
     const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
     if (!patternBakeOn) return fg;
-    // stripe×0.35 + BG×0.65  (identical to CSS opacity 0.35 over the plate)
+    // stripe×0.35 + Secondary×0.65  (as if 0.35 over the theme Secondary plate)
     return blendHexOver(fg, patternPlateHex(), 0.35);
   }
 
@@ -2665,6 +2668,14 @@
    * full-stage bitmaps under a solid veil. Pan X stays on the img transform
    * so unpark resumes where it left off. Pattern is display:none while parked.
    */
+  function encoreBackgroundHex() {
+    return (
+      normalizeHex(config.encoreBackgroundColor) ||
+      normalizeHex(config.secondaryColor) ||
+      "#ffffff"
+    );
+  }
+
   let _encoreSolidBg = false;
   let _encoreBgFadeTimer = null;
 
@@ -2813,7 +2824,7 @@
 
     if (galaxy) {
       if (want) {
-        galaxy.style.backgroundColor = config.secondaryColor || "#000000";
+        galaxy.style.backgroundColor = encoreBackgroundHex();
         galaxy.classList.remove("is-solid");
         galaxy.classList.toggle("has-image", !!config.bgImage);
       } else {
@@ -3514,10 +3525,10 @@
       }
     }
 
-    // Encore: plate is Secondary. Wallpaper is faded then parked (src dropped).
+    // Encore: Style Encore Background Color plate. Wallpaper faded then parked.
     // Do not restore src here while tokiParked — that would undo the GPU win.
     if (_encoreSolidBg) {
-      plate = config.secondaryColor || plate;
+      plate = encoreBackgroundHex();
       document.body.classList.add("encore-solid-bg");
     } else {
       document.body.classList.remove("encore-solid-bg");
@@ -4726,6 +4737,11 @@
           : config.encoreSpotlightColor,
         "black"
       ),
+      encoreBackgroundColor:
+        parsed.encoreBackgroundColor ||
+        config.encoreBackgroundColor ||
+        config.secondaryColor ||
+        "#ffffff",
     };
 
     if (parsed.proteinBox) {
@@ -5596,6 +5612,7 @@
   let liveSettings = {
     dataSource: "",
     requireRestart: false,
+    systemFont: "roboto",
     sheetId: "",
   };
 
@@ -5664,12 +5681,21 @@
         catalogIdx = i;
       }
     }
+    let systemFont = "roboto";
     if (headerIdx >= 0 && headerIdx + 1 < rows.length) {
       dataSource = String((rows[headerIdx + 1] && rows[headerIdx + 1][0]) || "").trim();
       requireRestart = parseYesNo(
         rows[headerIdx + 1] && rows[headerIdx + 1][1],
         false
       );
+      const header = rows[headerIdx] || [];
+      for (let c = 0; c < header.length; c++) {
+        const h = String(header[c] || "").trim().toLowerCase();
+        if (h.indexOf("system font") !== -1) {
+          systemFont = parseSystemFontName(rows[headerIdx + 1] && rows[headerIdx + 1][c]);
+          break;
+        }
+      }
     }
     if (catalogIdx >= 0) {
       for (let i = catalogIdx + 1; i < rows.length; i++) {
@@ -5696,24 +5722,58 @@
     return {
       dataSource: dataSource || "Alpha Copy",
       requireRestart: requireRestart,
+      systemFont: systemFont,
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || "",
     };
+  }
+
+  function parseSystemFontName(raw) {
+    const s = String(raw || "").trim().toLowerCase();
+    if (s.indexOf("poppin") !== -1) return "poppins";
+    if (s.indexOf("roboto") !== -1) return "roboto";
+    return "roboto";
+  }
+
+  function ensureSystemFontStylesheet(font) {
+    let el = document.getElementById("toki-system-font-link");
+    if (font !== "poppins") {
+      return;
+    }
+    if (el) return;
+    el = document.createElement("link");
+    el.id = "toki-system-font-link";
+    el.rel = "stylesheet";
+    el.href =
+      "https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap";
+    document.head.appendChild(el);
+  }
+
+  function applySystemFont(name) {
+    const font = parseSystemFontName(name);
+    const root = document.documentElement;
+    if (root) root.setAttribute("data-system-font", font);
+    if (document.body) document.body.setAttribute("data-system-font", font);
+    ensureSystemFontStylesheet(font);
+    tokiInfo("System Font:", font, font === "poppins" ? "scale 0.92" : "scale 1");
   }
 
   function applyLiveSettingsPayload(j) {
     liveSettings = {
       dataSource: j.dataSource || "",
       requireRestart: !!j.requireRestart,
+      systemFont: parseSystemFontName(j.systemFont),
       sheetId: j.sheetId || "",
     };
     if (liveSettings.sheetId) {
       cfg.googleSheetId = liveSettings.sheetId;
     }
+    applySystemFont(liveSettings.systemFont);
     tokiInfo(
       "live settings:",
       "dataSource=" + (liveSettings.dataSource || "?"),
       "requireRestart=" + liveSettings.requireRestart,
+      "systemFont=" + (liveSettings.systemFont || "roboto"),
       "sheet=" + (liveSettings.sheetId || "?")
     );
   }
@@ -5747,7 +5807,23 @@
             cache: "no-store",
           });
           if (res.ok) {
-            applyLiveSettingsPayload(await res.json());
+            const j = await res.json();
+            applyLiveSettingsPayload(j);
+            // Older toki_server omits systemFont — fill from public Settings.
+            if (!j.systemFont) {
+              try {
+                const pub = await fetchLiveSettingsFromPublicExport();
+                if (pub && pub.systemFont) {
+                  liveSettings.systemFont = pub.systemFont;
+                  applySystemFont(pub.systemFont);
+                }
+              } catch (fontErr) {
+                tokiWarn(
+                  "system font: public Settings failed",
+                  fontErr && fontErr.message ? fontErr.message : fontErr
+                );
+              }
+            }
             return liveSettings;
           }
           tokiWarn("live settings: proxy HTTP " + res.status + " — trying public Settings");
@@ -6195,6 +6271,15 @@
         : "",
       "black"
     );
+    let encoreBackgroundColor = secondary;
+    if (setCols.encoreBackgroundColor != null) {
+      const encoreBgRaw = String(
+        cell(boardRow, setCols.encoreBackgroundColor) || ""
+      ).trim();
+      if (encoreBgRaw) {
+        encoreBackgroundColor = parseBgColor(encoreBgRaw, null, palette);
+      }
+    }
 
     const theme = {
       themeName: themeName,
@@ -6217,6 +6302,7 @@
       showVersion: !!showVersion,
       encoreSpotlightType: encoreSpotlightType,
       encoreSpotlightColor: encoreSpotlightColor,
+      encoreBackgroundColor: encoreBackgroundColor,
     };
     tokiInfo(
       "Style theme:",
@@ -6246,7 +6332,9 @@
       theme.bgBlendMode,
       "encoreSpot",
       theme.encoreSpotlightType,
-      theme.encoreSpotlightColor
+      theme.encoreSpotlightColor,
+      "encoreBg",
+      theme.encoreBackgroundColor
     );
     return theme;
   }
@@ -6272,6 +6360,7 @@
     parsed.showVersion = !!theme.showVersion;
     parsed.encoreSpotlightType = theme.encoreSpotlightType;
     parsed.encoreSpotlightColor = theme.encoreSpotlightColor;
+    parsed.encoreBackgroundColor = theme.encoreBackgroundColor;
     return parsed;
   }
 
@@ -9235,8 +9324,12 @@
    */
   function measureTextPx(text, font) {
     const str = String(text || "");
-    const fontStr =
-      font || "700 30px Roboto Condensed, Roboto, sans-serif";
+    const face =
+      (document.documentElement.getAttribute("data-system-font") || "") ===
+      "poppins"
+        ? "Poppins, Roboto, sans-serif"
+        : "Roboto Condensed, Roboto, sans-serif";
+    const fontStr = font || "700 30px " + face;
     try {
       if (!_measureProbe) {
         _measureProbe = document.createElement("span");
@@ -10578,12 +10671,9 @@
   }
 
   function startFpsSampler() {
-    if (_fpsSampleRaf) return;
-    function loop(now) {
-      _fpsSampleRaf = requestAnimationFrame(loop);
-      noteFrameTs(now);
-    }
-    _fpsSampleRaf = requestAnimationFrame(loop);
+    // Intentionally empty. A vsync rAF loop here kept Fire Stick busy for
+    // the whole session (felt like a long load). Frame Rate reads the cap
+    // plus samples taken only while the Hard_Shadow camera stepper runs.
   }
 
   function stopFpsSampler() {
@@ -10656,6 +10746,7 @@
     function frame(now) {
       if (gen !== _encoreZoomGen) return;
       _encoreZoomRaf = requestAnimationFrame(frame);
+      noteFrameTs(now);
       if (now - lastPaint < minDt - 1) return;
       lastPaint = now;
       let u = (now - t0) / dur;
@@ -10733,15 +10824,15 @@
   function appendScaffoldBg(rig) {
     if (!rig) return false;
 
-    // Encore segment: color plate only (Secondary). Never copy the wallpaper
-    // onto the portrait rig — that is the image that stays visible during Encore.
+    // Encore segment: color plate only (Encore Background Color). Never copy
+    // the wallpaper onto the portrait rig.
     if (isEncoreSegmentNow()) {
       const wrap = document.createElement("div");
       wrap.className = "family-portrait-bg";
       wrap.setAttribute("aria-hidden", "true");
       const plateEl = document.createElement("div");
       plateEl.className = "family-portrait-bg-plate";
-      plateEl.style.backgroundColor = config.secondaryColor || "#000000";
+      plateEl.style.backgroundColor = encoreBackgroundHex();
       wrap.appendChild(plateEl);
       if (rig.firstChild) rig.insertBefore(wrap, rig.firstChild);
       else rig.appendChild(wrap);
@@ -15308,16 +15399,20 @@
           case "frameRate": {
             const cap = encoreHardShadowFpsCap();
             const measured =
-              _fpsEma > 0 ? "~" + Math.round(_fpsEma) + " rAF" : "…";
+              _fpsEma > 0 ? "~" + Math.round(_fpsEma) + " cam" : "";
             if (cap) {
-              return cap + " cam cap (Hard_Shadow) · " + measured;
+              return measured
+                ? cap + " cam cap (Hard_Shadow) · " + measured
+                : cap + " cam cap (Hard_Shadow)";
             }
-            return "uncapped · " + measured;
+            return measured ? "uncapped · " + measured : "uncapped";
           }
           case "dataSource": {
             const name = (liveSettings && liveSettings.dataSource) || "config.js";
             const sid = (liveSettings && liveSettings.sheetId) || "";
-            return sid ? name + " · " + sid.slice(0, 8) : name;
+            const font = (liveSettings && liveSettings.systemFont) || "roboto";
+            const base = sid ? name + " · " + sid.slice(0, 8) : name;
+            return base + " · " + font;
           }
           case "requireRestart":
             return liveSettings && liveSettings.requireRestart

@@ -27,7 +27,7 @@ Non-goals (for now):
 - Cloud multi-tenant SaaS hosting
 - Mobile responsive redesign (boards are fixed stage, scaled to the display)
 
-**Authoring path:** the sheet *is* the CMS for the first handoff. A boss-facing web authoring UI (sheet hidden) is a later goal — see [OWNER_HANDOFF.md](./OWNER_HANDOFF.md).
+**Authoring path:** the sheet *is* the CMS for the first handoff. A boss-facing mobile Menu Manager is in layout-prototype form at `manager.html` — see [MENU_MANAGER.md](./MENU_MANAGER.md) and [OWNER_HANDOFF.md](./OWNER_HANDOFF.md).
 
 ---
 
