@@ -334,7 +334,26 @@ img {
   color: var(--secondary);
 }
 
+.home-peak {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.home-peak svg {
+  /* Fill the hero box; preserveAspectRatio=xMinYMax slice does cover:
+     pin bottom-left, width-fit when the box is wide (crop top),
+     height-fit on the 390 artboard (crop right). No distortion. */
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .home-cluster {
+  position: relative;
+  z-index: 1;
   grid-column: 2;
   grid-row: 2;
   container-type: size;
@@ -347,24 +366,9 @@ img {
 }
 
 .home-logo {
-  /* Same seat as before: this flex slot holds the space above the wordmark.
-     Only the mark shrinks — mockup bunny ≈ 25% of phone width. */
+  /* Empty spacer — same flex seat as the old mark so the wordmark does not move. */
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.home-logo-mark {
-  display: block;
-  flex: 0 0 auto;
-  width: calc(var(--device-w) * 0.25);
-  aspect-ratio: 95.492 / 126.2874;
-  height: auto;
-  background-color: var(--secondary);
-  -webkit-mask: url("../assets/TokiLogoFix.svg") center / contain no-repeat;
-  mask: url("../assets/TokiLogoFix.svg") center / contain no-repeat;
 }
 
 .home-copy {
@@ -399,7 +403,8 @@ img {
 .home-ver {
   margin: 1.6cqh 0 0;
   font-size: 3.5cqh;
-  opacity: 0.72;
+  color: var(--special);
+  opacity: 1;
 }
 
 .home-body {

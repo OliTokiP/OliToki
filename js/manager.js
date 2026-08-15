@@ -241,12 +241,37 @@
     );
   }
 
+  function attachPeak() {
+    var host = document.querySelector(".home-peak");
+    if (!host || host.getAttribute("data-ready")) return;
+    fetch("assets/TokiPeak.svg?v=20260815peak")
+      .then(function (r) {
+        if (!r.ok) throw new Error("peak svg");
+        return r.text();
+      })
+      .then(function (txt) {
+        var el = document.querySelector(".home-peak");
+        if (!el) return;
+        el.innerHTML = txt;
+        var svg = el.querySelector("svg");
+        if (svg) {
+          svg.setAttribute("preserveAspectRatio", "xMinYMax slice");
+          svg.removeAttribute("width");
+          svg.removeAttribute("height");
+          svg.setAttribute("aria-hidden", "true");
+        }
+        el.setAttribute("data-ready", "1");
+      })
+      .catch(function () {});
+  }
+
   function screenHome() {
     return (
       '<section class="screen screen-home">' +
       '<div class="home-hero">' +
+      '<div class="home-peak" aria-hidden="true"></div>' +
       '<div class="home-cluster">' +
-      '<div class="home-logo" aria-hidden="true"><span class="home-logo-mark"></span></div>' +
+      '<div class="home-logo" aria-hidden="true"></div>' +
       '<div class="home-copy">' +
       '<p class="home-brand">OliToki</p>' +
       '<p class="home-kicker">MENU MANAGER</p>' +
@@ -510,6 +535,7 @@
     else if (state.screen === "board") html = screenBoard();
     els.app.innerHTML = html;
     applyTheme();
+    if (state.screen === "home") attachPeak();
     if (state.screen === "style") {
       var sc = document.getElementById("style-scroll");
       if (sc) sc.scrollTop = state.styleScroll;

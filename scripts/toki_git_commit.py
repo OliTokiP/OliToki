@@ -305,7 +305,7 @@ def git_commit(message: str, full: bool = False) -> bool:
             "add",
             "js/", "css/",
             "index.html", "index2.html", "index3.html", "index4.html",
-            "preview-all.html", "glossary.html",
+            "preview-all.html", "glossary.html", "manager.html",
             "docs/", "scripts/", "deprecated/",
             "AGENTS.md", "Agents.md",
             "*.command", "Start Toki Menu.command",
@@ -313,6 +313,7 @@ def git_commit(message: str, full: bool = False) -> bool:
             # Display-size rasters (untracked *-sm.webp are skipped by `git add -u`)
             ":(glob)food-pics/**/*-sm.webp",
             ":(glob)assets/**/*-sm.webp",
+            ":(glob)assets/*.svg",
             ":(glob)assets/stickers/*",
         ], check=False)
         run_git(["add", "-u"], check=False)
