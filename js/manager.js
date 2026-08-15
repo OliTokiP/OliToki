@@ -29,6 +29,8 @@
     pendingLeave: null,
   };
 
+  var previewCtl = { gen: 0, timers: [], raf: 0 };
+
   var els = {};
 
   function clone(obj) {
@@ -167,6 +169,17 @@
     );
   }
 
+  function linksBlock() {
+    return (
+      '<div class="row links-block">' +
+      '<span class="row-label">Links</span>' +
+      '<div class="links-cells">' +
+      '<button class="link-cell" type="button" data-act="open-sheet">Google Sheet</button>' +
+      '<button class="link-cell" type="button" data-act="open-settings-sheet">Settings</button>' +
+      "</div></div>"
+    );
+  }
+
   function row(opts) {
     var cls = "row" + (opts.child ? " is-child" : "");
     if (opts.control === "zeroOne") {
@@ -212,6 +225,8 @@
       "</span>" +
       '<div class="pills" data-pills="' +
       key +
+      '" data-range-min="0" data-range-max="' +
+      max +
       '">';
     for (var i = 0; i <= max; i++) {
       html +=
@@ -229,6 +244,13 @@
   }
 
   function footerBar(label, act) {
+    if (!act) {
+      return (
+        '<div class="footer-bar footer-soon"><span>' +
+        escapeHtml(label) +
+        "</span></div>"
+      );
+    }
     return (
       '<button class="footer-bar" type="button" data-act="' +
       act +
@@ -275,7 +297,9 @@
       '<div class="home-copy">' +
       '<p class="home-brand">OliToki</p>' +
       '<p class="home-kicker">MENU MANAGER</p>' +
-      '<p class="home-tag">Edit the look, feel and behavior of the OliToki Menu System.</p>' +
+      '<p class="home-tag">' +
+      '<span class="home-tag-line">Edit the look, feel and behavior of the</span>' +
+      '<span class="home-tag-line">OliToki Menu System.</span></p>' +
       '<p class="home-ver">' +
       escapeHtml(buildVersionLabel()) +
       "</p>" +
@@ -309,9 +333,7 @@
         label: "System Font",
         value: labelOf(D.fonts, state.draft.systemFont),
       }) +
-      '<button class="row row-sheet" type="button" data-act="open-sheet">' +
-      '<span class="row-value row-value-link">Google Sheet</span>' +
-      "</button>" +
+      linksBlock() +
       "</div></section>"
     );
   }
@@ -391,7 +413,12 @@
         value: labelOf(D.colorRoles, d.patternColor2),
         child: true,
       });
-      html += speedRow("BG Scroll Speed", "scrollSpeed", d.scrollSpeed, 5);
+      html += speedRow(
+        "Pattern Scroll Speed",
+        "scrollSpeed",
+        d.scrollSpeed,
+        D.speedTiles.scroll.max
+      );
     }
     if (d.background === "wallpaper") {
       html += row({
@@ -400,7 +427,12 @@
         value: labelOf(D.wallpapers, d.wallpaper),
         child: true,
       });
-      html += speedRow("BG Scroll Speed", "scrollSpeed", d.scrollSpeed, 5);
+      html += speedRow(
+        "Wallpaper Scroll Speed",
+        "scrollSpeed",
+        d.scrollSpeed,
+        D.speedTiles.scroll.max
+      );
     }
     html += row({
       key: "presentation",
@@ -431,56 +463,45 @@
       "Presentation Speed",
       "presentationSpeed",
       d.presentationSpeed,
-      7
+      D.speedTiles.presentation.max
     );
     return html;
   }
 
+  function wallpaperSrc() {
+    var paper = find(D.wallpapers, state.draft.wallpaper);
+    return paper && paper.src ? paper.src : D.wallpapers[0].src;
+  }
+
+  function scrollDurationSec() {
+    var speed = Number(state.draft.scrollSpeed) || 0;
+    if (speed <= 0) return 0;
+    var period = 44;
+    var px = 28 * 0.45 * speed;
+    return Math.max(0.45, period / Math.max(0.01, px));
+  }
+
   function previewHtml() {
-    var item = D.previewItems[state.previewIndex] || D.previewItems[0];
     var d = state.draft;
-    var showNew = item.isNew;
-    var paper = find(D.wallpapers, d.wallpaper);
+    var encore = d.presentation === "encore";
+    var fill = encore
+      ? roleHex(d.encoreBg)
+      : d.background === "pattern" || d.background === "wallpaper"
+        ? roleHex("main")
+        : roleHex(d.background);
     var scrollOn =
+      !encore &&
       d.scrollSpeed > 0 &&
       (d.background === "pattern" || d.background === "wallpaper");
-    var kb = d.presentation === "kenburns" || d.presentation === "encore";
-    var veil = d.presentation === "encore";
-    var bgClass = "preview-solid";
-    if (d.background === "pattern") bgClass = "preview-pattern";
-    if (d.background === "wallpaper") bgClass = "preview-wallpaper";
-    var scrollClass = scrollOn ? " is-scrolling" : "";
-    var fill =
-      d.presentation === "encore"
-        ? roleHex(d.encoreBg)
-        : d.background === "pattern" || d.background === "wallpaper"
-          ? roleHex("main")
-          : roleHex(d.background);
+    var veilKind =
+      d.encoreStyle === "soft"
+        ? "soft"
+        : d.encoreStyle === "hard"
+          ? "hard"
+          : "hard-shadow";
     var veilFill =
       d.encoreSpot === "highlight" ? currentTheme().highlight : "#000000";
-    var hold = Math.max(2, d.presentationSpeed || 1);
-    var scrollDur = Math.max(6, 22 - d.scrollSpeed * 3);
-    var layerStyle =
-      d.background === "wallpaper"
-        ? ' style="background-image:url(\'' + paper.src + "')\""
-        : "";
-    var sticker = showNew
-      ? '<div class="preview-sticker">' +
-        '<img class="preview-sticker-shadow" alt="" src="' +
-        D.sticker.shadow +
-        '">' +
-        '<img class="preview-sticker-body" alt="New!" src="' +
-        D.sticker.body +
-        '">' +
-        "</div>"
-      : "";
-    var veilEl = veil
-      ? '<div class="preview-layer preview-veil is-' +
-        (d.encoreStyle === "soft" ? "soft" : "hard") +
-        '" style="--veil-fill:' +
-        veilFill +
-        '"></div>'
-      : "";
+    var wp = wallpaperSrc();
     return (
       '<div class="preview" style="--preview-fill:' +
       fill +
@@ -488,27 +509,42 @@
       roleHex(d.patternColor1) +
       ";--pattern-b:" +
       roleHex(d.patternColor2) +
-      ";--hold-dur:" +
-      hold +
-      "s;--scroll-dur:" +
-      scrollDur +
-      's">' +
-      '<div class="preview-layer ' +
-      bgClass +
-      scrollClass +
+      ";--wallpaper-image:url('" +
+      wp +
+      "');--scroll-dur:" +
+      scrollDurationSec() +
+      's;--veil-fill:' +
+      veilFill +
+      '">' +
+      '<div class="preview-layer preview-solid"></div>' +
+      '<div class="preview-layer preview-pattern' +
+      (scrollOn && d.background === "pattern" ? " is-scrolling" : "") +
       '"' +
-      layerStyle +
-      "></div>" +
-      '<div class="preview-plate' +
-      (kb ? " is-kb" : "") +
-      '">' +
+      (encore || d.background !== "pattern" ? " hidden" : "") +
+      '><div class="preview-pattern-track"></div></div>' +
+      '<div class="preview-layer preview-wallpaper"' +
+      (encore || d.background !== "wallpaper" ? " hidden" : "") +
+      ">" +
+      '<div class="preview-wp preview-wp-a is-on"></div>' +
+      '<div class="preview-wp preview-wp-b"></div></div>' +
+      '<div class="preview-plate">' +
+      '<div class="preview-anim">' +
       '<img class="preview-food" alt="" src="' +
-      item.src +
+      (D.previewItems[0] && D.previewItems[0].src) +
       '">' +
-      sticker +
-      "</div>" +
-      veilEl +
-      "</div>"
+      '<div class="preview-sticker" hidden>' +
+      '<img class="preview-sticker-shadow" alt="" src="' +
+      D.sticker.shadow +
+      '">' +
+      '<img class="preview-sticker-body" alt="New!" src="' +
+      D.sticker.body +
+      '">' +
+      "</div></div></div>" +
+      '<div class="preview-layer preview-veil is-' +
+      veilKind +
+      '"' +
+      (encore ? "" : " hidden") +
+      "></div></div>"
     );
   }
 
@@ -521,7 +557,7 @@
       '<div class="rows">' +
       styleRows() +
       "</div></div>" +
-      footerBar("Create New Theme", "create-theme") +
+      footerBar("Coming soon") +
       "</section>"
     );
   }
@@ -710,11 +746,8 @@
     if (spec.kind === "trueFalse") {
       var btns = spec.options
         .map(function (o) {
-          var on = String(o.id) === String(spec.get());
           return (
-            '<button class="btn-primary' +
-            (on ? " is-on" : "") +
-            '" type="button" data-act="choose" data-id="' +
+            '<button class="btn-primary" type="button" data-act="choose" data-id="' +
             escapeHtml(o.id) +
             '">' +
             escapeHtml(o.label) +
@@ -739,7 +772,7 @@
     var note = spec.note
       ? '<p class="picker-note">' + escapeHtml(spec.note) + "</p>"
       : "";
-    var long = spec.options.length >= 6 ? " is-long" : "";
+    var long = " is-long";
     var opts = spec.options
       .map(function (o) {
         var on = String(o.id) === String(current);
@@ -905,10 +938,33 @@
   function choose(id) {
     var spec = pickerSpec(state.picker);
     if (!spec) return;
+    if (state.picker === "wallpaper" && id === "upload") {
+      state.picker = null;
+      renderPicker();
+      openUploadSoon();
+      return;
+    }
     spec.set(id);
     state.picker = null;
     applyTheme();
     renderAll();
+  }
+
+  function openUploadSoon() {
+    var inp = document.getElementById("toki-upload");
+    if (!inp) {
+      inp = document.createElement("input");
+      inp.type = "file";
+      inp.accept = "image/*";
+      inp.id = "toki-upload";
+      inp.hidden = true;
+      document.body.appendChild(inp);
+      inp.addEventListener("change", function () {
+        if (inp.files && inp.files.length) toast("Coming soon");
+        inp.value = "";
+      });
+    }
+    inp.click();
   }
 
   function setPill(key, val) {
@@ -972,26 +1028,218 @@
     window.open(url, "_blank", "noopener");
   }
 
+  function motionPhases() {
+    var m = D.motionDefaults;
+    var speed = Number(state.draft.presentationSpeed) || 0;
+    var scale = (m.previewScale || 0.7) / Math.max(1, speed);
+    return {
+      punchIn: m.punchIn * scale,
+      hold: m.hold * scale,
+      punchOut: m.punchOut * scale,
+      zoomMin: m.zoomMin,
+      zoomMax: m.zoomMax,
+      paused: speed <= 0,
+    };
+  }
+
+  function previewAfter(ms, gen, fn) {
+    var id = setTimeout(function () {
+      if (gen !== previewCtl.gen) return;
+      fn();
+    }, ms);
+    previewCtl.timers.push(id);
+  }
+
+  function applyPreviewItem(item) {
+    var img = els.app.querySelector(".preview-food");
+    var sticker = els.app.querySelector(".preview-sticker");
+    var veil = els.app.querySelector(".preview-veil");
+    if (img) img.src = item.src;
+    if (sticker) sticker.hidden = !item.isNew;
+    if (veil) {
+      var fill = item.isNew
+        ? currentTheme().special
+        : state.draft.encoreSpot === "highlight"
+          ? currentTheme().highlight
+          : "#000000";
+      veil.style.setProperty("--veil-fill", fill);
+    }
+  }
+
+  function setPlate(opacity, zoom, durIn, durOut) {
+    var plate = els.app.querySelector(".preview-plate");
+    var anim = els.app.querySelector(".preview-anim");
+    if (!plate) return;
+    var op = Math.min(0.45, durIn || 0.45);
+    plate.style.transition = "opacity " + op + "s ease";
+    if (anim) {
+      anim.style.transition =
+        "transform " + (durIn || 0.45) + "s ease-out";
+      anim.style.setProperty("--hero-zoom", String(zoom));
+    }
+    plate.style.opacity = String(opacity);
+    var veil = els.app.querySelector(".preview-veil");
+    if (veil && state.draft.presentation === "encore") {
+      veil.style.transition = "opacity " + op + "s ease";
+      veil.style.opacity = String(opacity);
+    }
+  }
+
+  function startWallpaperPan() {
+    var wrap = els.app.querySelector(".preview-wallpaper");
+    if (!wrap || wrap.hidden) return;
+    var a = wrap.querySelector(".preview-wp-a");
+    var b = wrap.querySelector(".preview-wp-b");
+    if (!a || !b) return;
+    var speed = 28 * 0.45 * (Number(state.draft.scrollSpeed) || 0);
+    if (speed <= 0) return;
+    var layers = [
+      { el: a, x: 0, on: true },
+      { el: b, x: 0, on: false },
+    ];
+    layers[0].el.classList.add("is-on");
+    layers[1].el.classList.remove("is-on");
+    var last = 0;
+    var fading = false;
+    var gen = previewCtl.gen;
+    function tick(ts) {
+      if (gen !== previewCtl.gen) return;
+      if (!last) last = ts;
+      var dt = Math.min(48, ts - last) / 1000;
+      last = ts;
+      var i;
+      for (i = 0; i < layers.length; i++) {
+        if (!layers[i].on && fading) continue;
+        layers[i].x -= speed * dt;
+        layers[i].el.style.transform = "translate3d(" + layers[i].x + "px,0,0)";
+      }
+      var active = layers[0].on ? layers[0] : layers[1];
+      var other = layers[0].on ? layers[1] : layers[0];
+      var limit = -Math.max(80, wrap.offsetWidth * 0.35);
+      if (!fading && active.x < limit) {
+        fading = true;
+        other.x = 0;
+        other.el.style.transform = "translate3d(0,0,0)";
+        other.el.style.transition = "opacity 0.45s ease";
+        active.el.style.transition = "opacity 0.45s ease";
+        other.el.classList.add("is-on");
+        active.el.classList.remove("is-on");
+        other.on = true;
+        active.on = false;
+        previewAfter(480, gen, function () {
+          fading = false;
+          other.el.style.transition = "";
+          active.el.style.transition = "";
+        });
+      }
+      previewCtl.raf = requestAnimationFrame(tick);
+    }
+    previewCtl.raf = requestAnimationFrame(tick);
+  }
+
+  function runPreviewBlock(index, gen) {
+    if (gen !== previewCtl.gen) return;
+    var items = D.previewItems;
+    if (!items.length) return;
+    var i = ((index % items.length) + items.length) % items.length;
+    state.previewIndex = i;
+    var item = items[i];
+    var phases = motionPhases();
+    var mode = state.draft.presentation;
+    var zoom = mode === "slideshow" ? 1 : phases.zoomMin;
+    applyPreviewItem(item);
+    var plate = els.app.querySelector(".preview-plate");
+    var anim = els.app.querySelector(".preview-anim");
+    if (plate) {
+      plate.style.transition = "none";
+      plate.style.opacity = "0";
+    }
+    if (anim) {
+      anim.style.transition = "none";
+      anim.style.setProperty("--hero-zoom", String(zoom));
+    }
+    var veil = els.app.querySelector(".preview-veil");
+    if (veil) {
+      veil.style.transition = "none";
+      veil.style.opacity = "0";
+    }
+    void (plate && plate.offsetWidth);
+    if (phases.paused) {
+      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.3, 0.3);
+      return;
+    }
+    previewAfter(30, gen, function () {
+      var zIn = mode === "slideshow" ? 1 : phases.zoomMax;
+      setPlate(1, zIn, phases.punchIn, phases.punchOut);
+      previewAfter(phases.punchIn * 1000 + phases.hold * 1000, gen, function () {
+        var zOut = mode === "slideshow" ? 1 : phases.zoomMin;
+        setPlate(0, zOut, phases.punchOut, phases.punchOut);
+        previewAfter(phases.punchOut * 1000, gen, function () {
+          runPreviewBlock(i + 1, gen);
+        });
+      });
+    });
+  }
+
   function startPreviewCycle() {
     stopPreviewCycle();
-    var sec = Number(state.draft.presentationSpeed) || 0;
-    if (sec <= 0) return;
-    state.previewTimer = setInterval(function () {
-      state.previewIndex = (state.previewIndex + 1) % D.previewItems.length;
-      var wrap = els.app.querySelector(".preview");
-      if (!wrap) return;
-      var parent = wrap.parentNode;
-      var html = previewHtml();
-      var tmp = document.createElement("div");
-      tmp.innerHTML = html;
-      parent.replaceChild(tmp.firstChild, wrap);
-    }, sec * 1000);
+    var gen = previewCtl.gen;
+    bindPillDrag();
+    startWallpaperPan();
+    runPreviewBlock(state.previewIndex || 0, gen);
   }
 
   function stopPreviewCycle() {
-    if (state.previewTimer) {
-      clearInterval(state.previewTimer);
-      state.previewTimer = null;
+    previewCtl.gen += 1;
+    previewCtl.timers.forEach(clearTimeout);
+    previewCtl.timers = [];
+    if (previewCtl.raf) cancelAnimationFrame(previewCtl.raf);
+    previewCtl.raf = 0;
+  }
+
+  function bindPillDrag() {
+    var rows = els.app.querySelectorAll(".pills");
+    for (var i = 0; i < rows.length; i++) {
+      (function (el) {
+        if (el.getAttribute("data-drag")) return;
+        el.setAttribute("data-drag", "1");
+        var down = false;
+        var moved = false;
+        var x0 = 0;
+        var sl = 0;
+        el.addEventListener("pointerdown", function (e) {
+          if (e.pointerType === "touch") return;
+          down = true;
+          moved = false;
+          x0 = e.clientX;
+          sl = el.scrollLeft;
+          try {
+            el.setPointerCapture(e.pointerId);
+          } catch (err) {}
+        });
+        el.addEventListener("pointermove", function (e) {
+          if (!down) return;
+          var dx = e.clientX - x0;
+          if (Math.abs(dx) > 6) moved = true;
+          if (moved) el.scrollLeft = sl - dx;
+        });
+        function up() {
+          down = false;
+        }
+        el.addEventListener("pointerup", up);
+        el.addEventListener("pointercancel", up);
+        el.addEventListener(
+          "click",
+          function (e) {
+            if (moved) {
+              e.preventDefault();
+              e.stopPropagation();
+              moved = false;
+            }
+          },
+          true
+        );
+      })(rows[i]);
     }
   }
 
@@ -1070,11 +1318,9 @@
       setPill(t.getAttribute("data-key"), t.getAttribute("data-val"));
     } else if (act === "confirm") {
       confirmChoice(t.getAttribute("data-val"));
-    } else if (act === "create-theme") {
-      state.dialog = "create";
-      renderDialog();
-    } else if (act === "create-save") {
-      createTheme();
+    } else if (act === "create-theme" || act === "create-save") {
+      state.dialog = null;
+      toast("Coming soon");
     } else if (act === "create-cancel") {
       state.dialog = null;
       renderDialog();
@@ -1083,6 +1329,8 @@
       renderPicker();
     } else if (act === "open-sheet") {
       openSheet();
+    } else if (act === "open-settings-sheet") {
+      window.open(D.settingsSheetUrl, "_blank", "noopener");
     } else if (act === "toast-add") {
       toast("Coming soon — add items from Toast.");
     }
@@ -1132,6 +1380,13 @@
     els.dialog = document.getElementById("dialog");
     els.toast = document.getElementById("toast");
     els.device.addEventListener("click", onClick);
+    function blockHeroScroll(e) {
+      if (e.target.closest && e.target.closest(".status, .preview, .header, .home-hero")) {
+        e.preventDefault();
+      }
+    }
+    els.device.addEventListener("touchmove", blockHeroScroll, { passive: false });
+    els.device.addEventListener("wheel", blockHeroScroll, { passive: false });
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", fitDevice);
     window.addEventListener("hashchange", function () {

@@ -53,6 +53,7 @@
   var WALLPAPERS = [
     { id: "galaxy", label: "Galaxy", src: "assets/bgs/galaxy-bg.webp" },
     { id: "film", label: "Film", src: "assets/bgs/film.webp" },
+    { id: "upload", label: "Upload" },
   ];
 
   var PRESENTATION_STYLES = [
@@ -62,7 +63,8 @@
   ];
 
   var ENCORE_STYLES = [
-    { id: "hard", label: "Hard (with shadow)" },
+    { id: "hard", label: "Hard" },
+    { id: "hard_shadow", label: "Hard (with shadow)" },
     { id: "soft", label: "Soft" },
   ];
 
@@ -106,10 +108,32 @@
   ];
 
   var PREVIEW_ITEMS = [
+    {
+      src: "food-pics/handhelds/KaliforniaBurrito-sm.webp",
+      isNew: true,
+      name: "California Burrito",
+    },
     { src: "food-pics/bowls/packedbowlorsalad-sm.webp", isNew: false },
-    { src: "food-pics/handhelds/OliTokiBurrito-sm.webp", isNew: true },
     { src: "food-pics/bowls/alohaspameggbowl-sm.webp", isNew: false },
   ];
+
+  /* Number tiles (0–N) only when a sheet cell has BOTH a lower and upper
+     bound. Unbounded fields must not become an infinite pill strip. */
+  var SPEED_TILES = {
+    scroll: { min: 0, max: 5 },
+    presentation: { min: 0, max: 7 },
+  };
+
+  /* Live Motion table defaults (Ken Burns / Slideshow). Preview scales these
+     down for the small hero. Higher Presentation Speed = faster (1/speed). */
+  var MOTION_DEFAULTS = {
+    punchIn: 3.4,
+    hold: 1,
+    punchOut: 0.45,
+    zoomMin: 0.93,
+    zoomMax: 1,
+    previewScale: 0.7,
+  };
 
   var STICKER = {
     body: "assets/stickers/Sticker-Body.webp",
@@ -125,7 +149,7 @@
     wallpaper: "galaxy",
     scrollSpeed: 1,
     presentation: "slideshow",
-    encoreStyle: "hard",
+    encoreStyle: "hard_shadow",
     encoreSpot: "black",
     encoreBg: "secondary",
     presentationSpeed: 1,
@@ -154,6 +178,8 @@
     boards: BOARDS,
     comingSoonFeatures: COMING_SOON_FEATURES,
     previewItems: PREVIEW_ITEMS,
+    speedTiles: SPEED_TILES,
+    motionDefaults: MOTION_DEFAULTS,
     sticker: STICKER,
     defaultDraft: DEFAULT_DRAFT,
   };
