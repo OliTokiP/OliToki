@@ -1,0 +1,43 @@
+name: Log a bug
+description: Field QA — imports into the Obsidian vault
+title: ""
+labels: ["toki-qa"]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Feature
+      options:
+        - Menu Manager
+        - Menu Screens
+    validations:
+      required: true
+  - type: dropdown
+    id: page
+    attributes:
+      label: Which screen (Menu Screens only)
+      description: Ignored when Feature is Menu Manager.
+      options:
+        - 1 · Bowls
+        - 2 · Handhelds
+        - 3 · Munchies
+        - 4 · Drinks
+        - Wall
+  - type: textarea
+    id: report
+    attributes:
+      label: The report
+      description: What is wrong, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reminder
+    attributes:
+      label: Reminder
+      description: Leave blank — the Mac fills this from the docs.
+  - type: checkboxes
+    id: include
+    attributes:
+      label: Listener
+      options:
+        - label: Include in listener

@@ -284,6 +284,15 @@ def write_build_info() -> Path | None:
             + ";\n",
             encoding="utf-8",
         )
+        stamp = ROOT / "js" / "live-stamp.json"
+        stamp.write_text(
+            json.dumps(
+                {"hash": short, "hashFull": full, "subject": subject},
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         return out
     except Exception as e:
         print("write_build_info failed:", e, flush=True)
@@ -306,6 +315,8 @@ def git_commit(message: str, full: bool = False) -> bool:
             "js/", "css/",
             "index.html", "index2.html", "index3.html", "index4.html",
             "preview-all.html", "glossary.html", "manager.html",
+            "new-bug.html",
+            ".github/",
             "docs/", "scripts/", "deprecated/",
             "AGENTS.md", "Agents.md",
             "*.command", "Start Toki Menu.command",

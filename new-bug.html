@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <title>Log a bug — OliToki</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font: 17px/1.45 system-ui, sans-serif;
+      margin: 0;
+      padding: 1.25rem;
+      max-width: 36rem;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 .35rem; }
+    .sub { color: #666; margin: 0 0 1rem; font-size: .95rem; }
+    .live {
+      font-weight: 700;
+      padding: .65rem .85rem;
+      border-radius: 10px;
+      background: #eee;
+      margin: 0 0 1.25rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      .live { background: #2a2a2a; }
+      .sub { color: #aaa; }
+    }
+    label, .lab { display: block; font-weight: 600; margin: 1rem 0 .35rem; }
+    input[type=text], textarea {
+      width: 100%; box-sizing: border-box; font: inherit;
+      padding: .55rem .65rem; border: 1px solid #bbb; border-radius: 8px;
+    }
+    .picks { display: flex; gap: .55rem; flex-wrap: wrap; }
+    .pick {
+      font-weight: 500; margin: 0; padding: .6rem .8rem;
+      border: 1px solid #bbb; border-radius: 8px;
+      display: flex; gap: .4rem; align-items: center;
+    }
+    #screens { display: none; }
+    #screens.on { display: block; }
+    .row { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
+    .row label { margin: 0; font-weight: 500; }
+    button {
+      margin-top: 1.25rem; width: 100%; font: inherit; font-weight: 700;
+      padding: .9rem; border: 0; border-radius: 10px;
+      background: #1a1a1a; color: #fff;
+    }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <h1 id="heading">New bug</h1>
+  <p class="sub">Works from your phone anywhere. Files a GitHub issue; the Mac writes the vault ticket when it is online.</p>
+  <div class="live" id="live">Pages vs git: checking…</div>
+
+  <form id="form">
+    <div class="lab">Feature</div>
+    <div class="picks">
+      <label class="pick"><input type="checkbox" name="surface" value="Menu Manager" /> Menu Manager</label>
+      <label class="pick"><input type="checkbox" name="surface" value="Menu Screens" /> Menu Screens</label>
+    </div>
+
+    <div id="screens">
+      <div class="lab">Which screen</div>
+      <div class="picks" id="screen-picks">
+        <label class="pick"><input type="checkbox" name="screen" value="index.html" data-label="1 · Bowls" /> 1 · Bowls</label>
+        <label class="pick"><input type="checkbox" name="screen" value="index2.html" data-label="2 · Handhelds" /> 2 · Handhelds</label>
+        <label class="pick"><input type="checkbox" name="screen" value="index3.html" data-label="3 · Munchies" /> 3 · Munchies</label>
+        <label class="pick"><input type="checkbox" name="screen" value="index4.html" data-label="4 · Drinks" /> 4 · Drinks</label>
+        <label class="pick"><input type="checkbox" name="screen" value="preview-all.html" data-label="Wall" /> Wall</label>
+      </div>
+    </div>
+
+    <label>Title <input type="text" name="title" required placeholder="Encore punch-out camera" /></label>
+    <label id="report-lab">The report
+      <textarea name="report" rows="6" required placeholder="What is wrong, and what you expected."></textarea>
+    </label>
+    <label>Reminder
+      <textarea name="reminder" rows="3" placeholder="Leave blank — filled from the docs on the Mac."></textarea>
+    </label>
+    <div id="why-wrap" hidden>
+      <label>Why <textarea name="why" rows="3" placeholder="Why this matters"></textarea></label>
+    </div>
+    <div class="row">
+      <input type="checkbox" name="include" id="inc" />
+      <label for="inc">Include in listener</label>
+    </div>
+    <button type="submit" id="go">Log Bug</button>
+  </form>
+
+  <script>
+    const REPO = "OliTokiP/OliToki";
+    const PAGES = "https://olitokip.github.io/OliToki";
+    const params = new URLSearchParams(location.search);
+    const isFeature = params.get("type") === "feature";
+    if (isFeature) {
+      document.getElementById("heading").textContent = "New request";
+      document.getElementById("report-lab").firstChild.textContent = "The request ";
+      document.getElementById("go").textContent = "Log request";
+      document.getElementById("why-wrap").hidden = false;
+    }
+
+    function onlyOne(name) {
+      const boxes = [...document.querySelectorAll('input[name="' + name + '"]')];
+      boxes.forEach((box) => {
+        box.addEventListener("change", () => {
+          if (box.checked) boxes.forEach((o) => { if (o !== box) o.checked = false; });
+        });
+      });
+      return boxes;
+    }
+    const surfaces = onlyOne("surface");
+    const screens = onlyOne("screen");
+    const screenBox = document.getElementById("screens");
+    surfaces.forEach((box) => {
+      box.addEventListener("change", () => {
+        screenBox.classList.toggle("on", surface() === "Menu Screens");
+      });
+    });
+
+    function surface() {
+      const on = surfaces.find((b) => b.checked);
+      return on ? on.value : "";
+    }
+    function pageInfo() {
+      if (surface() === "Menu Manager") {
+        return { page: "manager.html", label: "Menu Manager" };
+      }
+      const on = screens.find((b) => b.checked);
+      if (on) return { page: on.value, label: on.getAttribute("data-label") };
+      return { page: "preview-all.html", label: "Wall" };
+    }
+
+    async function refreshLive() {
+      const el = document.getElementById("live");
+      try {
+        const [git, stamp] = await Promise.all([
+          fetch("https://api.github.com/repos/" + REPO + "/commits/main", {
+            headers: { Accept: "application/vnd.github+json" },
+          }).then((r) => r.json()),
+          fetch(PAGES + "/js/live-stamp.json?t=" + Date.now()).then((r) =>
+            r.ok ? r.json() : {}
+          ),
+        ]);
+        const g = String(git.sha || "").slice(0, 7).toLowerCase();
+        const p = String(stamp.hash || stamp.hashFull || "").slice(0, 7).toLowerCase();
+        if (g && p && g === p) el.textContent = "Pages vs git: 🟢 " + g + " — safe to check live";
+        else if (g || p) el.textContent = "Pages vs git: 🔴 live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
+        else el.textContent = "Pages vs git: 🔴 could not read";
+      } catch (e) {
+        el.textContent = "Pages vs git: 🔴 could not read";
+      }
+    }
+    refreshLive();
+    setInterval(refreshLive, 30000);
+
+    document.getElementById("form").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const surf = surface();
+      if (!surf) { alert("Pick Menu Manager or Menu Screens."); return; }
+      if (surf === "Menu Screens" && !screens.some((b) => b.checked)) {
+        alert("Pick which screen.");
+        return;
+      }
+      const title = document.querySelector('[name=title]').value.trim();
+      const report = document.querySelector('[name=report]').value.trim();
+      if (!title || !report) return;
+      const reminder = document.querySelector('[name=reminder]').value.trim();
+      const why = (document.querySelector('[name=why]') || {}).value || "";
+      const include = document.getElementById("inc").checked;
+      const info = pageInfo();
+      const kind = isFeature ? "feature" : "ticket";
+      const reportH = isFeature ? "The request" : "The report";
+      const body = [
+        "### toki-meta",
+        "- type: " + kind,
+        "- surface: " + surf,
+        "- page: " + info.page,
+        "- pageLabel: " + info.label,
+        "- include: " + (include ? "true" : "false"),
+        "",
+        "### " + reportH,
+        "",
+        report,
+        "",
+        "### Reminder",
+        "",
+        reminder || "_blank — fill from docs_",
+        "",
+        "### Why",
+        "",
+        why.trim() || "_",
+      ].join("\n");
+      const url =
+        "https://github.com/" + REPO + "/issues/new?labels=toki-qa&title=" +
+        encodeURIComponent(title) +
+        "&body=" + encodeURIComponent(body);
+      location.href = url;
+    });
+  </script>
+</body>
+</html>
