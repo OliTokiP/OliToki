@@ -44,6 +44,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_KEY = ROOT / "secrets" / "google-service-account.json"
 DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
+# Commits and pushes stay on OliTokiP only — never the old absrdst identity.
+TOKI_GITHUB_OWNER = "OliTokiP"
+TOKI_GITHUB_REPO = "OliToki"
+TOKI_GIT_NAME = "OliTokiP"
+TOKI_GIT_EMAIL = "317138617+OliTokiP@users.noreply.github.com"
 SNAPSHOT_DIR = ROOT / "backups" / "sheet-snapshots"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -156,6 +161,15 @@ end try
 
 # ── Git helpers ─────────────────────────────────────────────────────────────
 
+def _git_identity_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["GIT_AUTHOR_NAME"] = TOKI_GIT_NAME
+    env["GIT_AUTHOR_EMAIL"] = TOKI_GIT_EMAIL
+    env["GIT_COMMITTER_NAME"] = TOKI_GIT_NAME
+    env["GIT_COMMITTER_EMAIL"] = TOKI_GIT_EMAIL
+    return env
+
+
 def run_git(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args],
@@ -163,7 +177,40 @@ def run_git(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=check,
+        env=_git_identity_env(),
     )
+
+
+def ensure_git_identity() -> None:
+    """Pin this repo's committer to OliTokiP so global absrdst config cannot leak."""
+    run_git(["config", "--local", "user.name", TOKI_GIT_NAME], check=False)
+    run_git(["config", "--local", "user.email", TOKI_GIT_EMAIL], check=False)
+
+
+def parse_github_owner_repo(url: str) -> tuple[str, str] | None:
+    m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", url or "")
+    if not m:
+        return None
+    return m.group(1), m.group(2)
+
+
+def assert_olitoki_origin(url: str) -> tuple[str, str]:
+    parsed = parse_github_owner_repo(url)
+    if not parsed:
+        raise RuntimeError(
+            "origin is not a GitHub URL:\n"
+            f"  {url or '(empty)'}\n\n"
+            "This project only publishes to OliTokiP/OliToki.\n"
+            "  git remote set-url origin https://github.com/OliTokiP/OliToki.git"
+        )
+    user, repo = parsed
+    if user.lower() != TOKI_GITHUB_OWNER.lower() or repo.lower() != TOKI_GITHUB_REPO.lower():
+        raise RuntimeError(
+            f"origin is {user}/{repo} — refused.\n"
+            "This project only pushes to OliTokiP/OliToki.\n"
+            "  git remote set-url origin https://github.com/OliTokiP/OliToki.git"
+        )
+    return user, repo
 
 
 def git_head_full() -> str:
@@ -290,13 +337,12 @@ def git_push() -> str:
     if not remote:
         raise RuntimeError(
             "No git remote named 'origin'.\n\n"
-            "Create a private GitHub repo, then once:\n"
-            "  cd TokiMenu\n"
-            "  git remote add origin git@github.com:YOU/TokiMenu.git\n"
-            "  # or: https://github.com/YOU/TokiMenu.git\n"
+            "This project only publishes to OliTokiP:\n"
+            "  git remote add origin https://github.com/OliTokiP/OliToki.git\n"
             "  git push -u origin main\n\n"
             "See docs/git-howto.txt"
         )
+    assert_olitoki_origin(remote)
     branch = git_branch()
     # Ensure upstream if missing
     up = run_git(["rev-parse", "--abbrev-ref", f"{branch}@{{upstream}}"], check=False)
@@ -315,11 +361,10 @@ def github_commit_url(full_sha: str) -> str:
     remote = git_remote_url()
     if not remote:
         return ""
-    # git@github.com:user/repo.git  or  https://github.com/user/repo.git
-    m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", remote)
-    if not m:
+    parsed = parse_github_owner_repo(remote)
+    if not parsed:
         return ""
-    user, repo = m.group(1), m.group(2)
+    user, repo = parsed
     return f"https://github.com/{user}/{repo}/commit/{full_sha}"
 
 
@@ -527,6 +572,15 @@ def main() -> int:
     if not (ROOT / ".git").is_dir():
         dialog("Not a git repository:\n" + str(ROOT), ui=ui, fatal=True)
         return 1
+
+    ensure_git_identity()
+    origin = git_remote_url()
+    if origin:
+        try:
+            assert_olitoki_origin(origin)
+        except RuntimeError as e:
+            dialog(str(e), ui=ui, fatal=True)
+            return 1
 
     notify("Toki Git Commit", "Starting…", ui)
     errors: list[str] = []

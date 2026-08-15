@@ -26,9 +26,9 @@ Skip UI with env:
   TOKI_OPEN_GLOSSARY=0|1
   TOKI_OPEN_MANAGER=0|1
   TOKI_BOARDS=1,2,3,4
-  TOKI_REMOTE_BASE=https://absrdst.github.io/TokiMenu
+  TOKI_REMOTE_BASE=https://olitokip.github.io/OliToki
   TOKI_PORT=8765
-  TOKI_PROJECT=/path/to/TokiMenu
+  TOKI_PROJECT=/path/to/OliToki
 """
 
 from __future__ import annotations
@@ -44,9 +44,11 @@ from typing import Any
 
 PREFERRED_PORT = int(os.environ.get("TOKI_PORT", "8765"))
 PORT = PREFERRED_PORT
-DEFAULT_REMOTE_BASE = os.environ.get(
-    "TOKI_REMOTE_BASE", "https://absrdst.github.io/TokiMenu"
-).rstrip("/")
+# This project publishes only under OliTokiP. Do not point Remote at another account.
+GITHUB_OWNER = "OliTokiP"
+GITHUB_REPO = "OliToki"
+DEFAULT_PAGES_BASE = f"https://{GITHUB_OWNER.lower()}.github.io/{GITHUB_REPO}"
+DEFAULT_REMOTE_BASE = os.environ.get("TOKI_REMOTE_BASE", DEFAULT_PAGES_BASE).rstrip("/")
 LOG = Path(os.environ.get("TOKI_SERVER_LOG", "/tmp/toki-menu-server.log"))
 
 # Live menu spreadsheet (always open in Chrome, never private)
@@ -737,7 +739,7 @@ def remote_reachable(base: str) -> bool:
             return False
 
 
-def github_pages_status(owner: str = "absrdst", repo: str = "TokiMenu") -> dict:
+def github_pages_status(owner: str = GITHUB_OWNER, repo: str = GITHUB_REPO) -> dict:
     """Public API: whether the repo has Pages enabled (has_pages)."""
     out = {"ok": False, "private": None, "has_pages": None, "html_url": None}
     try:
@@ -759,6 +761,7 @@ def github_pages_status(owner: str = "absrdst", repo: str = "TokiMenu") -> dict:
 def remote_unavailable_message(base: str) -> str:
     """Human-readable reason Remote failed (Pages off vs other)."""
     st = github_pages_status()
+    pages_settings = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/settings/pages"
     lines = [
         "Remote host is not available (HTTP 404 or unreachable):",
         "",
@@ -771,7 +774,7 @@ def remote_unavailable_message(base: str) -> str:
             "Making the repo public alone does not turn Pages on.",
             "",
             "Enable it once:",
-            "  1. Open:  https://github.com/absrdst/TokiMenu/settings/pages",
+            f"  1. Open:  {pages_settings}",
             "  2. Build and deployment → Source: Deploy from a branch",
             "  3. Branch: main   Folder: / (root)   → Save",
             "  4. Wait 1–2 minutes, then try Remote again",
@@ -783,14 +786,14 @@ def remote_unavailable_message(base: str) -> str:
             "Pages is enabled, but the site still 404s — often still deploying.",
             "Wait a minute, hard-refresh, or check Actions / Pages build log.",
             "",
-            "  https://github.com/absrdst/TokiMenu/settings/pages",
+            f"  {pages_settings}",
         ]
     else:
         lines += [
             "GitHub Pages is not automatic after a git push or after making",
             "the repo public. Enable Pages under repo Settings → Pages:",
             "",
-            "  https://github.com/absrdst/TokiMenu/settings/pages",
+            f"  {pages_settings}",
             "  Source: Deploy from a branch → main → / (root) → Save",
         ]
     lines += [

@@ -21,10 +21,10 @@ TokiMenu then loads **4K-class bitmaps** (e.g. `galaxy-bg.webp` at 3600×2400). 
 Pin the pixel budget so we never believe 4K:
 
 ```text
-https://absrdst.github.io/TokiMenu/index.html?w=1920&dpr=1
-https://absrdst.github.io/TokiMenu/index2.html?w=1920&dpr=1
-https://absrdst.github.io/TokiMenu/index3.html?w=1920&dpr=1
-https://absrdst.github.io/TokiMenu/index4.html?w=1920&dpr=1
+https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
+https://olitokip.github.io/OliToki/index2.html?w=1920&dpr=1
+https://olitokip.github.io/OliToki/index3.html?w=1920&dpr=1
+https://olitokip.github.io/OliToki/index4.html?w=1920&dpr=1
 ```
 
 Also try (same idea): `?display=1920x1080` or `?width=1920`.

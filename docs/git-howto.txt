@@ -1,8 +1,15 @@
 TokiMenu — Git howto
 ====================
 
-Repo location
-  /Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenu
+GitHub owner / repo (only)
+  https://github.com/OliTokiP/OliToki
+  Remote boards: https://olitokip.github.io/OliToki
+
+  Commit identity is OliTokiP (repo-local git config + Toki Git Commit.app).
+  Do not push to or author as absrdst.
+
+Repo location (this Mac)
+  /Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenuLive
 
 Baseline commit (first commit after Dropbox restore)
   Branch: main
@@ -19,7 +26,7 @@ What is NOT in git (see .gitignore)
 Day-to-day
 ----------
 
-  cd "/Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenu"
+  cd "/Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenuLive"
 
   git status
       Show changed / new / deleted files
@@ -61,14 +68,13 @@ Push to GitHub (optional)
 
   2. Wire remote and push:
 
-       git remote add origin https://github.com/YOUR_USER/TokiMenu.git
-       # or SSH: git remote add origin git@github.com:YOUR_USER/TokiMenu.git
+       git remote add origin https://github.com/OliTokiP/OliToki.git
 
        git push -u origin main
 
-  If GitHub CLI is installed and logged in:
+  If GitHub CLI is installed and logged in as OliTokiP:
 
-       gh repo create TokiMenu --private --source=. --remote=origin --push
+       gh repo create OliToki --public --source=. --remote=origin --push
 
 
 Open Toki Menus — Environment
@@ -80,7 +86,7 @@ Open Toki Menus — Environment
               Private Google Sheets work here (service account).
 
     Remote  — GitHub Pages static host (default
-              https://absrdst.github.io/TokiMenu).
+              https://olitokip.github.io/OliToki).
               A git push does NOT enable Pages by itself.
               Repo Settings → Pages → deploy from branch main (root).
               Private repos need GitHub Pro for Pages (or make public).
@@ -156,7 +162,7 @@ Dropbox + git
 Quick “save point” recipe
 -------------------------
 
-  cd "/Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenu"
+  cd "/Users/absrdst/Library/CloudStorage/Dropbox/2026/8/TokiMenuLive"
   git status
   git add -A
   git commit -m "describe what you just finished"
