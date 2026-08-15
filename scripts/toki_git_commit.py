@@ -284,13 +284,14 @@ def write_build_info() -> Path | None:
             + ";\n",
             encoding="utf-8",
         )
-        stamp = ROOT / "js" / "live-stamp.json"
+        stamp = ROOT / "js" / "live-stamp.js"
         stamp.write_text(
-            json.dumps(
+            "window.TOKI_LIVE_STAMP = "
+            + json.dumps(
                 {"hash": short, "hashFull": full, "subject": subject},
                 indent=2,
             )
-            + "\n",
+            + ";\n",
             encoding="utf-8",
         )
         return out
@@ -656,7 +657,7 @@ def main() -> int:
                     if bi and bi.is_file():
                         rel = str(bi.relative_to(ROOT))
                         run_git(
-                            ["add", rel, "js/live-stamp.json"],
+                            ["add", rel, "js/live-stamp.js"],
                             check=False,
                         )
                         if git_is_dirty():

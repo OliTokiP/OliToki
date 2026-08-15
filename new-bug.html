@@ -139,12 +139,13 @@
           fetch("https://api.github.com/repos/" + REPO + "/commits/main", {
             headers: { Accept: "application/vnd.github+json" },
           }).then((r) => r.json()),
-          fetch(PAGES + "/js/live-stamp.json?t=" + Date.now()).then((r) =>
-            r.ok ? r.json() : {}
+          fetch(PAGES + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
+            r.ok ? r.text() : ""
           ),
         ]);
         const g = String(git.sha || "").slice(0, 7).toLowerCase();
-        const p = String(stamp.hash || stamp.hashFull || "").slice(0, 7).toLowerCase();
+        const pm = String(stamp).match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
+        const p = (pm ? pm[1] : "").slice(0, 7).toLowerCase();
         if (g && p && g === p) el.textContent = "Pages vs git: 🟢 " + g + " — safe to check live";
         else if (g || p) el.textContent = "Pages vs git: 🔴 live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
         else el.textContent = "Pages vs git: 🔴 could not read";
