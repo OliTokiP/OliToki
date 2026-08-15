@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Push to QA — OliToki</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 18px/1.45 system-ui, sans-serif; margin: 0; padding: 1.5rem; max-width: 32rem; }
+    button {
+      margin-top: 1.25rem; width: 100%; font: inherit; font-weight: 700;
+      padding: .9rem; border: 0; border-radius: 10px; background: #1a1a1a; color: #fff;
+    }
+    .sub { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Push to QA</h1>
+  <p id="msg">Preparing…</p>
+  <p class="sub">This files a GitHub issue. The Mac starts the next pass when it sees it.</p>
+  <button type="button" id="go">Send to GitHub</button>
+  <script>
+    const REPO = "OliTokiP/OliToki";
+    const q = new URLSearchParams(location.search);
+    const ticket = (q.get("ticket") || "").trim();
+    const after = (q.get("after") || "1").trim();
+    const msg = document.getElementById("msg");
+    if (!ticket) {
+      msg.textContent = "Missing ticket name.";
+    } else {
+      msg.textContent = "Push after Feedback " + after + " on “" + ticket + "”.";
+    }
+    function send() {
+      if (!ticket) return;
+      const body = [
+        "### toki-push",
+        "- ticket: " + ticket,
+        "- after: " + after,
+      ].join("\n");
+      location.href =
+        "https://github.com/" + REPO + "/issues/new?labels=toki-push&title=" +
+        encodeURIComponent("Push to QA: " + ticket) +
+        "&body=" + encodeURIComponent(body);
+    }
+    document.getElementById("go").addEventListener("click", send);
+    if (ticket && q.get("go") === "1") send();
+  </script>
+</body>
+</html>
