@@ -11,9 +11,9 @@
 
 ## 1. Where QA lives
 
-- QA now lives in the iCloud Obsidian vault **OliToki Menu → QA**.
-- Apple Notes originals are left alone (rewrites corrupt screenshots).
-- Ticket shape is being chosen in `QA/Ticket styles/`. Until a style is picked, don’t invent a fifth format.
+- QA lives in the iCloud Obsidian vault **OliToki Menu**. Style A — Ticket.
+- Apple Notes originals are left alone.
+- Vault `Docs/` is a copy of this folder; Dropbox remains the git repo.
 
 ---
 
@@ -92,4 +92,4 @@ This section will be expanded once the mobile QA tooling is built.
 
 ---
 
-**Last updated:** 2026-08-15 (heading-based -g notes; no tables; Obsidian as a possible later home)
+**Last updated:** 2026-08-15 (vault is QA home; Style A; version required on tickets)

@@ -1665,6 +1665,8 @@
     }
 
     if (encore && phase === "out") {
+      // Punch-Out camera per MOTION_GLOSSARY §5.6: zoom 1.24 → 1 over punchOut (0.45s, --ease-fade).
+      // Pinch kept; origin kept at leaving slot so camera pulls back to show the family spread.
       setEncoreDimmed(false, phases.punchOut);
       if (rig) {
         rig.style.transition = encoreRigTransition(
@@ -1673,6 +1675,8 @@
           false
         );
       }
+      void (rig && rig.offsetWidth);
+      void (encoreWorldEl() && encoreWorldEl().offsetWidth);
       setEncoreZoom(1);
       syncPreviewNums(state.previewIndex || 0, true);
       schedulePhaseEnd(gen);
