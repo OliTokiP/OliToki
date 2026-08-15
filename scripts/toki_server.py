@@ -516,7 +516,7 @@ class SheetsBackend:
         return text
 
 
-def make_handler(api: dict, root: Path):
+def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(root), **kwargs)
@@ -571,6 +571,7 @@ def make_handler(api: dict, root: Path):
                         "dataSource": (live or {}).get("dataSource"),
                         "requireRestart": (live or {}).get("requireRestart"),
                         "root": str(ROOT),
+                        "bind": bind,
                         "email": (
                             backend.creds.service_account_email
                             if backend
@@ -822,7 +823,9 @@ def main():
             traceback.print_exc()
 
     # Bind first so the launcher health-check does not time out while Google loads.
-    httpd = ThreadingHTTPServer((args.bind, args.port), make_handler(api, ROOT))
+    httpd = ThreadingHTTPServer(
+        (args.bind, args.port), make_handler(api, ROOT, bind=args.bind)
+    )
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
     threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
     try:

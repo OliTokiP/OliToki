@@ -51,8 +51,18 @@
   var PATTERN_TYPES = [{ id: "stripes", label: "Stripes" }];
 
   var WALLPAPERS = [
-    { id: "galaxy", label: "Galaxy", src: "assets/bgs/galaxy-bg.webp" },
-    { id: "film", label: "Film", src: "assets/bgs/film.webp" },
+    {
+      id: "galaxy",
+      label: "Galaxy",
+      src: "assets/bgs/galaxy-bg.webp",
+      fallback: "assets/bgs/galaxy-bg.jpg",
+    },
+    {
+      id: "film",
+      label: "Film",
+      src: "assets/bgs/film.webp",
+      fallback: "assets/bgs/film.jpg",
+    },
     { id: "upload", label: "Upload" },
   ];
 
@@ -107,14 +117,23 @@
     "… and more!",
   ];
 
+  /* Trio: one bowl, one munchie, one handheld. New item last. */
   var PREVIEW_ITEMS = [
+    {
+      src: "food-pics/bowls/packedbowlorsalad-sm.webp",
+      isNew: false,
+      name: "Packed Bowl",
+    },
+    {
+      src: "food-pics/munchies/RiceBalls-sm.webp",
+      isNew: false,
+      name: "Kimchi Fried Rice Balls",
+    },
     {
       src: "food-pics/handhelds/KaliforniaBurrito-sm.webp",
       isNew: true,
       name: "California Burrito",
     },
-    { src: "food-pics/bowls/packedbowlorsalad-sm.webp", isNew: false },
-    { src: "food-pics/bowls/alohaspameggbowl-sm.webp", isNew: false },
   ];
 
   /* Number tiles (0–N) only when a sheet cell has BOTH a lower and upper

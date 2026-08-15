@@ -11,6 +11,8 @@ One launch dialog:
   • Open data sheet — Google Sheet in Chrome (normal window; default off)
   • Open glossary — glossary.html board index (default off)
   • Open Menu Manager — manager.html (mobile authoring UI; default off)
+  • Allow LAN — bind 0.0.0.0 so a phone / Fire Stick on the same Wi-Fi
+    can preview without a GitHub push (Local only; default off)
 
 Local server runs in a visible Terminal window titled “Toki Menu Server”
 (Ctrl+C or close the window to stop it).
@@ -25,6 +27,7 @@ Skip UI with env:
   TOKI_OPEN_SHEET=0|1
   TOKI_OPEN_GLOSSARY=0|1
   TOKI_OPEN_MANAGER=0|1
+  TOKI_LAN=0|1
   TOKI_BOARDS=1,2,3,4
   TOKI_REMOTE_BASE=https://olitokip.github.io/OliToki
   TOKI_PORT=8765
@@ -67,6 +70,8 @@ PREVIEW_ALL_URL = ""
 # Last launch flags (used by open_* helpers)
 LAUNCH_PRIVATE = True
 LAUNCH_HARD_REFRESH = True
+LAUNCH_LAN = False
+SERVER_BIND = "127.0.0.1"
 
 BOARD_PATHS = (
     "index.html",
@@ -494,6 +499,70 @@ def _http_status(url: str, timeout: float = 2.0) -> int | None:
         return None
 
 
+def _health_lan_ok(health: dict | None) -> bool:
+    """True if this toki_server is listening beyond loopback."""
+    bind = str((health or {}).get("bind") or "127.0.0.1").strip()
+    return bind in ("0.0.0.0", "::", "*")
+
+
+def lan_ipv4() -> str | None:
+    """Best-effort Wi-Fi / Ethernet IPv4 for phone and Fire Stick URLs."""
+    import socket
+
+    for iface in ("en0", "en1", "en2"):
+        try:
+            r = subprocess.run(
+                ["ipconfig", "getifaddr", iface],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            ip = (r.stdout or "").strip()
+            if r.returncode == 0 and ip and not ip.startswith("127."):
+                return ip
+        except Exception:
+            pass
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+        sock.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    return None
+
+
+def lan_base_url(host: str | None = None) -> str:
+    ip = host or lan_ipv4() or "THIS-MAC-LAN-IP"
+    return f"http://{ip}:{PORT}"
+
+
+def lan_urls_message(host: str | None, boards: list[bool] | None, open_manager: bool) -> str:
+    base = lan_base_url(host)
+    lines = [
+        "Same Wi-Fi as this Mac — open in the phone or Fire Stick browser:",
+        "",
+    ]
+    if open_manager or not boards or not any(boards):
+        lines.append(f"Menu Manager\n{base}/manager.html")
+        lines.append("")
+    if boards:
+        for i, on in enumerate(boards):
+            if not on:
+                continue
+            lines.append(f"{BOARD_LABELS[i]}\n{base}/{BOARD_PATHS[i]}")
+            lines.append("")
+    lines.append(f"This Mac stays http://127.0.0.1:{PORT}/")
+    lines.append("")
+    lines.append(
+        "macOS may ask Terminal or Python for Local Network access. "
+        "Leave this Mac awake; close the Toki Menu Server window to stop."
+    )
+    return "\n".join(lines).strip()
+
+
 def _same_checkout(root: Path, port: int, health: dict | None) -> bool:
     """True if the listener on `port` is serving this project folder."""
     if not health or not health.get("ok"):
@@ -518,10 +587,12 @@ def _server_log_path(port: int) -> Path:
     return Path(f"/tmp/toki-menu-server-{port}.log")
 
 
-def claim_local_port(root: Path) -> str:
+def claim_local_port(root: Path, lan: bool = False) -> str:
     """Pick a port for this checkout. Never steal another tree's toki_server.
 
     Returns 'reuse' or 'start'. Sets PORT (and LOG).
+    LAN launches skip a loopback-only server and start a new bind on the
+    next free port so phone / Fire Stick can actually connect.
     """
     global PORT, LOG
     preferred = PREFERRED_PORT
@@ -530,6 +601,9 @@ def claim_local_port(root: Path) -> str:
         health = api_health(port)
         if health and health.get("ok"):
             if _same_checkout(root, port, health):
+                if lan and not _health_lan_ok(health):
+                    last_busy = port
+                    continue
                 PORT = port
                 LOG = _server_log_path(port)
                 return "reuse"
@@ -558,10 +632,25 @@ def start_server_in_terminal(root: Path, server: Path, py: str) -> bool:
     Close that window (or Ctrl+C) to stop the server.
     """
     short = root.name
-    intro = (
+    bind = SERVER_BIND
+    intro_lines = [
         f"Toki Menu local server ({short}) — "
         "close this window or Ctrl+C to stop."
-    )
+    ]
+    if bind != "127.0.0.1":
+        host = lan_ipv4()
+        intro_lines.append("")
+        intro_lines.append(f"This Mac:     http://127.0.0.1:{PORT}/")
+        if host:
+            intro_lines.append(f"Phone / TV:   {lan_base_url(host)}/")
+            intro_lines.append(f"  Manager     {lan_base_url(host)}/manager.html")
+            intro_lines.append(f"  Board 1     {lan_base_url(host)}/index.html")
+        else:
+            intro_lines.append(
+                "LAN is on, but this Mac has no Wi-Fi/Ethernet address yet."
+            )
+        intro_lines.append("Same Wi-Fi. macOS may ask for Local Network access.")
+    intro = "\n".join(intro_lines)
     bye = "Server stopped. You can close this window."
     # Title the tab, cd to project, run server in foreground so close = stop
     cmd = " ".join(
@@ -571,7 +660,7 @@ def start_server_in_terminal(root: Path, server: Path, py: str) -> bool:
             f"echo {_shell_quote(intro)} &&",
             "echo &&",
             f"{_shell_quote(py)} {_shell_quote(str(server))}",
-            f"--port {PORT} --bind 127.0.0.1;",
+            f"--port {PORT} --bind {bind};",
             "echo;",
             f"echo {_shell_quote(bye)};",
             "exec bash",
@@ -610,18 +699,21 @@ end tell
         return False
 
 
-def ensure_local_server(root: Path) -> bool:
+def ensure_local_server(root: Path, lan: bool = False) -> bool:
     """Start toki_server in a Terminal window if needed. Returns True if healthy."""
+    global SERVER_BIND
+    SERVER_BIND = "0.0.0.0" if lan else "127.0.0.1"
     try:
-        action = claim_local_port(root)
+        action = claim_local_port(root, lan=lan)
     except RuntimeError as e:
         alert(str(e), stop=True)
         return False
 
     if action == "reuse":
         health = api_health()
+        how = "LAN" if _health_lan_ok(health) else "this Mac only"
         print(
-            f"toki_server already serving this folder on :{PORT} "
+            f"toki_server already serving this folder on :{PORT} ({how}) "
             "(close its Terminal window to stop)",
             flush=True,
         )
@@ -639,7 +731,7 @@ def ensure_local_server(root: Path) -> bool:
         return True
 
     print(
-        f"starting toki_server for {root} on :{PORT} "
+        f"starting toki_server for {root} on :{PORT} bind {SERVER_BIND} "
         f"(other checkouts keep their own port)",
         flush=True,
     )
@@ -665,7 +757,7 @@ def ensure_local_server(root: Path) -> bool:
         print("Falling back to background server (no Terminal)", flush=True)
         with LOG.open("a", encoding="utf-8") as logf:
             subprocess.Popen(
-                [py, str(server), "--port", str(PORT), "--bind", "127.0.0.1"],
+                [py, str(server), "--port", str(PORT), "--bind", SERVER_BIND],
                 cwd=str(root),
                 stdout=logf,
                 stderr=subprocess.STDOUT,
@@ -871,6 +963,10 @@ def _env_open_manager() -> bool | None:
     return _env_bool("TOKI_OPEN_MANAGER")
 
 
+def _env_lan() -> bool | None:
+    return _env_bool("TOKI_LAN")
+
+
 def _env_boards() -> list[bool] | None:
     raw = os.environ.get("TOKI_BOARDS", "").strip()
     if not raw:
@@ -900,6 +996,7 @@ def _default_launch_opts() -> dict[str, Any]:
         "open_sheet": False,
         "open_glossary": False,
         "open_manager": False,
+        "lan": False,
     }
 
 
@@ -919,6 +1016,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
     env_open_sheet = _env_open_sheet()
     env_open_glossary = _env_open_glossary()
     env_open_manager = _env_open_manager()
+    env_lan = _env_lan()
     env_boards = _env_boards()
 
     # Fully non-interactive when browser + layout forced
@@ -939,6 +1037,8 @@ def prompt_launch_options() -> dict[str, Any] | None:
             opts["open_glossary"] = env_open_glossary
         if env_open_manager is not None:
             opts["open_manager"] = env_open_manager
+        if env_lan is not None:
+            opts["lan"] = env_lan
         if env_boards is not None:
             opts["boards"] = env_boards
         return opts
@@ -958,6 +1058,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
     sheet_default = "true" if env_open_sheet is True else "false"
     glossary_default = "true" if env_open_glossary is True else "false"
     manager_default = "true" if env_open_manager is True else "false"
+    lan_default = "true" if env_lan is True else "false"
     boards = env_boards or [True, True, True, True]
     bdefs = ["true" if b else "false" for b in boards]
     env_default = (
@@ -978,6 +1079,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         sheet_default,
         glossary_default,
         manager_default,
+        lan_default,
         bdefs,
     )
     if out is None:
@@ -997,6 +1099,7 @@ def prompt_launch_options() -> dict[str, Any] | None:
         env_open_sheet=env_open_sheet,
         env_open_glossary=env_open_glossary,
         env_open_manager=env_open_manager,
+        env_lan=env_lan,
         env_boards=env_boards,
     )
 
@@ -1011,6 +1114,7 @@ def _prompt_nsalert_dialog(
     sheet_default: str,
     glossary_default: str,
     manager_default: str,
+    lan_default: str,
     bdefs: list[str],
 ) -> str | None:
     """NSAlert accessory with launch switches."""
@@ -1045,13 +1149,13 @@ function run() {{
   var alert = $.NSAlert.alloc.init;
   alert.setMessageText("Toki Menus");
   alert.setInformativeText(
-    "Local = this Mac (Sheets API). Remote = GitHub Pages. Private + hard refresh default on."
+    "Local = this Mac. Allow LAN for phone / Fire Stick on the same Wi-Fi. Remote = GitHub Pages."
   );
   alert.addButtonWithTitle("Open");
   alert.addButtonWithTitle("Cancel");
 
   var width = 380;
-  var height = 330;
+  var height = 354;
   var view = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, width, height));
   var y = height - 28;
 
@@ -1092,7 +1196,9 @@ function run() {{
   var glossaryBox = makeSwitch("Open glossary", 0, y, width, {glossary_default});
   view.addSubview(glossaryBox); y -= 24;
   var managerBox = makeSwitch("Open Menu Manager", 0, y, width, {manager_default});
-  view.addSubview(managerBox);
+  view.addSubview(managerBox); y -= 24;
+  var lanBox = makeSwitch("Allow LAN (phone / Fire Stick)", 0, y, width, {lan_default});
+  view.addSubview(lanBox);
 
   alert.setAccessoryView(view);
   try {{ app.activateIgnoringOtherApps(true); }} catch (e3) {{}}
@@ -1114,7 +1220,8 @@ function run() {{
     (Number(privateBox.state) === 1 ? "1" : "0") + "|" +
     (Number(sheetBox.state) === 1 ? "1" : "0") + "|" +
     (Number(glossaryBox.state) === 1 ? "1" : "0") + "|" +
-    (Number(managerBox.state) === 1 ? "1" : "0");
+    (Number(managerBox.state) === 1 ? "1" : "0") + "|" +
+    (Number(lanBox.state) === 1 ? "1" : "0");
 }}
 '''
     r = subprocess.run(
@@ -1140,6 +1247,7 @@ def _parse_launch_result(
     env_open_sheet: bool | None,
     env_open_glossary: bool | None,
     env_open_manager: bool | None,
+    env_lan: bool | None,
     env_boards: list[bool] | None,
 ) -> dict[str, Any] | None:
     parts = out.split("|")
@@ -1161,6 +1269,7 @@ def _parse_launch_result(
     sheet_flag = parts[7].strip() if len(parts) > 7 else "0"
     glossary_flag = parts[8].strip() if len(parts) > 8 else "0"
     manager_flag = parts[9].strip() if len(parts) > 9 else "0"
+    lan_flag = parts[10].strip() if len(parts) > 10 else "0"
 
     if layout not in ("tiled", "single"):
         layout = "tiled"
@@ -1171,6 +1280,7 @@ def _parse_launch_result(
     open_sheet = sheet_flag in ("1", "true", "yes")
     open_glossary = glossary_flag in ("1", "true", "yes")
     open_manager = manager_flag in ("1", "true", "yes")
+    lan = lan_flag in ("1", "true", "yes")
 
     boards = [False, False, False, False]
     bits = (boards_bits + "0000")[:4]
@@ -1205,6 +1315,8 @@ def _parse_launch_result(
         open_glossary = env_open_glossary
     if env_open_manager is not None:
         open_manager = env_open_manager
+    if env_lan is not None:
+        lan = env_lan
     if env_boards is not None:
         boards = env_boards
     if env_browser:
@@ -1221,6 +1333,7 @@ def _parse_launch_result(
         "open_sheet": open_sheet,
         "open_glossary": open_glossary,
         "open_manager": open_manager,
+        "lan": lan,
     }
 
 
@@ -1626,7 +1739,7 @@ def refresh_build_info(root: Path) -> None:
 
 
 def main():
-    global LAUNCH_PRIVATE, LAUNCH_HARD_REFRESH
+    global LAUNCH_PRIVATE, LAUNCH_HARD_REFRESH, LAUNCH_LAN
     root = project_root()
     os.environ.setdefault("TOKI_PROJECT", str(root))
 
@@ -1660,8 +1773,10 @@ def main():
     open_sheet = bool(picked.get("open_sheet"))
     open_glossary = bool(picked.get("open_glossary"))
     open_manager = bool(picked.get("open_manager"))
+    lan = bool(picked.get("lan")) and env == "local"
     LAUNCH_PRIVATE = private
     LAUNCH_HARD_REFRESH = hard_refresh
+    LAUNCH_LAN = lan
 
     print(
         "choice:",
@@ -1684,6 +1799,8 @@ def main():
         open_glossary,
         "open_manager=",
         open_manager,
+        "lan=",
+        lan,
         flush=True,
     )
 
@@ -1721,7 +1838,7 @@ def main():
     if env == "local":
         if needs_menu_server:
             refresh_build_info(root)
-            if not ensure_local_server(root):
+            if not ensure_local_server(root, lan=lan):
                 sys.exit(1)
     else:
         if needs_menu_server and not remote_reachable(DEFAULT_REMOTE_BASE):
@@ -1736,8 +1853,22 @@ def main():
         len(URLS),
         "PREVIEW=",
         PREVIEW_ALL_URL,
+        "LAN=",
+        lan,
         flush=True,
     )
+    if lan:
+        host = lan_ipv4()
+        print(lan_urls_message(host, boards, open_manager), flush=True)
+        if host:
+            alert(lan_urls_message(host, boards, open_manager), stop=False, title="Toki LAN")
+        else:
+            alert(
+                "Allow LAN is on, but this Mac has no Wi-Fi or Ethernet address yet.\n\n"
+                "Join a network, then relaunch. The server is listening on all interfaces.",
+                stop=False,
+                title="Toki LAN",
+            )
 
     if (
         not URLS

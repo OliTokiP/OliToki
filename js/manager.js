@@ -26,10 +26,21 @@
     previewTimer: null,
     toastTimer: null,
     styleScroll: 0,
+    pillScroll: {},
     pendingLeave: null,
   };
 
-  var previewCtl = { gen: 0, timers: [], raf: 0 };
+  var previewCtl = {
+    gen: 0,
+    timers: [],
+    raf: 0,
+    phase: null,
+    phaseT0: 0,
+    phaseDur: 0,
+    itemIndex: 0,
+    stripeY: 0,
+    wp: null,
+  };
 
   var els = {};
 
@@ -79,6 +90,11 @@
       g: A.g + (B.g - A.g) * t,
       b: A.b + (B.b - A.b) * t,
     });
+  }
+
+  /* Live Pattern Bake: stripe×0.35 + Secondary×0.65 (desat / opacity sim). */
+  function bakePatternHex(fg) {
+    return mixHex(fg, roleHex("secondary"), 0.65);
   }
 
   function luminance(hex) {
@@ -317,7 +333,7 @@
       '<section class="screen">' +
       header("System Settings") +
       statusBlock() +
-      '<div class="rows">' +
+      '<div class="rows"><div class="bounce-inner">' +
       row({
         key: "dataSource",
         label: "Data Source",
@@ -334,12 +350,12 @@
         value: labelOf(D.fonts, state.draft.systemFont),
       }) +
       linksBlock() +
-      "</div></section>"
+      "</div></div></section>"
     );
   }
 
   function screenMenu() {
-    var items = '<div class="nav-wrap"><div class="nav-list">';
+    var items = '<div class="nav-wrap"><div class="nav-list bounce-inner">';
     items +=
       '<button class="nav-item" type="button" data-act="go" data-to="style">Style and Theme</button>';
     D.boards.forEach(function (b) {
@@ -468,17 +484,20 @@
     return html;
   }
 
-  function wallpaperSrc() {
+  function wallpaperPaper() {
     var paper = find(D.wallpapers, state.draft.wallpaper);
-    return paper && paper.src ? paper.src : D.wallpapers[0].src;
+    if (!paper || !paper.src) paper = D.wallpapers[0];
+    return paper;
   }
 
-  function scrollDurationSec() {
-    var speed = Number(state.draft.scrollSpeed) || 0;
-    if (speed <= 0) return 0;
-    var period = 44;
-    var px = 28 * 0.45 * speed;
-    return Math.max(0.45, period / Math.max(0.01, px));
+  function wallpaperSrc() {
+    var paper = wallpaperPaper();
+    return paper && paper.src ? paper.src : "";
+  }
+
+  function wallpaperFallback() {
+    var paper = wallpaperPaper();
+    return (paper && paper.fallback) || "";
   }
 
   function previewHtml() {
@@ -489,10 +508,6 @@
       : d.background === "pattern" || d.background === "wallpaper"
         ? roleHex("main")
         : roleHex(d.background);
-    var scrollOn =
-      !encore &&
-      d.scrollSpeed > 0 &&
-      (d.background === "pattern" || d.background === "wallpaper");
     var veilKind =
       d.encoreStyle === "soft"
         ? "soft"
@@ -502,43 +517,53 @@
     var veilFill =
       d.encoreSpot === "highlight" ? currentTheme().highlight : "#000000";
     var wp = wallpaperSrc();
+    var wpFb = wallpaperFallback();
+    var first = D.previewItems[0] || { src: "", isNew: false };
     return (
       '<div class="preview" style="--preview-fill:' +
       fill +
       ";--pattern-a:" +
-      roleHex(d.patternColor1) +
+      bakePatternHex(roleHex(d.patternColor1)) +
       ";--pattern-b:" +
-      roleHex(d.patternColor2) +
-      ";--wallpaper-image:url('" +
-      wp +
-      "');--scroll-dur:" +
-      scrollDurationSec() +
-      's;--veil-fill:' +
+      bakePatternHex(roleHex(d.patternColor2)) +
+      ";--veil-fill:" +
       veilFill +
       '">' +
+      '<div class="preview-clip">' +
       '<div class="preview-layer preview-solid"></div>' +
-      '<div class="preview-layer preview-pattern' +
-      (scrollOn && d.background === "pattern" ? " is-scrolling" : "") +
-      '"' +
+      '<div class="preview-layer preview-pattern"' +
       (encore || d.background !== "pattern" ? " hidden" : "") +
       '><div class="preview-pattern-track"></div></div>' +
       '<div class="preview-layer preview-wallpaper"' +
       (encore || d.background !== "wallpaper" ? " hidden" : "") +
       ">" +
-      '<div class="preview-wp preview-wp-a is-on"></div>' +
-      '<div class="preview-wp preview-wp-b"></div></div>' +
+      '<div class="preview-wp preview-wp-a is-on"><img class="preview-wp-img" alt="" src="' +
+      escapeHtml(wp) +
+      '"' +
+      (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
+      "></div>" +
+      '<div class="preview-wp preview-wp-b"><img class="preview-wp-img" alt="" src="' +
+      escapeHtml(wp) +
+      '"' +
+      (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
+      "></div></div>" +
       '<div class="preview-plate">' +
       '<div class="preview-anim">' +
       '<img class="preview-food" alt="" src="' +
-      (D.previewItems[0] && D.previewItems[0].src) +
-      '">' +
-      '<div class="preview-sticker" hidden>' +
+      escapeHtml(first.src) +
+      '"></div>' +
+      '<div class="preview-sticker"' +
+      (first.isNew ? "" : " hidden") +
+      ">" +
       '<img class="preview-sticker-shadow" alt="" src="' +
       D.sticker.shadow +
       '">' +
-      '<img class="preview-sticker-body" alt="New!" src="' +
+      '<div class="preview-sticker-body">' +
+      '<img class="preview-sticker-body-img" alt="" src="' +
       D.sticker.body +
       '">' +
+      '<span class="preview-sticker-tint"></span></div>' +
+      '<span class="preview-sticker-label">New!</span>' +
       "</div></div></div>" +
       '<div class="preview-layer preview-veil is-' +
       veilKind +
@@ -554,10 +579,10 @@
       header("Style and Theme") +
       previewHtml() +
       '<div class="style-scroll" id="style-scroll">' +
-      '<div class="rows">' +
+      '<div class="rows bounce-inner">' +
       styleRows() +
       "</div></div>" +
-      footerBar("Coming soon") +
+      footerBar("New Theme", "create-theme") +
       "</section>"
     );
   }
@@ -575,6 +600,8 @@
     if (state.screen === "style") {
       var sc = document.getElementById("style-scroll");
       if (sc) sc.scrollTop = state.styleScroll;
+      restorePillScroll();
+      bindWpFallback();
       startPreviewCycle();
     } else {
       stopPreviewCycle();
@@ -781,6 +808,19 @@
           if (o.id === "poppins") fontStyle = "font-family:Poppins,sans-serif;";
           if (o.id === "roboto") fontStyle = "font-family:Roboto,sans-serif;";
         }
+        var check = on
+          ? '<span class="picker-check">' + CHECK_SVG + "</span>"
+          : "";
+        if (state.picker === "wallpaper" && o.id === "upload") {
+          return (
+            '<label class="picker-option">' +
+            '<span class="picker-label">' +
+            escapeHtml(o.label) +
+            "</span>" +
+            '<input class="picker-file" type="file" accept="image/*" aria-label="Upload wallpaper">' +
+            "</label>"
+          );
+        }
         return (
           '<button class="picker-option' +
           (on ? " is-on" : "") +
@@ -791,7 +831,7 @@
           '><span class="picker-label">' +
           escapeHtml(o.label) +
           "</span>" +
-          (on ? '<span class="picker-check">' + CHECK_SVG + "</span>" : "") +
+          check +
           "</button>"
         );
       })
@@ -807,9 +847,11 @@
       "</h2>" +
       note +
       '<div class="picker-list">' +
+      '<div class="picker-list-inner">' +
       opts +
-      "</div></div>";
+      "</div></div></div>";
     applyTheme();
+    bindPickerUpload();
   }
 
   function renderDialog() {
@@ -833,6 +875,7 @@
         '<div class="dialog-card" role="dialog">' +
         "<h2>Create New Theme</h2>" +
         '<input class="dialog-input" id="theme-name" type="text" maxlength="32" placeholder="Theme name" value="Custom Theme">' +
+        '<p class="dialog-gate" id="theme-gate" hidden>Theme Authoring Coming Soon</p>' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="create-save">Create</button>' +
         '<button class="btn-primary" type="button" data-act="create-cancel">Cancel</button>' +
@@ -939,9 +982,6 @@
     var spec = pickerSpec(state.picker);
     if (!spec) return;
     if (state.picker === "wallpaper" && id === "upload") {
-      state.picker = null;
-      renderPicker();
-      openUploadSoon();
       return;
     }
     spec.set(id);
@@ -950,26 +990,71 @@
     renderAll();
   }
 
-  function openUploadSoon() {
-    var inp = document.getElementById("toki-upload");
-    if (!inp) {
-      inp = document.createElement("input");
-      inp.type = "file";
-      inp.accept = "image/*";
-      inp.id = "toki-upload";
-      inp.hidden = true;
-      document.body.appendChild(inp);
-      inp.addEventListener("change", function () {
-        if (inp.files && inp.files.length) toast("Coming soon");
-        inp.value = "";
-      });
+  function bindPickerUpload() {
+    var inp = els.picker.querySelector(".picker-file");
+    if (!inp || inp.getAttribute("data-bound")) return;
+    inp.setAttribute("data-bound", "1");
+    inp.addEventListener("change", function () {
+      if (inp.files && inp.files.length) {
+        toast("Theme Authoring Coming Soon");
+      }
+      inp.value = "";
+    });
+  }
+
+  function bindWpFallback() {
+    var imgs = els.app.querySelectorAll(".preview-wp-img");
+    for (var i = 0; i < imgs.length; i++) {
+      (function (img) {
+        if (img.getAttribute("data-fb")) return;
+        img.setAttribute("data-fb", "1");
+        img.addEventListener("error", function () {
+          var fb = img.getAttribute("data-fallback");
+          if (fb && img.src.indexOf(fb) === -1) img.src = fb;
+        });
+      })(imgs[i]);
     }
-    inp.click();
+  }
+
+  function rememberPillScroll() {
+    var rows = els.app.querySelectorAll("[data-pills]");
+    for (var i = 0; i < rows.length; i++) {
+      var key = rows[i].getAttribute("data-pills");
+      if (key) state.pillScroll[key] = rows[i].scrollLeft;
+    }
+  }
+
+  function restorePillScroll() {
+    var rows = els.app.querySelectorAll("[data-pills]");
+    for (var i = 0; i < rows.length; i++) {
+      var key = rows[i].getAttribute("data-pills");
+      if (key && state.pillScroll[key] != null) {
+        rows[i].scrollLeft = state.pillScroll[key];
+      }
+    }
   }
 
   function setPill(key, val) {
-    state.draft[key] = Number(val);
+    var next = Number(val);
+    if (state.draft[key] === next) return;
     rememberStyleScroll();
+    rememberPillScroll();
+    state.draft[key] = next;
+    var row = els.app.querySelector('[data-pills="' + key + '"]');
+    if (row) {
+      var pills = row.querySelectorAll(".pill");
+      for (var i = 0; i < pills.length; i++) {
+        pills[i].classList.toggle(
+          "is-on",
+          Number(pills[i].getAttribute("data-val")) === next
+        );
+      }
+    }
+    if (key === "scrollSpeed") return;
+    if (key === "presentationSpeed") {
+      retargetMotion();
+      return;
+    }
     renderScreen();
   }
 
@@ -999,25 +1084,10 @@
     renderDialog();
   }
 
-  function createTheme() {
-    var inp = document.getElementById("theme-name");
-    var name = ((inp && inp.value) || "").trim() || "Custom Theme";
-    var exists = D.themes.some(function (t) {
-      return t.name.toLowerCase() === name.toLowerCase();
-    });
-    if (exists) name = name + " " + (D.themes.length + 1);
-    var t = currentTheme();
-    D.themes.push({
-      name: name,
-      main: t.main,
-      secondary: t.secondary,
-      highlight: t.highlight,
-      special: t.special,
-    });
-    state.draft.themeName = name;
-    state.dialog = null;
-    renderAll();
-    toast("Theme added locally — not written to the sheet.");
+  function gateNewTheme() {
+    var gate = document.getElementById("theme-gate");
+    if (gate) gate.hidden = false;
+    toast("Theme Authoring Coming Soon");
   }
 
   function openSheet() {
@@ -1066,75 +1136,239 @@
     }
   }
 
-  function setPlate(opacity, zoom, durIn, durOut) {
+  function currentScale(el) {
+    if (!el) return 1;
+    var t = getComputedStyle(el).transform;
+    if (!t || t === "none") return 1;
+    var m = t.match(/matrix\(([^)]+)\)/);
+    if (m) return Math.abs(parseFloat(m[1].split(",")[0])) || 1;
+    var m3 = t.match(/matrix3d\(([^)]+)\)/);
+    if (m3) return Math.abs(parseFloat(m3[1].split(",")[0])) || 1;
+    return 1;
+  }
+
+  function setPlate(opacity, zoom, dur) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
     if (!plate) return;
-    var op = Math.min(0.45, durIn || 0.45);
-    plate.style.transition = "opacity " + op + "s ease";
+    var fade = Math.min(0.45, Math.max(0.02, dur || 0.45));
+    var move = Math.max(0.02, dur || 0.45);
+    plate.style.transition = "opacity " + fade + "s ease";
     if (anim) {
-      anim.style.transition =
-        "transform " + (durIn || 0.45) + "s ease-out";
+      anim.style.transition = "transform " + move + "s ease-out";
       anim.style.setProperty("--hero-zoom", String(zoom));
     }
     plate.style.opacity = String(opacity);
     var veil = els.app.querySelector(".preview-veil");
     if (veil && state.draft.presentation === "encore") {
-      veil.style.transition = "opacity " + op + "s ease";
+      veil.style.transition = "opacity " + fade + "s ease";
       veil.style.opacity = String(opacity);
     }
   }
 
-  function startWallpaperPan() {
+  function snapPlate(opacity, zoom) {
+    var plate = els.app.querySelector(".preview-plate");
+    var anim = els.app.querySelector(".preview-anim");
+    var veil = els.app.querySelector(".preview-veil");
+    if (plate) {
+      plate.style.transition = "none";
+      plate.style.opacity = String(opacity);
+    }
+    if (anim) {
+      anim.style.transition = "none";
+      anim.style.setProperty("--hero-zoom", String(zoom));
+    }
+    if (veil) {
+      veil.style.transition = "none";
+      veil.style.opacity =
+        state.draft.presentation === "encore" ? String(opacity) : "0";
+    }
+    void (plate && plate.offsetWidth);
+  }
+
+  function scrollPxPerSec() {
+    return 28 * 0.45 * (Number(state.draft.scrollSpeed) || 0);
+  }
+
+  function stepPattern(dt) {
+    var wrap = els.app.querySelector(".preview-pattern");
+    var track = wrap && wrap.querySelector(".preview-pattern-track");
+    if (!track || !wrap || wrap.hidden) return;
+    var speed = scrollPxPerSec();
+    var period = 186;
+    if (speed <= 0) return;
+    previewCtl.stripeY = (previewCtl.stripeY + speed * dt) % period;
+    track.style.transform =
+      "rotate(-51.5deg) translate3d(0," + previewCtl.stripeY + "px,0)";
+  }
+
+  function stepWallpaper(dt) {
     var wrap = els.app.querySelector(".preview-wallpaper");
     if (!wrap || wrap.hidden) return;
-    var a = wrap.querySelector(".preview-wp-a");
-    var b = wrap.querySelector(".preview-wp-b");
-    if (!a || !b) return;
-    var speed = 28 * 0.45 * (Number(state.draft.scrollSpeed) || 0);
+    var speed = scrollPxPerSec();
     if (speed <= 0) return;
-    var layers = [
-      { el: a, x: 0, on: true },
-      { el: b, x: 0, on: false },
-    ];
-    layers[0].el.classList.add("is-on");
-    layers[1].el.classList.remove("is-on");
+    if (!previewCtl.wp) {
+      var a = wrap.querySelector(".preview-wp-a");
+      var b = wrap.querySelector(".preview-wp-b");
+      if (!a || !b) return;
+      previewCtl.wp = {
+        layers: [
+          { el: a, x: 0, on: true },
+          { el: b, x: 0, on: false },
+        ],
+        fading: false,
+      };
+      a.classList.add("is-on");
+      b.classList.remove("is-on");
+    }
+    var wp = previewCtl.wp;
+    var i;
+    for (i = 0; i < wp.layers.length; i++) {
+      if (!wp.layers[i].on && wp.fading) continue;
+      wp.layers[i].x -= speed * dt;
+      wp.layers[i].el.style.transform =
+        "translate3d(" + wp.layers[i].x + "px,0,0)";
+    }
+    var active = wp.layers[0].on ? wp.layers[0] : wp.layers[1];
+    var other = wp.layers[0].on ? wp.layers[1] : wp.layers[0];
+    var limit = -Math.max(80, wrap.offsetWidth * 0.35);
+    if (!wp.fading && active.x < limit) {
+      wp.fading = true;
+      other.x = 0;
+      other.el.style.transform = "translate3d(0,0,0)";
+      other.el.style.transition = "opacity 0.45s ease";
+      active.el.style.transition = "opacity 0.45s ease";
+      other.el.classList.add("is-on");
+      active.el.classList.remove("is-on");
+      other.on = true;
+      active.on = false;
+      previewAfter(480, previewCtl.gen, function () {
+        wp.fading = false;
+        other.el.style.transition = "";
+        active.el.style.transition = "";
+      });
+    }
+  }
+
+  function startPreviewRaf() {
     var last = 0;
-    var fading = false;
     var gen = previewCtl.gen;
     function tick(ts) {
       if (gen !== previewCtl.gen) return;
       if (!last) last = ts;
       var dt = Math.min(48, ts - last) / 1000;
       last = ts;
-      var i;
-      for (i = 0; i < layers.length; i++) {
-        if (!layers[i].on && fading) continue;
-        layers[i].x -= speed * dt;
-        layers[i].el.style.transform = "translate3d(" + layers[i].x + "px,0,0)";
-      }
-      var active = layers[0].on ? layers[0] : layers[1];
-      var other = layers[0].on ? layers[1] : layers[0];
-      var limit = -Math.max(80, wrap.offsetWidth * 0.35);
-      if (!fading && active.x < limit) {
-        fading = true;
-        other.x = 0;
-        other.el.style.transform = "translate3d(0,0,0)";
-        other.el.style.transition = "opacity 0.45s ease";
-        active.el.style.transition = "opacity 0.45s ease";
-        other.el.classList.add("is-on");
-        active.el.classList.remove("is-on");
-        other.on = true;
-        active.on = false;
-        previewAfter(480, gen, function () {
-          fading = false;
-          other.el.style.transition = "";
-          active.el.style.transition = "";
-        });
-      }
+      stepPattern(dt);
+      stepWallpaper(dt);
       previewCtl.raf = requestAnimationFrame(tick);
     }
     previewCtl.raf = requestAnimationFrame(tick);
+  }
+
+  function phaseTarget(phase, phases, mode) {
+    if (phase === "out") {
+      return {
+        opacity: 0,
+        zoom: mode === "slideshow" ? 1 : phases.zoomMin,
+        dur: phases.punchOut,
+      };
+    }
+    if (phase === "hold") {
+      return {
+        opacity: 1,
+        zoom: mode === "slideshow" ? 1 : phases.zoomMax,
+        dur: phases.hold,
+      };
+    }
+    return {
+      opacity: 1,
+      zoom: mode === "slideshow" ? 1 : phases.zoomMax,
+      dur: phases.punchIn,
+    };
+  }
+
+  function schedulePhaseEnd(gen) {
+    previewAfter(previewCtl.phaseDur * 1000, gen, function () {
+      advancePhase(gen);
+    });
+  }
+
+  function beginPhase(phase, gen, snap) {
+    if (gen !== previewCtl.gen) return;
+    var phases = motionPhases();
+    var mode = state.draft.presentation;
+    previewCtl.phase = phase;
+    var tgt = phaseTarget(phase, phases, mode);
+    if (phases.paused) {
+      previewCtl.phaseDur = 0;
+      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.25);
+      return;
+    }
+    previewCtl.phaseDur = Math.max(0.03, tgt.dur);
+    previewCtl.phaseT0 = performance.now();
+    if (snap) snapPlate(phase === "out" ? 1 : 0, phase === "out" ? tgt.zoom : (mode === "slideshow" ? 1 : phases.zoomMin));
+    if (phase === "in" && snap) {
+      previewAfter(20, gen, function () {
+        setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur);
+        schedulePhaseEnd(gen);
+      });
+      return;
+    }
+    setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur);
+    schedulePhaseEnd(gen);
+  }
+
+  function advancePhase(gen) {
+    if (gen !== previewCtl.gen) return;
+    if (previewCtl.phase === "in") {
+      beginPhase("hold", gen, false);
+      return;
+    }
+    if (previewCtl.phase === "hold") {
+      beginPhase("out", gen, false);
+      return;
+    }
+    runPreviewBlock(previewCtl.itemIndex + 1, gen);
+  }
+
+  function retargetMotion() {
+    var gen = previewCtl.gen;
+    var phases = motionPhases();
+    var mode = state.draft.presentation;
+    previewCtl.timers.forEach(clearTimeout);
+    previewCtl.timers = [];
+    if (!previewCtl.phase) {
+      runPreviewBlock(state.previewIndex || 0, gen);
+      return;
+    }
+    if (phases.paused) {
+      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.2);
+      return;
+    }
+    var tgt = phaseTarget(previewCtl.phase, phases, mode);
+    var elapsed = (performance.now() - previewCtl.phaseT0) / 1000;
+    var oldDur = Math.max(0.03, previewCtl.phaseDur || tgt.dur);
+    var p = Math.min(1, Math.max(0, elapsed / oldDur));
+    var remaining = Math.max(0.04, tgt.dur * (1 - p));
+    var plate = els.app.querySelector(".preview-plate");
+    var anim = els.app.querySelector(".preview-anim");
+    if (plate) {
+      var opNow = getComputedStyle(plate).opacity;
+      plate.style.transition = "none";
+      plate.style.opacity = opNow;
+    }
+    if (anim) {
+      var zNow = currentScale(anim);
+      anim.style.transition = "none";
+      anim.style.setProperty("--hero-zoom", String(zNow));
+    }
+    void (plate && plate.offsetWidth);
+    previewCtl.phaseDur = tgt.dur;
+    previewCtl.phaseT0 = performance.now() - p * tgt.dur * 1000;
+    setPlate(tgt.opacity, tgt.zoom, remaining);
+    previewAfter(remaining * 1000, gen, function () {
+      advancePhase(gen);
+    });
   }
 
   function runPreviewBlock(index, gen) {
@@ -1143,49 +1377,17 @@
     if (!items.length) return;
     var i = ((index % items.length) + items.length) % items.length;
     state.previewIndex = i;
-    var item = items[i];
-    var phases = motionPhases();
-    var mode = state.draft.presentation;
-    var zoom = mode === "slideshow" ? 1 : phases.zoomMin;
-    applyPreviewItem(item);
-    var plate = els.app.querySelector(".preview-plate");
-    var anim = els.app.querySelector(".preview-anim");
-    if (plate) {
-      plate.style.transition = "none";
-      plate.style.opacity = "0";
-    }
-    if (anim) {
-      anim.style.transition = "none";
-      anim.style.setProperty("--hero-zoom", String(zoom));
-    }
-    var veil = els.app.querySelector(".preview-veil");
-    if (veil) {
-      veil.style.transition = "none";
-      veil.style.opacity = "0";
-    }
-    void (plate && plate.offsetWidth);
-    if (phases.paused) {
-      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.3, 0.3);
-      return;
-    }
-    previewAfter(30, gen, function () {
-      var zIn = mode === "slideshow" ? 1 : phases.zoomMax;
-      setPlate(1, zIn, phases.punchIn, phases.punchOut);
-      previewAfter(phases.punchIn * 1000 + phases.hold * 1000, gen, function () {
-        var zOut = mode === "slideshow" ? 1 : phases.zoomMin;
-        setPlate(0, zOut, phases.punchOut, phases.punchOut);
-        previewAfter(phases.punchOut * 1000, gen, function () {
-          runPreviewBlock(i + 1, gen);
-        });
-      });
-    });
+    previewCtl.itemIndex = i;
+    applyPreviewItem(items[i]);
+    beginPhase("in", gen, true);
   }
 
   function startPreviewCycle() {
     stopPreviewCycle();
     var gen = previewCtl.gen;
+    previewCtl.wp = null;
     bindPillDrag();
-    startWallpaperPan();
+    startPreviewRaf();
     runPreviewBlock(state.previewIndex || 0, gen);
   }
 
@@ -1195,6 +1397,8 @@
     previewCtl.timers = [];
     if (previewCtl.raf) cancelAnimationFrame(previewCtl.raf);
     previewCtl.raf = 0;
+    previewCtl.phase = null;
+    previewCtl.wp = null;
   }
 
   function bindPillDrag() {
@@ -1204,37 +1408,57 @@
         if (el.getAttribute("data-drag")) return;
         el.setAttribute("data-drag", "1");
         var down = false;
-        var moved = false;
+        var dragging = false;
+        var suppressClick = false;
+        var pid = null;
         var x0 = 0;
         var sl = 0;
+        var THRESH = 14;
         el.addEventListener("pointerdown", function (e) {
           if (e.pointerType === "touch") return;
           down = true;
-          moved = false;
+          dragging = false;
+          pid = e.pointerId;
           x0 = e.clientX;
           sl = el.scrollLeft;
-          try {
-            el.setPointerCapture(e.pointerId);
-          } catch (err) {}
         });
         el.addEventListener("pointermove", function (e) {
           if (!down) return;
           var dx = e.clientX - x0;
-          if (Math.abs(dx) > 6) moved = true;
-          if (moved) el.scrollLeft = sl - dx;
+          if (!dragging && Math.abs(dx) >= THRESH) {
+            dragging = true;
+            suppressClick = true;
+            el.classList.add("is-dragging");
+            try {
+              el.setPointerCapture(e.pointerId);
+            } catch (err) {}
+          }
+          if (dragging) el.scrollLeft = sl - dx;
         });
-        function up() {
+        function endDrag(e) {
+          if (pid != null && e && e.pointerId !== pid && e.type !== "pointercancel") {
+            return;
+          }
+          if (dragging) {
+            rememberPillScroll();
+            try {
+              if (pid != null) el.releasePointerCapture(pid);
+            } catch (err) {}
+          }
           down = false;
+          dragging = false;
+          pid = null;
+          el.classList.remove("is-dragging");
         }
-        el.addEventListener("pointerup", up);
-        el.addEventListener("pointercancel", up);
+        el.addEventListener("pointerup", endDrag);
+        el.addEventListener("pointercancel", endDrag);
         el.addEventListener(
           "click",
           function (e) {
-            if (moved) {
+            if (suppressClick) {
               e.preventDefault();
               e.stopPropagation();
-              moved = false;
+              suppressClick = false;
             }
           },
           true
@@ -1284,6 +1508,7 @@
     var params = new URLSearchParams(q);
     if (params.get("pick")) state.picker = params.get("pick");
     if (params.get("confirm") === "1") state.dialog = "confirm";
+    if (params.get("newtheme") === "1") state.dialog = "create";
     if (params.get("theme")) {
       var want = params.get("theme");
       if (D.themes.some(function (t) { return t.name === want; })) {
@@ -1292,6 +1517,14 @@
     }
     if (params.get("bg")) state.draft.background = params.get("bg");
     if (params.get("pres")) state.draft.presentation = params.get("pres");
+    if (params.get("item")) {
+      var n = parseInt(params.get("item"), 10);
+      if (!isNaN(n)) state.previewIndex = n;
+    }
+    if (params.get("speed") != null && params.get("speed") !== "") {
+      var sp = parseInt(params.get("speed"), 10);
+      if (!isNaN(sp)) state.draft.presentationSpeed = sp;
+    }
   }
 
   function onClick(e) {
@@ -1318,9 +1551,11 @@
       setPill(t.getAttribute("data-key"), t.getAttribute("data-val"));
     } else if (act === "confirm") {
       confirmChoice(t.getAttribute("data-val"));
-    } else if (act === "create-theme" || act === "create-save") {
-      state.dialog = null;
-      toast("Coming soon");
+    } else if (act === "create-theme") {
+      state.dialog = "create";
+      renderDialog();
+    } else if (act === "create-save") {
+      gateNewTheme();
     } else if (act === "create-cancel") {
       state.dialog = null;
       renderDialog();
