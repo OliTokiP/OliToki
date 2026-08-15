@@ -655,7 +655,10 @@ def main() -> int:
                     bi = write_build_info()
                     if bi and bi.is_file():
                         rel = str(bi.relative_to(ROOT))
-                        run_git(["add", rel], check=False)
+                        run_git(
+                            ["add", rel, "js/live-stamp.json"],
+                            check=False,
+                        )
                         if git_is_dirty():
                             try:
                                 run_git(
