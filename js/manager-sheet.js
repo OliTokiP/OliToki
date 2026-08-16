@@ -222,14 +222,161 @@
     return "black";
   }
 
-  function clampSpeed(raw, fallback, max) {
+  function clampSpeed(raw, fallback, min, max) {
     if (raw === undefined || raw === null || raw === "") return fallback;
     var n = Number(raw);
     if (!isFinite(n)) return fallback;
     n = Math.round(n);
-    if (n < 0) return 0;
-    if (n > max) return max;
+    if (min != null && isFinite(min) && n < min) return min;
+    if (max != null && isFinite(max) && n > max) return max;
     return n;
+  }
+
+  function offlineSpeedTiles() {
+    var D = global.TOKI_MANAGER_DATA;
+    var st = (D && D.speedTiles) || {};
+    return {
+      scroll: {
+        min: st.scroll && st.scroll.min != null ? st.scroll.min : 0,
+        max: st.scroll && st.scroll.max != null ? st.scroll.max : 5,
+      },
+      presentation: {
+        min: st.presentation && st.presentation.min != null ? st.presentation.min : 0,
+        max: st.presentation && st.presentation.max != null ? st.presentation.max : 7,
+      },
+    };
+  }
+
+  function foldField(raw) {
+    return String(raw || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+  }
+
+  function fieldValidation(fields, names) {
+    if (!fields) return null;
+    var folded = [];
+    var n;
+    for (n = 0; n < names.length; n++) folded.push(foldField(names[n]));
+    var keys = Object.keys(fields);
+    var i;
+    var k;
+    var fk;
+    for (i = 0; i < keys.length; i++) {
+      k = keys[i];
+      fk = foldField(k);
+      for (n = 0; n < folded.length; n++) {
+        if (fk === folded[n]) return fields[k];
+      }
+    }
+    return null;
+  }
+
+  function parseConditionNumber(raw) {
+    if (raw === undefined || raw === null || raw === "") return null;
+    var s = String(raw).trim();
+    if (!s) return null;
+    // Strip formula-ish wrappers; validation values are usually plain digits.
+    if (s.charAt(0) === "=") s = s.slice(1).trim();
+    var n = Number(s);
+    if (!isFinite(n)) return null;
+    return n;
+  }
+
+  /**
+   * Turn a Sheets dataValidation condition into integer tile bounds.
+   * Needs both lower and upper after merge with offline defaults — unbounded
+   * rules must not become an infinite pill strip.
+   * Returns { min, max } or null when the condition is not a finite number range.
+   */
+  function numberBoundsFromValidation(rule, fallback) {
+    var fb = fallback || { min: 0, max: 5 };
+    var fMin = fb.min != null && isFinite(fb.min) ? Number(fb.min) : 0;
+    var fMax = fb.max != null && isFinite(fb.max) ? Number(fb.max) : fMin;
+    if (!rule || !rule.type) {
+      return { min: fMin, max: fMax };
+    }
+    var type = String(rule.type || "").toUpperCase();
+    var vals = rule.values || [];
+    var a = parseConditionNumber(vals[0]);
+    var b = parseConditionNumber(vals[1]);
+    var min = fMin;
+    var max = fMax;
+    var list = null;
+
+    if (type === "NUMBER_BETWEEN" && a != null && b != null) {
+      min = Math.min(a, b);
+      max = Math.max(a, b);
+    } else if (type === "NUMBER_NOT_BETWEEN") {
+      // Cannot express exclusion as a simple pill strip — keep offline tiles.
+      return { min: fMin, max: fMax };
+    } else if (type === "NUMBER_GREATER_THAN_EQ" && a != null) {
+      min = a;
+      max = Math.max(fMax, a);
+    } else if (type === "NUMBER_GREATER" && a != null) {
+      min = Math.floor(a) + 1;
+      max = Math.max(fMax, min);
+    } else if (type === "NUMBER_LESS_THAN_EQ" && a != null) {
+      max = a;
+      min = Math.min(fMin, a);
+    } else if (type === "NUMBER_LESS" && a != null) {
+      max = Math.ceil(a) - 1;
+      min = Math.min(fMin, max);
+    } else if (type === "NUMBER_EQ" && a != null) {
+      min = a;
+      max = a;
+    } else if (type === "ONE_OF_LIST") {
+      list = [];
+      for (var i = 0; i < vals.length; i++) {
+        var n = parseConditionNumber(vals[i]);
+        if (n == null) continue;
+        n = Math.round(n);
+        if (list.indexOf(n) === -1) list.push(n);
+      }
+      if (!list.length) return { min: fMin, max: fMax };
+      list.sort(function (x, y) {
+        return x - y;
+      });
+      return { min: list[0], max: list[list.length - 1], values: list };
+    } else {
+      // ONE_OF_RANGE / text / unknown — offline tiles
+      return { min: fMin, max: fMax };
+    }
+
+    min = Math.round(min);
+    max = Math.round(max);
+    if (max < min) {
+      var t = min;
+      min = max;
+      max = t;
+    }
+    // Guard against pathological ranges (e.g. 0…1e9)
+    if (max - min > 30) {
+      console.warn(
+        "manager-sheet: number validation span too large, clamping to offline max",
+        type,
+        min,
+        max
+      );
+      max = min + Math.min(30, Math.max(0, fMax - fMin));
+    }
+    return { min: min, max: max };
+  }
+
+  function buildSpeedTiles(fields) {
+    var base = offlineSpeedTiles();
+    var scrollRule = fieldValidation(fields, [
+      "BG Scroll Speed",
+      "Background Scroll Speed",
+      "Scroll Speed",
+    ]);
+    var presRule = fieldValidation(fields, [
+      "Presentation Speed",
+      "Slideshow Speed",
+    ]);
+    var scroll = numberBoundsFromValidation(scrollRule, base.scroll);
+    var presentation = numberBoundsFromValidation(presRule, base.presentation);
+    return { scroll: scroll, presentation: presentation };
   }
 
   function hexOrEmpty(raw) {
@@ -463,7 +610,7 @@
     return themes;
   }
 
-  function parseStyleDraft(rows, themes) {
+  function parseStyleDraft(rows, themes, speedTiles) {
     var start = findSectionData(rows, "settings");
     if (start < 0) start = 2;
     var headers = rows[start - 1] || [];
@@ -476,6 +623,12 @@
     if (colBg < 0) colBg = STYLE_SETTINGS.bgColor;
     if (colPat < 0) colPat = STYLE_SETTINGS.bgPattern;
     if (colWp < 0) colWp = STYLE_SETTINGS.bgImage;
+
+    var tiles = speedTiles || offlineSpeedTiles();
+    var scrollMin = tiles.scroll.min;
+    var scrollMax = tiles.scroll.max;
+    var presMin = tiles.presentation.min;
+    var presMax = tiles.presentation.max;
 
     var themeName = cell(row, colTheme) || "Toki Default";
     var chosen = null;
@@ -515,7 +668,12 @@
       patternColor2:
         (chosen && chosen.patternColor2) || "highlight",
       wallpaper: wp || "galaxy",
-      scrollSpeed: clampSpeed(cell(row, STYLE_SETTINGS.bgScrollSpeed), 1, 5),
+      scrollSpeed: clampSpeed(
+        cell(row, STYLE_SETTINGS.bgScrollSpeed),
+        1,
+        scrollMin,
+        scrollMax
+      ),
       encoreStyle: encoreStyle(cell(row, STYLE_SETTINGS.encoreSpotlightType)),
       encoreSpot: encoreSpot(cell(row, STYLE_SETTINGS.encoreSpotlightColor)),
       encoreBg:
@@ -524,14 +682,37 @@
       presentationSpeed: clampSpeed(
         cell(row, STYLE_SETTINGS.slideshowSpeed),
         1,
-        7
+        presMin,
+        presMax
       ),
     };
   }
 
-  function buildPayload(settings, styleRows) {
+  async function fetchValidations(gid, force) {
+    var useProxy = await detectProxy();
+    if (!useProxy) return null;
+    try {
+      var res = await fetch(
+        "/api/sheets/validations?gid=" +
+          encodeURIComponent(String(gid)) +
+          (force ? "&force=1" : "") +
+          "&t=" +
+          Date.now(),
+        { cache: "no-store" }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var j = await res.json();
+      return (j && j.fields) || null;
+    } catch (err) {
+      console.warn("manager-sheet: validations failed", err);
+      return null;
+    }
+  }
+
+  function buildPayload(settings, styleRows, validationFields) {
+    var speedTiles = buildSpeedTiles(validationFields || null);
     var themes = parseThemes(styleRows);
-    var style = parseStyleDraft(styleRows, themes);
+    var style = parseStyleDraft(styleRows, themes, speedTiles);
     var sources = catalogToSources(settings.catalog);
     var dsId = sourceId(settings.dataSource || settings.sourceName);
     var draft = {
@@ -559,6 +740,8 @@
       dataSources: sources,
       themes: themes,
       draft: draft,
+      speedTiles: speedTiles,
+      fieldValidations: validationFields || null,
     };
   }
 
@@ -572,28 +755,33 @@
     var useProxy = await detectProxy();
     var settings;
     var styleRows;
+    var validationFields = null;
     if (useProxy) {
-      var pair = await Promise.all([
+      var triple = await Promise.all([
         fetchSettings(force),
         fetchCsv(STYLE_GID, "", force),
+        fetchValidations(STYLE_GID, force),
       ]);
-      settings = pair[0];
-      styleRows = pair[1];
+      settings = triple[0];
+      styleRows = triple[1];
+      validationFields = triple[2];
     } else {
       settings = await fetchSettings(force);
       if (!settings.sheetId && settings.catalog && settings.catalog.length) {
         settings.sheetId = settings.catalog[0].sheetId || "";
       }
       styleRows = await fetchCsv(STYLE_GID, settings.sheetId, force);
+      // Public CSV has no dataValidation — offline speedTiles stay.
     }
     if (!settings.sheetId && settings.catalog && settings.catalog.length) {
       settings.sheetId = settings.catalog[0].sheetId || "";
     }
-    var payload = buildPayload(settings, styleRows);
+    var payload = buildPayload(settings, styleRows, validationFields);
     var ms =
       (typeof performance !== "undefined" && performance.now
         ? performance.now()
         : Date.now()) - t0;
+    var st = payload.speedTiles || {};
     console.info(
       "Menu Manager sheet:",
       payload.sourceName || "?",
@@ -602,6 +790,18 @@
       "bgColor=" + payload.draft.bgColor,
       "font=" + payload.draft.systemFont,
       "restart=" + payload.draft.requireRestart,
+      "scrollTiles=" +
+        ((st.scroll && st.scroll.min) != null ? st.scroll.min : "?") +
+        ".." +
+        ((st.scroll && st.scroll.max) != null ? st.scroll.max : "?"),
+      "presTiles=" +
+        ((st.presentation && st.presentation.min) != null
+          ? st.presentation.min
+          : "?") +
+        ".." +
+        ((st.presentation && st.presentation.max) != null
+          ? st.presentation.max
+          : "?"),
       Math.round(ms) + "ms",
       force ? "force" : "cache-ok"
     );

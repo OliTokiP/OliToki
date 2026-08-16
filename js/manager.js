@@ -365,7 +365,23 @@
     );
   }
 
-  function speedRow(label, key, value, max) {
+  function speedTileSpec(kind) {
+    var st = (D.speedTiles && D.speedTiles[kind]) || {};
+    var min = st.min != null && isFinite(st.min) ? Number(st.min) : 0;
+    var max = st.max != null && isFinite(st.max) ? Number(st.max) : min;
+    var values = null;
+    if (st.values && st.values.length) {
+      values = st.values.slice();
+    } else {
+      values = [];
+      for (var i = min; i <= max; i++) values.push(i);
+    }
+    return { min: min, max: max, values: values };
+  }
+
+  function speedRow(label, key, value, kind) {
+    var spec = speedTileSpec(kind || "scroll");
+    var vals = spec.values;
     var html =
       '<div class="row' +
       (key === "scrollSpeed" ? " is-child" : "") +
@@ -375,19 +391,22 @@
       "</span>" +
       '<div class="pills" data-pills="' +
       key +
-      '" data-range-min="0" data-range-max="' +
-      max +
+      '" data-range-min="' +
+      spec.min +
+      '" data-range-max="' +
+      spec.max +
       '">';
-    for (var i = 0; i <= max; i++) {
+    for (var i = 0; i < vals.length; i++) {
+      var n = vals[i];
       html +=
         '<button class="pill' +
-        (i === value ? " is-on" : "") +
+        (n === value ? " is-on" : "") +
         '" type="button" data-act="pill" data-key="' +
         key +
         '" data-val="' +
-        i +
+        n +
         '">' +
-        i +
+        n +
         "</button>";
     }
     return html + "</div></div>";
@@ -580,7 +599,7 @@
         "Pattern Scroll Speed",
         "scrollSpeed",
         d.scrollSpeed,
-        D.speedTiles.scroll.max
+        "scroll"
       );
     }
     if (d.background === "wallpaper") {
@@ -594,7 +613,7 @@
         "Wallpaper Scroll Speed",
         "scrollSpeed",
         d.scrollSpeed,
-        D.speedTiles.scroll.max
+        "scroll"
       );
     }
     html += row({
@@ -626,7 +645,7 @@
       "Presentation Speed",
       "presentationSpeed",
       d.presentationSpeed,
-      D.speedTiles.presentation.max
+      "presentation"
     );
     return html;
   }
@@ -2237,8 +2256,27 @@
     if (payload.themes && payload.themes.length) {
       D.themes = payload.themes;
     }
+    if (payload.speedTiles) {
+      D.speedTiles = {
+        scroll: Object.assign({}, D.speedTiles.scroll, payload.speedTiles.scroll),
+        presentation: Object.assign(
+          {},
+          D.speedTiles.presentation,
+          payload.speedTiles.presentation
+        ),
+      };
+    }
     if (payload.draft) {
       var fromSheet = Object.assign({}, D.defaultDraft, payload.draft);
+      // Keep draft numbers inside the live tile set (sheet conditionals).
+      fromSheet.scrollSpeed = clampDraftSpeed(
+        fromSheet.scrollSpeed,
+        "scroll"
+      );
+      fromSheet.presentationSpeed = clampDraftSpeed(
+        fromSheet.presentationSpeed,
+        "presentation"
+      );
       state.committed = clone(fromSheet);
       if (!state.sheetDirty) {
         state.draft = clone(fromSheet);
@@ -2248,6 +2286,30 @@
     state.sheetSource = "sheet";
     applyTheme();
     renderAll();
+  }
+
+  function clampDraftSpeed(raw, kind) {
+    var spec = speedTileSpec(kind);
+    var n = Number(raw);
+    if (!isFinite(n)) n = spec.min;
+    n = Math.round(n);
+    if (spec.values && spec.values.length) {
+      if (spec.values.indexOf(n) !== -1) return n;
+      // Nearest allowed tile
+      var best = spec.values[0];
+      var bestDist = Math.abs(best - n);
+      for (var i = 1; i < spec.values.length; i++) {
+        var d = Math.abs(spec.values[i] - n);
+        if (d < bestDist) {
+          best = spec.values[i];
+          bestDist = d;
+        }
+      }
+      return best;
+    }
+    if (n < spec.min) return spec.min;
+    if (n > spec.max) return spec.max;
+    return n;
   }
 
   function loadSheet(opts) {

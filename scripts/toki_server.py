@@ -573,6 +573,119 @@ class SheetsBackend:
         )
         return text
 
+    def validations_for_settings_row(self, gid: str, force: bool = False) -> dict:
+        """
+        Read data-validation rules on the Settings data row for a revised tab
+        (label → headers → values). Keyed by header name for Menu Manager.
+        """
+        gid = str(gid)
+        self.apply_live_sheet(force_settings=force)
+        title = self.title_for_gid(gid)
+        safe = "'" + title.replace("'", "''") + "'!A1:Z40"
+        t0 = time.time()
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .get(
+                    spreadsheetId=self.sheet_id,
+                    ranges=[safe],
+                    includeGridData=True,
+                    fields=(
+                        "sheets(data(rowData(values("
+                        "formattedValue,userEnteredValue,dataValidation"
+                        "))))"
+                    ),
+                )
+                .execute()
+            )
+        rows = []
+        for sh in result.get("sheets") or []:
+            for block in sh.get("data") or []:
+                rows = block.get("rowData") or []
+                break
+            if rows:
+                break
+
+        def cell_text(cell: dict | None) -> str:
+            if not cell:
+                return ""
+            fv = cell.get("formattedValue")
+            if fv is not None and str(fv).strip() != "":
+                return str(fv).strip()
+            ue = cell.get("userEnteredValue") or {}
+            if "stringValue" in ue:
+                return str(ue.get("stringValue") or "").strip()
+            if "numberValue" in ue:
+                return str(ue.get("numberValue"))
+            if "boolValue" in ue:
+                return "TRUE" if ue.get("boolValue") else "FALSE"
+            return ""
+
+        def fold(s: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "", str(s or "").lower())
+
+        header_idx = -1
+        for i, row in enumerate(rows):
+            vals = row.get("values") or []
+            a = cell_text(vals[0] if vals else None).lower()
+            if a == "settings" or a.startswith("settings"):
+                # next non-empty row is headers
+                for j in range(i + 1, min(i + 4, len(rows))):
+                    hv = (rows[j].get("values") or [])
+                    if any(cell_text(c) for c in hv):
+                        header_idx = j
+                        break
+                break
+        if header_idx < 0:
+            # Fallback: first row that looks like Theme Selector / BG Color
+            for i, row in enumerate(rows[:8]):
+                vals = row.get("values") or []
+                heads = [fold(cell_text(c)) for c in vals]
+                if "themeselector" in heads or "bgscrollspeed" in heads:
+                    header_idx = i
+                    break
+        if header_idx < 0 or header_idx + 1 >= len(rows):
+            _log(
+                f"validations gid={gid}: no Settings header "
+                f"({time.time() - t0:.2f}s)"
+            )
+            return {"gid": gid, "title": title, "fields": {}}
+
+        headers = rows[header_idx].get("values") or []
+        data = rows[header_idx + 1].get("values") or []
+        fields: dict[str, dict] = {}
+        for ci, hcell in enumerate(headers):
+            name = cell_text(hcell)
+            if not name:
+                continue
+            dcell = data[ci] if ci < len(data) else None
+            dv = (dcell or {}).get("dataValidation") if dcell else None
+            if not dv:
+                continue
+            cond = dv.get("condition") or {}
+            ctype = str(cond.get("type") or "").strip()
+            raw_vals = []
+            for v in cond.get("values") or []:
+                if not isinstance(v, dict):
+                    continue
+                if "userEnteredValue" in v:
+                    raw_vals.append(str(v.get("userEnteredValue") or "").strip())
+                elif "relativeDate" in v:
+                    raw_vals.append(str(v.get("relativeDate") or "").strip())
+            entry = {
+                "type": ctype,
+                "values": raw_vals,
+                "strict": bool(dv.get("strict")),
+            }
+            if dv.get("inputMessage"):
+                entry["inputMessage"] = str(dv.get("inputMessage"))
+            fields[name] = entry
+        _log(
+            f"validations gid={gid} fields={len(fields)} "
+            f"fetch={time.time() - t0:.2f}s"
+        )
+        return {"gid": gid, "title": title, "fields": fields}
+
 
 def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
     class Handler(SimpleHTTPRequestHandler):
@@ -806,6 +919,35 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
                     ]
                     self._json(200, {"tabs": tabs})
                 except Exception as e:
+                    self._json(500, {"error": str(e)})
+                return
+
+            if path == "/api/sheets/validations":
+                # Settings-row dataValidation rules keyed by header name.
+                # Menu Manager uses this for number-pill bounds (not CSV).
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                qs = parse_qs(parsed.query)
+                gid = (qs.get("gid") or [None])[0]
+                if gid is None or gid == "":
+                    self._json(400, {"error": "missing gid"})
+                    return
+                force = (qs.get("force") or ["0"])[0] in ("1", "true", "yes")
+                try:
+                    payload = backend.validations_for_settings_row(
+                        str(gid), force=force
+                    )
+                    self._json(200, payload)
+                except Exception as e:
+                    _log(f"validations gid={gid} error: {e}")
+                    traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return
 

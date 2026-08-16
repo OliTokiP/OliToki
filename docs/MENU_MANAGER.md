@@ -72,6 +72,8 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
+**Number pills (BG Scroll Speed / Presentation Speed):** offline defaults live in `manager-data.js` `speedTiles`. With the Sheets proxy, load pulls **dataValidation** on the Style Settings row (`/api/sheets/validations?gid=…`) and rebuilds the pill strip from the condition (e.g. `NUMBER_BETWEEN` 0…10 → tiles 0–10). Unbounded rules keep a finite strip via the offline max. Public CSV fallback (no proxy) cannot see validations → offline tiles only.
+
 ---
 
 ## 5. Files
@@ -81,11 +83,12 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `manager.html` | Shell |
 | `css/manager.css` | Layout + theme tokens |
 | `js/manager-data.js` | Offline catalogs, defaults, asset paths |
-| `js/manager-sheet.js` | One-way Settings + Style and Theme read |
+| `js/manager-sheet.js` | One-way Settings + Style and Theme read (+ validations) |
 | `js/motion-presets.js` | Shared motion digits (also for live boards) |
 | `js/manager.js` | Router, draft/commit, preview |
+| `scripts/toki_server.py` | `/api/sheets/validations` (Settings-row rules by header) |
 
-Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. Do not teach this UI raw column indexes; write adapter is a later slice.
+Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. Do not teach this UI raw column indexes; write adapter is a later slice. Number options should come from sheet dataValidation when present, not hard-coded spans.
 
 ---
 

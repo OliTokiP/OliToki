@@ -137,8 +137,10 @@
     },
   ];
 
-  /* Number tiles (0–N) only when a sheet cell has BOTH a lower and upper
-     bound. Unbounded fields must not become an infinite pill strip. */
+  /* Offline fallback for number pills (BG Scroll / Presentation Speed).
+     Live load (manager-sheet) replaces these from Style Settings
+     dataValidation (e.g. NUMBER_BETWEEN 0…10). Unbounded rules keep a
+     finite strip via these defaults — never invent an open-ended pill list. */
   var SPEED_TILES = {
     scroll: { min: 0, max: 5 },
     presentation: { min: 0, max: 7 },
