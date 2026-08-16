@@ -7,9 +7,10 @@
   <title>Log a bug — OliToki</title>
   <style>
     :root { color-scheme: light dark; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
       font: 17px/1.45 system-ui, sans-serif;
-      margin: 0;
+      margin: 0 auto;
       padding: 1.25rem;
       max-width: 36rem;
     }
@@ -30,12 +31,15 @@
     input[type=text], textarea {
       width: 100%; box-sizing: border-box; font: inherit;
       padding: .55rem .65rem; border: 1px solid #bbb; border-radius: 8px;
+      font-size: 16px;
     }
     .picks { display: flex; gap: .55rem; flex-wrap: wrap; }
     .pick {
       font-weight: 500; margin: 0; padding: .6rem .8rem;
       border: 1px solid #bbb; border-radius: 8px;
       display: flex; gap: .4rem; align-items: center;
+      font-size: 16px;
+      min-height: 44px;
     }
     #screens { display: none; }
     #screens.on { display: block; }
@@ -47,6 +51,18 @@
       background: #1a1a1a; color: #fff;
     }
     a { color: inherit; }
+
+    @media (max-width: 520px) {
+      body { padding: .75rem; }
+      h1 { font-size: 1.25rem; }
+      .sub { font-size: .9rem; }
+      .live { padding: .5rem .65rem; font-size: .9rem; margin-bottom: 1rem; }
+      label, .lab { margin: .75rem 0 .3rem; }
+      input[type=text], textarea { padding: .6rem .7rem; font-size: 16px; }
+      .pick { padding: .65rem .85rem; font-size: 16px; }
+      button { padding: .85rem; margin-top: 1rem; }
+      .picks { gap: .4rem; }
+    }
   </style>
 </head>
 <body>
@@ -55,7 +71,13 @@
   <div class="live" id="live">Pages vs git: checking…</div>
 
   <form id="form">
-    <div class="lab">Feature</div>
+    <div class="lab">Type</div>
+    <div class="picks">
+      <label class="pick"><input type="checkbox" name="kind" value="ticket" checked /> Bug</label>
+      <label class="pick"><input type="checkbox" name="kind" value="feature" /> Feature request</label>
+    </div>
+
+    <div class="lab">Surface</div>
     <div class="picks">
       <label class="pick"><input type="checkbox" name="surface" value="Listener" /> Listener</label>
       <label class="pick"><input type="checkbox" name="surface" value="Menu Manager" /> Menu Manager</label>
@@ -109,13 +131,6 @@
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
     const params = new URLSearchParams(location.search);
-    const isFeature = params.get("type") === "feature";
-    if (isFeature) {
-      document.getElementById("heading").textContent = "New request";
-      document.getElementById("report-lab").firstChild.textContent = "The request ";
-      document.getElementById("go").textContent = "Log request";
-      document.getElementById("why-wrap").hidden = false;
-    }
 
     function onlyOne(name) {
       const boxes = [...document.querySelectorAll('input[name="' + name + '"]')];
@@ -126,8 +141,38 @@
       });
       return boxes;
     }
+
+    const kinds = onlyOne("kind");
     const surfaces = onlyOne("surface");
     const screens = onlyOne("screen");
+
+    // Preselect from ?type=feature for links from New request note (keep compatibility)
+    if (params.get("type") === "feature") {
+      kinds.forEach((b) => { b.checked = (b.value === "feature"); });
+    }
+
+    function kind() {
+      const on = kinds.find((b) => b.checked);
+      return on ? on.value : "ticket";
+    }
+
+    function updateTypeUI() {
+      const isFeature = kind() === "feature";
+      document.getElementById("heading").textContent = isFeature ? "New request" : "New bug";
+      document.title = isFeature ? "Log a request — OliToki" : "Log a bug — OliToki";
+      const lab = document.getElementById("report-lab");
+      if (lab && lab.firstChild) lab.firstChild.textContent = isFeature ? "The request " : "The report ";
+      const go = document.getElementById("go");
+      if (go) go.textContent = isFeature ? "Log request" : "Log Bug";
+      const why = document.getElementById("why-wrap");
+      if (why) why.hidden = !isFeature;
+    }
+
+    kinds.forEach((box) => {
+      box.addEventListener("change", updateTypeUI);
+    });
+    updateTypeUI();
+
     const screenBox = document.getElementById("screens");
     surfaces.forEach((box) => {
       box.addEventListener("change", () => {
@@ -193,11 +238,12 @@
       const modelEl = document.querySelector('input[name="model"]:checked');
       const model = modelEl ? modelEl.value : "Auto";
       const info = pageInfo();
-      const kind = isFeature ? "feature" : "ticket";
+      const isFeature = kind() === "feature";
+      const k = isFeature ? "feature" : "ticket";
       const reportH = isFeature ? "The request" : "The report";
       const body = [
         "### toki-meta",
-        "- type: " + kind,
+        "- type: " + k,
         "- surface: " + surf,
         "- page: " + info.page,
         "- pageLabel: " + info.label,
