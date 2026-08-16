@@ -1,9 +1,20 @@
 # What’s New
 
-**Last updated:** 2026-08-14 16:40  
+**Last updated:** 2026-08-16 00:55  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-16 00:55 — Menu Manager reads the live sheet (one way)
+
+**Boards / surface:** `manager.html`  
+**Sheet:** [OliToki Menu Settings](https://docs.google.com/spreadsheets/d/1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY/edit) + the chosen Alpha / Restaurant Style and Theme tab  
+**Summary:** Manager boot now pulls System Settings and Style and Theme from Google (same `/api/settings` + `/api/sheets/csv` path as the TVs, public CSV fallback on Remote). Theme list, colors, background, speeds, and Encore knobs match the sheet. Confirm-on-back is still local. **No writes.**
+
+### Docs updated
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
 
 ---
 

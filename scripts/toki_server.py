@@ -515,6 +515,44 @@ class SheetsBackend:
         )
         return text
 
+    def csv_for_gid_one(self, gid: str, force: bool = False) -> str:
+        """One tab only. Does not batchGet the rest of the workbook."""
+        gid = str(gid)
+        now = time.time()
+        self.apply_live_sheet(force_settings=force)
+        if not force:
+            with _csv_lock:
+                hit = _csv_cache.get(gid)
+                if hit and now - hit["at"] < CSV_TTL:
+                    _log(
+                        f"csv gid={gid} single cache hit "
+                        f"age={now - hit['at']:.1f}s"
+                    )
+                    return hit["text"]
+        t0 = time.time()
+        title = self.title_for_gid(gid)
+        safe = "'" + title.replace("'", "''") + "'"
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self.sheet_id,
+                    range=safe,
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        text = self._values_to_csv(result.get("values") or [])
+        with _csv_lock:
+            _csv_cache[gid] = {"at": time.time(), "text": text}
+        _log(
+            f"csv gid={gid} title={title!r} single-only "
+            f"force={force} fetch={time.time() - t0:.2f}s bytes={len(text)}"
+        )
+        return text
+
 
 def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
     class Handler(SimpleHTTPRequestHandler):
@@ -597,10 +635,12 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
                             "systemFont": live.get("systemFont") or "roboto",
                             "sheetId": backend.sheet_id,
                             "sourceName": live.get("sourceName"),
+                            "sourceUrl": live.get("sourceUrl") or "",
                             "settingsSheetId": live.get("settingsSheetId"),
                             "resolvedFromCatalog": bool(
                                 live.get("resolvedFromCatalog")
                             ),
+                            "catalog": live.get("catalog") or [],
                         },
                     )
                 except Exception as e:
@@ -692,8 +732,12 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
                     self._json(400, {"error": "missing gid"})
                     return
                 force = (qs.get("force") or ["0"])[0] in ("1", "true", "yes")
+                single = (qs.get("single") or ["0"])[0] in ("1", "true", "yes")
                 try:
-                    text = backend.csv_for_gid(str(gid), force=force)
+                    if single:
+                        text = backend.csv_for_gid_one(str(gid), force=force)
+                    else:
+                        text = backend.csv_for_gid(str(gid), force=force)
                     self._send(
                         200,
                         text.encode("utf-8"),

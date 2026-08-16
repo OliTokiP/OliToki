@@ -32,12 +32,23 @@
   --top-slot-h: calc(var(--device-w) * 2 / 3);
 }
 
+/* Until the webfont is in, keep the system face at 16px. Applying the
+   Poppins shrink (0.96) to San Francisco is the small-then-big flash. */
 html[data-system-font="roboto"] {
-  --font: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-scale: 1;
 }
 
+html[data-system-font="roboto"].is-font-ready {
+  --font: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 html[data-system-font="poppins"] {
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-scale: 1;
+}
+
+html[data-system-font="poppins"].is-font-ready {
   --font: "Poppins", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-scale: 0.96;
 }
@@ -60,6 +71,8 @@ body {
   background: var(--studio);
   color: var(--main);
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -204,7 +217,39 @@ img {
 }
 
 .status p + p {
-  margin-top: 8px;
+  margin-top: 5px;
+}
+
+.status-color {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  width: 100%;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.status-color:active {
+  opacity: 0.72;
+}
+
+.status-dot {
+  flex: 0 0 auto;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--main) 28%, transparent);
+}
+
+.status-hex {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.status-color.is-pale .status-hex {
+  -webkit-text-stroke: 0.45px color-mix(in srgb, var(--main) 38%, transparent);
 }
 
 .rows {

@@ -1,7 +1,7 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-14 16:40  
-**Status:** mobile layout prototype (no Google Sheet writes)
+**Last updated:** 2026-08-16 02:55  
+**Status:** mobile layout + one-way sheet read (no Google Sheet writes)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
 
@@ -13,7 +13,7 @@ Related: [PRODUCT.md](./PRODUCT.md) · [STYLE_GUIDE.md](./STYLE_GUIDE.md) · [SH
 
 ## 1. What this prototype is
 
-A **non-working-but-navigable** mobile layout for testing:
+A navigable mobile layout that **reads** the live sheet on boot:
 
 - Splash → System Settings / Menu Settings
 - Style and Theme editor with a live presentation preview
@@ -32,7 +32,7 @@ It should feel like a polished iPhone Settings app. Desktop is a centered phone 
 | **This app’s chrome** | Immediately, from a **draft** cache (CSS variables) |
 | **TV boards** | Only after Save — **not wired** in the prototype |
 
-Draft loads from a local stand-in of the selected Data Source’s **Style and Theme** tab (`js/manager-data.js`). Edits never touch Google in this version. **Yes** on confirm keeps the draft for the rest of the session; **No** reverts.
+Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. Edits never touch Google. **Yes** on confirm keeps the draft for the rest of the session; **No** reverts to the last loaded sheet values.
 
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
@@ -51,6 +51,8 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 | `#/menu/board/1` … `/3` | Coming Soon (board authoring) |
 | `#/menu/board/announcements` | Coming Soon |
 
+Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
+
 QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`.
 
 ---
@@ -62,13 +64,13 @@ Context-driven children (same idea as the mockup):
 | Parent | Reveals |
 |--------|---------|
 | Background = a theme color | (none — color also clears pattern/wallpaper) |
-| Background = Pattern | Pattern Type, Pattern Color 1 / 2, BG Scroll Speed |
-| Background = Wallpaper | Wallpaper Type, BG Scroll Speed |
+| Background = Pattern | Background Color, Pattern Type, Pattern Color 1 / 2, BG Scroll Speed |
+| Background = Wallpaper | Background Color, Wallpaper Type, BG Scroll Speed |
 | Presentation Style = Encore | Spotlight Style, Spotlight Color, Encore Background |
 
 Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns / Encore must match [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md). Shared digits: `js/motion-presets.js`. Top slot height is the same `--top-slot-h` as System Settings.
 
-Presentation Speed `0` = stop, `≥1` = go until sheets are wired. Create New Theme is gated (toast only).
+Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
 ---
 
@@ -78,18 +80,18 @@ Presentation Speed `0` = stop, `≥1` = go until sheets are wired. Create New Th
 |------|------|
 | `manager.html` | Shell |
 | `css/manager.css` | Layout + theme tokens |
-| `js/manager-data.js` | Catalogs, defaults, asset paths |
+| `js/manager-data.js` | Offline catalogs, defaults, asset paths |
+| `js/manager-sheet.js` | One-way Settings + Style and Theme read |
 | `js/motion-presets.js` | Shared motion digits (also for live boards) |
 | `js/manager.js` | Router, draft/commit, preview |
 
-Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Do not teach this UI raw column indexes; map **field names** when a write adapter lands.
+Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. Do not teach this UI raw column indexes; write adapter is a later slice.
 
 ---
 
 ## 6. Not in this prototype
 
 - Writes to OliToki Menu Settings or the catalog workbook
-- Loading live Style rows over `/api/sheets/csv` (hook is the next slice)
 - Board / box / announcement item editors
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 

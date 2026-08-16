@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "ff117fa",
-  "hashFull": "ff117faa72a8fce29acc3e6ad40c76b24b9595e1",
-  "subject": "QA: 2026-08-15 Encore punch-out camera (pass 2)"
+  "hash": "4cf4ab8",
+  "hashFull": "4cf4ab884ea021054186169c1b1100dd86ad2be4",
+  "subject": "Menu Manager: one-way sheet read, faster load, local/Tailscale check links"
 };

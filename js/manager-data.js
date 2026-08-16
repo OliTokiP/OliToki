@@ -1,7 +1,8 @@
 /**
  * OliToki Menu Manager — catalogs and defaults.
- * Theme palettes stand in for the Style and Theme tab until sheet load is wired.
- * Toki Default matches STYLE_GUIDE tokens (source of truth).
+ * These are the offline stand-in. Live load (js/manager-sheet.js) replaces
+ * themes + data sources + the draft from OliToki Menu Settings / Style and Theme.
+ * Toki Default matches STYLE_GUIDE tokens when the sheet is unreachable.
  */
 (function (global) {
   "use strict";
@@ -167,12 +168,13 @@
   var DEFAULT_DRAFT = {
     themeName: "Toki Default",
     background: "main",
+    bgColor: "main",
     patternType: "stripes",
     patternColor1: "special",
     patternColor2: "highlight",
     wallpaper: "galaxy",
     scrollSpeed: 1,
-    presentation: "slideshow",
+    presentation: "kenburns",
     encoreStyle: "hard_shadow",
     encoreSpot: "black",
     encoreBg: "secondary",

@@ -1,7 +1,7 @@
 /**
- * OliToki Menu Manager — layout prototype.
+ * OliToki Menu Manager — layout + one-way sheet read.
  * Draft theme tokens restyle the app immediately. Confirm-on-back is local only
- * (no Google Sheet writes in this prototype).
+ * (no Google Sheet writes).
  */
 (function () {
   "use strict";
@@ -29,6 +29,8 @@
     styleScroll: 0,
     pillScroll: {},
     pendingLeave: null,
+    sheetDirty: false,
+    sheetSource: "loading",
   };
 
   var previewCtl = {
@@ -132,6 +134,41 @@
       : state.draft.themeName;
   }
 
+  function systemFontFace() {
+    return state.draft.systemFont === "roboto" ? "Roboto" : "Poppins";
+  }
+
+  function fontsAreReady() {
+    var want = systemFontFace().toLowerCase();
+    if (!document.fonts || !document.fonts.forEach) {
+      return !(document.fonts && document.fonts.status === "loading");
+    }
+    var seen = false;
+    var loaded = false;
+    document.fonts.forEach(function (face) {
+      var name = String(face.family || "").replace(/['"]/g, "").toLowerCase();
+      if (name !== want) return;
+      seen = true;
+      if (face.status === "loaded") loaded = true;
+    });
+    return seen && loaded;
+  }
+
+  function syncFontReadyClass() {
+    document.documentElement.classList.toggle("is-font-ready", fontsAreReady());
+  }
+
+  function watchFonts() {
+    syncFontReadyClass();
+    if (!document.fonts) return;
+    if (document.fonts.ready) {
+      document.fonts.ready.then(syncFontReadyClass).catch(syncFontReadyClass);
+    }
+    if (document.fonts.addEventListener) {
+      document.fonts.addEventListener("loadingdone", syncFontReadyClass);
+    }
+  }
+
   function applyTheme() {
     var t = currentTheme();
     var root = document.documentElement;
@@ -146,6 +183,7 @@
     root.style.setProperty("--highlight-child", child);
     root.style.setProperty("--on-highlight", onHi);
     root.setAttribute("data-system-font", state.draft.systemFont);
+    syncFontReadyClass();
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", t.highlight);
   }
@@ -174,7 +212,90 @@
     );
   }
 
+  function statusVersion() {
+    var b = window.TOKI_BUILD;
+    var hash = b && (b.hash || (b.hashFull && String(b.hashFull).slice(0, 7)));
+    return hash || D.version;
+  }
+
+  function formatHex(hex) {
+    var s = String(hex || "").trim();
+    if (!s) return "";
+    if (s.charAt(0) !== "#") s = "#" + s;
+    if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+      s = "#" + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2) + s.charAt(3) + s.charAt(3);
+    }
+    return s.toUpperCase();
+  }
+
+  function statusColorLine(label, hex) {
+    var h = formatHex(hex) || "#000000";
+    var pale = luminance(h) > 0.72;
+    return (
+      '<button type="button" class="status-color' +
+      (pale ? " is-pale" : "") +
+      '" data-act="copy-hex" data-hex="' +
+      escapeHtml(h) +
+      '" aria-label="Copy ' +
+      escapeHtml(label) +
+      " " +
+      escapeHtml(h) +
+      '"><span class="status-dot" style="background:' +
+      escapeHtml(h) +
+      '"></span>' +
+      escapeHtml(label) +
+      ' <span class="status-hex" style="color:' +
+      escapeHtml(h) +
+      '">' +
+      escapeHtml(h) +
+      "</span></button>"
+    );
+  }
+
+  function copyText(text) {
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.setAttribute("aria-hidden", "true");
+      ta.style.cssText =
+        "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;font-size:16px;border:0;padding:0;margin:0;";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      var ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (e) {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(
+        function () {
+          return true;
+        },
+        function () {
+          return fallback();
+        }
+      );
+    }
+    return Promise.resolve(fallback());
+  }
+
+  function copyHex(hex) {
+    var h = formatHex(hex);
+    if (!h) return;
+    copyText(h).then(function (ok) {
+      toast(ok ? "Copied " + h : "Could not copy " + h);
+    });
+  }
+
   function statusBlock() {
+    var t = currentTheme();
     return (
       '<div class="status">' +
       "<p>Data Source: " +
@@ -183,7 +304,16 @@
       "<p>Current Theme: " +
       escapeHtml(themeStatusName()) +
       "</p>" +
-      "<p>Menus on?: 1, 2, 3, 4</p>" +
+      statusColorLine("Main", t.main) +
+      statusColorLine("Secondary", t.secondary) +
+      statusColorLine("Highlight", t.highlight) +
+      statusColorLine("Special", t.special) +
+      "<p>Require restart: " +
+      escapeHtml(labelOf(D.yesNo, state.draft.requireRestart)) +
+      "</p>" +
+      "<p>Version: " +
+      escapeHtml(statusVersion()) +
+      "</p>" +
       "</div>"
     );
   }
@@ -195,6 +325,7 @@
       '<div class="links-cells">' +
       '<button class="link-cell" type="button" data-act="open-sheet">Google Sheet</button>' +
       '<button class="link-cell" type="button" data-act="open-settings-sheet">Settings</button>' +
+      '<button class="link-cell" type="button" data-act="reload-sheet">Reload sheet</button>' +
       "</div></div>"
     );
   }
@@ -411,8 +542,21 @@
     html += row({
       key: "background",
       label: "Background",
-      value: labelOf(D.backgroundOptions, d.background),
+      value: labelOf(
+        D.backgroundOptions,
+        d.background === "pattern" || d.background === "wallpaper"
+          ? d.background
+          : d.bgColor || d.background
+      ),
     });
+    if (d.background === "pattern" || d.background === "wallpaper") {
+      html += row({
+        key: "bgColor",
+        label: "Background Color",
+        value: labelOf(D.colorRoles, d.bgColor || "main"),
+        child: true,
+      });
+    }
     if (d.background === "pattern") {
       html += row({
         key: "patternType",
@@ -518,7 +662,7 @@
     var fill = encore
       ? roleHex(d.encoreBg)
       : d.background === "pattern" || d.background === "wallpaper"
-        ? roleHex("main")
+        ? roleHex(d.bgColor || "main")
         : roleHex(d.background);
     var wp = wallpaperSrc();
     var wpFb = wallpaperFallback();
@@ -659,10 +803,29 @@
         title: "Background",
         options: D.backgroundOptions,
         get: function () {
-          return state.draft.background;
+          var d = state.draft;
+          if (d.background === "pattern" || d.background === "wallpaper") {
+            return d.background;
+          }
+          return d.bgColor || d.background || "main";
         },
         set: function (id) {
           state.draft.background = id;
+          if (id !== "pattern" && id !== "wallpaper") {
+            state.draft.bgColor = id;
+          }
+        },
+      };
+    }
+    if (key === "bgColor") {
+      return {
+        title: "Background Color",
+        options: D.colorRoles,
+        get: function () {
+          return state.draft.bgColor || "main";
+        },
+        set: function (id) {
+          state.draft.bgColor = id;
         },
       };
     }
@@ -1026,6 +1189,7 @@
     }
     spec.set(id);
     state.picker = null;
+    state.sheetDirty = true;
     applyTheme();
     renderAll();
   }
@@ -1079,6 +1243,7 @@
     if (state.draft[key] === next) return;
     rememberStyleScroll();
     rememberPillScroll();
+    state.sheetDirty = true;
     state.draft[key] = next;
     var row = els.app.querySelector('[data-pills="' + key + '"]');
     if (row) {
@@ -1971,30 +2136,15 @@
     if (location.hash !== hash) history.replaceState(null, "", hash);
   }
 
-  function readHash() {
-    var raw = (location.hash || "#/").replace(/^#/, "");
-    var q = "";
+  function queryParams() {
+    var raw = (location.hash || "").replace(/^#/, "");
     var qi = raw.indexOf("?");
-    if (qi >= 0) {
-      q = raw.slice(qi + 1);
-      raw = raw.slice(0, qi);
-    }
-    var parts = raw.split("/").filter(Boolean);
-    state.picker = null;
-    state.dialog = null;
-    if (parts[0] === "system") {
-      state.screen = "system";
-    } else if (parts[0] === "menu" && parts[1] === "style") {
-      state.screen = "style";
-    } else if (parts[0] === "menu" && parts[1] === "board") {
-      state.screen = "board";
-      state.boardId = parts[2] || "1";
-    } else if (parts[0] === "menu") {
-      state.screen = "menu";
-    } else {
-      state.screen = "home";
-    }
-    var params = new URLSearchParams(q);
+    if (qi >= 0) return new URLSearchParams(raw.slice(qi + 1));
+    return new URLSearchParams(location.search || "");
+  }
+
+  function applyQueryParams() {
+    var params = queryParams();
     if (params.get("pick")) state.picker = params.get("pick");
     if (params.get("confirm") === "1") state.dialog = "confirm";
     if (params.get("newtheme") === "1") state.dialog = "create";
@@ -2021,6 +2171,74 @@
       state.draft.presentationSpeed = 0;
       state.holdGrid = true;
     }
+  }
+
+  function readHash() {
+    var raw = (location.hash || "#/").replace(/^#/, "");
+    var qi = raw.indexOf("?");
+    if (qi >= 0) raw = raw.slice(0, qi);
+    var parts = raw.split("/").filter(Boolean);
+    state.picker = null;
+    state.dialog = null;
+    if (parts[0] === "system") {
+      state.screen = "system";
+    } else if (parts[0] === "menu" && parts[1] === "style") {
+      state.screen = "style";
+    } else if (parts[0] === "menu" && parts[1] === "board") {
+      state.screen = "board";
+      state.boardId = parts[2] || "1";
+    } else if (parts[0] === "menu") {
+      state.screen = "menu";
+    } else {
+      state.screen = "home";
+    }
+    applyQueryParams();
+  }
+
+  function applySheetPayload(payload) {
+    if (!payload || !payload.ok) return;
+    if (payload.dataSources && payload.dataSources.length) {
+      D.dataSources = payload.dataSources;
+    }
+    if (payload.themes && payload.themes.length) {
+      D.themes = payload.themes;
+    }
+    if (payload.draft) {
+      var fromSheet = Object.assign({}, D.defaultDraft, payload.draft);
+      state.committed = clone(fromSheet);
+      if (!state.sheetDirty) {
+        state.draft = clone(fromSheet);
+        applyQueryParams();
+      }
+    }
+    state.sheetSource = "sheet";
+    applyTheme();
+    renderAll();
+  }
+
+  function loadSheet(opts) {
+    opts = opts || {};
+    var loader = window.TOKI_MANAGER_SHEET;
+    if (!loader || !loader.load) {
+      state.sheetSource = "local";
+      return;
+    }
+    if (opts.force) toast("Reloading sheet…");
+    loader
+      .load(opts)
+      .then(function (payload) {
+        if (opts.force) state.sheetDirty = false;
+        applySheetPayload(payload);
+        if (payload && payload.sourceName) {
+          toast("Loaded " + payload.sourceName + " from sheet");
+        }
+      })
+      .catch(function (err) {
+        console.warn("Menu Manager sheet load failed", err);
+        state.sheetSource = "local";
+        renderAll();
+        toast("Could not load sheet — using local defaults");
+      });
   }
 
   function onClick(e) {
@@ -2064,6 +2282,10 @@
       window.open(D.settingsSheetUrl, "_blank", "noopener");
     } else if (act === "toast-add") {
       toast("Coming soon — add items from Toast.");
+    } else if (act === "copy-hex") {
+      copyHex(t.getAttribute("data-hex"));
+    } else if (act === "reload-sheet") {
+      loadSheet({ force: true });
     }
   }
 
@@ -2126,8 +2348,10 @@
     });
     readHash();
     applyTheme();
+    watchFonts();
     fitDevice();
     renderAll();
+    loadSheet();
   }
 
   if (document.readyState === "loading") {
