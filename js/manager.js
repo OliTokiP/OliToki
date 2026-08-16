@@ -777,7 +777,11 @@
       if (sc) sc.scrollTop = state.styleScroll;
       restorePillScroll();
       bindWpFallback();
-      startPreviewCycle();
+      /* Do not start motion until the sheet has resolved. loadSheet →
+         renderAll used to remount mid Punch-In, so the plate snapped and
+         the next photo just appeared (0696e41 never had that remount). */
+      if (state.sheetSource === "loading") parkPreviewStill();
+      else startPreviewCycle();
     } else {
       stopPreviewCycle();
     }
@@ -1638,26 +1642,34 @@
     return 1;
   }
 
+  /* Same plate runner as 0696e41 (last time Slideshow / Ken Burns faded).
+     Drive scale() directly — --hero-zoom alone does not start a transform
+     transition. Timing functions are the named eases from that commit. */
   function setPlate(opacity, zoom, dur, kind) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
     if (!plate) return;
     var phases = motionPhases();
-    var fade = phases.opacityDur;
+    var fade = phases.opacityDur || 0.45;
     var move = Math.max(0.02, dur || phases.punchIn);
-    var ease =
-      kind === "out"
-        ? "var(--ease-fade, cubic-bezier(0.4, 0, 0.2, 1))"
-        : "var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1))";
-    plate.style.transition = "opacity " + fade + "s " + ease;
+    var zoomEase = kind === "out" ? "ease" : "ease-out";
+    var z = Number(zoom);
+    if (!isFinite(z)) z = 1;
+    plate.style.transition = "opacity " + fade + "s ease";
+    plate.style.setProperty("--hero-zoom", String(z));
+    plate.classList.toggle(
+      "is-kb-in",
+      kind === "in" && state.draft.presentation === "kenburns"
+    );
     if (anim) {
-      anim.style.transition = "transform " + move + "s " + ease;
-      anim.style.setProperty("--hero-zoom", String(zoom));
+      anim.style.transition = "transform " + move + "s " + zoomEase;
+      anim.style.setProperty("--hero-zoom", String(z));
+      anim.style.transform = "scale(" + z + ")";
     }
     plate.style.opacity = String(opacity);
     var sticker = els.app.querySelector(".preview-sticker");
     if (sticker && !sticker.hidden) {
-      sticker.style.transition = "opacity " + fade + "s " + ease;
+      sticker.style.transition = "opacity " + fade + "s ease";
       sticker.style.opacity = String(opacity);
     }
   }
@@ -1665,13 +1677,18 @@
   function snapPlate(opacity, zoom) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
+    var z = Number(zoom);
+    if (!isFinite(z)) z = 1;
     if (plate) {
       plate.style.transition = "none";
+      plate.classList.remove("is-kb-in");
+      plate.style.setProperty("--hero-zoom", String(z));
       plate.style.opacity = String(opacity);
     }
     if (anim) {
       anim.style.transition = "none";
-      anim.style.setProperty("--hero-zoom", String(zoom));
+      anim.style.setProperty("--hero-zoom", String(z));
+      anim.style.transform = "scale(" + z + ")";
     }
     var sticker = els.app.querySelector(".preview-sticker");
     if (sticker) {
@@ -1679,6 +1696,7 @@
       sticker.style.opacity = sticker.hidden ? "0" : String(opacity);
     }
     void (plate && plate.offsetWidth);
+    void (anim && anim.offsetWidth);
   }
 
   function scrollPxPerSec() {
@@ -2012,6 +2030,7 @@
       var zNow = currentScale(anim);
       anim.style.transition = "none";
       anim.style.setProperty("--hero-zoom", String(zNow));
+      anim.style.transform = "scale(" + zNow + ")";
     }
     void (plate && plate.offsetWidth);
     previewCtl.phaseDur = tgt.dur;
@@ -2031,6 +2050,19 @@
     previewCtl.itemIndex = i;
     applyPreviewItem(items[i]);
     beginPhase("in", gen, true);
+  }
+
+  function parkPreviewStill() {
+    stopPreviewCycle();
+    var items = D.previewItems;
+    var item = items[state.previewIndex || 0] || items[0];
+    if (item) applyPreviewItem(item);
+    if (state.draft.presentation === "encore") {
+      fillPortraitGrid();
+      setEncoreStageVisible(true);
+      return;
+    }
+    snapPlate(1, state.draft.presentation === "slideshow" ? 1 : 1);
   }
 
   function startPreviewCycle() {
