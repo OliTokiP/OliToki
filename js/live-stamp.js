@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "8c45926",
-  "hashFull": "8c45926d39503a710d92bd1760bfb5ee1bbd8db3",
-  "subject": "QA: 2026-08-16 Zooming in on mobile view when editing fields in ticket (pass 1)"
+  "hash": "2db7ebb",
+  "hashFull": "2db7ebbc79b7e8010ef568cf0b9e0810958c8d0c",
+  "subject": "QA: 2026-08-16 Bug log confirmation should include link back to Listener home page (pass 1)"
 };
