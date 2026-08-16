@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "4cf4ab8",
-  "hashFull": "4cf4ab884ea021054186169c1b1100dd86ad2be4",
-  "subject": "Menu Manager: one-way sheet read, faster load, local/Tailscale check links"
+  "hash": "8b9aa82",
+  "hashFull": "8b9aa82d8d0df0c732f02e4d4a9a6d4439e7d7f1",
+  "subject": "Fixed several things"
 };

@@ -626,6 +626,12 @@ def _shell_quote(s: str) -> str:
     return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
+def toki_window_title(port: int, bind: str, folder: str) -> str:
+    """Keep prefix 'Toki Menu Server :{port}' so stop-by-title still works."""
+    where = "this Mac" if str(bind) in ("127.0.0.1", "::1") else "LAN+Tailscale"
+    return f"Toki Menu Server :{port} · {folder} · {where}"
+
+
 def start_server_in_terminal(root: Path, server: Path, py: str) -> bool:
     """
     Open a visible Terminal window running toki_server.
@@ -633,9 +639,10 @@ def start_server_in_terminal(root: Path, server: Path, py: str) -> bool:
     """
     short = root.name
     bind = SERVER_BIND
+    title = toki_window_title(PORT, bind, short)
     intro_lines = [
-        f"Toki Menu local server ({short}) — "
-        "close this window or Ctrl+C to stop."
+        f"{title}",
+        "Close this window or Ctrl+C to stop.",
     ]
     if bind != "127.0.0.1":
         host = lan_ipv4()
@@ -655,7 +662,7 @@ def start_server_in_terminal(root: Path, server: Path, py: str) -> bool:
     # Title the tab, cd to project, run server in foreground so close = stop
     cmd = " ".join(
         [
-            f"printf '\\e]0;Toki Menu Server :{PORT} · {short}\\a';",
+            f"printf '\\e]0;{title}\\a';",
             f"cd {_shell_quote(str(root))} &&",
             f"echo {_shell_quote(intro)} &&",
             "echo &&",
@@ -674,7 +681,7 @@ tell application "Terminal"
   do script "{as_cmd}"
   delay 0.2
   try
-    set custom title of front window to "Toki Menu Server :{PORT}"
+    set custom title of front window to "{title}"
   end try
 end tell
 '''

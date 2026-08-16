@@ -66,6 +66,26 @@ _settings_cache: dict = {"at": 0.0, "data": None}
 SETTINGS_TTL = 15.0
 
 
+def bind_where(bind: str) -> str:
+    return "this Mac" if str(bind) in ("127.0.0.1", "::1") else "LAN+Tailscale"
+
+
+def window_title(port: int, bind: str, source: str | None = None) -> str:
+    """Must keep prefix 'Toki Menu Server :{port}' — launcher stop matches it."""
+    parts = [f"Toki Menu Server :{port}", ROOT.name, bind_where(bind)]
+    src = (source or "").strip()
+    if src:
+        parts.append(src)
+    return " · ".join(parts)
+
+
+def set_terminal_title(title: str) -> None:
+    if not sys.stdout.isatty():
+        return
+    sys.stdout.write("\033]0;" + title + "\007")
+    sys.stdout.flush()
+
+
 def _log(msg: str) -> None:
     print(f"[toki_server] {msg}", flush=True)
 
@@ -858,6 +878,9 @@ def main():
             t0 = time.time()
             backend.warm_csv_cache(force=True)
             _log(f"startup csv warm done in {time.time() - t0:.2f}s")
+            live = backend.refresh_settings(force=False)
+            src = (live or {}).get("dataSource") or ""
+            set_terminal_title(window_title(args.port, args.bind, src))
         except SystemExit as e:
             _log(f"WARNING: Sheets API unavailable: {e}")
             _log("Serving static files only (Menu Manager still works).")
@@ -870,7 +893,9 @@ def main():
     httpd = ThreadingHTTPServer(
         (args.bind, args.port), make_handler(api, ROOT, bind=args.bind)
     )
+    set_terminal_title(window_title(args.port, args.bind))
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
+    _log(f"window: {window_title(args.port, args.bind)}")
     threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
     try:
         httpd.serve_forever()
