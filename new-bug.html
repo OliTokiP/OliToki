@@ -57,6 +57,7 @@
   <form id="form">
     <div class="lab">Feature</div>
     <div class="picks">
+      <label class="pick"><input type="checkbox" name="surface" value="Listener" /> Listener</label>
       <label class="pick"><input type="checkbox" name="surface" value="Menu Manager" /> Menu Manager</label>
       <label class="pick"><input type="checkbox" name="surface" value="Menu Screens" /> Menu Screens</label>
     </div>
@@ -72,7 +73,7 @@
       </div>
     </div>
 
-    <label>Title <input type="text" name="title" required placeholder="Encore punch-out camera" /></label>
+    <label>Title <input type="text" name="title" required placeholder="Short title" /></label>
     <label id="report-lab">The report
       <textarea name="report" rows="6" required placeholder="What is wrong, and what you expected."></textarea>
     </label>
@@ -85,6 +86,21 @@
     <div class="row">
       <input type="checkbox" name="include" id="inc" />
       <label for="inc">Include in listener</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" name="queued" id="queued" />
+      <label for="queued">Mark as queued?</label>
+    </div>
+    <div class="lab">Model</div>
+    <div class="picks" id="model-picks">
+      <label class="pick"><input type="radio" name="model" value="Auto" checked /> Auto</label>
+      <label class="pick"><input type="radio" name="model" value="grok-4.6" /> grok-4.6</label>
+      <label class="pick"><input type="radio" name="model" value="grok-4.5" /> grok-4.5</label>
+      <label class="pick"><input type="radio" name="model" value="grok-build" /> grok-build</label>
+      <label class="pick"><input type="radio" name="model" value="grok-build-0.1" /> grok-build-0.1</label>
+      <label class="pick"><input type="radio" name="model" value="grok-4.3" /> grok-4.3</label>
+      <label class="pick"><input type="radio" name="model" value="grok-4.20-non-reasoning" /> grok-4.20-non-reasoning</label>
+      <label class="pick"><input type="radio" name="model" value="grok-4.20-reasoning" /> grok-4.20-reasoning</label>
     </div>
     <button type="submit" id="go">Log Bug</button>
   </form>
@@ -124,6 +140,9 @@
       return on ? on.value : "";
     }
     function pageInfo() {
+      if (surface() === "Listener") {
+        return { page: "Listener.md", label: "Listener" };
+      }
       if (surface() === "Menu Manager") {
         return { page: "manager.html", label: "Menu Manager" };
       }
@@ -159,7 +178,7 @@
     document.getElementById("form").addEventListener("submit", (ev) => {
       ev.preventDefault();
       const surf = surface();
-      if (!surf) { alert("Pick Menu Manager or Menu Screens."); return; }
+      if (!surf) { alert("Pick Listener, Menu Manager, or Menu Screens."); return; }
       if (surf === "Menu Screens" && !screens.some((b) => b.checked)) {
         alert("Pick which screen.");
         return;
@@ -170,6 +189,9 @@
       const reminder = document.querySelector('[name=reminder]').value.trim();
       const why = (document.querySelector('[name=why]') || {}).value || "";
       const include = document.getElementById("inc").checked;
+      const queued = document.getElementById("queued").checked;
+      const modelEl = document.querySelector('input[name="model"]:checked');
+      const model = modelEl ? modelEl.value : "Auto";
       const info = pageInfo();
       const kind = isFeature ? "feature" : "ticket";
       const reportH = isFeature ? "The request" : "The report";
@@ -180,6 +202,8 @@
         "- page: " + info.page,
         "- pageLabel: " + info.label,
         "- include: " + (include ? "true" : "false"),
+        "- queued: " + (queued ? "true" : "false"),
+        "- model: " + model,
         "",
         "### " + reportH,
         "",

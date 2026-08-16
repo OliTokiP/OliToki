@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Push to QA — OliToki</title>
+  <title>Mark as queued — OliToki</title>
   <style>
     :root { color-scheme: light dark; }
     body { font: 18px/1.45 system-ui, sans-serif; margin: 0; padding: 1.5rem; max-width: 32rem; }
@@ -15,10 +15,10 @@
   </style>
 </head>
 <body>
-  <h1>Push to QA</h1>
+  <h1>Mark as queued</h1>
   <p id="msg">Preparing…</p>
-  <p class="sub">This files a GitHub issue. The Mac starts the next pass when it sees it.</p>
-  <button type="button" id="go">Send to GitHub</button>
+  <p class="sub">This files a GitHub issue. The Mac marks the ticket queued when include is on.</p>
+  <button type="button" id="go">Mark queued</button>
   <script>
     const REPO = "OliTokiP/OliToki";
     const q = new URLSearchParams(location.search);
@@ -28,7 +28,7 @@
     if (!ticket) {
       msg.textContent = "Missing ticket name.";
     } else {
-      msg.textContent = "Push after Feedback " + after + " on “" + ticket + "”.";
+      msg.textContent = "Mark queued after Feedback " + after + " on “" + ticket + "”.";
     }
     function send() {
       if (!ticket) return;
@@ -39,7 +39,7 @@
       ].join("\n");
       location.href =
         "https://github.com/" + REPO + "/issues/new?labels=toki-push&title=" +
-        encodeURIComponent("Push to QA: " + ticket) +
+        encodeURIComponent("Mark queued: " + ticket) +
         "&body=" + encodeURIComponent(body);
     }
     document.getElementById("go").addEventListener("click", send);
