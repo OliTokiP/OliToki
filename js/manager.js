@@ -1360,7 +1360,9 @@
     if (preview) preview.style.setProperty("--item-highlight", color);
     for (var i = 0; i < nums.length; i++) {
       var n = Number(nums[i].getAttribute("data-n"));
+      var neu = !!(items[n] && items[n].isNew);
       nums[i].classList.toggle("is-on", !fadeOut && n === index);
+      nums[i].classList.toggle("is-new", !fadeOut && n === index && neu);
     }
   }
 
