@@ -1138,7 +1138,7 @@
     state.screen = screen;
     state.boardId = boardId || null;
     if (screen !== "style") state.styleScroll = 0;
-    writeHash();
+    writeHash(true);
     renderAll();
   }
 
@@ -1165,16 +1165,12 @@
     }
     if (state.screen === "style") {
       leaveStyle(function () {
-        go("menu");
+        history.back();
       });
       return;
     }
-    if (state.screen === "board") {
-      go("menu");
-      return;
-    }
-    if (state.screen === "system" || state.screen === "menu") {
-      go("home");
+    if (state.screen === "board" || state.screen === "system" || state.screen === "menu") {
+      history.back();
       return;
     }
   }
@@ -2180,13 +2176,19 @@
     renderDialog();
   }
 
-  function writeHash() {
+  function writeHash(shouldPush) {
     var hash = "#/";
     if (state.screen === "system") hash = "#/system";
     else if (state.screen === "menu") hash = "#/menu";
     else if (state.screen === "style") hash = "#/menu/style";
     else if (state.screen === "board") hash = "#/menu/board/" + state.boardId;
-    if (location.hash !== hash) history.replaceState(null, "", hash);
+    if (location.hash !== hash) {
+      if (shouldPush) {
+        history.pushState(null, "", hash);
+      } else {
+        history.replaceState(null, "", hash);
+      }
+    }
   }
 
   function queryParams() {
@@ -2194,6 +2196,24 @@
     var qi = raw.indexOf("?");
     if (qi >= 0) return new URLSearchParams(raw.slice(qi + 1));
     return new URLSearchParams(location.search || "");
+  }
+
+  function parseScreenFromHash() {
+    var raw = (location.hash || "#/").replace(/^#/, "");
+    var qi = raw.indexOf("?");
+    if (qi >= 0) raw = raw.slice(0, qi);
+    var parts = raw.split("/").filter(Boolean);
+    if (parts[0] === "system") {
+      return { screen: "system", boardId: null };
+    } else if (parts[0] === "menu" && parts[1] === "style") {
+      return { screen: "style", boardId: null };
+    } else if (parts[0] === "menu" && parts[1] === "board") {
+      return { screen: "board", boardId: parts[2] || "1" };
+    } else if (parts[0] === "menu") {
+      return { screen: "menu", boardId: null };
+    } else {
+      return { screen: "home", boardId: null };
+    }
   }
 
   function applyQueryParams() {
@@ -2227,25 +2247,37 @@
   }
 
   function readHash() {
-    var raw = (location.hash || "#/").replace(/^#/, "");
-    var qi = raw.indexOf("?");
-    if (qi >= 0) raw = raw.slice(0, qi);
-    var parts = raw.split("/").filter(Boolean);
+    var target = parseScreenFromHash();
     state.picker = null;
     state.dialog = null;
-    if (parts[0] === "system") {
-      state.screen = "system";
-    } else if (parts[0] === "menu" && parts[1] === "style") {
-      state.screen = "style";
-    } else if (parts[0] === "menu" && parts[1] === "board") {
-      state.screen = "board";
-      state.boardId = parts[2] || "1";
-    } else if (parts[0] === "menu") {
-      state.screen = "menu";
-    } else {
-      state.screen = "home";
-    }
+    state.screen = target.screen;
+    state.boardId = target.boardId;
     applyQueryParams();
+  }
+
+  function handleLocationChange() {
+    var target = parseScreenFromHash();
+    var prevScreen = state.screen;
+    var isDirtyStyle = prevScreen === "style" && !eq(state.draft, state.committed);
+    var leavingDirtyStyle = isDirtyStyle && target.screen !== "style";
+    if (leavingDirtyStyle) {
+      // Browser back (or hash pop) from dirty style: bounce to keep URL + screen on style,
+      // show the same Confirm dialog as internal back(). On confirm leave we history.back()
+      // to actually pop to the target.
+      state.picker = null;
+      var styleHash = "#/menu/style";
+      if (location.hash !== styleHash) {
+        history.replaceState(null, "", styleHash);
+      }
+      state.pendingLeave = function () {
+        history.back();
+      };
+      state.dialog = "confirm";
+      renderAll();
+      return;
+    }
+    readHash();
+    renderAll();
   }
 
   function applySheetPayload(payload) {
@@ -2438,11 +2470,10 @@
     els.device.addEventListener("wheel", blockHeroScroll, { passive: false });
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", fitDevice);
-    window.addEventListener("hashchange", function () {
-      readHash();
-      renderAll();
-    });
+    window.addEventListener("hashchange", handleLocationChange);
+    window.addEventListener("popstate", handleLocationChange);
     readHash();
+    writeHash(false);
     applyTheme();
     watchFonts();
     fitDevice();
