@@ -1240,29 +1240,45 @@
     return layout.slots[i] || layout.slots[0] || null;
   }
 
-  function placeEncoreWorld() {
+  function encoreCenterPoint() {
+    var layout = previewCtl.lattice;
+    if (!layout || typeof layout.stageW !== "number") return null;
+    return { x: layout.stageW / 2, y: layout.stageH / 2 };
+  }
+
+  function placeEncoreWorldAt(point) {
     var world = encoreWorldEl();
-    var slot = currentLatticeSlot();
     var o = imageBoxOrigin();
-    if (!world || o.h <= 0) return;
+    if (!world || o.h <= 0 || !point) return;
     var s = o.h / 1080;
-    world.style.transform = "scale(" + s + ")";
-    if (!slot) return;
-    world.style.left = o.x - slot.x * s + "px";
-    world.style.top = o.y - slot.y * s + "px";
-    world.style.setProperty("--encore-hole-x", slot.x + "px");
-    world.style.setProperty("--encore-hole-y", slot.y + "px");
+    // Re-apply the fixed form-factor scale (idempotent). Do not clobber during camera anims.
+    if (!world.style.transform || world.style.transform.indexOf("scale(") !== 0) {
+      world.style.transform = "scale(" + s + ")";
+    }
+    world.style.left = o.x - point.x * s + "px";
+    world.style.top = o.y - point.y * s + "px";
+    world.style.setProperty("--encore-hole-x", point.x + "px");
+    world.style.setProperty("--encore-hole-y", point.y + "px");
+  }
+
+  function placeEncoreWorld() {
+    placeEncoreWorldAt(currentLatticeSlot());
+  }
+
+  function setPreviewEncoreHoleProps() {
+    var preview = els.app.querySelector(".preview");
+    var o = imageBoxOrigin();
+    if (preview && o) {
+      preview.style.setProperty("--encore-hole-x", o.x + "px");
+      preview.style.setProperty("--encore-hole-y", o.y + "px");
+      if (o.u) preview.style.setProperty("--encore-hole-r", 0.42 * 300 * o.u + "px");
+    }
   }
 
   function setEncoreOrigin() {
-    var preview = els.app.querySelector(".preview");
-    var o = imageBoxOrigin();
-    if (preview) {
-      preview.style.setProperty("--encore-hole-x", o.x + "px");
-      preview.style.setProperty("--encore-hole-y", o.y + "px");
-      preview.style.setProperty("--encore-hole-r", 0.42 * 300 * o.u + "px");
-    }
-    placeEncoreWorld();
+    setPreviewEncoreHoleProps();
+    var slot = currentLatticeSlot();
+    if (slot) placeEncoreWorldAt(slot);
   }
 
   function appendPreviewPortraitSticker(slotEl, photoScale) {
@@ -1328,7 +1344,16 @@
     } catch (e) {
       /* ignore */
     }
-    setEncoreOrigin();
+    // Initial park prefers center (family spread). The first "in" will drive the
+    // camera push (lateral + zoom) to the starting item. Matches Encore wind-up
+    // centering + MOTION_GLOSSARY §5.0 / §5.6.
+    var initP = encoreCenterPoint() || currentLatticeSlot();
+    if (initP) {
+      placeEncoreWorldAt(initP);
+    } else {
+      setEncoreOrigin();
+    }
+    setPreviewEncoreHoleProps();
     return layout;
   }
 
@@ -1363,7 +1388,10 @@
     if (preview) {
       preview.style.setProperty("--encore-veil-color", spotlightHex(item));
     }
-    setEncoreOrigin();
+    // Do not call setEncoreOrigin / place here. Parking the lattice (slot vs center)
+    // is managed inside beginPhase camera phases so punch-in/out can include
+    // lateral motion. We still keep the fixed visual hole/radius up to date.
+    setPreviewEncoreHoleProps();
   }
 
   function setEncoreZoom(scale) {
@@ -1382,11 +1410,14 @@
   function snapEncoreCamera(zoom, pinch) {
     var rig = encoreRigEl();
     var shroud = encoreShroudEl();
+    var world = encoreWorldEl();
     if (rig) rig.style.transition = "none";
     if (shroud) shroud.style.transition = "none";
+    if (world) world.style.transition = "none";
     setEncoreZoom(zoom);
     setEncorePinch(pinch);
     void (rig && rig.offsetWidth);
+    void (world && world.offsetWidth);
   }
 
   function encoreRigTransition(sec, easeVar, includePinch) {
@@ -1604,7 +1635,15 @@
     if (phases.paused) {
       previewCtl.phaseDur = 0;
       if (encore) {
-        setEncoreOrigin(currentLatticeSlot());
+        // For holdGrid (or rest state) park at center per MOTION_GLOSSARY §5.6 so entire
+        // family spread is visible and centered after punch-out.
+        var park = state.holdGrid ? (encoreCenterPoint() || currentLatticeSlot()) : currentLatticeSlot();
+        if (park) {
+          placeEncoreWorldAt(park);
+        } else {
+          setEncoreOrigin();
+        }
+        setPreviewEncoreHoleProps();
         setEncoreStageVisible(true);
         if (state.holdGrid) {
           snapEncoreCamera(1, 0);
@@ -1628,8 +1667,14 @@
     if (encore && phase === "in") {
       var first = !!previewCtl.encoreFirst;
       previewCtl.encoreFirst = false;
-      setEncoreOrigin(currentLatticeSlot());
+      var targetSlot = currentLatticeSlot();
+      // Do not snap park to slot immediately. Per feedback + MOTION_GLOSSARY §5.6,
+      // the punch-in must include lateral camera movement (park shift from family center
+      // to target slot while zooming 1→1.24). Snapping x/y before the zoom produced
+      // non-camera motion.
       if (first) {
+        // First bow after fill (which parks center): start camera push from centered 1×.
+        // The park-to-slot + zoom happens inside the timed block below.
         snapEncoreCamera(1, 0);
         setEncoreDimmed(false, 0);
         setEncoreStageVisible(false);
@@ -1638,16 +1683,32 @@
       } else {
         setEncoreDimmed(false, 0);
         snapEncoreCamera(1, 0);
-        setEncoreOrigin(currentLatticeSlot());
+        // Ensure we are at center park coming out of previous Punch-Out (MOTION_GLOSSARY §5.6).
+        // Snap the park instantly (no trans) at 1× before starting the new camera in.
+        var c = encoreCenterPoint();
+        if (c) {
+          var w = encoreWorldEl();
+          if (w) w.style.transition = "none";
+          placeEncoreWorldAt(c);
+          void (w && w.offsetWidth);
+        }
       }
       previewAfter(20, gen, function () {
         var preview = els.app.querySelector(".preview");
+        var worldEl = encoreWorldEl();
         if (rig) {
           rig.style.transition = encoreRigTransition(
             phases.punchIn,
             "--ease-out",
             false
           );
+        }
+        // Drive lateral + zoom together for camera-like push-in (no pre-zoom snap).
+        if (worldEl && targetSlot) {
+          var t = phases.punchIn + "s var(--ease-out, ease)";
+          worldEl.style.transition =
+            "left " + t + ", top " + t + ", --encore-hole-x " + t + ", --encore-hole-y " + t;
+          placeEncoreWorldAt(targetSlot);
         }
         if (preview) {
           preview.style.transition =
@@ -1665,10 +1726,26 @@
     }
 
     if (encore && phase === "out") {
-      // Punch-Out camera per MOTION_GLOSSARY §5.6: zoom 1.24 → 1 over punchOut (0.45s, --ease-fade).
-      // Pinch kept; origin kept at leaving slot so camera pulls back to show the family spread.
+      // Punch-Out camera per MOTION_GLOSSARY §5.6: undim veil (0.45s), zoom 1.24→1
+      // (ease-fade), pinch kept, grid stays. To center the family portrait and provide
+      // lateral camera movement (not straight-out from slot, not x/y snap before next in),
+      // we also animate the world parking offset + rig origin from leaving slot to
+      // plane center during the same 0.45s. This produces the pull-back + pan so the
+      // entire spread is framed centered at 1× after punch-out.
       setEncoreDimmed(false, phases.punchOut);
-      if (rig) {
+      var centerP = encoreCenterPoint();
+      var worldEl = encoreWorldEl();
+      if (worldEl && centerP) {
+        var tsec = phases.punchOut;
+        var t = tsec + "s var(--ease-fade, ease)";
+        if (rig) {
+          rig.style.transition = "transform " + t;
+        }
+        worldEl.style.transition =
+          "left " + t + ", top " + t + ", --encore-hole-x " + t + ", --encore-hole-y " + t;
+        void worldEl.offsetWidth;
+        placeEncoreWorldAt(centerP);
+      } else if (rig) {
         rig.style.transition = encoreRigTransition(
           phases.punchOut,
           "--ease-fade",
@@ -1732,7 +1809,13 @@
     }
     if (mode === "encore") {
       if (phases.paused) {
-        setEncoreOrigin(currentLatticeSlot());
+        var p = state.holdGrid ? (encoreCenterPoint() || currentLatticeSlot()) : currentLatticeSlot();
+        if (p) {
+          placeEncoreWorldAt(p);
+        } else {
+          setEncoreOrigin();
+        }
+        setPreviewEncoreHoleProps();
         setEncoreStageVisible(true);
         snapEncoreCamera(phases.zoomMax, encorePinchPx());
         setEncoreDimmed(true, 0.2);
