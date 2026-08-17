@@ -68,11 +68,19 @@ Context-driven children (same idea as the mockup):
 | Background = Wallpaper | Background Color, Wallpaper Type, BG Scroll Speed |
 | Presentation Style = Encore | Spotlight Style, Spotlight Color, Encore Background |
 
-Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns / Encore must match [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md). Shared digits: `js/motion-presets.js`. Top slot height is the same `--top-slot-h` as System Settings.
+Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Number pills (BG Scroll Speed / Presentation Speed):** follow Style Settings `dataValidation` from the Sheets API (`GET /api/sheets/validations?gid=…` on `toki_server`). Unbounded rules keep a finite strip via the offline max in `manager-data.js`. GitHub Pages is static and cannot hold the service account, so it cannot call that API — pills fall back to the offline defaults there until a hosted API exists ([FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md)).
+**Number pills (BG Scroll Speed / Presentation Speed):** read a validator in the Settings **header label** (same public CSV as themes). House style is the cute form already on Restaurant Copy:
+
+| Header | Pills |
+|--------|--------|
+| `BG Scroll Speed (0<=5)` | 0…5 |
+| `Presentation Speed (0,1,2,3)` | those integers |
+| `Theme Selector (='Style and Theme'!$A$6:$A$17)` | values in that range |
+
+`[0-5]`, `[0..5]`, `(>=3)` also parse. Matching ignores the suffix (`Highlight Color (Special)` stays a name). No spec → offline defaults.
 
 ---
 
@@ -84,7 +92,7 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `css/manager.css` | Layout + theme tokens |
 | `js/manager-data.js` | Offline catalogs, defaults, asset paths |
 | `js/manager-sheet.js` | One-way Settings + Style and Theme read (+ validations via API) |
-| `js/motion-presets.js` | Shared motion digits (also for live boards) |
+| `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
 | `js/manager.js` | Router, draft/commit, preview |
 | `scripts/toki_server.py` | `/api/sheets/validations` (Settings-row rules by header) |
 

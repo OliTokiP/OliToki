@@ -555,16 +555,10 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
   display: block;
   width: 1305px;
   height: 870px;
-  opacity: 0;
-  /* Engine overrides via --motion-opacity-in / --motion-opacity-out */
-  transition: opacity var(--motion-opacity-in, var(--dur-mid)) var(--ease-fade);
   pointer-events: none;
   user-select: none;
   overflow: visible; /* sticker hangs below plate box */
-}
-
-#hero-plate.visible {
-  opacity: 1;
+  /* opacity + transition: css/motion.css */
 }
 
 /* Only the photo (and multi lattice) zoom — not the New sticker sibling */
@@ -573,17 +567,8 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
   inset: 0;
   width: 100%;
   height: 100%;
-  transform-origin: center center;
-  transform: scale(var(--hero-zoom, 1));
-  /* Punch-out default; engine sets inline for exact Beta digits */
-  transition: transform var(--motion-punch-out, var(--dur-mid)) var(--ease-fade);
   filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.4));
-}
-
-#hero-plate.is-kb-in .hero-anim {
-  /* Punch-in: Beta Motion "Punch-In Time" via --motion-punch-in */
-  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
-    var(--ease-out);
+  /* transform + transition: css/motion.css */
 }
 
 /* Food image is content only — no independent motion or shadow */

@@ -5,7 +5,7 @@ Legacy motion is bypassed; see [MOTION_QUARANTINE.md](MOTION_QUARANTINE.md).
 **Next:** Beta Motion table → real block engine (Ken Burns first).  
 **Truth source for names/phases:** [UI_NOMENCLATURE.md §4](UI_NOMENCLATURE.md)  
 **Per-style behavior grid (times, math, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md)  
-**Shared digits:** `js/motion-presets.js`
+**Shared motion:** `js/motion.js` + `css/motion.css` (hero punch-in/out). Board clock / Encore / FP stay in `js/menu.js`.
 
 ---
 

@@ -1,0 +1,164 @@
+/**
+ * Board presentation treatments — live menu AND Menu Manager.
+ * Layout (size / position) stays in menu.css / manager.css.
+ * These rules ARE the Ken Burns / Slideshow animation.
+ */
+
+@property --hero-zoom {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+:root {
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-fade: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-mid: 0.45s;
+  --dur-encore-zoom: 3.4s;
+  --hero-zoom: 1;
+  --hero-zoom-min: 0.93;
+  --hero-zoom-max: 1;
+}
+
+#hero-plate {
+  opacity: 0;
+  /* Engine overrides via --motion-opacity-in / --motion-opacity-out */
+  transition: opacity var(--motion-opacity-in, var(--dur-mid)) var(--ease-fade);
+}
+
+#hero-plate.visible {
+  opacity: 1;
+}
+
+/* Only the photo (and multi lattice) zoom — not the New sticker sibling */
+#hero-plate .hero-anim {
+  transform-origin: center center;
+  transform: scale(var(--hero-zoom, 1));
+  /* Punch-out default; engine sets inline for exact Beta digits */
+  transition: transform var(--motion-punch-out, var(--dur-mid)) var(--ease-fade);
+}
+
+#hero-plate.is-kb-in .hero-anim {
+  /* Punch-in: Beta Motion "Punch-In Time" via --motion-punch-in */
+  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
+    var(--ease-out);
+}
+
+@property --encore-hole-pinch {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --encore-zoom {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+:root {
+  --encore-zoom: 1;
+  --encore-zoom-to: 1.24;
+  --encore-hole-pinch: 0px;
+  --encore-veil-color: #000000;
+  --motion-veil: 1.7s;
+  --veil-extend: 20px;
+  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
+}
+
+#family-portrait-stage {
+  --encore-veil-color: #000000;
+  opacity: 0;
+  transition: opacity var(--dur-mid) var(--ease-fade);
+}
+
+#family-portrait-stage.visible {
+  opacity: 1;
+}
+
+#family-portrait-stage .family-portrait-rig {
+  transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
+  transform: scale(var(--encore-zoom, 1));
+  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
+    var(--ease-out);
+}
+
+#family-portrait-stage.is-zoom-out .family-portrait-rig {
+  transition: transform var(--motion-punch-out, var(--dur-slow, 1.05s))
+    var(--ease-fade);
+}
+
+#family-portrait-stage .family-portrait-veil {
+  position: absolute;
+  inset: calc(-1 * var(--veil-extend, 20px));
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade);
+  transform: translateZ(0);
+  --veil-hole-x: calc(
+    var(--encore-hole-x, 50%) + var(--veil-extend, 20px)
+  );
+  --veil-hole-y: calc(
+    var(--encore-hole-y, 50%) + var(--veil-extend, 20px)
+  );
+}
+
+#family-portrait-stage.encore-spot-hard .family-portrait-veil {
+  mix-blend-mode: normal;
+  background: radial-gradient(
+    circle
+      max(
+        40px,
+        calc(var(--encore-hole-r, 160px) - var(--encore-hole-pinch, 0px))
+      )
+      at var(--veil-hole-x) var(--veil-hole-y),
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 99%,
+    var(--encore-veil-color, #000) 100%
+  );
+}
+
+#family-portrait-stage.encore-spot-hard.is-dimmed .family-portrait-veil {
+  opacity: 1;
+}
+
+#family-portrait-stage.encore-spot-hard-shadow .family-portrait-veil {
+  filter: var(--veil-shadow-filter, none);
+}
+
+#family-portrait-stage.veil-filter-parked .family-portrait-veil {
+  filter: none;
+}
+
+#family-portrait-stage.encore-spot-soft .family-portrait-veil {
+  mix-blend-mode: multiply;
+  background: radial-gradient(
+    circle calc(var(--encore-hole-r, 160px) * 1.85)
+      at var(--veil-hole-x) var(--veil-hole-y),
+    transparent 0%,
+    transparent 8%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 12%, transparent) 18%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 28%, transparent) 30%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 48%, transparent) 42%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 68%, transparent) 55%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 85%, transparent) 70%,
+    var(--encore-veil-color, #000) 88%,
+    var(--encore-veil-color, #000) 100%
+  );
+}
+
+#family-portrait-stage.encore-spot-soft.is-dimmed .family-portrait-veil {
+  opacity: 0.88;
+}
+
+#family-portrait-stage.encore-spot-color-highlight .family-portrait-veil {
+  mix-blend-mode: normal;
+}
+
+#family-portrait-stage.encore-spot-soft.encore-spot-color-highlight.is-dimmed
+  .family-portrait-veil {
+  opacity: 0.9;
+}

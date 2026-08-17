@@ -2,10 +2,12 @@
  * OliToki Menu Manager — one-way sheet read.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
  * Never writes. Field-name draft only (no column indexes in the UI).
- * Number pills (scroll / presentation) come from Style Settings
- * dataValidation via GET /api/sheets/validations (Sheets API on toki_server).
- * GitHub Pages has no server and cannot hold the service account, so it
- * cannot call that API. Offline SPEED_TILES are the fallback there.
+ * Number pills follow a validator in the Settings header — same CSV
+ * Pages already reads. House style:
+ *   BG Scroll Speed (0<=5)
+ *   Presentation Speed (0,1,2,3)
+ *   Theme Selector (='Style and Theme'!$A$6:$A$17)
+ * Also: [0-5], [0..5], [A6:A17], (>=3). Offline last.
  */
 (function (global) {
   "use strict";
@@ -80,9 +82,7 @@
       if (ch === "\n" || ch === "\r") {
         row.push(field);
         field = "";
-        if (row.some(function (c) { return String(c).trim() !== ""; })) {
-          rows.push(row);
-        }
+        rows.push(row);
         row = [];
         if (ch === "\r" && s[i + 1] === "\n") i++;
         i++;
@@ -92,7 +92,7 @@
       i++;
     }
     row.push(field);
-    if (row.some(function (c) { return String(c).trim() !== ""; })) rows.push(row);
+    rows.push(row);
     return rows;
   }
 
@@ -174,9 +174,9 @@
     var n;
     var h;
     var folded = [];
-    for (n = 0; n < names.length; n++) folded.push(foldKey(names[n]));
+    for (n = 0; n < names.length; n++) folded.push(foldKey(headerName(names[n])));
     for (i = 0; i < (headerRow || []).length; i++) {
-      h = foldKey(headerRow[i]);
+      h = foldKey(headerName(headerRow[i]));
       if (!h) continue;
       for (n = 0; n < folded.length; n++) {
         if (h === folded[n]) return i;
@@ -257,18 +257,176 @@
       .replace(/[^a-z0-9]+/g, "");
   }
 
+  function looksLikeValidator(inner) {
+    var s = String(inner || "").trim();
+    if (!s) return false;
+    if (s.charAt(0) === "=") return true;
+    if (/[<>]=?/.test(s)) return true;
+    if (/^'[^']+'\s*!/.test(s)) return true;
+    if (/^\$?[A-Za-z]+\$?\d+/.test(s)) return true;
+    if (/^-?\d+(?:\.\d+)?\s*(?:-|\.\.)\s*-?\d+(?:\.\d+)?$/.test(s)) return true;
+    if (/^-?\d+(?:\.\d+)?(\s*,\s*-?\d+(?:\.\d+)?)+$/.test(s)) return true;
+    return false;
+  }
+
+  /* "BG Scroll Speed (0<=5)" → { name, spec }. Leaves "Highlight Color (Special)" alone. */
+  function splitHeader(raw) {
+    var full = String(raw == null ? "" : raw).trim();
+    var m = full.match(/^(.*?)[\s]*[\(\[](.+)[\)\]]\s*$/);
+    if (m && looksLikeValidator(m[2])) {
+      return { name: m[1].trim() || full, spec: String(m[2]).trim() };
+    }
+    return { name: full, spec: "" };
+  }
+
+  function headerName(raw) {
+    return splitHeader(raw).name;
+  }
+
+  function colLettersToIndex(letters) {
+    var n = 0;
+    var s = String(letters || "").toUpperCase();
+    var i;
+    for (i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c < 65 || c > 90) continue;
+      n = n * 26 + (c - 64);
+    }
+    return n - 1;
+  }
+
+  function parseA1Range(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return null;
+    if (s.charAt(0) === "=") s = s.slice(1).trim();
+    s = s.replace(/^'[^']+'\s*!/, "").replace(/^[^'!]+!/, "");
+    s = s.replace(/\$/g, "").toUpperCase();
+    var m = s.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+    if (m) {
+      return {
+        c1: colLettersToIndex(m[1]),
+        r1: parseInt(m[2], 10),
+        c2: colLettersToIndex(m[3]),
+        r2: parseInt(m[4], 10),
+      };
+    }
+    m = s.match(/^([A-Z]+)(\d+):([A-Z]+)$/);
+    if (m) {
+      return {
+        c1: colLettersToIndex(m[1]),
+        r1: parseInt(m[2], 10),
+        c2: colLettersToIndex(m[3]),
+        r2: 0,
+      };
+    }
+    m = s.match(/^([A-Z]+)(\d+)$/);
+    if (m) {
+      var c = colLettersToIndex(m[1]);
+      var r = parseInt(m[2], 10);
+      return { c1: c, r1: r, c2: c, r2: r };
+    }
+    return null;
+  }
+
+  function resolveA1Values(rows, spec) {
+    var a1 = parseA1Range(spec);
+    if (!a1) return [];
+    var r2 = a1.r2;
+    if (!r2) r2 = (rows || []).length;
+    var c1 = Math.min(a1.c1, a1.c2);
+    var c2 = Math.max(a1.c1, a1.c2);
+    var r1 = Math.min(a1.r1, r2);
+    r2 = Math.max(a1.r1, r2);
+    var out = [];
+    var r;
+    var c;
+    for (r = r1; r <= r2; r++) {
+      var row = (rows || [])[r - 1] || [];
+      for (c = c1; c <= c2; c++) {
+        var v = cell(row, c);
+        if (v) out.push(v);
+      }
+    }
+    return out;
+  }
+
+  function parseLabelSpec(spec) {
+    var raw = String(spec || "").trim();
+    if (!raw) return null;
+    var s = raw.charAt(0) === "=" ? raw.slice(1).trim() : raw;
+    var m;
+    m = s.match(
+      /^(-?\d+(?:\.\d+)?)\s*<=\s*[a-zA-Z]?\s*<=\s*(-?\d+(?:\.\d+)?)$/
+    );
+    if (m) {
+      return {
+        type: "NUMBER_BETWEEN",
+        values: [m[1], m[2]],
+      };
+    }
+    m = s.match(/^(-?\d+(?:\.\d+)?)\s*<=\s*(-?\d+(?:\.\d+)?)$/);
+    if (m) {
+      return { type: "NUMBER_BETWEEN", values: [m[1], m[2]] };
+    }
+    m = s.match(/^>=\s*(-?\d+(?:\.\d+)?)$/);
+    if (m) return { type: "NUMBER_GREATER_THAN_EQ", values: [m[1]] };
+    m = s.match(/^<=\s*(-?\d+(?:\.\d+)?)$/);
+    if (m) return { type: "NUMBER_LESS_THAN_EQ", values: [m[1]] };
+    m = s.match(/^(-?\d+(?:\.\d+)?)\s*(?:-|\.\.)\s*(-?\d+(?:\.\d+)?)$/);
+    if (m) return { type: "NUMBER_BETWEEN", values: [m[1], m[2]] };
+    if (/^-?\d+(?:\.\d+)?(\s*,\s*-?\d+(?:\.\d+)?)+$/.test(s)) {
+      return {
+        type: "ONE_OF_LIST",
+        values: s.split(/\s*,\s*/),
+      };
+    }
+    if (parseA1Range(raw) || parseA1Range(s)) {
+      return {
+        type: "ONE_OF_RANGE",
+        values: [raw.charAt(0) === "=" ? raw : "=" + raw],
+      };
+    }
+    return null;
+  }
+
+  function ruleFromHeader(header, rows) {
+    var parts = splitHeader(header);
+    if (!parts.spec) return null;
+    var rule = parseLabelSpec(parts.spec);
+    if (!rule) return null;
+    if (rule.type === "ONE_OF_RANGE") {
+      var resolved = resolveA1Values(rows, parts.spec);
+      if (resolved.length) rule = { type: "ONE_OF_LIST", values: resolved };
+    }
+    return { name: parts.name, rule: rule };
+  }
+
+  function rulesFromStyleRows(rows) {
+    var start = findSectionData(rows, "settings");
+    if (start < 0) start = 2;
+    var headers = rows[start - 1] || [];
+    var fields = {};
+    var i;
+    for (i = 0; i < headers.length; i++) {
+      var parsed = ruleFromHeader(headers[i], rows);
+      if (!parsed || !parsed.name) continue;
+      fields[parsed.name] = parsed.rule;
+    }
+    return fields;
+  }
+
   function fieldValidation(fields, names) {
     if (!fields) return null;
     var folded = [];
     var n;
-    for (n = 0; n < names.length; n++) folded.push(foldField(names[n]));
+    for (n = 0; n < names.length; n++) folded.push(foldField(headerName(names[n])));
     var keys = Object.keys(fields);
     var i;
     var k;
     var fk;
     for (i = 0; i < keys.length; i++) {
       k = keys[i];
-      fk = foldField(k);
+      fk = foldField(headerName(k));
       for (n = 0; n < folded.length; n++) {
         if (fk === folded[n]) return fields[k];
       }
@@ -367,17 +525,20 @@
     return { min: min, max: max };
   }
 
-  function buildSpeedTiles(fields) {
+  function buildSpeedTiles(fields, headerRules) {
     var base = offlineSpeedTiles();
-    var scrollRule = fieldValidation(fields, [
+    var scrollNames = [
       "BG Scroll Speed",
       "Background Scroll Speed",
       "Scroll Speed",
-    ]);
-    var presRule = fieldValidation(fields, [
-      "Presentation Speed",
-      "Slideshow Speed",
-    ]);
+    ];
+    var presNames = ["Presentation Speed", "Slideshow Speed"];
+    var scrollRule =
+      fieldValidation(headerRules, scrollNames) ||
+      fieldValidation(fields, scrollNames);
+    var presRule =
+      fieldValidation(headerRules, presNames) ||
+      fieldValidation(fields, presNames);
     var scroll = numberBoundsFromValidation(scrollRule, base.scroll);
     var presentation = numberBoundsFromValidation(presRule, base.presentation);
     return { scroll: scroll, presentation: presentation };
@@ -623,10 +784,21 @@
     var colBg = headerIndex(headers, ["BG Color", "Background Color"]);
     var colPat = headerIndex(headers, ["BG Pattern", "Background Pattern"]);
     var colWp = headerIndex(headers, ["BG Wallpaper", "Background Wallpaper"]);
+    var colScroll = headerIndex(headers, [
+      "BG Scroll Speed",
+      "Background Scroll Speed",
+      "Scroll Speed",
+    ]);
+    var colPres = headerIndex(headers, [
+      "Presentation Speed",
+      "Slideshow Speed",
+    ]);
     if (colTheme < 0) colTheme = STYLE_SETTINGS.themeSelector;
     if (colBg < 0) colBg = STYLE_SETTINGS.bgColor;
     if (colPat < 0) colPat = STYLE_SETTINGS.bgPattern;
     if (colWp < 0) colWp = STYLE_SETTINGS.bgImage;
+    if (colScroll < 0) colScroll = STYLE_SETTINGS.bgScrollSpeed;
+    if (colPres < 0) colPres = STYLE_SETTINGS.slideshowSpeed;
 
     var tiles = speedTiles || offlineSpeedTiles();
     var scrollMin = tiles.scroll.min;
@@ -673,7 +845,7 @@
         (chosen && chosen.patternColor2) || "highlight",
       wallpaper: wp || "galaxy",
       scrollSpeed: clampSpeed(
-        cell(row, STYLE_SETTINGS.bgScrollSpeed),
+        cell(row, colScroll),
         1,
         scrollMin,
         scrollMax
@@ -684,7 +856,7 @@
         colorRole(cell(row, STYLE_SETTINGS.encoreBackgroundColor)) ||
         "secondary",
       presentationSpeed: clampSpeed(
-        cell(row, STYLE_SETTINGS.slideshowSpeed),
+        cell(row, colPres),
         1,
         presMin,
         presMax
@@ -714,7 +886,9 @@
   }
 
   function buildPayload(settings, styleRows, validationFields) {
-    var speedTiles = buildSpeedTiles(validationFields || null);
+    var headerRules = rulesFromStyleRows(styleRows);
+    var merged = Object.assign({}, validationFields || {}, headerRules);
+    var speedTiles = buildSpeedTiles(validationFields || null, headerRules);
     var themes = parseThemes(styleRows);
     var style = parseStyleDraft(styleRows, themes, speedTiles);
     var sources = catalogToSources(settings.catalog);
@@ -745,7 +919,7 @@
       themes: themes,
       draft: draft,
       speedTiles: speedTiles,
-      fieldValidations: validationFields || null,
+      fieldValidations: merged,
     };
   }
 

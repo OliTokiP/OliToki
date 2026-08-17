@@ -2,9 +2,8 @@
  * OliToki Menu Manager — catalogs and defaults.
  * These are the offline stand-in. Live load (js/manager-sheet.js) replaces
  * themes + data sources + the draft from OliToki Menu Settings / Style and Theme.
- * Speed tiles come from live Style Settings dataValidation via the Sheets
- * API on toki_server. Offline defaults apply when that API is not there
- * (GitHub Pages). Toki Default matches STYLE_GUIDE when the sheet is down.
+ * Speed tiles come from a validator in the Settings header label
+ * (house style: (0<=5)). Offline defaults if the label has no spec.
  */
 (function (global) {
   "use strict";
@@ -140,7 +139,7 @@
   ];
 
   /* Offline fallback for number pills (BG Scroll / Presentation Speed).
-     Replaced from live dataValidation when /api/sheets/validations is up.
+     Replaced when the Settings header carries a validator ((0<=5), …).
      Unbounded rules keep a finite strip via these defaults. */
   var SPEED_TILES = {
     scroll: { min: 0, max: 5 },

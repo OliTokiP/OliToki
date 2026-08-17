@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5997144",
-  "hashFull": "5997144e127e3cc47db0d9f5ddb306e9d65ce536",
-  "subject": "QA: 2026-08-16 Menu Manager should understand conditionals from sheet (pass 3)"
+  "hash": "4619464",
+  "hashFull": "461946425c69ac95f0959e795c99c58d0e7214cf",
+  "subject": "Header Validations Changed"
 };

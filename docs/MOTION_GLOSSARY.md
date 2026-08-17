@@ -3,7 +3,7 @@
 **Status:** Source of truth for *what each Motion Style does on the live boards*.  
 Menu Manager preview must implement **this document**, not a look-alike.
 
-**Code:** `js/motion-presets.js` (shared digits) · `js/menu.js` (engine) · `css/menu.css` (treatments)  
+**Code:** `js/motion.js` (digits + hero + Encore punch-in/out) · `css/motion.css` (treatments) · `js/menu.js` (board clock / FP / chrome)  
 **Names:** [UI_NOMENCLATURE.md §4](UI_NOMENCLATURE.md)  
 **Clock intent:** [MOTION_REFACTOR.md](MOTION_REFACTOR.md)  
 **Runtime mode:** [MOTION_QUARANTINE.md](MOTION_QUARANTINE.md) — live is `engine`
@@ -18,7 +18,7 @@ You can say “make Encore” only if you implement **every row** in the Encore 
 
 | Do | Do not |
 |----|--------|
-| Copy times from `js/motion-presets.js` / `MOTION_DEFAULTS_*` | Scale punch/fade/zoom **times** for a small preview |
+| Call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` (js/motion.js) | Write a second plate runner for Menu Manager |
 | Scale **pixel sizes** (hole px, pinch px, shadow px) to the form factor | Invent a second veil gradient |
 | Drive highlight **color** on Punch-Out’s clock | Fade list text opacity |
 | Keep hole pinched on Punch-Out (`ENCORE_HOLE_PINCH_OUT = false`) | Unpinch on the way out |
@@ -271,7 +271,7 @@ Not in the Manager trio, but part of Encore’s world:
 When adding or fixing a preview style:
 
 1. Open **this file**, find the style.  
-2. Use `window.TOKI_MOTION` (`js/motion-presets.js`) for digits.  
+2. Call `window.TOKI_MOTION.heroPunchIn` / `heroPunchOut` (`js/motion.js`). Do not reimplement.  
 3. Reuse live CSS treatments (same custom properties, same gradient).  
 4. Scale **px** only.  
 5. Screenshot and compare: highlight color, veil fill, hole radius, pinch duration, opacity vs zoom clocks.

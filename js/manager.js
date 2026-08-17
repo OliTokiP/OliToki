@@ -729,21 +729,18 @@
       '"' +
       (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
       "></div></div>" +
-      '<div class="preview-plate">' +
-      '<div class="preview-anim">' +
-      '<img class="preview-food" alt="" src="' +
+      '<div id="hero-plate">' +
+      '<div class="hero-anim">' +
+      '<img id="hero" class="preview-food" alt="" src="' +
       escapeHtml(first.src) +
       '"></div></div>' +
-      '<div class="preview-fp-world' +
-      (encore ? " " + encoreStageClass(d) : "") +
-      '">' +
+      '<div id="family-portrait-stage"' +
+      (encore ? ' class="' + encoreStageClass(d) + '"' : " hidden") +
+      ">" +
       '<div class="family-portrait-rig">' +
-      '<div class="family-portrait-plates"></div></div></div>' +
-      '<div class="preview-encore-shroud' +
-      (encore ? " " + encoreStageClass(d) : "") +
-      '"' +
-      (encore ? "" : " hidden") +
-      "></div></div>" +
+      '<div class="family-portrait-plates"></div>' +
+      '<div class="family-portrait-veil" aria-hidden="true"></div>' +
+      "</div></div></div>" +
       '<div class="preview-sticker"' +
       (first.isNew ? "" : " hidden") +
       ">" +
@@ -788,6 +785,23 @@
     else if (state.screen === "menu") html = screenMenu();
     else if (state.screen === "style") html = screenStyle();
     else if (state.screen === "board") html = screenBoard();
+
+    if (state.screen === "style") {
+      var existing = els.app.querySelector(".screen-style");
+      if (existing) {
+        // CRITICAL GUARD: #hero-plate / .hero-anim must never be destroyed by
+        // innerHTML while the user is on Style and Theme. Any renderScreen while
+        // already showing the style screen now only refreshes rows + preview CSS vars.
+        // Plate animations (fade + KB zoom) survive theme/picker/conditional/sheet changes.
+        // Full mount (and double-rAF start) only happens on first entry to the screen.
+        // See MOTION_GLOSSARY §3/4. Hero motion is js/motion.js only.
+        refreshStyleRows();
+        applyTheme();
+        if (!previewCtl.phase) startPreviewCycle();
+        return;
+      }
+    }
+
     els.app.innerHTML = html;
     applyTheme();
     if (state.screen === "home") attachPeak();
@@ -796,24 +810,11 @@
       if (sc) sc.scrollTop = state.styleScroll;
       restorePillScroll();
       bindWpFallback();
-      /* Do not start motion until the sheet has resolved. loadSheet →
-         renderAll used to remount mid Punch-In, so the plate snapped and
-         the next photo just appeared (0696e41 never had that remount). */
-      if (state.sheetSource === "loading") {
-        parkPreviewStill();
-      } else {
-        // Guardrail: double-rAF after innerHTML lets layout + CSS vars on .preview
-        // (incl. --ease-fade / --ease-out) settle before snap + rAF kick. Extra frame
-        // protects against races after sheet apply, picker changes, or hash nav.
-        // Prevents remount teardown and makes KB/Slideshow reliable (MOTION_GLOSSARY 3, 4).
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            if (state.screen === "style" && state.sheetSource !== "loading") {
-              startPreviewCycle();
-            }
-          });
-        });
-      }
+      /* 0696e41 started the cycle immediately. Waiting for the sheet parked
+         the plate at opacity 1, then a later remount made the next photo
+         just appear. Start now; renderScreen's existing-screen path will
+         not remount the plate when the sheet arrives. */
+      startPreviewCycle();
     } else {
       stopPreviewCycle();
     }
@@ -1219,11 +1220,23 @@
     if (state.picker === "wallpaper" && id === "upload") {
       return;
     }
+    var wasPresentation = state.picker === "presentation";
+    var oldPres = wasPresentation ? state.draft.presentation : null;
     spec.set(id);
     state.picker = null;
     state.sheetDirty = true;
     applyTheme();
     renderAll();
+    if (wasPresentation && state.screen === "style") {
+      var newPres = state.draft.presentation;
+      if (oldPres !== newPres) {
+        if (newPres === "encore") {
+          previewCtl.encoreFirst = true;
+          fillPortraitGrid();
+        }
+        retargetMotion();
+      }
+    }
   }
 
   function bindPickerUpload() {
@@ -1398,257 +1411,36 @@
     }
   }
 
-  function encoreWorldEl() {
-    return els.app.querySelector(".preview-fp-world");
-  }
-
-  function encoreShroudEl() {
-    return els.app.querySelector(".preview-encore-shroud");
-  }
-
-  function encoreRigEl() {
-    return els.app.querySelector(".preview-fp-world .family-portrait-rig");
-  }
-
-  function imageBoxOrigin() {
-    var preview = els.app.querySelector(".preview");
-    var h = preview && preview.clientHeight ? preview.clientHeight : 0;
-    var u = h / 300;
-    return {
-      x: 250 * u,
-      y: 150 * u,
-      u: u,
-      h: h,
-      w: preview ? preview.clientWidth : 0,
-    };
-  }
-
-  function encorePinchPx() {
-    if (state.draft.encoreStyle === "soft") return 0;
-    var TM = window.TOKI_MOTION;
-    var o = imageBoxOrigin();
-    var holeR = 0.42 * 300 * o.u;
-    if (TM && TM.scaledHolePinch) return TM.scaledHolePinch(holeR);
-    return holeR ? 40 * (holeR / 160) : 40;
-  }
-
-  function currentLatticeSlot() {
-    var layout = previewCtl.lattice;
-    if (!layout || !layout.slots || !layout.slots.length) return null;
-    var i = state.previewIndex || 0;
-    return layout.slots[i] || layout.slots[0] || null;
-  }
-
-  function encoreCenterPoint() {
-    var layout = previewCtl.lattice;
-    if (!layout || typeof layout.stageW !== "number") return null;
-    return { x: layout.stageW / 2, y: layout.stageH / 2 };
-  }
-
-  function placeEncoreWorldAt(point) {
-    var world = encoreWorldEl();
-    var o = imageBoxOrigin();
-    if (!world || o.h <= 0 || !point) return;
-    var s = o.h / 1080;
-    // Re-apply the fixed form-factor scale (idempotent). Do not clobber during camera anims.
-    if (!world.style.transform || world.style.transform.indexOf("scale(") !== 0) {
-      world.style.transform = "scale(" + s + ")";
-    }
-    world.style.left = o.x - point.x * s + "px";
-    world.style.top = o.y - point.y * s + "px";
-    world.style.setProperty("--encore-hole-x", point.x + "px");
-    world.style.setProperty("--encore-hole-y", point.y + "px");
-  }
-
-  function placeEncoreWorld() {
-    placeEncoreWorldAt(currentLatticeSlot());
-  }
-
-  function setPreviewEncoreHoleProps() {
-    var preview = els.app.querySelector(".preview");
-    var o = imageBoxOrigin();
-    if (preview && o) {
-      preview.style.setProperty("--encore-hole-x", o.x + "px");
-      preview.style.setProperty("--encore-hole-y", o.y + "px");
-      if (o.u) preview.style.setProperty("--encore-hole-r", 0.42 * 300 * o.u + "px");
-    }
-  }
-
-  function setEncoreOrigin() {
-    setPreviewEncoreHoleProps();
-    var slot = currentLatticeSlot();
-    if (slot) placeEncoreWorldAt(slot);
-  }
-
-  function appendPreviewPortraitSticker(slotEl, photoScale) {
-    var el = document.createElement("div");
-    el.className = "family-portrait-sticker";
-    el.setAttribute("aria-hidden", "true");
-    el.innerHTML =
-      '<img class="new-sticker-shadow" alt="" src="' +
-      D.sticker.shadow +
-      '">' +
-      '<div class="new-sticker-body">' +
-      '<img class="new-sticker-body-img" alt="" src="' +
-      D.sticker.body +
-      '">' +
-      '<span class="new-sticker-tint"></span></div>' +
-      '<span class="new-sticker-label">New!</span>';
-    var ox = 280 * photoScale;
-    var oy = 160 * photoScale;
-    el.style.left = "calc(50% + " + ox + "px)";
-    el.style.top = "calc(50% + " + oy + "px)";
-    var stickScale = Math.max(0.16, Math.min(0.4, photoScale * 0.9));
-    el.style.transform = "translate(-50%, -50%) scale(" + stickScale + ")";
-    slotEl.appendChild(el);
+  function encoreStageEl() {
+    return els.app.querySelector("#family-portrait-stage");
   }
 
   function fillPortraitGrid() {
-    var host = els.app.querySelector(
-      ".preview-fp-world .family-portrait-plates"
-    );
-    var world = encoreWorldEl();
-    var L = window.TOKI_LATTICE;
-    if (!host || !L) return null;
-    host.innerHTML = "";
-    var items = D.previewItems;
-    var layout = L.buildPortraitLayout(items.length);
-    previewCtl.lattice = layout;
-    var i;
-    for (i = 0; i < items.length; i++) {
-      var slot = layout.slots[i];
-      var it = items[i];
-      if (!slot || !it) continue;
-      var wrap = document.createElement("div");
-      wrap.className = "family-portrait-slot";
-      wrap.style.left = slot.x + "px";
-      wrap.style.top = slot.y + "px";
-      wrap.style.zIndex = String(slot.zIndex);
-      var img = document.createElement("img");
-      img.className = "family-portrait-item";
-      img.alt = "";
-      img.draggable = false;
-      img.src = it.src;
-      img.style.transform =
-        "translate(-50%, -50%) scale(" + layout.scale + ")";
-      wrap.appendChild(img);
-      if (it.isNew) appendPreviewPortraitSticker(wrap, layout.scale);
-      host.appendChild(wrap);
-    }
-    try {
-      var q = new URLSearchParams(location.hash.split("?")[1] || location.search || "");
-      if (world && (q.get("portraitDebug") === "1" || q.get("portraitDebug") === "true")) {
-        world.classList.add("portrait-debug");
-      }
-    } catch (e) {
-      /* ignore */
-    }
-    // Initial park prefers center (family spread). The first "in" will drive the
-    // camera push (lateral + zoom) to the starting item. Matches Encore wind-up
-    // centering + MOTION_GLOSSARY §5.0 / §5.6.
-    var initP = encoreCenterPoint() || currentLatticeSlot();
-    if (initP) {
-      placeEncoreWorldAt(initP);
-    } else {
-      setEncoreOrigin();
-    }
-    setPreviewEncoreHoleProps();
-    return layout;
+    var TM = window.TOKI_MOTION;
+    var stage = encoreStageEl();
+    if (!TM || !stage) return null;
+    var items = (D.previewItems || []).map(function (it, i) {
+      return { src: it.src, isNew: !!it.isNew, itemIndex: i };
+    });
+    previewCtl.lattice = TM.fillEncorePlates(stage, items, {
+      sticker: D.sticker,
+    });
+    return previewCtl.lattice;
   }
 
   function applyEncoreChrome(item) {
-    var world = encoreWorldEl();
-    var shroud = encoreShroudEl();
-    var nodes = [world, shroud];
-    var d = state.draft;
-    var n;
-    for (n = 0; n < nodes.length; n++) {
-      if (!nodes[n]) continue;
-      nodes[n].classList.remove(
-        "encore-spot-hard",
-        "encore-spot-hard-shadow",
-        "encore-spot-soft",
-        "encore-spot-color-highlight",
-        "encore-spot-color-black"
-      );
-      if (d.encoreStyle === "soft") nodes[n].classList.add("encore-spot-soft");
-      else if (d.encoreStyle === "hard_shadow") {
-        nodes[n].classList.add("encore-spot-hard", "encore-spot-hard-shadow");
-      } else {
-        nodes[n].classList.add("encore-spot-hard");
-      }
-      if (d.encoreSpot === "highlight") {
-        nodes[n].classList.add("encore-spot-color-highlight");
-      } else {
-        nodes[n].classList.add("encore-spot-color-black");
-      }
-    }
-    var preview = els.app.querySelector(".preview");
-    if (preview) {
-      preview.style.setProperty("--encore-veil-color", spotlightHex(item));
-    }
-    // Do not call setEncoreOrigin / place here. Parking the lattice (slot vs center)
-    // is managed inside beginPhase camera phases so punch-in/out can include
-    // lateral motion. We still keep the fixed visual hole/radius up to date.
-    setPreviewEncoreHoleProps();
-  }
-
-  function setEncoreZoom(scale) {
-    var world = encoreWorldEl();
-    if (world) world.style.setProperty("--encore-zoom", String(scale));
-  }
-
-  function setEncorePinch(px) {
-    var preview = els.app.querySelector(".preview");
-    var shroud = encoreShroudEl();
-    var v = Math.max(0, px) + "px";
-    if (preview) preview.style.setProperty("--encore-hole-pinch", v);
-    if (shroud) shroud.style.setProperty("--encore-hole-pinch", v);
-  }
-
-  function snapEncoreCamera(zoom, pinch) {
-    var rig = encoreRigEl();
-    var shroud = encoreShroudEl();
-    var world = encoreWorldEl();
-    if (rig) rig.style.transition = "none";
-    if (shroud) shroud.style.transition = "none";
-    if (world) world.style.transition = "none";
-    setEncoreZoom(zoom);
-    setEncorePinch(pinch);
-    void (rig && rig.offsetWidth);
-    void (world && world.offsetWidth);
-  }
-
-  function encoreRigTransition(sec, easeVar, includePinch) {
-    var t = "transform " + sec + "s var(" + easeVar + ", ease)";
-    if (includePinch) {
-      t += ", --encore-hole-pinch " + sec + "s var(" + easeVar + ", ease)";
-    }
-    return t;
-  }
-
-  function setEncoreDimmed(on, veilSec) {
-    var shroud = encoreShroudEl();
-    var preview = els.app.querySelector(".preview");
-    if (veilSec != null && preview) {
-      preview.style.setProperty("--motion-veil", veilSec + "s");
-    }
-    if (shroud) {
-      if (veilSec != null) {
-        shroud.style.transition =
-          "opacity " + veilSec + "s var(--ease-fade, ease)";
-      }
-      shroud.classList.toggle("is-dimmed", !!on);
-    }
-  }
-
-  function setEncoreStageVisible(on) {
-    var world = encoreWorldEl();
-    if (world) world.classList.toggle("is-visible", !!on);
+    var TM = window.TOKI_MOTION;
+    var stage = encoreStageEl();
+    if (!TM || !stage) return;
+    TM.applyEncoreChrome(stage, {
+      type: state.draft.encoreStyle,
+      colorMode: state.draft.encoreSpot === "highlight" ? "highlight" : "black",
+      veilHex: spotlightHex(item),
+    });
   }
 
   function applyPreviewItem(item) {
-    var img = els.app.querySelector(".preview-food");
+    var img = els.app.querySelector("#hero") || els.app.querySelector(".preview-food");
     var sticker = els.app.querySelector(".preview-sticker");
     if (img) img.src = item.src;
     if (sticker) sticker.hidden = !item.isNew;
@@ -1657,93 +1449,6 @@
     }
     armHighlightClock(motionPhases().punchOut);
     syncPreviewNums(state.previewIndex || 0, false);
-  }
-
-  function currentScale(el) {
-    if (!el) return 1;
-    var t = getComputedStyle(el).transform;
-    if (!t || t === "none") return 1;
-    var m = t.match(/matrix\(([^)]+)\)/);
-    if (m) return Math.abs(parseFloat(m[1].split(",")[0])) || 1;
-    var m3 = t.match(/matrix3d\(([^)]+)\)/);
-    if (m3) return Math.abs(parseFloat(m3[1].split(",")[0])) || 1;
-    return 1;
-  }
-
-  /* Plate runner per MOTION_GLOSSARY 3 (Slideshow) and 4 (Ken Burns).
-     .preview-plate owns fade (opacity 0→1/1→0). .preview-anim owns Ken Burns
-     scale only (0.93→1 on in; reverse on out). Sticker is sibling, fades but
-     does not scale. Inline transform + explicit transition to ensure it runs.
-     Uses concrete EASE from TOKI_MOTION (glossary) + var fallback; explicit
-     flush after transition decls (and before targets) is the guardrail so values
-     never snap. */
-  function setPlate(opacity, zoom, dur, kind) {
-    var plate = els.app.querySelector(".preview-plate");
-    var anim = els.app.querySelector(".preview-anim");
-    if (!plate) return;
-    var phases = motionPhases();
-    var fade = phases.opacityDur || 0.45;
-    var move = Math.max(0.02, dur || phases.punchIn);
-    var TM = window.TOKI_MOTION;
-    var fadeEase = (TM && TM.EASE && TM.EASE.fade) || "var(--ease-fade, ease)";
-    var outEase = (TM && TM.EASE && TM.EASE.out) || "var(--ease-out, ease-out)";
-    var zoomEase = kind === "out" ? fadeEase : outEase;
-    var z = Number(zoom);
-    if (!isFinite(z)) z = 1;
-    plate.style.transition = "opacity " + fade + "s " + fadeEase;
-    plate.style.setProperty("--hero-zoom", String(z));
-    plate.classList.toggle(
-      "is-kb-in",
-      kind === "in" && state.draft.presentation === "kenburns"
-    );
-    if (anim) {
-      anim.style.transition = "transform " + move + "s " + zoomEase;
-      anim.style.setProperty("--hero-zoom", String(z));
-    }
-    var sticker = els.app.querySelector(".preview-sticker");
-    var showSticker = !!(sticker && !sticker.hidden);
-    if (showSticker) {
-      sticker.style.transition = "opacity " + fade + "s " + fadeEase;
-    }
-    // Force reflow after declaring transitions (before writing target values) so
-    // the 0→1 fade and 0.93→1 zoom actually run instead of appearing.
-    // This + double-rAF start + concrete EASE guard against future races.
-    // Sticker gets same flush treatment when visible.
-    void (plate && plate.offsetWidth);
-    if (anim) void (anim.offsetWidth);
-    if (showSticker) void (sticker.offsetWidth);
-    if (anim) {
-      anim.style.transform = "scale(" + z + ")";
-    }
-    plate.style.opacity = String(opacity);
-    if (showSticker) {
-      sticker.style.opacity = String(opacity);
-    }
-  }
-
-  function snapPlate(opacity, zoom) {
-    var plate = els.app.querySelector(".preview-plate");
-    var anim = els.app.querySelector(".preview-anim");
-    var z = Number(zoom);
-    if (!isFinite(z)) z = 1;
-    if (plate) {
-      plate.style.transition = "none";
-      plate.classList.remove("is-kb-in");
-      plate.style.setProperty("--hero-zoom", String(z));
-      plate.style.opacity = String(opacity);
-    }
-    if (anim) {
-      anim.style.transition = "none";
-      anim.style.setProperty("--hero-zoom", String(z));
-      anim.style.transform = "scale(" + z + ")";
-    }
-    var sticker = els.app.querySelector(".preview-sticker");
-    if (sticker) {
-      sticker.style.transition = "none";
-      sticker.style.opacity = sticker.hidden ? "0" : String(opacity);
-    }
-    void (plate && plate.offsetWidth);
-    void (anim && anim.offsetWidth);
   }
 
   function scrollPxPerSec() {
@@ -1862,172 +1567,36 @@
     var zoomTo = TM && TM.ENCORE ? TM.ENCORE.zoomTo : 1.24;
     previewCtl.phase = phase;
     var tgt = phaseTarget(phase, phases, mode);
-    var rig = encoreRigEl();
 
     if (phases.paused) {
       previewCtl.phaseDur = 0;
-      if (encore) {
-        // For holdGrid (or rest state) park at center per MOTION_GLOSSARY §5.6 so entire
-        // family spread is visible and centered after punch-out.
-        var park = state.holdGrid ? (encoreCenterPoint() || currentLatticeSlot()) : currentLatticeSlot();
-        if (park) {
-          placeEncoreWorldAt(park);
-        } else {
-          setEncoreOrigin();
-        }
-        setPreviewEncoreHoleProps();
-        setEncoreStageVisible(true);
+      if (encore && TM) {
+        var stagePark = encoreStageEl();
+        var originPark = TM.encoreSlotOrigin(stagePark, state.previewIndex || 0);
+        if (originPark) TM.setEncoreZoomOrigin(stagePark, originPark.x, originPark.y);
+        else TM.setPlaneCenterOrigin(stagePark);
         if (state.holdGrid) {
-          snapEncoreCamera(1, 0);
-          setEncoreDimmed(false, 0);
+          TM.encoreSnap(stagePark, { zoom: 1, pinch: 0, dimmed: false, opacity: 1 });
         } else {
-          snapEncoreCamera(zoomTo, encorePinchPx());
-          setEncoreDimmed(true, 0.2);
+          TM.encoreSnap(stagePark, {
+            zoom: zoomTo,
+            pinch: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
+            dimmed: true,
+            opacity: 1,
+          });
         }
       } else {
-        setPlate(1, tgt.zoom, 0.25, "in");
+        var platePark = els.app.querySelector("#hero-plate");
+        if (TM && platePark) {
+          TM.heroSnap(platePark, 1, tgt.zoom);
+        }
       }
       armHighlightClock(phases.punchOut);
       syncPreviewNums(state.previewIndex || 0, false);
       return;
     }
 
-    previewCtl.phaseDur = Math.max(0.03, tgt.dur);
-    previewCtl.phaseT0 = performance.now();
-    armHighlightClock(phases.punchOut);
-
-    if (encore && phase === "in") {
-      var first = !!previewCtl.encoreFirst;
-      previewCtl.encoreFirst = false;
-      var targetSlot = currentLatticeSlot();
-      // Do not snap park to slot immediately. Per feedback + MOTION_GLOSSARY §5.6,
-      // the punch-in must include lateral camera movement (park shift from family center
-      // to target slot while zooming 1→1.24). Snapping x/y before the zoom produced
-      // non-camera motion.
-      if (first) {
-        // First bow after fill (which parks center): start camera push from centered 1×.
-        // The park-to-slot + zoom happens inside the timed block below.
-        snapEncoreCamera(1, 0);
-        setEncoreDimmed(false, 0);
-        setEncoreStageVisible(false);
-        void (encoreWorldEl() && encoreWorldEl().offsetWidth);
-        setEncoreStageVisible(true);
-      } else {
-        setEncoreDimmed(false, 0);
-        snapEncoreCamera(1, 0);
-        // Ensure we are at center park coming out of previous Punch-Out (MOTION_GLOSSARY §5.6).
-        // Snap the park instantly (no trans) at 1× before starting the new camera in.
-        var c = encoreCenterPoint();
-        if (c) {
-          var w = encoreWorldEl();
-          if (w) w.style.transition = "none";
-          placeEncoreWorldAt(c);
-          void (w && w.offsetWidth);
-        }
-      }
-      previewAfter(20, gen, function () {
-        var preview = els.app.querySelector(".preview");
-        var worldEl = encoreWorldEl();
-        if (rig) {
-          rig.style.transition = encoreRigTransition(
-            phases.punchIn,
-            "--ease-out",
-            false
-          );
-        }
-        // Drive lateral + zoom together for camera-like push-in (no pre-zoom snap).
-        if (worldEl && targetSlot) {
-          var t = phases.punchIn + "s var(--ease-out, ease)";
-          worldEl.style.transition =
-            "left " + t + ", top " + t + ", --encore-hole-x " + t + ", --encore-hole-y " + t;
-          placeEncoreWorldAt(targetSlot);
-        }
-        if (preview) {
-          preview.style.transition =
-            "--encore-hole-pinch " +
-            phases.punchIn +
-            "s var(--ease-out, ease)";
-        }
-        setEncoreZoom(zoomTo);
-        setEncorePinch(encorePinchPx());
-        setEncoreDimmed(true, phases.veilIn);
-        syncPreviewNums(state.previewIndex || 0, false);
-        schedulePhaseEnd(gen);
-      });
-      return;
-    }
-
-    if (encore && phase === "out") {
-      // Punch-Out camera per MOTION_GLOSSARY §5.6: undim veil (0.45s), zoom 1.24→1
-      // (ease-fade), pinch kept, grid stays. To center the family portrait and provide
-      // lateral camera movement (not straight-out from slot, not x/y snap before next in),
-      // we also animate the world parking offset + rig origin from leaving slot to
-      // plane center during the same 0.45s. This produces the pull-back + pan so the
-      // entire spread is framed centered at 1× after punch-out.
-      setEncoreDimmed(false, phases.punchOut);
-      var centerP = encoreCenterPoint();
-      var worldEl = encoreWorldEl();
-      if (worldEl && centerP) {
-        var tsec = phases.punchOut;
-        var t = tsec + "s var(--ease-fade, ease)";
-        if (rig) {
-          rig.style.transition = "transform " + t;
-        }
-        worldEl.style.transition =
-          "left " + t + ", top " + t + ", --encore-hole-x " + t + ", --encore-hole-y " + t;
-        void worldEl.offsetWidth;
-        placeEncoreWorldAt(centerP);
-      } else if (rig) {
-        rig.style.transition = encoreRigTransition(
-          phases.punchOut,
-          "--ease-fade",
-          false
-        );
-      }
-      void (rig && rig.offsetWidth);
-      void (encoreWorldEl() && encoreWorldEl().offsetWidth);
-      setEncoreZoom(1);
-      syncPreviewNums(state.previewIndex || 0, true);
-      schedulePhaseEnd(gen);
-      return;
-    }
-
-    if (encore && phase === "hold") {
-      schedulePhaseEnd(gen);
-      return;
-    }
-
-    // Always snap "from" state for "out" (and when caller asks for in) so that
-    // the fade/zoom transition is forced from a committed value. Prevents snap-to-final
-    // when coming out of hold or after other style updates. Matches MOTION_GLOSSARY 3/4.
-    var doSnap = snap || phase === "out";
-    if (doSnap) {
-      snapPlate(
-        phase === "out" ? 1 : 0,
-        phase === "out" ? tgt.zoom : phases.zoomMin
-      );
-    }
-    if (phase === "in" && snap) {
-      // Use chained rAFs (instead of fixed timeout) after snap to ensure the "from"
-      // state (opacity 0 / zoomMin) is committed by the browser before we declare
-      // the transition and set the target values. This, combined with the
-      // offsetWidth flush inside setPlate and the double-rAF at renderScreen entry,
-      // makes the fade+zoom survive re-renders from hash, sheet conditionals,
-      // picker, etc. See MOTION_GLOSSARY §3/4 and ticket 2026-08-16 Ken Burns...
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          if (gen === previewCtl.gen) {
-            setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur, "in");
-            syncPreviewNums(state.previewIndex || 0, false);
-            schedulePhaseEnd(gen);
-          }
-        });
-      });
-      return;
-    }
-    if (phase === "out") syncPreviewNums(state.previewIndex || 0, true);
-    setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur, phase === "out" ? "out" : "in");
-    schedulePhaseEnd(gen);
+    /* Encore in/out/hold: TOKI_MOTION.runEncoreBlock. Hero: runHeroBlock. */
   }
 
   function advancePhase(gen) {
@@ -2054,52 +1623,11 @@
       return;
     }
     if (mode === "encore") {
-      if (phases.paused) {
-        var p = state.holdGrid ? (encoreCenterPoint() || currentLatticeSlot()) : currentLatticeSlot();
-        if (p) {
-          placeEncoreWorldAt(p);
-        } else {
-          setEncoreOrigin();
-        }
-        setPreviewEncoreHoleProps();
-        setEncoreStageVisible(true);
-        snapEncoreCamera(phases.zoomMax, encorePinchPx());
-        setEncoreDimmed(true, 0.2);
-        syncPreviewNums(state.previewIndex || 0, false);
-        return;
-      }
-      beginPhase(previewCtl.phase, gen, false);
+      runPreviewBlock(state.previewIndex || 0, gen);
       return;
     }
-    if (phases.paused) {
-      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.2, "in");
-      return;
-    }
-    var tgt = phaseTarget(previewCtl.phase, phases, mode);
-    var elapsed = (performance.now() - previewCtl.phaseT0) / 1000;
-    var oldDur = Math.max(0.03, previewCtl.phaseDur || tgt.dur);
-    var p = Math.min(1, Math.max(0, elapsed / oldDur));
-    var remaining = Math.max(0.04, tgt.dur * (1 - p));
-    var plate = els.app.querySelector(".preview-plate");
-    var anim = els.app.querySelector(".preview-anim");
-    if (plate) {
-      var opNow = getComputedStyle(plate).opacity;
-      plate.style.transition = "none";
-      plate.style.opacity = opNow;
-    }
-    if (anim) {
-      var zNow = currentScale(anim);
-      anim.style.transition = "none";
-      anim.style.setProperty("--hero-zoom", String(zNow));
-      anim.style.transform = "scale(" + zNow + ")";
-    }
-    void (plate && plate.offsetWidth);
-    previewCtl.phaseDur = tgt.dur;
-    previewCtl.phaseT0 = performance.now() - p * tgt.dur * 1000;
-    setPlate(tgt.opacity, tgt.zoom, remaining, previewCtl.phase === "out" ? "out" : "in");
-    previewAfter(remaining * 1000, gen, function () {
-      advancePhase(gen);
-    });
+    /* Ken Burns / Slideshow: restart the shared block (same as the board). */
+    runPreviewBlock(state.previewIndex || 0, gen);
   }
 
   function runPreviewBlock(index, gen) {
@@ -2110,7 +1638,92 @@
     state.previewIndex = i;
     previewCtl.itemIndex = i;
     applyPreviewItem(items[i]);
-    beginPhase("in", gen, true);
+    if (state.draft.presentation === "encore") {
+      var TM = window.TOKI_MOTION;
+      var stage = encoreStageEl();
+      if (!TM || !stage) return;
+      var speed = Number(state.draft.presentationSpeed) || 0;
+      applyEncoreChrome(items[i]);
+      if (speed <= 0) {
+        var originP = TM.encoreSlotOrigin(stage, i);
+        if (originP) TM.setEncoreZoomOrigin(stage, originP.x, originP.y);
+        TM.encoreSnap(stage, {
+          zoom: TM.ENCORE.zoomTo,
+          pinch: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
+          dimmed: !state.holdGrid,
+          opacity: 1,
+        });
+        syncPreviewNums(i, false);
+        return;
+      }
+      var first = !!previewCtl.encoreFirst;
+      previewCtl.encoreFirst = false;
+      previewCtl.phase = "in";
+      TM.runEncoreBlock(
+        stage,
+        {
+          first: first,
+          last: false,
+          origin: TM.encoreSlotOrigin(stage, i),
+          pinchPx: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
+          zoomTo: TM.ENCORE.zoomTo,
+          fpsCap: TOKI_MOTION.encoreFpsCap(state.draft.encoreStyle),
+          style: TM.ENCORE,
+        },
+        {
+          afterMs: function (ms, fn) {
+            previewAfter(ms, gen, fn);
+          },
+          onEntrance: function () {
+            previewCtl.phase = "in";
+            syncPreviewNums(i, false);
+          },
+          onHold: function () {
+            previewCtl.phase = "hold";
+          },
+          onExit: function () {
+            previewCtl.phase = "out";
+            syncPreviewNums(i, true);
+          },
+          onDone: function () {
+            if (gen !== previewCtl.gen) return;
+            runPreviewBlock(i + 1, gen);
+          },
+        }
+      );
+      return;
+    }
+    var TM = window.TOKI_MOTION;
+    var plate = els.app.querySelector("#hero-plate");
+    if (!TM || !plate) return;
+    var style = TM.styleByMode(state.draft.presentation);
+    var speed = Number(state.draft.presentationSpeed) || 0;
+    if (speed <= 0) {
+      TM.heroSnap(plate, 1, style.zoomMax);
+      syncPreviewNums(i, false);
+      return;
+    }
+    previewCtl.phase = "in";
+    TM.runHeroBlock(plate, style, {
+      afterMs: function (ms, fn) {
+        previewAfter(ms, gen, fn);
+      },
+      onEntrance: function () {
+        previewCtl.phase = "in";
+        syncPreviewNums(i, false);
+      },
+      onHold: function () {
+        previewCtl.phase = "hold";
+      },
+      onExit: function () {
+        previewCtl.phase = "out";
+        syncPreviewNums(i, true);
+      },
+      onDone: function () {
+        if (gen !== previewCtl.gen) return;
+        runPreviewBlock(i + 1, gen);
+      },
+    });
   }
 
   function parkPreviewStill() {
@@ -2120,10 +1733,66 @@
     if (item) applyPreviewItem(item);
     if (state.draft.presentation === "encore") {
       fillPortraitGrid();
-      setEncoreStageVisible(true);
+      var stageStill = encoreStageEl();
+      if (window.TOKI_MOTION && stageStill) {
+        window.TOKI_MOTION.encoreSnap(stageStill, {
+          zoom: 1,
+          pinch: 0,
+          dimmed: false,
+          opacity: 1,
+        });
+      }
       return;
     }
-    snapPlate(1, state.draft.presentation === "slideshow" ? 1 : 1);
+    var plate = els.app.querySelector("#hero-plate");
+    if (window.TOKI_MOTION && plate) {
+      window.TOKI_MOTION.heroSnap(plate, 1, 1);
+    }
+  }
+
+  /* Sync only the preview container's theme-dependent styles and layer visibility.
+     Does NOT touch #hero-plate / .hero-anim / .preview-sticker DOM nodes.
+     This is the core guardrail so KB/Slideshow transitions survive row updates,
+     theme changes, and picker applies (see MOTION_GLOSSARY 3/4 and ticket). */
+  function syncPreviewFromDraft(preview) {
+    if (!preview) return;
+    var d = state.draft;
+    var encore = d.presentation === "encore";
+    preview.classList.toggle("is-encore", encore);
+    var fill = encore
+      ? roleHex(d.encoreBg)
+      : d.background === "pattern" || d.background === "wallpaper"
+        ? roleHex(d.bgColor || "main")
+        : roleHex(d.background);
+    preview.style.setProperty("--preview-fill", fill);
+    preview.style.setProperty("--pattern-a", bakePatternHex(roleHex(d.patternColor1)));
+    preview.style.setProperty("--pattern-b", bakePatternHex(roleHex(d.patternColor2)));
+    var pat = preview.querySelector(".preview-pattern");
+    var wpp = preview.querySelector(".preview-wallpaper");
+    if (pat) pat.hidden = encore || d.background !== "pattern";
+    if (wpp) wpp.hidden = encore || d.background !== "wallpaper";
+    var stage = preview.querySelector("#family-portrait-stage");
+    if (stage) {
+      stage.hidden = !encore;
+      if (encore) stage.setAttribute("aria-hidden", "false");
+    }
+  }
+
+  /* Re-render only the controls under style screen. Leaves the preview plate/anim
+     subtree in the DOM so running fade+zoom (or encore rig) is never remounted. */
+  function refreshStyleRows() {
+    if (state.screen !== "style") return;
+    var existing = els.app.querySelector(".screen-style");
+    if (!existing) return;
+    var preview = existing.querySelector(".preview");
+    syncPreviewFromDraft(preview);
+    var scroll = existing.querySelector("#style-scroll");
+    if (scroll) {
+      scroll.innerHTML = '<div class="rows bounce-inner">' + styleRows() + '</div>';
+    }
+    restorePillScroll();
+    bindWpFallback();
+    bindPillDrag();
   }
 
   function startPreviewCycle() {
@@ -2330,7 +1999,7 @@
     } else {
       // Same screen (hashchange/pop from our writeHash when entering Style,
       // or other self events). Skip renderAll — a rebuild would remount
-      // .preview-plate / .preview-anim and tear down the running cycle
+      // #hero-plate / .hero-anim and tear down the running cycle
       // (gen++, cleared timers, snap lost). This regressed after back-button
       // support. Guardrail protects Ken Burns / Slideshow fade+zoom.
       // (MOTION_GLOSSARY 3 and 4.)
@@ -2376,6 +2045,11 @@
     state.sheetSource = "sheet";
     applyTheme();
     renderAll();
+    if (state.screen === "style") {
+      // Sheet may have new presentation/speed/etc. Retarget keeps the plate elements
+      // (no remount) but adopts the new phase timings/zoom per glossary.
+      retargetMotion();
+    }
   }
 
   function clampDraftSpeed(raw, kind) {

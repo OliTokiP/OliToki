@@ -13,12 +13,6 @@
   initial-value: 1;
 }
 
-@property --hero-zoom {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 1;
-}
-
 :root {
   --main: #000000;
   --secondary: #ffffff;
@@ -747,36 +741,35 @@ img {
   user-select: none;
 }
 
-/* Hero plate: 3:2 box, 3 cells × 2 cells, centered on the green tile.
-   Plate owns opacity (Slideshow fade). .preview-anim owns Ken Burns scale. */
-.preview-plate {
+/* Hero plate layout only (3:2 crop). Fade + Ken Burns live in css/motion.css. */
+.preview #hero-plate {
   position: absolute;
   left: calc(var(--origin-x) - var(--plate-w) / 2);
   top: calc(var(--origin-y) - var(--plate-h) / 2);
   width: var(--plate-w);
   height: var(--plate-h);
   overflow: visible;
-  opacity: 0;
   z-index: 1;
-  --hero-zoom: 1;
-  transition: opacity 0.45s var(--ease-fade);
 }
 
-.preview-plate .preview-anim {
+.preview #hero-plate .hero-anim {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  filter: drop-shadow(
+    0 calc(14 * var(--top-slot-h) / 1080) calc(32 * var(--top-slot-h) / 1080)
+      rgba(0, 0, 0, 0.4)
+  );
 }
 
-.preview.is-encore .preview-plate,
+.preview.is-encore #hero-plate,
 .preview.is-encore .preview-sticker {
   display: none;
 }
 
-/* Live Family Portrait lattice (848.1×1080). JS scales it and parks the
-   active slot on --origin-x/y so the camera and the image box share an origin. */
-.preview-fp-world {
+/* 848.1×1080 Encore world, scaled into the preview crop. Camera/veil: css/motion.css */
+.preview #family-portrait-stage {
   display: none;
   position: absolute;
   left: 0;
@@ -786,50 +779,40 @@ img {
   transform-origin: 0 0;
   transform: scale(calc(var(--top-slot-h) / 1080px));
   z-index: 1;
-  overflow: visible;
+  overflow: hidden;
   pointer-events: none;
   isolation: isolate;
-  opacity: 0;
-  --encore-zoom: 1;
-  --encore-hole-x: 50%;
-  --encore-hole-y: 50%;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
 }
 
-.preview.is-encore .preview-fp-world {
+.preview.is-encore #family-portrait-stage {
   display: block;
 }
 
-.preview-fp-world.is-visible {
-  opacity: 1;
-  transition: opacity 0.45s var(--ease-fade);
-}
-
-.preview-fp-world .family-portrait-rig {
+.preview #family-portrait-stage .family-portrait-rig {
   position: absolute;
   inset: 0;
-  transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
-  transform: scale(var(--encore-zoom, 1));
 }
 
-.preview-fp-world .family-portrait-plates {
+.preview #family-portrait-stage .family-portrait-plates {
   position: absolute;
   inset: 0;
   z-index: 1;
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
 }
 
-.preview-fp-world.encore-spot-hard-shadow .family-portrait-plates {
+.preview #family-portrait-stage.encore-spot-hard-shadow .family-portrait-plates {
   filter: none;
 }
 
-.preview-fp-world .family-portrait-slot {
+.preview #family-portrait-stage .family-portrait-slot {
   position: absolute;
   width: 0;
   height: 0;
   pointer-events: none;
 }
 
-.preview-fp-world .family-portrait-item {
+.preview #family-portrait-stage .family-portrait-item {
   position: absolute;
   left: 0;
   top: 0;
@@ -843,7 +826,7 @@ img {
   z-index: 2;
 }
 
-.preview-fp-world .family-portrait-sticker {
+.preview #family-portrait-stage .family-portrait-sticker {
   position: absolute;
   width: 560px;
   aspect-ratio: 1 / 1;
@@ -854,30 +837,30 @@ img {
   z-index: 3;
 }
 
-.preview-fp-world .family-portrait-sticker .new-sticker-shadow {
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-shadow {
   display: none;
 }
 
-.preview-fp-world .family-portrait-sticker .new-sticker-body,
-.preview-fp-world .family-portrait-sticker .new-sticker-body-img,
-.preview-fp-world .family-portrait-sticker .new-sticker-tint {
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-body,
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-body-img,
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-tint {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.preview-fp-world .family-portrait-sticker .new-sticker-body {
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-body {
   z-index: 1;
   isolation: isolate;
 }
 
-.preview-fp-world .family-portrait-sticker .new-sticker-body-img {
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-body-img {
   object-fit: contain;
   z-index: 0;
 }
 
-.preview-fp-world .family-portrait-sticker .new-sticker-tint {
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-tint {
   z-index: 1;
   background-color: var(--special);
   mix-blend-mode: color;
@@ -892,7 +875,7 @@ img {
   mask-position: center;
 }
 
-.preview-fp-world .family-portrait-sticker .new-sticker-label {
+.preview #family-portrait-stage .family-portrait-sticker .new-sticker-label {
   position: absolute;
   z-index: 2;
   left: 48.05%;
@@ -988,27 +971,10 @@ img {
   opacity: 0.9;
 }
 
-.preview-fp-world.portrait-debug {
+.preview #family-portrait-stage.portrait-debug {
   outline: 2px solid rgba(0, 255, 120, 0.85);
   outline-offset: -2px;
   background: rgba(0, 255, 120, 0.06);
-}
-
-.preview-anim {
-  position: absolute;
-  inset: 0;
-  transform: scale(var(--hero-zoom, 1));
-  transform-origin: 50% 50%;
-  /* Punch-out default; JS sets inline duration. Live: #hero-plate .hero-anim */
-  transition: transform 0.45s var(--ease-fade);
-  filter: drop-shadow(
-    0 calc(14 * var(--top-slot-h) / 1080) calc(32 * var(--top-slot-h) / 1080)
-      rgba(0, 0, 0, 0.4)
-  );
-}
-
-.preview-plate.is-kb-in .preview-anim {
-  transition: transform 3.4s var(--ease-out);
 }
 
 .preview-food {
@@ -1466,8 +1432,6 @@ img {
 @media (prefers-reduced-motion: reduce) {
   .preview-pattern-track,
   .preview-wp,
-  .preview-anim,
-  .preview-plate,
   .preview-veil {
     transition: none !important;
   }

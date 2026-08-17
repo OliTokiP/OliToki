@@ -2747,44 +2747,6 @@
     if (document.body) document.body.classList.toggle("encore-hard-shadow", on);
   }
 
-  /**
-   * Hard_Shadow filter stays on during the veil opacity fade, then parks
-   * after transitionend so an invisible veil is not still drop-shadowed.
-   */
-  function setEncoreVeilDimmed(stage, on) {
-    if (!stage) return;
-    if (on) {
-      stage.classList.remove("veil-filter-parked");
-      stage.classList.add("is-dimmed");
-      return;
-    }
-    const wasOn = stage.classList.contains("is-dimmed");
-    stage.classList.remove("is-dimmed");
-    if (!wasOn) return;
-    const type = normalizedEncoreSpotlightType(config.encoreSpotlightType);
-    if (type !== "hard_shadow") {
-      stage.classList.add("veil-filter-parked");
-      return;
-    }
-    const veil = stage.querySelector(".family-portrait-veil");
-    let settled = false;
-    function finish() {
-      if (settled) return;
-      settled = true;
-      if (stage.classList.contains("is-dimmed")) return;
-      stage.classList.add("veil-filter-parked");
-      if (veil) veil.removeEventListener("transitionend", onEnd);
-    }
-    function onEnd(e) {
-      if (e.target !== veil) return;
-      if (e.propertyName && e.propertyName !== "opacity") return;
-      finish();
-    }
-    if (veil) veil.addEventListener("transitionend", onEnd);
-    const ms = readCssDurationMs(stage, "--motion-veil", 1050);
-    window.setTimeout(finish, (Number(ms) || 1050) + 60);
-  }
-
   function setEncoreSolidBackground(on, opts) {
     opts = opts || {};
     const want = !!on;
@@ -2858,15 +2820,11 @@
       if (!opts.forceClear && !stage.hidden) {
         return;
       }
-      stage.classList.remove(
-        "encore-spot-hard",
-        "encore-spot-hard-shadow",
-        "encore-spot-soft",
-        "encore-spot-color-highlight",
-        "encore-spot-color-black"
-      );
+      TOKI_MOTION.applyEncoreChrome(stage, {
+        forceClear: true,
+        clearVars: !!(opts.forceClear || !isEncoreActiveNow()),
+      });
       if (opts.forceClear || !isEncoreActiveNow()) {
-        stage.style.removeProperty("--encore-veil-color");
         stage.style.removeProperty("background-color");
       }
       syncEncoreHardShadowMode();
@@ -2876,42 +2834,27 @@
     const type = normalizedEncoreSpotlightType(config.encoreSpotlightType);
     const colorMode =
       config.encoreSpotlightColor === "highlight" ? "highlight" : "black";
-    const hard = type === "hard" || type === "hard_shadow";
-
-    stage.classList.toggle("encore-spot-hard", hard);
-    stage.classList.toggle("encore-spot-hard-shadow", type === "hard_shadow");
-    stage.classList.toggle("encore-spot-soft", type === "soft");
-    syncEncoreHardShadowMode();
-    stage.classList.toggle(
-      "encore-spot-color-highlight",
-      colorMode === "highlight"
-    );
-    stage.classList.toggle("encore-spot-color-black", colorMode === "black");
-
+    let veilHex = "#000000";
+    let preserveVeil = false;
     if (colorMode === "highlight") {
-      // Only update color when we know the bow item — preserve Special through zoom-out
       if (item) {
-        let veilColor = item.isNew
+        veilHex = item.isNew
           ? config.highlightSpecial || config.highlight || "#fff900"
           : config.highlight || "#26bbcb";
-        veilColor = normalizeHex(veilColor) || veilColor || "#26bbcb";
-        stage.style.setProperty("--encore-veil-color", veilColor);
-        tokiInfo(
-          "encore spotlight",
-          type,
-          colorMode,
-          "veil",
-          veilColor,
-          item.isNew ? "(special)" : ""
-        );
-      } else if (opts.forceClear || !stage.style.getPropertyValue("--encore-veil-color")) {
-        const fallback =
-          normalizeHex(config.highlight) || config.highlight || "#26bbcb";
-        stage.style.setProperty("--encore-veil-color", fallback);
+        veilHex = normalizeHex(veilHex) || veilHex || "#26bbcb";
+      } else {
+        preserveVeil = true;
+        veilHex = "";
       }
-    } else {
-      stage.style.setProperty("--encore-veil-color", "#000000");
     }
+    TOKI_MOTION.applyEncoreChrome(stage, {
+      type: type,
+      colorMode: colorMode,
+      veilHex: veilHex,
+      preserveVeil: preserveVeil,
+      fallbackHex: normalizeHex(config.highlight) || config.highlight || "#26bbcb",
+    });
+    syncEncoreHardShadowMode();
   }
 
   /**
@@ -10575,92 +10518,20 @@
     }, fadeMs + 40);
   }
 
-  function readEncoreZoomTo(stage) {
-    let zoomTo = 1.24;
-    try {
-      const el = stage || els.familyPortrait || document.documentElement;
-      const raw = getComputedStyle(el).getPropertyValue("--encore-zoom-to").trim();
-      const n = parseFloat(raw);
-      if (Number.isFinite(n) && n > 1) zoomTo = n;
-    } catch (e) {
-      /* keep default */
-    }
-    return zoomTo;
-  }
-
-  /**
-   * Spotlight hole + Ken Burns origin: always the item lattice point (no bias).
-   */
-  function setEncoreZoomOrigin(stage, latticeX, latticeY) {
-    if (!stage) return;
-    stage.style.setProperty("--encore-hole-x", latticeX + "px");
-    stage.style.setProperty("--encore-hole-y", latticeY + "px");
-  }
-
-  /** Hard Encore only. Soft never pinches. Amount is hardcoded. */
   function encoreHolePinchPx() {
-    if (config.encoreSpotlightType === "soft") return 0;
-    const n = Number(ENCORE_HOLE_PINCH_PX);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    return TOKI_MOTION.encoreHolePinchPx(config.encoreSpotlightType);
   }
-
-  function encorePinchNode(stage) {
-    if (!stage) return null;
-    return stage.querySelector(".family-portrait-rig") || stage;
-  }
-
-  function snapEncoreHolePinch(stage, px) {
-    const node = encorePinchNode(stage);
-    if (!node) return;
-    const prev = node.style.transition;
-    node.style.transition = "none";
-    node.style.setProperty("--encore-hole-pinch", Math.max(0, px) + "px");
-    void node.offsetWidth;
-    node.style.transition = prev;
-  }
-
-  function setEncoreHolePinch(stage, px) {
-    const node = encorePinchNode(stage);
-    if (!node) return;
-    node.style.setProperty("--encore-hole-pinch", Math.max(0, px) + "px");
-  }
-
-  /** Same clock as the rig zoom. includePinch adds --encore-hole-pinch to the transition. */
-  function encoreRigTransition(sec, easeVar, easeFallback, includePinch) {
-    if (encoreHardShadowFpsCap()) return "none";
-    const t =
-      "transform " + sec + "s var(" + easeVar + ", " + easeFallback + ")";
-    if (!includePinch) return t;
-    return (
-      t +
-      ", --encore-hole-pinch " +
-      sec +
-      "s var(" +
-      easeVar +
-      ", " +
-      easeFallback +
-      ")"
-    );
-  }
-
-  /** Hard_Shadow camera cap. CSS transitions still vsync; we step --encore-zoom. */
-  const ENCORE_SHADOW_FPS_CAP = 30;
-  let _fpsEma = 0;
-  let _fpsLastTs = 0;
-  let _fpsSampleRaf = 0;
-  let _encoreZoomRaf = 0;
-  let _encoreZoomGen = 0;
 
   function encoreHardShadowFpsCap() {
     if (!isEncoreSegmentNow()) return 0;
-    if (
-      normalizedEncoreSpotlightType(config.encoreSpotlightType) !==
-      "hard_shadow"
-    ) {
-      return 0;
-    }
-    return ENCORE_SHADOW_FPS_CAP;
+    return TOKI_MOTION.encoreFpsCap(
+      normalizedEncoreSpotlightType(config.encoreSpotlightType)
+    );
   }
+
+  let _fpsEma = 0;
+  let _fpsLastTs = 0;
+  let _fpsSampleRaf = 0;
 
   function noteFrameTs(now) {
     if (_fpsLastTs > 0) {
@@ -10681,96 +10552,6 @@
     _fpsSampleRaf = 0;
   }
 
-  function cancelEncoreZoomStepper() {
-    _encoreZoomGen++;
-    if (_encoreZoomRaf) {
-      cancelAnimationFrame(_encoreZoomRaf);
-      _encoreZoomRaf = 0;
-    }
-  }
-
-  function easeUnit(easeVar, t) {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    const out = easeVar === "--ease-out";
-    const p1x = out ? 0.22 : 0.4;
-    const p1y = out ? 1 : 0;
-    const p2x = out ? 0.36 : 0.2;
-    const p2y = out ? 1 : 1;
-    let x = t;
-    for (let i = 0; i < 5; i++) {
-      const cx = 3 * p1x;
-      const bx = 3 * (p2x - p1x) - cx;
-      const ax = 1 - cx - bx;
-      const yo = ((ax * x + bx) * x + cx) * x - t;
-      const d = (3 * ax * x + 2 * bx) * x + cx;
-      if (Math.abs(d) < 1e-5) break;
-      x -= yo / d;
-    }
-    const cy = 3 * p1y;
-    const by = 3 * (p2y - p1y) - cy;
-    const ay = 1 - cy - by;
-    return ((ay * x + by) * x + cy) * x;
-  }
-
-  function readEncoreZoomNow(stage) {
-    if (!stage) return 1;
-    const n = parseFloat(stage.style.getPropertyValue("--encore-zoom"));
-    return Number.isFinite(n) && n > 0 ? n : 1;
-  }
-
-  function readEncorePinchNow(stage) {
-    const node = encorePinchNode(stage);
-    if (!node) return 0;
-    const n = parseFloat(node.style.getPropertyValue("--encore-hole-pinch"));
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  /**
-   * Step the Encore camera at 30fps (Hard_Shadow only) so the hole
-   * drop-shadow is not re-rasterized on every vsync. false = use CSS.
-   */
-  function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo) {
-    const cap = encoreHardShadowFpsCap();
-    if (!cap || !stage || !(durationSec > 0)) return false;
-    const rig = stage.querySelector(".family-portrait-rig");
-    if (rig) rig.style.transition = "none";
-    const from = readEncoreZoomNow(stage);
-    const pinchFrom = readEncorePinchNow(stage);
-    const wantPinch = pinchTo != null && Number.isFinite(Number(pinchTo));
-    const gen = ++_encoreZoomGen;
-    const t0 = performance.now();
-    const dur = durationSec * 1000;
-    const minDt = 1000 / cap;
-    let lastPaint = -1e9;
-    function frame(now) {
-      if (gen !== _encoreZoomGen) return;
-      _encoreZoomRaf = requestAnimationFrame(frame);
-      noteFrameTs(now);
-      if (now - lastPaint < minDt - 1) return;
-      lastPaint = now;
-      let u = (now - t0) / dur;
-      if (u >= 1) {
-        u = 1;
-        _encoreZoomGen++;
-        _encoreZoomRaf = 0;
-      }
-      const e = easeUnit(easeVar, u);
-      stage.style.setProperty(
-        "--encore-zoom",
-        String(from + (toScale - from) * e)
-      );
-      if (wantPinch) {
-        setEncoreHolePinch(
-          stage,
-          pinchFrom + (Number(pinchTo) - pinchFrom) * e
-        );
-      }
-    }
-    _encoreZoomRaf = requestAnimationFrame(frame);
-    return true;
-  }
-
   function readCssDurationMs(el, prop, fallbackMs) {
     try {
       const raw = getComputedStyle(el || document.documentElement)
@@ -10785,34 +10566,6 @@
       return Number.isFinite(n) ? n * 1000 : fallbackMs;
     } catch (e) {
       return fallbackMs;
-    }
-  }
-
-  /** Lattice plane center in stage-local px (transform-origin + veil hole). */
-  function setPlaneCenterOrigin(stage) {
-    if (!stage) return;
-    stage.style.setProperty(
-      "--encore-hole-x",
-      PORTRAIT_STAGE_W * 0.5 + "px"
-    );
-    stage.style.setProperty(
-      "--encore-hole-y",
-      PORTRAIT_STAGE_H * 0.5 + "px"
-    );
-  }
-
-  /** Snap scale with no transition (origin changes only safe at ~1× or under cover). */
-  function snapPortraitZoom(stage, scale) {
-    cancelEncoreZoomStepper();
-    if (!stage) return;
-    const rig = stage.querySelector(".family-portrait-rig");
-    if (rig) {
-      rig.style.transition = "none";
-      stage.style.setProperty("--encore-zoom", String(scale));
-      void rig.offsetWidth;
-      rig.style.transition = "";
-    } else {
-      stage.style.setProperty("--encore-zoom", String(scale));
     }
   }
 
@@ -10945,12 +10698,12 @@
     stage.hidden = true;
     stage.setAttribute("aria-hidden", "true");
     stage.style.opacity = "";
-    snapPortraitZoom(stage, 1);
+    TOKI_MOTION.snapPortraitZoom(stage, 1);
     setEncoreScaffoldBgActive(false);
     _lastEncoreBowItem = null;
     // Drop veil classes so a later Slideshow hero is not under leftover chrome
     applyEncoreSpotlightChrome(null, { forceClear: true });
-    snapEncoreHolePinch(stage, 0);
+    TOKI_MOTION.snapEncoreHolePinch(stage, 0);
     // Keep render key so re-show can reuse DOM; cleared only on full re-render
   }
 
@@ -11079,7 +10832,7 @@
     // Phase 2 (fade):   real opacity fade at full spread (must not be cancelled
     //                   by the next Wind-up — handoff waits zoom+fade total)
     if (opts.encoreWindDown && !fadingOut) {
-      setEncoreVeilDimmed(stage, false);
+      TOKI_MOTION.setEncoreVeilDimmed(stage, false);
       clearAllPresentationHighlights();
       const zoomMs = encoreWindDownZoomMs(stage);
       const fadeMs = presentationFadeMs(stage);
@@ -11122,13 +10875,13 @@
 
     if (opts.reverseZoom && !fadingOut) {
       // FP Wind-down: reverse Zoom Reveal — center origin + peak while fading
-      setPlaneCenterOrigin(stage);
+      TOKI_MOTION.setPlaneCenterOrigin(stage);
       stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
       stage.classList.add("is-dimmed");
       stage.style.setProperty(
         "--encore-zoom",
-        String(readEncoreZoomTo(stage))
+        String(TOKI_MOTION.readEncoreZoomTo(stage))
       );
     } else if (!opts.reverseZoom) {
       // Generic: undim + ease to 1× while fading
@@ -11192,12 +10945,12 @@
     // FP Wind-up is never an Encore bow — strip veil so lineup isn't blacked out
     applyEncoreSpotlightChrome(null, { forceClear: true });
     setEncoreScaffoldBgActive(false);
-    setPlaneCenterOrigin(stage);
+    TOKI_MOTION.setPlaneCenterOrigin(stage);
     // No is-dimmed: that turns the Encore veil on; Wind-up is collage only
     stage.classList.remove("visible", "is-zoom-out", "is-dimmed");
     stage.hidden = false;
     stage.setAttribute("aria-hidden", "false");
-    snapPortraitZoom(stage, readEncoreZoomTo(stage));
+    TOKI_MOTION.snapPortraitZoom(stage, TOKI_MOTION.readEncoreZoomTo(stage));
 
     // Hard reset opacity so .visible fade always runs (every Wind-up)
     stage.style.transition = "none";
@@ -11282,7 +11035,7 @@
     stage.classList.remove("visible", "is-dimmed", "is-zoom-out");
     stage.hidden = true;
     stage.style.opacity = "";
-    snapPortraitZoom(stage, 1);
+    TOKI_MOTION.snapPortraitZoom(stage, 1);
 
     ensureFamilyPortrait(cast);
 
@@ -11290,7 +11043,7 @@
       hideHeroPlate();
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
-      snapPortraitZoom(stage, 1);
+      TOKI_MOTION.snapPortraitZoom(stage, 1);
       stage.classList.add("visible");
       if (isEncoreSegmentNow() && stage.querySelector(".family-portrait-bg")) {
         setEncoreScaffoldBgActive(true);
@@ -11326,11 +11079,11 @@
       : 200;
 
     // Pre-stage collage at peak (like holding hero at zoomMin before show)
-    setPlaneCenterOrigin(stage);
+    TOKI_MOTION.setPlaneCenterOrigin(stage);
     stage.classList.remove("visible");
     stage.hidden = false;
     stage.setAttribute("aria-hidden", "false");
-    snapPortraitZoom(stage, readEncoreZoomTo(stage));
+    TOKI_MOTION.snapPortraitZoom(stage, TOKI_MOTION.readEncoreZoomTo(stage));
     stage.classList.add("is-dimmed");
     stage.style.opacity = "0";
     void stage.offsetWidth;
@@ -11408,7 +11161,7 @@
       hideHeroPlate();
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
-      snapPortraitZoom(stage, 1);
+      TOKI_MOTION.snapPortraitZoom(stage, 1);
       stage.classList.remove("is-dimmed", "is-zoom-out");
       stage.style.opacity = "";
       stage.classList.add("visible");
@@ -11486,85 +11239,72 @@
   function fillPortraitPlates(platesEl, portraitItems, opts) {
     opts = opts || {};
     if (!platesEl) return null;
-    platesEl.innerHTML = "";
     const list = portraitItems || [];
     const n = list.length;
     if (!n) return null;
-
-    // Always FP defaults — one grid for overview cast AND multi-image heroes
-    const layout = buildPortraitLayout(n, PORTRAIT_STAGE_W, PORTRAIT_STAGE_H);
-    tokiInfo(
-      "portrait layout",
-      n,
-      "→",
-      layout.cols + "×" + layout.rows,
-      "scale",
-      layout.scale.toFixed(3)
-    );
-
     const wantStickers = opts.stickers !== false && cfg.showSticker !== false;
     const resolveIndex =
       typeof opts.resolveItemIndex === "function"
         ? opts.resolveItemIndex
         : function (it, i) {
-            // Prefer explicit index (box cast / alpha mapped objects)
             if (it && it.itemIndex != null && it.itemIndex >= 0) {
               return it.itemIndex;
             }
             const idx = items.indexOf(it);
             return idx >= 0 ? idx : i;
           };
-
-    list.forEach(function (it, i) {
-      const slot = layout.slots[i];
-      if (!slot || !it || !it.image) return;
-
-      const itemIndex = resolveIndex(it, i);
-      const wrap = document.createElement("div");
-      wrap.className = "family-portrait-slot";
-      wrap.dataset.itemIndex = String(itemIndex);
-      wrap.dataset.portraitIndex = String(i);
-      wrap.dataset.baseZ = String(slot.zIndex);
-      wrap.style.left = slot.x + "px";
-      wrap.style.top = slot.y + "px";
-      wrap.style.zIndex = String(slot.zIndex);
-
-      const img = document.createElement("img");
-      img.className = "family-portrait-item";
-      img.alt = "";
-      img.draggable = false;
-      attachWebpFallback(img);
-      img.dataset.tokiGridN = String(n);
+    const mapped = [];
+    for (let i = 0; i < n; i++) {
+      const it = list[i];
+      if (!it || !it.image) continue;
       const rawSrc = resolveImagePath(it.image) || it.image;
-      if (!rawSrc) return;
+      if (!rawSrc) continue;
       const cellNeed = bakeTargetPx(n);
       const src = preferFoodPathForNeed(rawSrc, cellNeed.w, cellNeed.h);
-      img.dataset.tokiMaster = src;
       const baked = peekRasterBake(src, n);
-      if (baked && baked.url) {
-        img.dataset.downsampled = "1";
-        if (baked.from) img.dataset.tokiFrom = baked.from;
-        if (baked.px) img.dataset.tokiPx = baked.px;
-        img.src = baked.url;
-      } else {
-        img.onload = function onPlateLoad() {
-          if (img.dataset.downsampled === "1") return;
-          maybeDownsampleImg(img);
-        };
-        img.src = src;
-      }
-      img.style.transform =
-        "translate(-50%, -50%) scale(" + layout.scale + ")";
-
-      wrap.appendChild(img);
-
-      if (wantStickers && it.isNew) {
-        appendPortraitSticker(wrap, layout.scale);
-      }
-
-      platesEl.appendChild(wrap);
+      mapped.push({
+        src: baked && baked.url ? baked.url : src,
+        isNew: !!it.isNew,
+        itemIndex: resolveIndex(it, i),
+        _master: src,
+        _baked: baked,
+      });
+    }
+    const layout = TOKI_MOTION.fillEncorePlates(platesEl, mapped, {
+      sticker: wantStickers
+        ? {
+            onCreated: function (el, scale) {
+              const stickNeed = stickerPortraitNeedPx(scale);
+              applyStickerRasters(el, stickNeed.w, stickNeed.h);
+            },
+          }
+        : null,
+      onImage: function (img, it) {
+        attachWebpFallback(img);
+        img.dataset.tokiGridN = String(n);
+        img.dataset.tokiMaster = it._master;
+        if (it._baked && it._baked.url) {
+          img.dataset.downsampled = "1";
+          if (it._baked.from) img.dataset.tokiFrom = it._baked.from;
+          if (it._baked.px) img.dataset.tokiPx = it._baked.px;
+        } else {
+          img.onload = function () {
+            if (img.dataset.downsampled === "1") return;
+            maybeDownsampleImg(img);
+          };
+        }
+      },
     });
-
+    if (layout) {
+      tokiInfo(
+        "portrait layout",
+        n,
+        "→",
+        layout.cols + "×" + layout.rows,
+        "scale",
+        layout.scale.toFixed(3)
+      );
+    }
     return layout;
   }
 
@@ -11993,7 +11733,7 @@
     if (rig) rig.style.transition = ""; // CSS .is-zoom-out handles duration
     stage.classList.add("is-zoom-out");
     const sec = readCssDurationMs(stage, "--dur-slow", 1050) / 1000;
-    if (!tryEncoreFpsZoom(stage, 1, sec, "--ease-fade", null)) {
+    if (!TOKI_MOTION.tryEncoreFpsZoom(stage, 1, sec, "--ease-fade", null, encoreHardShadowFpsCap())) {
       stage.style.setProperty("--encore-zoom", "1");
     }
   }
@@ -12009,7 +11749,7 @@
     if (_lastEncoreBowItem) {
       applyEncoreSpotlightChrome(_lastEncoreBowItem);
     }
-    setEncoreVeilDimmed(stage, false);
+    TOKI_MOTION.setEncoreVeilDimmed(stage, false);
     easePortraitZoomOut(stage);
     if (isEncoreActiveNow()) {
       // Punch-out: fade highlight with veil, do not blink off
@@ -12041,7 +11781,7 @@
     if (isPresentationStatic()) {
       applyEncoreSpotlightChrome(null, { forceClear: true });
       stage.classList.remove("is-dimmed", "is-zoom-out");
-      snapPortraitZoom(stage, 1);
+      TOKI_MOTION.snapPortraitZoom(stage, 1);
       stage.hidden = false;
       stage.setAttribute("aria-hidden", "false");
       stage.style.opacity = "";
@@ -12063,7 +11803,7 @@
     } else {
       applyEncoreSpotlightChrome(null);
     }
-    setEncoreVeilDimmed(stage, false);
+    TOKI_MOTION.setEncoreVeilDimmed(stage, false);
     easePortraitZoomOut(stage);
     if (segEncore) {
       // Same clock as veil / zoom-out — not an instant class strip
@@ -12087,18 +11827,18 @@
       // Lattice → origin (always pure lattice)
       const lx = parseFloat(slot.style.left) || 0;
       const ly = parseFloat(slot.style.top) || 0;
-      setEncoreZoomOrigin(stage, lx, ly);
+      TOKI_MOTION.setEncoreZoomOrigin(stage, lx, ly);
       _lastEncoreBowItem = presItem;
       applyEncoreSpotlightChrome(presItem);
-      const zoomTo = readEncoreZoomTo(stage);
+      const zoomTo = TOKI_MOTION.readEncoreZoomTo(stage);
       // Long push-in again (drop .is-zoom-out so --dur-encore-zoom applies)
       const rig = stage.querySelector(".family-portrait-rig");
       if (rig) rig.style.transition = "";
       stage.classList.remove("is-zoom-out");
       void stage.offsetWidth;
-      setEncoreVeilDimmed(stage, true);
+      TOKI_MOTION.setEncoreVeilDimmed(stage, true);
       const zoomSec = readCssDurationMs(stage, "--dur-encore-zoom", 3400) / 1000;
-      if (!tryEncoreFpsZoom(stage, zoomTo, zoomSec, "--ease-out", null)) {
+      if (!TOKI_MOTION.tryEncoreFpsZoom(stage, zoomTo, zoomSec, "--ease-out", null, encoreHardShadowFpsCap())) {
         stage.style.setProperty("--encore-zoom", String(zoomTo));
       }
       // List/box highlight arrives with the zoom-in (Encore only)
@@ -12191,14 +11931,7 @@
 
   /** Set CSS transition durations from sheet digits for this phase. */
   function engineApplyCssDurations(entranceSec, exitSec) {
-    const root = document.documentElement;
-    if (!root || !root.style) return;
-    const opIn = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
-    const opOut = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
-    root.style.setProperty("--motion-punch-in", String(entranceSec) + "s");
-    root.style.setProperty("--motion-punch-out", String(exitSec) + "s");
-    root.style.setProperty("--motion-opacity-in", String(opIn) + "s");
-    root.style.setProperty("--motion-opacity-out", String(opOut) + "s");
+    window.TOKI_MOTION.applyCssDurations(entranceSec, exitSec);
   }
 
   function engineLoadHeroImage(item, done) {
@@ -12291,8 +12024,8 @@
       engineApplyCssDurations(resumeSec, style.punchOut);
       if (rig) rig.style.transition = "none";
       stage.style.transition = "none";
-      setPlaneCenterOrigin(stage);
-      snapPortraitZoom(stage, 1);
+      TOKI_MOTION.setPlaneCenterOrigin(stage);
+      TOKI_MOTION.snapPortraitZoom(stage, 1);
       stage.classList.remove("is-dimmed", "is-zoom-out");
       stage.style.opacity = "1";
       stage.classList.add("visible");
@@ -12311,8 +12044,8 @@
 
     if (rig) rig.style.transition = "none";
     stage.style.transition = "none";
-    setPlaneCenterOrigin(stage);
-    snapPortraitZoom(stage, 1);
+    TOKI_MOTION.setPlaneCenterOrigin(stage);
+    TOKI_MOTION.snapPortraitZoom(stage, 1);
     stage.classList.remove("is-dimmed", "is-zoom-out");
     stage.style.opacity = "0";
     stage.classList.add("visible");
@@ -12356,7 +12089,7 @@
       stage.style.opacity = "1";
       stage.classList.add("visible");
       stage.classList.remove("is-dimmed", "is-zoom-out");
-      snapPortraitZoom(stage, 1);
+      TOKI_MOTION.snapPortraitZoom(stage, 1);
       applyEncoreSpotlightChrome(null, { forceClear: true });
       afterMs(exitSec * 1000, gen, done);
       return;
@@ -12375,19 +12108,6 @@
       finishHideFamilyPortrait();
       done();
     });
-  }
-
-  /** Lattice origin for Encore camera (slot center). */
-  function encoreSlotOrigin(stage, itemIndex) {
-    if (!stage || itemIndex == null || itemIndex < 0) return null;
-    const slot = stage.querySelector(
-      '.family-portrait-slot[data-item-index="' + itemIndex + '"]'
-    );
-    if (!slot) return null;
-    return {
-      x: parseFloat(slot.style.left) || 0,
-      y: parseFloat(slot.style.top) || 0,
-    };
   }
 
   /**
@@ -12513,119 +12233,28 @@
 
     const itemIndex = slide.itemIndex;
     const presItem = resolvePresItem(itemIndex, slide);
-    const zoomTo = readEncoreZoomTo(stage);
-    const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
-    const rig = stage.querySelector(".family-portrait-rig");
-    const origin = encoreSlotOrigin(stage, itemIndex);
-
-    // Veil *in* only: shorter than phase (ENCORE_VEIL_IN_MULT); zoom still uses full entranceSec
-    stage.style.setProperty(
-      "--motion-veil",
-      String(encoreVeilInSeconds(entranceSec)) + "s"
-    );
-    engineApplyCssDurations(entranceSec, style.punchOut);
-
-    if (isFirstInSegment) {
-      // —— Wind-up treatment (FP off kicker): grid + veil + camera together ——
-      setPlaneCenterOrigin(stage);
-      if (rig) {
-        rig.style.transition = "none";
-      }
-      stage.style.transition = "none";
-      snapPortraitZoom(stage, 1);
-      snapEncoreHolePinch(stage, 0);
-      stage.classList.remove("is-dimmed", "is-zoom-out");
-      stage.style.opacity = "0";
-      stage.classList.add("visible");
-      void stage.offsetWidth;
-
-      const doPinch = encoreHolePinchPx() > 0;
-      if (rig) {
-        rig.style.transition = encoreRigTransition(
-          entranceSec,
-          "--ease-out",
-          "ease-out",
-          doPinch
-        );
-      }
-      stage.style.transition =
-        "opacity " + opSec + "s var(--ease-fade, ease)";
-      stage.classList.remove("is-zoom-out");
-      if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
-      if (presItem) {
-        _lastEncoreBowItem = presItem;
-        applyEncoreSpotlightChrome(presItem);
-      } else {
-        applyEncoreSpotlightChrome(null);
-      }
-      if (
-        !tryEncoreFpsZoom(
-          stage,
-          zoomTo,
-          entranceSec,
-          "--ease-out",
-          doPinch ? encoreHolePinchPx() : null
-        )
-      ) {
-        stage.style.setProperty("--encore-zoom", String(zoomTo));
-        if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
-      }
-      setEncoreVeilDimmed(stage, true);
-      stage.style.opacity = "1";
-      encoreArmHighlight(slide, style.punchOut);
-
-      afterMs(entranceSec * 1000, gen, function () {
-        if (rig) rig.style.transition = "";
-        stage.style.transition = "";
-        done();
-      });
-      return;
-    }
-
-    // —— Punch-In (mid-run): grid already up; veil + camera only (no grid fade) ——
-    // Previous Punch-Out left zoom≈1 and veil undimmed.
-    stage.style.opacity = "1";
-    stage.classList.add("visible");
-    stage.classList.remove("is-dimmed", "is-zoom-out");
-    if (rig) {
-      rig.style.transition = "none";
-    }
-    // Reset hole while veil is undimmed, then shrink with Punch-in / zoom
-    snapEncoreHolePinch(stage, 0);
-    // Retarget origin while at ~1× (under undimmed veil), then punch in
-    if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
-    void stage.offsetWidth;
-    const doPinch = encoreHolePinchPx() > 0;
-    if (rig) {
-      rig.style.transition = encoreRigTransition(
-        entranceSec,
-        "--ease-out",
-        "ease-out",
-        doPinch
-      );
-    }
+    const zoomTo = TOKI_MOTION.readEncoreZoomTo(stage);
+    const origin = window.TOKI_MOTION.encoreSlotOrigin(stage, itemIndex);
     if (presItem) {
       _lastEncoreBowItem = presItem;
       applyEncoreSpotlightChrome(presItem);
     } else {
       applyEncoreSpotlightChrome(null);
     }
-    if (
-      !tryEncoreFpsZoom(
-        stage,
-        zoomTo,
-        entranceSec,
-        "--ease-out",
-        doPinch ? encoreHolePinchPx() : null
-      )
-    ) {
-      stage.style.setProperty("--encore-zoom", String(zoomTo));
-      if (doPinch) setEncoreHolePinch(stage, encoreHolePinchPx());
-    }
-    setEncoreVeilDimmed(stage, true);
+    window.TOKI_MOTION.encorePunchIn(stage, {
+      first: !!isFirstInSegment,
+      entranceSec: entranceSec,
+      zoomTo: zoomTo,
+      origin: origin,
+      pinchPx: encoreHolePinchPx(),
+      punchOut: style.punchOut,
+      fpsCap: encoreHardShadowFpsCap(),
+    });
     encoreArmHighlight(slide, style.punchOut);
     afterMs(entranceSec * 1000, gen, function () {
+      const rig = stage.querySelector(".family-portrait-rig");
       if (rig) rig.style.transition = "";
+      stage.style.transition = "";
       done();
     });
   }
@@ -12637,13 +12266,6 @@
    */
   function encoreRunExit(slide, style, exitSec, gen, isLastInSegment, done) {
     const stage = els.familyPortrait;
-    const opSec = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
-    const rig = stage ? stage.querySelector(".family-portrait-rig") : null;
-
-    // Veil *out* keeps full exit duration (multiplier is fade-in only)
-    if (stage) {
-      stage.style.setProperty("--motion-veil", String(exitSec) + "s");
-    }
     engineApplyCssDurations(style.punchIn, exitSec);
     encoreClearHighlight(exitSec);
 
@@ -12652,51 +12274,17 @@
       return;
     }
 
-    // Veil out + ease camera toward 1×
-    // Hole stays pinched (ENCORE_HOLE_PINCH_OUT is off).
-    setEncoreVeilDimmed(stage, false);
-    stage.classList.add("is-zoom-out");
-    if (rig) {
-      rig.style.transition = encoreRigTransition(
-        exitSec,
-        "--ease-fade",
-        "ease",
-        !!ENCORE_HOLE_PINCH_OUT
-      );
-    }
-    if (
-      !tryEncoreFpsZoom(
-        stage,
-        1,
-        exitSec,
-        "--ease-fade",
-        ENCORE_HOLE_PINCH_OUT ? 0 : null
-      )
-    ) {
-      stage.style.setProperty("--encore-zoom", "1");
-      if (ENCORE_HOLE_PINCH_OUT) setEncoreHolePinch(stage, 0);
-    }
+    window.TOKI_MOTION.encorePunchOut(stage, {
+      exitSec: exitSec,
+      last: !!isLastInSegment,
+      pinchOut: !!ENCORE_HOLE_PINCH_OUT,
+      punchIn: style.punchIn,
+      fpsCap: encoreHardShadowFpsCap(),
+    });
 
-    if (isLastInSegment) {
-      // Wind-down: grid opacity out (inherit KB/Slideshow full exit)
-      stage.style.transition =
-        "opacity " + opSec + "s var(--ease-fade, ease)";
-      stage.style.opacity = "0";
-      afterMs(exitSec * 1000, gen, function () {
-        if (rig) rig.style.transition = "";
-        stage.style.transition = "";
-        stage.classList.remove("visible", "is-zoom-out");
-        finishHideFamilyPortrait();
-        done();
-      });
-      return;
-    }
-
-    // Punch-out: grid stays visible
-    stage.style.opacity = "1";
     afterMs(exitSec * 1000, gen, function () {
-      if (rig) rig.style.transition = "";
-      stage.classList.remove("is-zoom-out");
+      window.TOKI_MOTION.encoreFinishExit(stage, !!isLastInSegment);
+      if (isLastInSegment) finishHideFamilyPortrait();
       done();
     });
   }
@@ -12729,17 +12317,6 @@
       images: slide.images,
       isNew: !!slide.isNew,
     };
-    const useZoom = motionStyleUsesZoom(style);
-    const zMin = useZoom
-      ? style.zoomMin != null
-        ? style.zoomMin
-        : 0.93
-      : 1;
-    const zMax = useZoom
-      ? style.zoomMax != null
-        ? style.zoomMax
-        : 1
-      : 1;
     engineApplyCssDurations(entranceSec, style.punchOut);
 
     const textOnly = !!slide.textOnly || !slide.image;
@@ -12777,18 +12354,6 @@
         return;
       }
 
-      const anim = plate.querySelector
-        ? plate.querySelector(".hero-anim")
-        : null;
-      // Park: Ken Burns at zoomMin; Slideshow stays at 1×
-      plate.style.transition = "none";
-      if (anim) anim.style.transition = "none";
-      plate.style.setProperty("--hero-zoom", String(zMin));
-      plate.style.opacity = "0";
-      plate.classList.add("visible");
-      plate.hidden = false;
-      void plate.offsetWidth;
-
       // Highlight color ease = Punch-Out (same as fade-out), not full Punch-In
       engineArmHighlightIn(style.punchOut);
       if (slide.segment === "box") {
@@ -12801,24 +12366,14 @@
         staticSetListHighlight(slide.itemIndex, !!slide.isNew);
       }
 
-      const opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
-      plate.style.transition =
-        "opacity " + opSec + "s var(--ease-fade, ease)";
-      if (useZoom && anim) {
-        anim.style.transition =
-          "transform " + entranceSec + "s var(--ease-out, ease-out)";
-        plate.classList.add("is-kb-in");
-        plate.style.setProperty("--hero-zoom", String(zMax));
-        setFeatureActive("kenBurns", true, "engine punch-in");
-      } else {
-        plate.classList.remove("is-kb-in");
-        plate.style.setProperty("--hero-zoom", "1");
-        if (anim) anim.style.transition = "none";
-        setFeatureActive("kenBurns", false, "slideshow opacity-only");
-      }
-      plate.style.opacity = "1";
+      window.TOKI_MOTION.heroPunchIn(plate, style, entranceSec, {
+        onFeature: setFeatureActive,
+      });
 
       afterMs(entranceSec * 1000, gen, function () {
+        const anim = plate.querySelector
+          ? plate.querySelector(".hero-anim")
+          : null;
         if (anim) anim.style.transition = "";
         plate.style.transition = "";
         done();
@@ -12859,12 +12414,6 @@
       return;
     }
     const plate = heroMotionEl();
-    const useZoom = motionStyleUsesZoom(style);
-    const zMin = useZoom
-      ? style.zoomMin != null
-        ? style.zoomMin
-        : 0.93
-      : 1;
     engineApplyCssDurations(style.punchIn, exitSec);
 
     // Highlight → secondary color on Punch-Out clock (same as image/veil exit)
@@ -12875,23 +12424,12 @@
       return;
     }
 
-    const anim = plate.querySelector ? plate.querySelector(".hero-anim") : null;
-    const opSec = Math.min(0.45, exitSec > 0 ? exitSec : 0.45);
-    plate.classList.remove("is-kb-in");
-    plate.style.transition =
-      "opacity " + opSec + "s var(--ease-fade, ease)";
-    if (useZoom && anim) {
-      anim.style.transition =
-        "transform " + exitSec + "s var(--ease-fade, ease)";
-      plate.style.setProperty("--hero-zoom", String(zMin));
-    } else {
-      if (anim) anim.style.transition = "none";
-      plate.style.setProperty("--hero-zoom", "1");
-    }
-    plate.style.opacity = "0";
-    setFeatureActive("kenBurns", false, "engine punch-out");
+    window.TOKI_MOTION.heroPunchOut(plate, style, exitSec, {
+      onFeature: setFeatureActive,
+    });
 
     afterMs(exitSec * 1000, gen, function () {
+      const anim = plate.querySelector ? plate.querySelector(".hero-anim") : null;
       if (anim) anim.style.transition = "";
       plate.style.transition = "";
       plate.classList.remove("visible");
