@@ -3,6 +3,7 @@ secrets/
 *.json
 !package.json
 !tsconfig.json
+!data/manager-fallback.json
 
 # Local / OS
 .DS_Store

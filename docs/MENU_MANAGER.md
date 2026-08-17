@@ -32,7 +32,7 @@ It should feel like a polished iPhone Settings app. Desktop is a centered phone 
 | **This app’s chrome** | Immediately, from a **draft** cache (CSS variables) |
 | **TV boards** | Only after Save — **not wired** in the prototype |
 
-Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. Edits never touch Google. **Yes** on confirm keeps the draft for the rest of the session; **No** reverts to the last loaded sheet values.
+Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. Edits never touch Google. **Yes** on confirm keeps the draft for the rest of the session and, when `toki_server` is up, overwrites `data/manager-fallback.json` with the current catalogs + draft. That file is what we load if the sheet is unreachable. **No** reverts to the last loaded sheet values.
 
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
@@ -94,7 +94,8 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `js/manager-sheet.js` | One-way Settings + Style and Theme read (+ validations via API) |
 | `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
 | `js/manager.js` | Router, draft/commit, preview |
-| `scripts/toki_server.py` | `/api/sheets/validations` (Settings-row rules by header) |
+| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback` |
+| `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. Do not teach this UI raw column indexes; write adapter is a later slice. Number options should come from sheet dataValidation when present, not hard-coded spans.
 

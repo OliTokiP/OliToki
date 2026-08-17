@@ -2284,23 +2284,34 @@
 
   function getMotionStyle(name) {
     const want = String(name || "Slideshow").trim();
+    let style = null;
     if (want && motionStylesByName[want]) {
-      return normalizeMotionStyle(motionStylesByName[want]);
-    }
-    const keys = Object.keys(motionStylesByName);
-    for (let i = 0; i < keys.length; i++) {
-      if (keys[i].toLowerCase() === want.toLowerCase()) {
-        return normalizeMotionStyle(motionStylesByName[keys[i]]);
+      style = normalizeMotionStyle(motionStylesByName[want]);
+    } else {
+      const keys = Object.keys(motionStylesByName);
+      for (let i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === want.toLowerCase()) {
+          style = normalizeMotionStyle(motionStylesByName[keys[i]]);
+          break;
+        }
       }
     }
-    if (want.toLowerCase() === "ken burns") {
-      return Object.assign({}, MOTION_DEFAULTS_KEN_BURNS);
+    if (!style) {
+      if (want.toLowerCase() === "ken burns") {
+        style = Object.assign({}, MOTION_DEFAULTS_KEN_BURNS);
+      } else if (want.toLowerCase() === "encore") {
+        style = Object.assign({}, MOTION_DEFAULTS_SLIDESHOW, { name: "Encore" });
+      } else {
+        style = Object.assign({}, MOTION_DEFAULTS_SLIDESHOW);
+      }
     }
-    if (want.toLowerCase() === "encore") {
-      // Not implemented yet — opacity-only like Slideshow, not Ken Burns zoom
-      return Object.assign({}, MOTION_DEFAULTS_SLIDESHOW, { name: "Encore" });
+    if (
+      window.TOKI_MOTION &&
+      typeof window.TOKI_MOTION.withPresentationClock === "function"
+    ) {
+      return window.TOKI_MOTION.withPresentationClock(style, motionStylesByName);
     }
-    return Object.assign({}, MOTION_DEFAULTS_SLIDESHOW);
+    return style;
   }
 
   function normalizeMotionStyle(s) {
@@ -12548,9 +12559,7 @@
     }
     const style = scaleMotionStyleForSpeed(rawStyle);
     const entranceSec = engineEntranceSec(style, isFirstInSegment);
-    const holdSec = motionStyleIsEncore(style)
-      ? encoreHoldSeconds(style.hold)
-      : style.hold;
+    const holdSec = style.hold;
     const exitSec = engineExitSec(style, isLastInSegment);
 
     _prevBoardSlide = slide;

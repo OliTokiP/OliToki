@@ -198,22 +198,58 @@
     return out;
   }
 
-  /** Base runner style (zoom/chrome) + Beta Motion phase digits when present. */
+  /**
+   * One slide clock for every Presentation Style (Slideshow / Ken Burns / Encore).
+   * Digits come from the Slideshow row (Ken Burns fallback). Treatments stay
+   * on the style — only Punch/Hold/Out (and wind) are shared.
+   */
+  function presentationClock(sheetMap) {
+    var row =
+      lookupSheetStyle(sheetMap, "Slideshow") ||
+      lookupSheetStyle(sheetMap, "Ken Burns");
+    return {
+      windUp: row && row.windUp != null ? row.windUp : 0,
+      punchIn: row && row.punchIn != null ? row.punchIn : 3.4,
+      hold: row && row.hold != null ? row.hold : 1,
+      punchOut: row && row.punchOut != null ? row.punchOut : 0.45,
+      windDown: row && row.windDown != null ? row.windDown : 0,
+    };
+  }
+
+  function withPresentationClock(style, sheetMap) {
+    var clock = presentationClock(sheetMap);
+    var out = {};
+    var k;
+    if (style) {
+      for (k in style) {
+        if (Object.prototype.hasOwnProperty.call(style, k)) out[k] = style[k];
+      }
+    }
+    out.windUp = clock.windUp;
+    out.punchIn = clock.punchIn;
+    out.hold = clock.hold;
+    out.punchOut = clock.punchOut;
+    out.windDown = clock.windDown;
+    return out;
+  }
+
+  /** Base runner style (zoom/chrome) + shared presentation clock. */
   function styleForMode(mode, sheetMap) {
     var base = styleByMode(mode);
     var sheet = lookupSheetStyle(sheetMap, base.name);
-    if (!sheet) return base;
     var out = {};
     var k;
     for (k in base) {
       if (Object.prototype.hasOwnProperty.call(base, k)) out[k] = base[k];
     }
-    out.windUp = sheet.windUp;
-    out.punchIn = sheet.punchIn;
-    out.hold = sheet.hold;
-    out.punchOut = sheet.punchOut;
-    out.windDown = sheet.windDown;
-    return out;
+    if (sheet) {
+      out.windUp = sheet.windUp;
+      out.punchIn = sheet.punchIn;
+      out.hold = sheet.hold;
+      out.punchOut = sheet.punchOut;
+      out.windDown = sheet.windDown;
+    }
+    return withPresentationClock(out, sheetMap);
   }
 
   function encoreVeilIn(punchIn) {
@@ -999,7 +1035,7 @@
         : style.punchIn != null
           ? style.punchIn
           : 3.4;
-    var holdSec = encoreHold(style.hold != null ? style.hold : 1);
+    var holdSec = style.hold != null ? style.hold : 1;
     var exitSec =
       last && style.windDown > 0
         ? style.windDown
@@ -1052,6 +1088,8 @@
     parseMotionStylesTable: parseMotionStylesTable,
     lookupSheetStyle: lookupSheetStyle,
     styleForMode: styleForMode,
+    presentationClock: presentationClock,
+    withPresentationClock: withPresentationClock,
     PRESENTATION_TEMPO_MED: PRESENTATION_TEMPO_MED,
     presentationTempo: presentationTempo,
     scaleDuration: scaleDuration,

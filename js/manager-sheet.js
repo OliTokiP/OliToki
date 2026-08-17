@@ -1151,8 +1151,63 @@
     return payload;
   }
 
+  var FALLBACK_URL = "data/manager-fallback.json";
+
+  function fallbackToPayload(store, wantId) {
+    if (!store || !store.sources) return null;
+    var id = wantId || store.active || "";
+    var entry = store.sources[id] || store.sources[store.active];
+    if (!entry && store.sources) {
+      var keys = Object.keys(store.sources);
+      if (keys.length) entry = store.sources[keys[0]];
+    }
+    if (!entry) return null;
+    return {
+      ok: true,
+      fromFallback: true,
+      sourceName: entry.sourceName || "",
+      sheetId: entry.sheetId || "",
+      dataSources: entry.dataSources || [],
+      themes: entry.themes || [],
+      colorRoles: entry.colorRoles || null,
+      wallpapers: entry.wallpapers || null,
+      draft: entry.draft || null,
+      speedTiles: entry.speedTiles || null,
+      fieldValidations: entry.fieldValidations || null,
+      motionStyles: entry.motionStyles || {},
+    };
+  }
+
+  async function loadFallback(wantId) {
+    try {
+      var text = await fetchText(FALLBACK_URL + "?t=" + Date.now());
+      return fallbackToPayload(JSON.parse(text), wantId);
+    } catch (err) {
+      console.warn("manager-sheet: no fallback json", err);
+      return null;
+    }
+  }
+
+  async function saveFallback(entry) {
+    try {
+      var res = await fetch("/api/manager/fallback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry || {}),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var j = await res.json();
+      return !!(j && j.ok);
+    } catch (err) {
+      console.warn("manager-sheet: save fallback failed", err);
+      return false;
+    }
+  }
+
   global.TOKI_MANAGER_SHEET = {
     load: load,
+    loadFallback: loadFallback,
+    saveFallback: saveFallback,
     styleGid: STYLE_GID,
   };
 })(window);

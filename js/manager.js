@@ -31,6 +31,7 @@
     pendingLeave: null,
     sheetDirty: false,
     sheetSource: "loading",
+    lastSheet: null,
   };
 
   var previewCtl = {
@@ -1308,15 +1309,40 @@
     renderScreen();
   }
 
+  function persistFallback() {
+    var sheet = window.TOKI_MANAGER_SHEET;
+    if (!sheet || !sheet.saveFallback) return Promise.resolve(false);
+    var meta = state.lastSheet || {};
+    return sheet.saveFallback({
+      sourceId: state.draft.dataSource || "source",
+      sourceName: meta.sourceName || "",
+      sheetId: meta.sheetId || "",
+      draft: clone(state.draft),
+      themes: D.themes,
+      speedTiles: D.speedTiles,
+      colorRoles: D.colorRoles,
+      wallpapers: D.wallpapers,
+      fieldValidations: meta.fieldValidations || null,
+      dataSources: D.dataSources,
+      motionStyles: D.motionStyles || {},
+    });
+  }
+
   function confirmChoice(val) {
     if (val === "yes") {
       state.committed = clone(state.draft);
       state.dialog = null;
-      toast("Saved for this session (sheet write not wired yet).");
       var next = state.pendingLeave;
       state.pendingLeave = null;
-      if (next) next();
-      else renderAll();
+      persistFallback().then(function (wrote) {
+        toast(
+          wrote
+            ? "Saved fallback"
+            : "Saved for this session (could not write fallback)"
+        );
+        if (next) next();
+        else renderAll();
+      });
       return;
     }
     if (val === "no") {
@@ -1377,7 +1403,7 @@
     var punchIn = style.punchIn != null ? style.punchIn : 3.4;
     var punchOut = style.punchOut != null ? style.punchOut : 0.45;
     var holdRaw = style.hold != null ? style.hold : 1;
-    var hold = encore && TM ? TM.encoreHold(holdRaw) : holdRaw;
+    var hold = holdRaw;
     var veilIn = encore && TM ? TM.encoreVeilIn(punchIn) : Math.min(0.45, punchIn);
     return {
       punchIn: punchIn,
@@ -2039,6 +2065,12 @@
     if (payload.wallpapers && payload.wallpapers.length) {
       D.wallpapers = payload.wallpapers;
     }
+    state.lastSheet = {
+      sourceName: payload.sourceName || "",
+      sheetId: payload.sheetId || "",
+      fieldValidations: payload.fieldValidations || null,
+      motionStyles: payload.motionStyles || {},
+    };
     D.motionStyles = payload.motionStyles || {};
     if (payload.speedTiles) {
       D.speedTiles = {
@@ -2120,9 +2152,23 @@
       })
       .catch(function (err) {
         console.warn("Menu Manager sheet load failed", err);
-        state.sheetSource = "local";
-        renderAll();
-        toast("Could not load sheet — using local defaults");
+        var fb = loader.loadFallback;
+        if (!fb) {
+          state.sheetSource = "local";
+          renderAll();
+          toast("Could not load sheet — using local defaults");
+          return;
+        }
+        return fb(state.draft && state.draft.dataSource).then(function (payload) {
+          if (payload && payload.ok) {
+            applySheetPayload(payload);
+            toast("Loaded last saved fallback");
+            return;
+          }
+          state.sheetSource = "local";
+          renderAll();
+          toast("Could not load sheet — using local defaults");
+        });
       });
   }
 

@@ -572,27 +572,32 @@ img {
   --stripe-angle: -51.5deg;
   --ease-fade: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  /* 400×300 panel ÷ 4 columns × 3 rows. Green tile = col 3, row 2 (1-based). */
   --cell: calc(100 * var(--u));
-  --origin-x: calc(var(--cell) * 2.5);
-  --origin-y: calc(var(--cell) * 1.5);
-  --plate-w: calc(var(--cell) * 3);
-  --plate-h: calc(var(--cell) * 2);
-  --encore-hole-x: var(--origin-x);
-  --encore-hole-y: var(--origin-y);
-  --encore-hole-r: calc(var(--plate-w) * 0.42);
   --encore-hole-pinch: 0px;
   --encore-veil-color: #000000;
   --motion-veil: 1.7s;
   --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
   /* Frame leftover is a trapezoid (top 103.332, bottom 120.793). Treat it as
-     a left rectangle of the SHORTER top width; Encore fills total − that. */
+     a left rectangle of the SHORTER top width. Photo (Encore / KB / Slideshow)
+     uses total − that rectangle. */
   --encore-gutter: calc(103.332 * var(--u));
   --encore-box-w: calc(100cqi - var(--encore-gutter));
   --encore-scale: max(
     calc(var(--encore-box-w) / 848.1px),
     calc(var(--top-slot-h) / 1080px)
   );
+  /* 3:2 hero contained in that same box, then centered. */
+  --plate-w: min(var(--encore-box-w), calc(var(--top-slot-h) * 3 / 2));
+  --plate-h: calc(var(--plate-w) * 2 / 3);
+  --plate-left: calc(
+    var(--encore-gutter) + (var(--encore-box-w) - var(--plate-w)) / 2
+  );
+  --plate-top: calc((var(--top-slot-h) - var(--plate-h)) / 2);
+  --origin-x: calc(var(--plate-left) + var(--plate-w) / 2);
+  --origin-y: calc(var(--plate-top) + var(--plate-h) / 2);
+  --encore-hole-x: var(--origin-x);
+  --encore-hole-y: var(--origin-y);
+  --encore-hole-r: calc(var(--plate-w) * 0.42);
 }
 
 .preview-stage {
@@ -753,8 +758,8 @@ img {
 /* Hero plate layout only (3:2 crop). Fade + Ken Burns live in css/motion.css. */
 .preview #hero-plate {
   position: absolute;
-  left: calc(var(--origin-x) - var(--plate-w) / 2);
-  top: calc(var(--origin-y) - var(--plate-h) / 2);
+  left: var(--plate-left);
+  top: var(--plate-top);
   width: var(--plate-w);
   height: var(--plate-h);
   overflow: visible;
@@ -996,11 +1001,16 @@ img {
 .preview-sticker {
   position: absolute;
   z-index: 4;
-  left: calc(257.8 * var(--u));
-  top: calc(179.66 * var(--u));
-  width: calc(148.04 * var(--u));
-  height: calc(148.04 * var(--u));
-  font-size: calc(148.04 * var(--u));
+  /* Same corner of the 3:2 plate as the 400×300 mock, clamped so .preview
+     overflow does not clip the badge. */
+  left: calc(var(--plate-left) + var(--plate-w) * 0.526);
+  top: min(
+    calc(var(--plate-top) + var(--plate-h) * 0.6483),
+    calc(var(--top-slot-h) - var(--plate-w) * 0.4935 - 8 * var(--u))
+  );
+  width: calc(var(--plate-w) * 0.4935);
+  height: calc(var(--plate-w) * 0.4935);
+  font-size: calc(var(--plate-w) * 0.4935);
   pointer-events: none;
   user-select: none;
 }

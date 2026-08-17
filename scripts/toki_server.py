@@ -717,9 +717,73 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
         def do_OPTIONS(self):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "*")
             self.end_headers()
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/manager/fallback":
+                self.send_error(404, "Not found")
+                return
+            try:
+                n = int(self.headers.get("Content-Length") or "0")
+            except ValueError:
+                n = 0
+            if n <= 0 or n > 2_000_000:
+                self._json(400, {"error": "bad content-length"})
+                return
+            raw = self.rfile.read(n)
+            try:
+                body = json.loads(raw.decode("utf-8"))
+            except Exception:
+                self._json(400, {"error": "invalid json"})
+                return
+            if not isinstance(body, dict):
+                self._json(400, {"error": "expected object"})
+                return
+            sid = re.sub(
+                r"[^a-z0-9-]+",
+                "",
+                str(body.get("sourceId") or "source").lower(),
+            )[:40] or "source"
+            keep = (
+                "sourceId",
+                "sourceName",
+                "sheetId",
+                "draft",
+                "themes",
+                "speedTiles",
+                "colorRoles",
+                "wallpapers",
+                "fieldValidations",
+                "dataSources",
+                "motionStyles",
+            )
+            entry = {k: body.get(k) for k in keep}
+            entry["sourceId"] = sid
+            entry["savedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            dest = ROOT / "data" / "manager-fallback.json"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            store = {"updatedAt": entry["savedAt"], "active": sid, "sources": {}}
+            if dest.is_file():
+                try:
+                    prev = json.loads(dest.read_text(encoding="utf-8"))
+                    if isinstance(prev, dict) and isinstance(prev.get("sources"), dict):
+                        store["sources"] = prev["sources"]
+                except Exception:
+                    pass
+            store["sources"][sid] = entry
+            store["updatedAt"] = entry["savedAt"]
+            store["active"] = sid
+            tmp = dest.with_name("manager-fallback.json.tmp")
+            tmp.write_text(
+                json.dumps(store, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            tmp.replace(dest)
+            _log(f"fallback wrote {dest} source={sid}")
+            self._json(200, {"ok": True, "path": "data/manager-fallback.json", "sourceId": sid})
 
         def do_GET(self):
             parsed = urlparse(self.path)

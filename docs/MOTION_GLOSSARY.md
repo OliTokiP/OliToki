@@ -48,7 +48,7 @@ Wind-up → Punch-in → Hold → Punch-out → Wind-down
 |-------|-------------|------|
 | Wind-up | `0` | First block of a segment only; if `0`, Punch-In is the entrance |
 | Punch-in | `3.4` | Camera / zoom / veil-in / hero in |
-| Hold | `1` | Hang at settled pose. Encore Hold is **× 0.5 → 0.5s** |
+| Hold | `1` | Hang at settled pose. Same for Slideshow, Ken Burns, and Encore |
 | Punch-out | `0.45` | Camera back, veil-out, hero out, highlight color reverse |
 | Wind-down | `0` | Last block of a segment only; if `0`, Punch-Out is the exit |
 | Opacity fade | `min(0.45, phase)` | Plate / stage opacity. **Never** use the full 3.4s for opacity |
@@ -61,13 +61,14 @@ Wind-up → Punch-in → Hold → Punch-out → Wind-down
 | `--ease-fade` | `cubic-bezier(0.4, 0, 0.2, 1)` | Opacity, highlight color, Punch-Out camera |
 | `--ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | Punch-In camera / zoom settle |
 
-**Presentation Speed (Style I3, tiles 0–5):** not seconds. Tempo key on Beta Motion digits (`TOKI_MOTION.presentationTempo`). `0` = parked. `3` = medium = 1× sheet Punch/Hold/Out. Each step is a half-stop (`×√2`): 1 crawl 2×, 2 slow √2×, 4 fast 1/√2×, 5 very fast ½×. Same function on the live board and Menu Manager.
+**Presentation Speed (Style I3, tiles 0–5):** not seconds. Tempo key on the **shared** Punch/Hold/Out clock (`TOKI_MOTION.presentationTempo` × Slideshow digits). `0` = parked. `3` = medium = 1×. Each step is a half-stop (`×√2`): 1 crawl 2×, 2 slow √2×, 4 fast 1/√2×, 5 very fast ½×. Slideshow, Ken Burns, and Encore use the same phase seconds so one slide is the same length at a given speed. Encore treatments (lattice, veil, pinch) still ride that clock.
 
 Engine sequence today (`motionEngineRunBlock`):
 
 ```text
-entranceSec = windUp > 0 && first ? windUp : punchIn     // 3.4
-holdSec     = encore ? hold * 0.5 : hold                  // 0.5 or 1
+clock       = Slideshow (or Ken Burns) Punch/Hold/Out     // 3.4 / 1 / 0.45
+entranceSec = windUp > 0 && first ? windUp : punchIn      // 3.4
+holdSec     = hold                                        // 1
 exitSec     = windDown > 0 && last ? windDown : punchOut  // 0.45
 run entrance → run hold → run exit → next block
 ```
