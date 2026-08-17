@@ -1571,7 +1571,10 @@ def main():
             api["backend"] = backend
             tabs = backend.refresh_meta(force=True)
             _log(f"tabs: {len(tabs['title_by_gid'])}")
-            _log("Sheets API proxy: /api/sheets/csv?gid=…  (/api/sheets/xlsx → 410)")
+            _log(
+                "Sheets API proxy: /api/sheets/csv?gid=…  "
+                "POST /api/manager/style  (/api/sheets/xlsx → 410)"
+            )
             if not args.api_only:
                 t0 = time.time()
                 backend.warm_csv_cache(force=True)
