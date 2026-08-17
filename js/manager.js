@@ -1997,7 +1997,11 @@
       return;
     }
 
-    if (snap) {
+    // Always snap "from" state for "out" (and when caller asks for in) so that
+    // the fade/zoom transition is forced from a committed value. Prevents snap-to-final
+    // when coming out of hold or after other style updates. Matches MOTION_GLOSSARY 3/4.
+    var doSnap = snap || phase === "out";
+    if (doSnap) {
       snapPlate(
         phase === "out" ? 1 : 0,
         phase === "out" ? tgt.zoom : phases.zoomMin
