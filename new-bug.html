@@ -330,7 +330,8 @@
       const reminder = document.querySelector('[name=reminder]').value.trim();
       const why = (document.querySelector('[name=why]') || {}).value || "";
       const include = document.getElementById("inc").checked;
-      const queued = document.getElementById("queued").checked;
+      const draftChecked = document.getElementById("queued").checked;
+      const queued = !draftChecked;
       const modelEl = document.querySelector('input[name="model"]:checked');
       const model = modelEl ? modelEl.value : "Auto";
       const info = pageInfo();

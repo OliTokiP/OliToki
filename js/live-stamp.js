@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "cb615c9",
-  "hashFull": "cb615c91a4425b6546962f2d2a1ed1a3cfc50173",
-  "subject": "API LIVE"
+  "hash": "a13919f",
+  "hashFull": "a13919fa68ee422cf9496f16ebfb487d2aff90d7",
+  "subject": "QA: 2026-08-17 Include in Listener default ON when making new tickets (pass 1)"
 };
