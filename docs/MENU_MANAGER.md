@@ -72,7 +72,7 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Number pills (BG Scroll Speed / Presentation Speed):** offline defaults live in `manager-data.js` `speedTiles`. With the Sheets proxy, load pulls **dataValidation** on the Style Settings row (`/api/sheets/validations?gid=…`) and rebuilds the pill strip from the condition (e.g. `NUMBER_BETWEEN` 0…10 → tiles 0–10). Unbounded rules keep a finite strip via the offline max. Public CSV fallback (no proxy) cannot see validations → offline tiles only.
+**Number pills (BG Scroll Speed / Presentation Speed):** offline defaults live in `manager-data.js` `speedTiles`. With the Sheets proxy, load pulls **dataValidation** on the Style Settings row (`/api/sheets/validations?gid=…`) and rebuilds the pill strip from the condition (e.g. `ONE_OF_LIST` 0,1,2,3 or `NUMBER_BETWEEN`). Unbounded rules keep a finite strip via the offline max. On static deploys (GitHub Pages / no proxy) public CSV has no rules, so `data/validations-restaurant.json` + `data/validations-alpha.json` committed snapshots supply the current conditionals for the chosen data source.
 
 ---
 
@@ -86,6 +86,7 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `js/manager-sheet.js` | One-way Settings + Style and Theme read (+ validations) |
 | `js/motion-presets.js` | Shared motion digits (also for live boards) |
 | `js/manager.js` | Router, draft/commit, preview |
+| `data/validations-*.json` | Committed snapshots of Style Settings dataValidation for static deploys |
 | `scripts/toki_server.py` | `/api/sheets/validations` (Settings-row rules by header) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. Do not teach this UI raw column indexes; write adapter is a later slice. Number options should come from sheet dataValidation when present, not hard-coded spans.

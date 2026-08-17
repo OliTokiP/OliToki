@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "acc53b4",
-  "hashFull": "acc53b4535846568ed21f7c83077f55a0023a841",
-  "subject": "QA: 2026-08-16 Ken Burns and Slideshow both broken (pass 2)"
+  "hash": "964a46b",
+  "hashFull": "964a46b6670e67bf8d87b683c03a3acde4058f99",
+  "subject": "QA: 2026-08-16 Menu Manager should understand conditionals from sheet (pass 2)"
 };

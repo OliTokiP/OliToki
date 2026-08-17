@@ -2,6 +2,9 @@
  * OliToki Menu Manager — one-way sheet read.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
  * Never writes. Field-name draft only (no column indexes in the UI).
+ * Number pills (scroll / presentation) come from dataValidation when the
+ * proxy is present, or from committed data/validations-*.json snapshots
+ * on static deploys (public CSV never includes validation rules).
  */
 (function (global) {
   "use strict";
@@ -709,6 +712,29 @@
     }
   }
 
+  async function fetchValidationsPublic(settings) {
+    // Static / GitHub Pages / remote deploys have no /api proxy. Load committed
+    // snapshot of Style Settings dataValidation (produced from the live
+    // workbook). Snapshots are per-catalog because each workbook carries its
+    // own rules. Falls back to manager-data.js defaults if missing.
+    if (!settings) return null;
+    var srcName = settings.sourceName || settings.dataSource || "";
+    var key = sourceId(srcName);
+    if (key !== "restaurant" && key !== "alpha") key = "restaurant";
+    var url = "data/validations-" + key + ".json?t=" + Date.now();
+    try {
+      var text = await fetchText(url);
+      var j = JSON.parse(text);
+      return (j && j.fields) || j || null;
+    } catch (err) {
+      console.warn(
+        "manager-sheet: public validations snapshot missing for " + key + " (using offline defaults)",
+        err
+      );
+      return null;
+    }
+  }
+
   function buildPayload(settings, styleRows, validationFields) {
     var speedTiles = buildSpeedTiles(validationFields || null);
     var themes = parseThemes(styleRows);
@@ -771,7 +797,10 @@
         settings.sheetId = settings.catalog[0].sheetId || "";
       }
       styleRows = await fetchCsv(STYLE_GID, settings.sheetId, force);
-      // Public CSV has no dataValidation — offline speedTiles stay.
+      validationFields = await fetchValidationsPublic(settings);
+      // Public CSV has no dataValidation. Use committed snapshot
+      // (data/validations-*.json) so gh-pages/remote static also sees the
+      // sheet's current conditionals (ONE_OF_LIST / NUMBER_* etc).
     }
     if (!settings.sheetId && settings.catalog && settings.catalog.length) {
       settings.sheetId = settings.catalog[0].sheetId || "";

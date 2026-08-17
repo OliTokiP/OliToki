@@ -802,14 +802,16 @@
       if (state.sheetSource === "loading") {
         parkPreviewStill();
       } else {
-        // Guardrail: rAF after innerHTML lets layout + CSS vars on .preview
-        // (incl. --ease-fade / --ease-out) settle before snap + 20ms kick.
-        // Prevents races from nav handlers or sheet apply. Keeps KB/Slideshow
-        // reliable (MOTION_GLOSSARY 3, 4).
+        // Guardrail: double-rAF after innerHTML lets layout + CSS vars on .preview
+        // (incl. --ease-fade / --ease-out) settle before snap + 20ms kick. Extra frame
+        // protects against races after sheet apply, picker changes, or hash nav.
+        // Prevents remount teardown and makes KB/Slideshow reliable (MOTION_GLOSSARY 3, 4).
         requestAnimationFrame(function () {
-          if (state.screen === "style" && state.sheetSource !== "loading") {
-            startPreviewCycle();
-          }
+          requestAnimationFrame(function () {
+            if (state.screen === "style" && state.sheetSource !== "loading") {
+              startPreviewCycle();
+            }
+          });
         });
       }
     } else {
@@ -1672,7 +1674,8 @@
      .preview-plate owns fade (opacity 0→1/1→0). .preview-anim owns Ken Burns
      scale only (0.93→1 on in; reverse on out). Sticker is sibling, fades but
      does not scale. Inline transform + explicit transition to ensure it runs.
-     Uses --ease-* to match glossary + live boards. */
+     Uses concrete EASE from TOKI_MOTION (glossary) + var fallback; explicit
+     flush after transition decls is the guardrail so values never snap. */
   function setPlate(opacity, zoom, dur, kind) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
@@ -1680,10 +1683,13 @@
     var phases = motionPhases();
     var fade = phases.opacityDur || 0.45;
     var move = Math.max(0.02, dur || phases.punchIn);
-    var zoomEase = kind === "out" ? "var(--ease-fade, ease)" : "var(--ease-out, ease-out)";
+    var TM = window.TOKI_MOTION;
+    var fadeEase = (TM && TM.EASE && TM.EASE.fade) || "var(--ease-fade, ease)";
+    var outEase = (TM && TM.EASE && TM.EASE.out) || "var(--ease-out, ease-out)";
+    var zoomEase = kind === "out" ? fadeEase : outEase;
     var z = Number(zoom);
     if (!isFinite(z)) z = 1;
-    plate.style.transition = "opacity " + fade + "s var(--ease-fade, ease)";
+    plate.style.transition = "opacity " + fade + "s " + fadeEase;
     plate.style.setProperty("--hero-zoom", String(z));
     plate.classList.toggle(
       "is-kb-in",
@@ -1692,12 +1698,19 @@
     if (anim) {
       anim.style.transition = "transform " + move + "s " + zoomEase;
       anim.style.setProperty("--hero-zoom", String(z));
+    }
+    // Force reflow after declaring transitions (before writing target values) so
+    // the 0→1 fade and 0.93→1 zoom actually run instead of appearing.
+    // This + double-rAF start + concrete EASE guard against future races.
+    void (plate && plate.offsetWidth);
+    if (anim) void (anim.offsetWidth);
+    if (anim) {
       anim.style.transform = "scale(" + z + ")";
     }
     plate.style.opacity = String(opacity);
     var sticker = els.app.querySelector(".preview-sticker");
     if (sticker && !sticker.hidden) {
-      sticker.style.transition = "opacity " + fade + "s var(--ease-fade, ease)";
+      sticker.style.transition = "opacity " + fade + "s " + fadeEase;
       sticker.style.opacity = String(opacity);
     }
   }
@@ -2039,7 +2052,7 @@
       return;
     }
     if (phases.paused) {
-      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.2);
+      setPlate(1, mode === "slideshow" ? 1 : phases.zoomMax, 0.2, "in");
       return;
     }
     var tgt = phaseTarget(previewCtl.phase, phases, mode);
@@ -2063,7 +2076,7 @@
     void (plate && plate.offsetWidth);
     previewCtl.phaseDur = tgt.dur;
     previewCtl.phaseT0 = performance.now() - p * tgt.dur * 1000;
-    setPlate(tgt.opacity, tgt.zoom, remaining);
+    setPlate(tgt.opacity, tgt.zoom, remaining, previewCtl.phase === "out" ? "out" : "in");
     previewAfter(remaining * 1000, gen, function () {
       advancePhase(gen);
     });
