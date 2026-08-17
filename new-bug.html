@@ -40,6 +40,10 @@
       display: flex; gap: .4rem; align-items: center;
       font-size: 16px;
       min-height: 44px;
+      position: relative;
+    }
+    .pick input[type="file"] {
+      position: absolute; inset: 0; opacity: 0.02; width: 100%; height: 100%; cursor: pointer;
     }
     #screens { display: none; }
     #screens.on { display: block; }
@@ -52,6 +56,24 @@
     }
     a { color: inherit; }
 
+    .attach-picks { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: .25rem; }
+    .attach-preview { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+    .attach-preview .att {
+      border: 1px solid #bbb; border-radius: 8px; padding: .35rem; font-size: .8rem;
+      max-width: 128px; position: relative; background: #fafafa;
+    }
+    .attach-preview img { max-width: 100%; max-height: 78px; display: block; border-radius: 4px; }
+    .attach-preview .nm { word-break: break-all; margin-top: .2rem; }
+    .att .x {
+      position: absolute; top: -6px; right: -6px; background: #fff; color: #111;
+      border: 1px solid #999; border-radius: 50%; width: 18px; height: 18px;
+      line-height: 16px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 700;
+    }
+    @media (prefers-color-scheme: dark) {
+      .attach-preview .att { background: #222; border-color: #444; }
+      .att .x { background: #111; color: #ddd; border-color: #555; }
+    }
+
     @media (max-width: 520px) {
       body { padding: .75rem; }
       h1 { font-size: 1.25rem; }
@@ -62,6 +84,7 @@
       .pick { padding: .65rem .85rem; font-size: 16px; }
       button { padding: .85rem; margin-top: 1rem; }
       .picks { gap: .4rem; }
+      .attach-preview .att { max-width: 92px; font-size: .72rem; }
     }
   </style>
 </head>
@@ -105,6 +128,18 @@
     <div id="why-wrap" hidden>
       <label>Why <textarea name="why" rows="3" placeholder="Why this matters"></textarea></label>
     </div>
+    <div class="lab">Attachments</div>
+    <div class="attach-picks">
+      <label class="pick">
+        <input type="file" id="attach-img" accept="image/*" />
+        <span>📷 Image from Photos</span>
+      </label>
+      <label class="pick">
+        <input type="file" id="attach-file" />
+        <span>📄 File from Files</span>
+      </label>
+    </div>
+    <div id="attach-preview" class="attach-preview"></div>
     <div class="row">
       <input type="checkbox" name="include" id="inc" />
       <label for="inc">Include in listener</label>
@@ -184,6 +219,62 @@
       const on = surfaces.find((b) => b.checked);
       return on ? on.value : "";
     }
+
+    // --- attachments (apple file pickers for images + files) ---
+    let attachedFiles = [];
+    function renderAttachPreviews() {
+      const box = document.getElementById("attach-preview");
+      if (!box) return;
+      box.innerHTML = "";
+      attachedFiles.forEach((f, i) => {
+        const el = document.createElement("div");
+        el.className = "att";
+        if (f.type && f.type.indexOf("image/") === 0) {
+          const url = URL.createObjectURL(f);
+          const im = document.createElement("img");
+          im.src = url;
+          im.onload = () => { /* keep url for lifetime of preview */ };
+          el.appendChild(im);
+        } else {
+          const ico = document.createElement("div");
+          ico.textContent = "📄";
+          ico.style.fontSize = "28px";
+          ico.style.lineHeight = "1";
+          el.appendChild(ico);
+        }
+        const nm = document.createElement("div");
+        nm.className = "nm";
+        const kb = Math.max(1, Math.round((f.size || 0) / 1024));
+        nm.textContent = f.name + " (" + kb + "k)";
+        el.appendChild(nm);
+        const x = document.createElement("div");
+        x.className = "x";
+        x.textContent = "×";
+        x.onclick = () => {
+          attachedFiles.splice(i, 1);
+          renderAttachPreviews();
+        };
+        el.appendChild(x);
+        box.appendChild(el);
+      });
+    }
+    const imgIn = document.getElementById("attach-img");
+    const fileIn = document.getElementById("attach-file");
+    if (imgIn) imgIn.addEventListener("change", () => {
+      if (imgIn.files && imgIn.files.length) {
+        for (let f of imgIn.files) attachedFiles.push(f);
+        renderAttachPreviews();
+      }
+      imgIn.value = "";
+    });
+    if (fileIn) fileIn.addEventListener("change", () => {
+      if (fileIn.files && fileIn.files.length) {
+        for (let f of fileIn.files) attachedFiles.push(f);
+        renderAttachPreviews();
+      }
+      fileIn.value = "";
+    });
+
     function pageInfo() {
       if (surface() === "Listener") {
         return { page: "Listener.md", label: "Listener" };
@@ -241,6 +332,12 @@
       const isFeature = kind() === "feature";
       const k = isFeature ? "feature" : "ticket";
       const reportH = isFeature ? "The request" : "The report";
+      let attachNote = "";
+      if (attachedFiles.length > 0) {
+        attachNote = "\n\n### Attachments\n\n" +
+          attachedFiles.map((f) => "- " + f.name).join("\n") +
+          "\n\n(Use GitHub's attach button or drag files into the box after the page opens.)";
+      }
       const body = [
         "### toki-meta",
         "- type: " + k,
@@ -262,6 +359,7 @@
         "### Why",
         "",
         why.trim() || "_",
+        attachNote,
       ].join("\n");
       const url =
         "https://github.com/" + REPO + "/issues/new?labels=toki-qa&title=" +
