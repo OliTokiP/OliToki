@@ -709,7 +709,7 @@
       '<div class="preview-layer preview-solid"></div>' +
       '<div class="preview-layer preview-pattern"' +
       (encore || d.background !== "pattern" ? " hidden" : "") +
-      '><div class="preview-pattern-track"></div></div>' +
+      '><div class="preview-pattern-track" style="transform:rotate(-51.5deg) translate3d(0,0px,0);"></div></div>' +
       '<div class="preview-layer preview-wallpaper"' +
       (encore || d.background !== "wallpaper" ? " hidden" : "") +
       ">" +
@@ -1598,8 +1598,9 @@
     if (!track || !wrap || wrap.hidden) return;
     var speed = scrollPxPerSec();
     var period = 186;
-    if (speed <= 0) return;
-    previewCtl.stripeY = (previewCtl.stripeY + speed * dt) % period;
+    if (speed > 0) {
+      previewCtl.stripeY = (previewCtl.stripeY + speed * dt) % period;
+    }
     track.style.transform =
       "rotate(-51.5deg) translate3d(0," + previewCtl.stripeY + "px,0)";
   }
@@ -1897,6 +1898,13 @@
     var wpp = preview.querySelector(".preview-wallpaper");
     if (pat) pat.hidden = encore || d.background !== "pattern";
     if (wpp) wpp.hidden = encore || d.background !== "wallpaper";
+    if (pat && !pat.hidden) {
+      var track = pat.querySelector(".preview-pattern-track");
+      if (track) {
+        track.style.transform =
+          "rotate(-51.5deg) translate3d(0," + previewCtl.stripeY + "px,0)";
+      }
+    }
     var stage = preview.querySelector("#family-portrait-stage");
     if (stage) {
       stage.hidden = !encore;
