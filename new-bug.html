@@ -262,7 +262,11 @@
     const fileIn = document.getElementById("attach-file");
     if (imgIn) imgIn.addEventListener("change", () => {
       if (imgIn.files && imgIn.files.length) {
-        for (let f of imgIn.files) attachedFiles.push(f);
+        for (let f of imgIn.files) {
+          if (f.type && f.type.indexOf("image/") === 0) {
+            attachedFiles.push(f);
+          }
+        }
         renderAttachPreviews();
       }
       imgIn.value = "";
