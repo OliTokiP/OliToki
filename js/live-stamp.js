@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "11e62f7",
-  "hashFull": "11e62f77d74f7580be0b4d0e108af9d8c2dbd2b0",
-  "subject": "QA: 2026-08-17 Check Live buttons should open new tabs 2 (pass 1)"
+  "hash": "cb615c9",
+  "hashFull": "cb615c91a4425b6546962f2d2a1ed1a3cfc50173",
+  "subject": "API LIVE"
 };
