@@ -803,7 +803,7 @@
         parkPreviewStill();
       } else {
         // Guardrail: double-rAF after innerHTML lets layout + CSS vars on .preview
-        // (incl. --ease-fade / --ease-out) settle before snap + 20ms kick. Extra frame
+        // (incl. --ease-fade / --ease-out) settle before snap + rAF kick. Extra frame
         // protects against races after sheet apply, picker changes, or hash nav.
         // Prevents remount teardown and makes KB/Slideshow reliable (MOTION_GLOSSARY 3, 4).
         requestAnimationFrame(function () {
@@ -1675,7 +1675,8 @@
      scale only (0.93→1 on in; reverse on out). Sticker is sibling, fades but
      does not scale. Inline transform + explicit transition to ensure it runs.
      Uses concrete EASE from TOKI_MOTION (glossary) + var fallback; explicit
-     flush after transition decls is the guardrail so values never snap. */
+     flush after transition decls (and before targets) is the guardrail so values
+     never snap. */
   function setPlate(opacity, zoom, dur, kind) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
@@ -1699,18 +1700,23 @@
       anim.style.transition = "transform " + move + "s " + zoomEase;
       anim.style.setProperty("--hero-zoom", String(z));
     }
+    var sticker = els.app.querySelector(".preview-sticker");
+    var showSticker = !!(sticker && !sticker.hidden);
+    if (showSticker) {
+      sticker.style.transition = "opacity " + fade + "s " + fadeEase;
+    }
     // Force reflow after declaring transitions (before writing target values) so
     // the 0→1 fade and 0.93→1 zoom actually run instead of appearing.
     // This + double-rAF start + concrete EASE guard against future races.
+    // Sticker gets same flush treatment when visible.
     void (plate && plate.offsetWidth);
     if (anim) void (anim.offsetWidth);
+    if (showSticker) void (sticker.offsetWidth);
     if (anim) {
       anim.style.transform = "scale(" + z + ")";
     }
     plate.style.opacity = String(opacity);
-    var sticker = els.app.querySelector(".preview-sticker");
-    if (sticker && !sticker.hidden) {
-      sticker.style.transition = "opacity " + fade + "s " + fadeEase;
+    if (showSticker) {
       sticker.style.opacity = String(opacity);
     }
   }
@@ -1998,10 +2004,20 @@
       );
     }
     if (phase === "in" && snap) {
-      previewAfter(20, gen, function () {
-        setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur, "in");
-        syncPreviewNums(state.previewIndex || 0, false);
-        schedulePhaseEnd(gen);
+      // Use chained rAFs (instead of fixed timeout) after snap to ensure the "from"
+      // state (opacity 0 / zoomMin) is committed by the browser before we declare
+      // the transition and set the target values. This, combined with the
+      // offsetWidth flush inside setPlate and the double-rAF at renderScreen entry,
+      // makes the fade+zoom survive re-renders from hash, sheet conditionals,
+      // picker, etc. See MOTION_GLOSSARY §3/4 and ticket 2026-08-16 Ken Burns...
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (gen === previewCtl.gen) {
+            setPlate(tgt.opacity, tgt.zoom, previewCtl.phaseDur, "in");
+            syncPreviewNums(state.previewIndex || 0, false);
+            schedulePhaseEnd(gen);
+          }
+        });
       });
       return;
     }

@@ -72,7 +72,7 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Number pills (BG Scroll Speed / Presentation Speed):** offline defaults live in `manager-data.js` `speedTiles`. With the Sheets proxy, load pulls **dataValidation** on the Style Settings row (`/api/sheets/validations?gid=…`) and rebuilds the pill strip from the condition (e.g. `ONE_OF_LIST` 0,1,2,3 or `NUMBER_BETWEEN`). Unbounded rules keep a finite strip via the offline max. On static deploys (GitHub Pages / no proxy) public CSV has no rules, so `data/validations-restaurant.json` + `data/validations-alpha.json` committed snapshots supply the current conditionals for the chosen data source.
+**Number pills (BG Scroll Speed / Presentation Speed):** offline defaults live in `manager-data.js` `speedTiles`. With the Sheets proxy (same-origin or cross-origin via `?proxyBase=...` when loading the UI statically from gh-pages or a plain server), load pulls **dataValidation** on the Style Settings row (`/api/sheets/validations?gid=…`) and rebuilds the pill strip from the condition (e.g. `ONE_OF_LIST` 0,1,2,3 or `NUMBER_BETWEEN`). Unbounded rules keep a finite strip via the offline max. This means pills change with the gsheet rules (no manual reseed). On static deploys with no proxyBase, public CSV has no rules, so `data/validations-restaurant.json` + `data/validations-alpha.json` committed snapshots supply the conditionals for the chosen data source.
 
 ---
 
