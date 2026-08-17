@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "cb88896",
-  "hashFull": "cb888968e7029ee063a3acf39931260b7407dd13",
-  "subject": "QA: 2026-08-17 Stripes pattern is appearing as horizontal parallel lines when scroll speed is set to 0 (pass 1)"
+  "hash": "11e62f7",
+  "hashFull": "11e62f77d74f7580be0b4d0e108af9d8c2dbd2b0",
+  "subject": "QA: 2026-08-17 Check Live buttons should open new tabs 2 (pass 1)"
 };
