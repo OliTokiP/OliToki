@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "fc4329d",
-  "hashFull": "fc4329d1690e8b61df2d6899e143eaea71e9262a",
-  "subject": "QA: 2026-08-17 Locked state for tickets that are in progress (pass 5)"
+  "hash": "954f7bd",
+  "hashFull": "954f7bd4189713a05597c708ec998f8622c1c5d6",
+  "subject": "QA: 2026-08-17 Post-ticket screen should include link to ticket that was just logged (pass 1)"
 };

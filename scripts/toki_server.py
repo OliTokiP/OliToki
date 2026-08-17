@@ -40,8 +40,9 @@ DEFAULT_KEY = ROOT / "secrets" / "google-service-account.json"
 DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
 DEFAULT_SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY"
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
 ]
+STYLE_THEME_GID = "183083022"
 _SHEET_ID_IN_URL = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 _BARE_SHEET_ID = re.compile(r"^[a-zA-Z0-9-_]{30,}$")
 
@@ -685,6 +686,184 @@ class SheetsBackend:
             f"fetch={time.time() - t0:.2f}s"
         )
         return {"gid": gid, "title": title, "fields": fields}
+
+    def catalog_sheet_ids(self) -> set[str]:
+        live = self.refresh_settings(force=False)
+        ids: set[str] = set()
+        for extra in (self.sheet_id, self.fallback_sheet_id):
+            sid = extract_spreadsheet_id(extra or "")
+            if sid:
+                ids.add(sid)
+        for c in live.get("catalog") or []:
+            if not isinstance(c, dict):
+                continue
+            sid = extract_spreadsheet_id(
+                c.get("sheetId") or c.get("url") or ""
+            )
+            if sid:
+                ids.add(sid)
+        return ids
+
+    def resolve_catalog_sheet_id(self, requested: str | None) -> tuple[str, str]:
+        """Return (spreadsheet_id, source_name) for a catalog workbook."""
+        live = self.refresh_settings(force=False)
+        catalog = [
+            c for c in (live.get("catalog") or []) if isinstance(c, dict)
+        ]
+        want = extract_spreadsheet_id(requested or "")
+        if want:
+            if want not in self.catalog_sheet_ids():
+                raise ValueError("sheetId is not a catalog data source")
+            for c in catalog:
+                sid = extract_spreadsheet_id(
+                    c.get("sheetId") or c.get("url") or ""
+                )
+                if sid == want:
+                    return want, str(c.get("name") or "").strip()
+            return want, ""
+        sid = extract_spreadsheet_id(
+            (live.get("sheetId") or self.sheet_id or self.fallback_sheet_id or "")
+        )
+        if not sid:
+            raise ValueError("no data source spreadsheet")
+        return sid, str(live.get("sourceName") or live.get("dataSource") or "").strip()
+
+    def _style_tab_title(self, spreadsheet_id: str) -> str:
+        with self._api_lock:
+            meta = (
+                self.sheets.spreadsheets()
+                .get(
+                    spreadsheetId=spreadsheet_id,
+                    fields="sheets.properties(sheetId,title)",
+                )
+                .execute()
+            )
+        want_gid = str(STYLE_THEME_GID)
+        named = []
+        for sh in meta.get("sheets") or []:
+            p = sh.get("properties") or {}
+            title = str(p.get("title") or "")
+            if str(p.get("sheetId")) == want_gid:
+                return title
+            folded = re.sub(r"[^a-z0-9]+", "", title.lower())
+            if folded == "styleandtheme" and "(old)" not in title.lower():
+                named.append(title)
+        if named:
+            return named[0]
+        raise KeyError("Style and Theme tab not found")
+
+    @staticmethod
+    def _header_fold(raw: str) -> str:
+        name = str(raw or "").strip()
+        name = re.sub(r"\s*[\(\[].*[\)\]]\s*$", "", name).strip()
+        return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+    @staticmethod
+    def _col_letters(idx: int) -> str:
+        n = int(idx) + 1
+        out = ""
+        while n > 0:
+            n, rem = divmod(n - 1, 26)
+            out = chr(65 + rem) + out
+        return out or "A"
+
+    def _theme_selector_target(
+        self, rows: list, want_name: str
+    ) -> tuple[str, str]:
+        """Map a theme name to the Settings Theme Selector A1 + canonical name."""
+        header_idx = -1
+        for i, row in enumerate(rows or []):
+            a = _cell(row, 0).lower()
+            if a == "settings" or a.startswith("settings"):
+                if i + 1 < len(rows):
+                    header_idx = i + 1
+                break
+        col = 0
+        data_idx = 2
+        if header_idx >= 0:
+            headers = rows[header_idx] or []
+            for c, h in enumerate(headers):
+                if self._header_fold(str(h or "")) == "themeselector":
+                    col = c
+                    break
+            data_idx = header_idx + 1
+
+        db = -1
+        for i, row in enumerate(rows or []):
+            a = _cell(row, 0).lower()
+            if a.startswith("themes database"):
+                db = i + 2
+                break
+        if db < 0:
+            db = 5
+        themes: list[str] = []
+        for row in (rows or [])[db:]:
+            name = _cell(row, 0)
+            low = name.lower()
+            if not name or low in ("theme name", "settings"):
+                continue
+            if "glossary" in low:
+                continue
+            themes.append(name)
+        key = str(want_name or "").strip().lower()
+        canonical = ""
+        for name in themes:
+            if name.lower() == key:
+                canonical = name
+                break
+        if not canonical:
+            raise ValueError("theme is not in Themes Database")
+        return f"{self._col_letters(col)}{data_idx + 1}", canonical
+
+    def write_theme(self, theme: str, sheet_id: str | None = None) -> dict:
+        name = str(theme or "").strip()
+        if not name or len(name) > 64:
+            raise ValueError("invalid theme")
+        sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
+        title = self._style_tab_title(sid)
+        safe_title = "'" + title.replace("'", "''") + "'"
+        t0 = time.time()
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=sid,
+                    range=safe_title + "!A1:A40",
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        rows = result.get("values") or []
+        a1, canonical = self._theme_selector_target(rows, name)
+        target = safe_title + "!" + a1
+        with self._api_lock:
+            updated = (
+                self.sheets.spreadsheets()
+                .values()
+                .update(
+                    spreadsheetId=sid,
+                    range=target,
+                    valueInputOption="USER_ENTERED",
+                    body={"values": [[canonical]]},
+                )
+                .execute()
+            )
+        if sid == self.sheet_id:
+            _flush_data_caches()
+        _log(
+            f"theme write {source_name or sid} {target}={canonical!r} "
+            f"cells={updated.get('updatedCells')} "
+            f"({time.time() - t0:.2f}s)"
+        )
+        return {
+            "ok": True,
+            "theme": canonical,
+            "range": updated.get("updatedRange") or target,
+            "sheetId": sid,
+            "sourceName": source_name,
+        }
 
 
 def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
