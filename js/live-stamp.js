@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "6d571ff",
-  "hashFull": "6d571ff3b39fc1763707b043ccc4743c9df273a2",
-  "subject": "QA: 2026-08-16 Ticket type selector (pass 1)"
+  "hash": "8e1c04a",
+  "hashFull": "8e1c04a27d5c9938cb32ee90cfdb4a9d25c5e934",
+  "subject": "QA: 2026-08-16 Put New Ticket button at the top of the page (pass 1)"
 };

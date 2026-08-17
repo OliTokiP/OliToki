@@ -56,6 +56,11 @@
     }
     a { color: inherit; }
 
+    .new-ticket {
+      font-weight: 500; margin: 0 0 .5rem; padding: .55rem .75rem; border: 1px solid #bbb; border-radius: 8px;
+      display: block; text-align: center; text-decoration: none; color: inherit; font-size: 1.1rem;
+    }
+
     .attach-picks { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: .25rem; }
     .attach-preview { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
     .attach-preview .att {
@@ -89,7 +94,7 @@
   </style>
 </head>
 <body>
-  <h1 id="heading">New ticket</h1>
+  <div class="new-ticket" id="heading">New ticket</div>
   <p class="sub">Works from your phone anywhere. Files a GitHub issue; the Mac writes the vault ticket when it is online.</p>
   <div class="live" id="live">Pages vs git: checking…</div>
 
