@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
-  <title>Log a bug — OliToki</title>
+  <title>Log a ticket — OliToki</title>
   <style>
     :root { color-scheme: light dark; }
     html { -webkit-text-size-adjust: 100%; }
@@ -89,7 +89,7 @@
   </style>
 </head>
 <body>
-  <h1 id="heading">New bug</h1>
+  <h1 id="heading">New ticket</h1>
   <p class="sub">Works from your phone anywhere. Files a GitHub issue; the Mac writes the vault ticket when it is online.</p>
   <div class="live" id="live">Pages vs git: checking…</div>
 
@@ -159,7 +159,7 @@
       <label class="pick"><input type="radio" name="model" value="grok-4.20-non-reasoning" /> grok-4.20-non-reasoning</label>
       <label class="pick"><input type="radio" name="model" value="grok-4.20-reasoning" /> grok-4.20-reasoning</label>
     </div>
-    <button type="submit" id="go">Log Bug</button>
+    <button type="submit" id="go">Log ticket</button>
   </form>
 
   <script>
@@ -193,12 +193,8 @@
 
     function updateTypeUI() {
       const isFeature = kind() === "feature";
-      document.getElementById("heading").textContent = isFeature ? "New request" : "New bug";
-      document.title = isFeature ? "Log a request — OliToki" : "Log a bug — OliToki";
       const lab = document.getElementById("report-lab");
       if (lab && lab.firstChild) lab.firstChild.textContent = isFeature ? "The request " : "The report ";
-      const go = document.getElementById("go");
-      if (go) go.textContent = isFeature ? "Log request" : "Log Bug";
       const why = document.getElementById("why-wrap");
       if (why) why.hidden = !isFeature;
     }
