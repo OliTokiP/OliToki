@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "db0076a",
-  "hashFull": "db0076a50cd6ba449ac807b69c7a9aca0d72eed2",
-  "subject": "QA: 2026-08-17 Check Live buttons should open new tabs 2 (pass 3)"
+  "hash": "c04bec9",
+  "hashFull": "c04bec9dd518ca8e34311aa34ffc1e4d652f4e8b",
+  "subject": "QA: 2026-08-17 Under Version in system settings, include latest git commit comment (pass 1)"
 };
