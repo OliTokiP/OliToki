@@ -1380,6 +1380,7 @@
       state.dialog = null;
       var next = state.pendingLeave;
       state.pendingLeave = null;
+      renderDialog();
       persistThemeWrite()
         .then(function (themeResult) {
           return persistFallback().then(function (fb) {

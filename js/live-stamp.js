@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "7b6424e",
-  "hashFull": "7b6424e3b174824fd0adb98440723c7e9384682d",
-  "subject": "QA: 2026-08-17 Add pill indicator for Draft (pass 1)"
+  "hash": "a084cb0",
+  "hashFull": "a084cb019e39f5c8c8cdcc6296c0a2b76b0a4026",
+  "subject": "QA: 2026-08-17 Two way communication with sheets (pass 1)"
 };
