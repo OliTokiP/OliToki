@@ -2,11 +2,10 @@
  * OliToki Menu Manager — one-way sheet read.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
  * Never writes. Field-name draft only (no column indexes in the UI).
- * Number pills (scroll / presentation) come from dataValidation when the
- * proxy is present (supports same-origin or ?proxyBase=... cross-origin when
- * loading static UI from gh-pages / file / plain static server), or from
- * committed data/validations-*.json snapshots on static with no proxy.
- * Public CSV never includes validation rules.
+ * Number pills (scroll / presentation) come from Style Settings
+ * dataValidation via GET /api/sheets/validations (Sheets API on toki_server).
+ * GitHub Pages has no server and cannot hold the service account, so it
+ * cannot call that API. Offline SPEED_TILES are the fallback there.
  */
 (function (global) {
   "use strict";
@@ -36,29 +35,6 @@
   };
 
   var _proxy = null;
-  var _proxyBaseUsed = "";
-
-  function getProxyBase() {
-    try {
-      var params =
-        typeof location !== "undefined" && location && location.search
-          ? new URLSearchParams(location.search)
-          : null;
-      var b = params
-        ? params.get("proxyBase") || params.get("apiBase") || params.get("proxy") || ""
-        : "";
-      if (b) b = String(b).trim().replace(/\/+$/, "");
-      return b || "";
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function apiUrl(path) {
-    var b = _proxyBaseUsed || getProxyBase();
-    if (b) return b + path;
-    return path;
-  }
 
   function cell(row, idx) {
     if (!row || idx == null || idx < 0 || idx >= row.length) return "";
@@ -433,13 +409,8 @@
 
   async function detectProxy() {
     if (_proxy != null) return _proxy;
-    var base = getProxyBase();
-    _proxyBaseUsed = base;
-    var url = base ? base + "/api/health" : "/api/health";
     try {
-      var opts = { cache: "no-store" };
-      if (base) opts.mode = "cors";
-      var res = await fetch(url, opts);
+      var res = await fetch("/api/health", { cache: "no-store" });
       if (!res.ok) {
         _proxy = false;
         return false;
@@ -481,14 +452,12 @@
       try {
         return parseCsv(
           await fetchText(
-            apiUrl(
-              "/api/sheets/csv?gid=" +
-                encodeURIComponent(String(gid)) +
-                "&single=1" +
-                extra +
-                "&t=" +
-                Date.now()
-            )
+            "/api/sheets/csv?gid=" +
+              encodeURIComponent(String(gid)) +
+              "&single=1" +
+              extra +
+              "&t=" +
+              Date.now()
           )
         );
       } catch (err) {
@@ -580,8 +549,8 @@
     if (useProxy) {
       try {
         var res = await fetch(
-          apiUrl("/api/settings?" + (force ? "force=1&" : "") + "t=" + Date.now()),
-          { cache: "no-store", mode: _proxyBaseUsed ? "cors" : undefined }
+          "/api/settings?" + (force ? "force=1&" : "") + "t=" + Date.now(),
+          { cache: "no-store" }
         );
         if (res.ok) {
           var j = await res.json();
@@ -728,44 +697,18 @@
     if (!useProxy) return null;
     try {
       var res = await fetch(
-        apiUrl(
-          "/api/sheets/validations?gid=" +
-            encodeURIComponent(String(gid)) +
-            (force ? "&force=1" : "") +
-            "&t=" +
-            Date.now()
-        ),
-        { cache: "no-store", mode: _proxyBaseUsed ? "cors" : undefined }
+        "/api/sheets/validations?gid=" +
+          encodeURIComponent(String(gid)) +
+          (force ? "&force=1" : "") +
+          "&t=" +
+          Date.now(),
+        { cache: "no-store" }
       );
       if (!res.ok) throw new Error("HTTP " + res.status);
       var j = await res.json();
       return (j && j.fields) || null;
     } catch (err) {
       console.warn("manager-sheet: validations failed", err);
-      return null;
-    }
-  }
-
-  async function fetchValidationsPublic(settings) {
-    // Static / GitHub Pages / remote deploys (no proxyBase param) have no
-    // /api proxy. Load committed snapshot of Style Settings dataValidation.
-    // Snapshots are per-catalog. When ?proxyBase=... is given we use the live
-    // proxy path instead and get conditionals that change with the sheet.
-    // Falls back to manager-data.js defaults if snapshot missing.
-    if (!settings) return null;
-    var srcName = settings.sourceName || settings.dataSource || "";
-    var key = sourceId(srcName);
-    if (key !== "restaurant" && key !== "alpha") key = "restaurant";
-    var url = "data/validations-" + key + ".json?t=" + Date.now();
-    try {
-      var text = await fetchText(url);
-      var j = JSON.parse(text);
-      return (j && j.fields) || j || null;
-    } catch (err) {
-      console.warn(
-        "manager-sheet: public validations snapshot missing for " + key + " (using offline defaults)",
-        err
-      );
       return null;
     }
   }
@@ -832,13 +775,6 @@
         settings.sheetId = settings.catalog[0].sheetId || "";
       }
       styleRows = await fetchCsv(STYLE_GID, settings.sheetId, force);
-      validationFields = await fetchValidationsPublic(settings);
-      // Public CSV has no dataValidation. If no proxyBase configured we use
-      // committed snapshot (data/validations-*.json) so gh-pages/remote static
-      // gets a recent view of sheet conditionals. If ?proxyBase=... supplied,
-      // detectProxy succeeds (CORS ok on server) and we fetch live
-      // validations/CSV just like the same-origin proxy case; rules change
-      // with the gsheet with no reseed/deploy required.
     }
     if (!settings.sheetId && settings.catalog && settings.catalog.length) {
       settings.sheetId = settings.catalog[0].sheetId || "";

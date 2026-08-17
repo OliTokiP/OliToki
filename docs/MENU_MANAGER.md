@@ -72,7 +72,7 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Number pills (BG Scroll Speed / Presentation Speed):** offline defaults live in `manager-data.js` `speedTiles`. With the Sheets proxy (same-origin or cross-origin via `?proxyBase=...` when loading the UI statically from gh-pages or a plain server), load pulls **dataValidation** on the Style Settings row (`/api/sheets/validations?gid=…`) and rebuilds the pill strip from the condition (e.g. `ONE_OF_LIST` 0,1,2,3 or `NUMBER_BETWEEN`). Unbounded rules keep a finite strip via the offline max. This means pills change with the gsheet rules (no manual reseed). On static deploys with no proxyBase, public CSV has no rules, so `data/validations-restaurant.json` + `data/validations-alpha.json` committed snapshots supply the conditionals for the chosen data source.
+**Number pills (BG Scroll Speed / Presentation Speed):** follow Style Settings `dataValidation` from the Sheets API (`GET /api/sheets/validations?gid=…` on `toki_server`). Unbounded rules keep a finite strip via the offline max in `manager-data.js`. GitHub Pages is static and cannot hold the service account, so it cannot call that API — pills fall back to the offline defaults there until a hosted API exists ([FUTURE_HOSTED_API.md](./FUTURE_HOSTED_API.md)).
 
 ---
 
@@ -83,10 +83,9 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `manager.html` | Shell |
 | `css/manager.css` | Layout + theme tokens |
 | `js/manager-data.js` | Offline catalogs, defaults, asset paths |
-| `js/manager-sheet.js` | One-way Settings + Style and Theme read (+ validations) |
+| `js/manager-sheet.js` | One-way Settings + Style and Theme read (+ validations via API) |
 | `js/motion-presets.js` | Shared motion digits (also for live boards) |
 | `js/manager.js` | Router, draft/commit, preview |
-| `data/validations-*.json` | Committed snapshots of Style Settings dataValidation for static deploys |
 | `scripts/toki_server.py` | `/api/sheets/validations` (Settings-row rules by header) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. Do not teach this UI raw column indexes; write adapter is a later slice. Number options should come from sheet dataValidation when present, not hard-coded spans.
