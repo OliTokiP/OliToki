@@ -218,7 +218,12 @@
   function statusVersion() {
     var b = window.TOKI_BUILD;
     var hash = b && (b.hash || (b.hashFull && String(b.hashFull).slice(0, 7)));
-    return hash || D.version;
+    var h = hash || D.version;
+    var subj = b && b.subject;
+    if (subj) {
+      return h + " — " + subj;
+    }
+    return h;
   }
 
   function formatHex(hex) {

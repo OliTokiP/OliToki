@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "b6844a8",
-  "hashFull": "b6844a8e6236687c001d237f5cff874357361ca7",
-  "subject": "QA: 2026-08-17 Two way communication with sheets (pass 3)"
+  "hash": "6998705",
+  "hashFull": "69987053b388f8079f6ae8094e9b9c9a0e04e004",
+  "subject": "QA: 2026-08-17 Under Version in system settings, include latest git commit comment (pass 2)"
 };
