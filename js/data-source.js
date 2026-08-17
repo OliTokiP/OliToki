@@ -30,7 +30,14 @@
   /** OliToki Menu Settings — Data Source + Require Restart (not the menu). */
   var SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY";
 
+  /**
+   * Hosted Sheets proxy (Cloud Run). Empty = same-origin `/api` (local toki_server).
+   * GitHub Pages / phones fall back to this when `/api/health` is missing.
+   */
+  var API_BASE = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
+
   window.TOKI_DATA_SOURCE = DATA_SOURCE;
   window.TOKI_LOCAL_XLSX = LOCAL_XLSX;
   window.TOKI_SETTINGS_SHEET_ID = SETTINGS_SHEET_ID;
+  if (!window.TOKI_API_BASE) window.TOKI_API_BASE = API_BASE;
 })();

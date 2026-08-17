@@ -30,9 +30,9 @@ It should feel like a polished iPhone Settings app. Desktop is a centered phone 
 | Layer | When it updates |
 |-------|-----------------|
 | **This app’s chrome** | Immediately, from a **draft** cache (CSS variables) |
-| **TV boards** | After Save writes Theme Selector — boards pick it up on their next sheet load |
+| **TV boards** | After Save writes Theme Selector + Background cells — boards pick them up on their next sheet load |
 
-Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm writes the Theme dropdown to Theme Selector on the **selected catalog** (`POST /api/manager/theme` → Settings row, today **A3**). The UI sends the theme name; the server adapter maps the cell. Other Style fields stay local. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. That file is what we load if the sheet is unreachable. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
+Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm writes the Theme dropdown and the **Background** conglomerate on the **selected catalog** (`POST /api/manager/style`). The UI sends field names; the server adapter maps Theme Selector (**A3**), BG Color (**B3**), BG Pattern (**C3**), BG Wallpaper (**D3**). Pattern wins on the live board, so a color or wallpaper choice writes `none` into the unused of C/D. Scroll speed writes with the background group. Other Style fields stay local. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
 
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
@@ -64,8 +64,8 @@ Context-driven children (same idea as the mockup):
 | Parent | Reveals |
 |--------|---------|
 | Background = a theme color | (none — color also clears pattern/wallpaper) |
-| Background = Pattern | Background Color, Pattern Type, Pattern Color 1 / 2, BG Scroll Speed |
-| Background = Wallpaper | Background Color, Wallpaper Type, BG Scroll Speed |
+| Background = Pattern | Pattern Type, Pattern Color 1 / 2, BG Scroll Speed |
+| Background = Wallpaper | Wallpaper Type, BG Scroll Speed |
 | Presentation Style = Encore | Spotlight Style, Spotlight Color, Encore Background |
 
 Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
@@ -91,19 +91,19 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `manager.html` | Shell |
 | `css/manager.css` | Layout + theme tokens |
 | `js/manager-data.js` | Offline catalogs, defaults, asset paths |
-| `js/manager-sheet.js` | Settings + Style and Theme read; Theme write via `/api/manager/theme` |
+| `js/manager-sheet.js` | Settings + Style and Theme read; Theme + Background write via `/api/manager/style` |
 | `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
-| `js/manager.js` | Router, draft/commit, preview; Yes writes Theme Selector |
-| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/theme` |
+| `js/manager.js` | Router, draft/commit, preview; Yes writes Theme + Background |
+| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style` |
 | `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
-Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme write is the first adapter (`Theme Selector` / A3). Number options should come from sheet dataValidation when present, not hard-coded spans.
+Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme + Background use the server adapter (`Theme Selector` / A3, `BG Color` / B3, `BG Pattern` / C3, `BG Wallpaper` / D3). Number options should come from sheet dataValidation when present, not hard-coded spans.
 
 ---
 
 ## 6. Not in this prototype
 
-- Writes for other Style fields, OliToki Menu Settings, or Data Source
+- Writes for presentation / Encore, OliToki Menu Settings, or Data Source
 - Board / box / announcement item editors
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 

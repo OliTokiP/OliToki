@@ -1,8 +1,10 @@
 /**
  * OliToki Menu Manager — sheet read + theme write.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
- * Field-name draft only (no column indexes in the UI). Theme confirm
- * posts the name to /api/manager/theme; the server maps Theme Selector (A3).
+ * Field-name draft only (no column indexes in the UI). Confirm posts
+ * theme + background to /api/manager/style; the server maps Theme
+ * Selector (A3) and BG Color / Pattern / Wallpaper (B3 / C3 / D3).
+ * Switching to a color writes none into C3 and D3 (pattern wins on boards).
  * Number pills follow a validator in the Settings header — same CSV
  * Pages already reads. House style:
  *   BG Scroll Speed (0<=5)
@@ -574,21 +576,37 @@
     return SETTINGS_SHEET_ID;
   }
 
+  var _proxyBase = "";
+
+  function apiUrl(path) {
+    var p = path.charAt(0) === "/" ? path : "/" + path;
+    var base = _proxyBase || String(global.TOKI_API_BASE || "").replace(/\/$/, "");
+    return base ? base + p : p;
+  }
+
   async function detectProxy() {
     if (_proxy != null) return _proxy;
-    try {
-      var res = await fetch("/api/health", { cache: "no-store" });
-      if (!res.ok) {
-        _proxy = false;
-        return false;
-      }
-      var j = await res.json();
-      _proxy = !!(j && j.sheetsApi);
-      return _proxy;
-    } catch (e) {
-      _proxy = false;
-      return false;
+    var configured = String(global.TOKI_API_BASE || "").replace(/\/$/, "");
+    var candidates = ["/api/health"];
+    if (configured) candidates.push(configured + "/api/health");
+    var i;
+    for (i = 0; i < candidates.length; i++) {
+      try {
+        var res = await fetch(candidates[i], { cache: "no-store" });
+        if (!res.ok) continue;
+        var j = await res.json();
+        if (j && j.sheetsApi) {
+          _proxy = true;
+          _proxyBase =
+            candidates[i].indexOf("http") === 0
+              ? candidates[i].replace(/\/api\/health$/, "")
+              : "";
+          return true;
+        }
+      } catch (e) {}
     }
+    _proxy = false;
+    return false;
   }
 
   function publicCsvUrl(sheetId, gid) {
@@ -619,7 +637,7 @@
       try {
         return parseCsv(
           await fetchText(
-            "/api/sheets/csv?gid=" +
+            apiUrl("/api/sheets/csv") + "?gid=" +
               encodeURIComponent(String(gid)) +
               "&single=1" +
               extra +
@@ -716,7 +734,7 @@
     if (useProxy) {
       try {
         var res = await fetch(
-          "/api/settings?" + (force ? "force=1&" : "") + "t=" + Date.now(),
+          apiUrl("/api/settings") + "?" + (force ? "force=1&" : "") + "t=" + Date.now(),
           { cache: "no-store" }
         );
         if (res.ok) {
@@ -935,8 +953,10 @@
     var bgRole = colorRoleFromTheme(rawBg, chosen);
     if (!bgRole) bgRole = "main";
     var background = bgRole;
-    if (wp) background = "wallpaper";
-    else if (pat) background = "pattern";
+    // Boards: pattern wins over wallpaper. Keep Manager read in the same order
+    // so a leftover D3 cannot hide a live C3 stripe.
+    if (pat) background = "pattern";
+    else if (wp) background = "wallpaper";
 
     console.info(
       "Style Settings BG Color:",
@@ -981,7 +1001,7 @@
     if (!useProxy) return null;
     try {
       var res = await fetch(
-        "/api/sheets/validations?gid=" +
+        apiUrl("/api/sheets/validations") + "?gid=" +
           encodeURIComponent(String(gid)) +
           (force ? "&force=1" : "") +
           "&t=" +
@@ -1191,7 +1211,7 @@
 
   async function saveFallback(entry) {
     try {
-      var res = await fetch("/api/manager/fallback", {
+      var res = await fetch(apiUrl("/api/manager/fallback"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry || {}),
@@ -1205,21 +1225,17 @@
     }
   }
 
-  async function writeTheme(themeName, sheetId) {
-    var name = String(themeName || "").trim();
-    if (!name) return { ok: false, error: "missing theme" };
+  async function writeStyle(payload) {
+    payload = payload || {};
     var useProxy = await detectProxy();
     if (!useProxy) {
       return { ok: false, error: "Needs local Menu Manager server" };
     }
     try {
-      var res = await fetch("/api/manager/theme", {
+      var res = await fetch(apiUrl("/api/manager/style"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          theme: name,
-          sheetId: String(sheetId || "").trim(),
-        }),
+        body: JSON.stringify(payload),
       });
       var j = {};
       try {
@@ -1235,15 +1251,25 @@
       }
       return j;
     } catch (err) {
-      console.warn("manager-sheet: theme write failed", err);
+      console.warn("manager-sheet: style write failed", err);
       return { ok: false, error: String((err && err.message) || err) };
     }
+  }
+
+  async function writeTheme(themeName, sheetId) {
+    var name = String(themeName || "").trim();
+    if (!name) return { ok: false, error: "missing theme" };
+    return writeStyle({
+      theme: name,
+      sheetId: String(sheetId || "").trim(),
+    });
   }
 
   global.TOKI_MANAGER_SHEET = {
     load: load,
     loadFallback: loadFallback,
     saveFallback: saveFallback,
+    writeStyle: writeStyle,
     writeTheme: writeTheme,
     styleGid: STYLE_GID,
   };

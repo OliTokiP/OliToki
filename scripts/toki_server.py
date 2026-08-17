@@ -15,7 +15,10 @@ Usage:
 Env:
   TOKI_SHEET_ID   default spreadsheet id
   TOKI_SA_KEY     path to service account JSON
-  TOKI_PORT       port (default 8765)
+  TOKI_SA_JSON    service account JSON text (Cloud Run secret; preferred in host)
+  TOKI_PORT       port (default 8765). Cloud Run sets PORT — that wins.
+  TOKI_BIND       bind address (default 127.0.0.1; 0.0.0.0 when PORT/TOKI_API_ONLY)
+  TOKI_API_ONLY   1 = API only, no static files (hosted)
 """
 
 from __future__ import annotations
@@ -227,15 +230,24 @@ def _load_creds(key_path: Path):
             f"({e})"
         )
 
-    if not key_path.is_file():
-        raise SystemExit(
-            f"Service account key not found:\n  {key_path}\n"
-            "See scripts/gsheet_api.md"
+    raw = (os.environ.get("TOKI_SA_JSON") or "").strip()
+    if raw:
+        try:
+            info = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"TOKI_SA_JSON is not valid JSON ({e})")
+        creds = service_account.Credentials.from_service_account_info(
+            info, scopes=SCOPES
         )
-
-    creds = service_account.Credentials.from_service_account_file(
-        str(key_path), scopes=SCOPES
-    )
+    else:
+        if not key_path.is_file():
+            raise SystemExit(
+                f"Service account key not found:\n  {key_path}\n"
+                "See scripts/gsheet_api.md"
+            )
+        creds = service_account.Credentials.from_service_account_file(
+            str(key_path), scopes=SCOPES
+        )
     sheets = build("sheets", "v4", credentials=creds, cache_discovery=False)
     return creds, sheets
 
@@ -767,10 +779,7 @@ class SheetsBackend:
             out = chr(65 + rem) + out
         return out or "A"
 
-    def _theme_selector_target(
-        self, rows: list, want_name: str
-    ) -> tuple[str, str]:
-        """Map a theme name to the Settings Theme Selector A1 + canonical name."""
+    def _settings_layout(self, rows: list) -> tuple[int, int, dict[str, int]]:
         header_idx = -1
         for i, row in enumerate(rows or []):
             a = _cell(row, 0).lower()
@@ -778,16 +787,53 @@ class SheetsBackend:
                 if i + 1 < len(rows):
                     header_idx = i + 1
                 break
-        col = 0
-        data_idx = 2
-        if header_idx >= 0:
-            headers = rows[header_idx] or []
-            for c, h in enumerate(headers):
-                if self._header_fold(str(h or "")) == "themeselector":
+        if header_idx < 0:
+            header_idx = 1
+        headers = (rows[header_idx] if header_idx < len(rows or []) else []) or []
+        data_idx = header_idx + 1
+        cols: dict[str, int] = {}
+        for c, h in enumerate(headers):
+            fold = self._header_fold(str(h or ""))
+            if fold:
+                cols[fold] = c
+        return header_idx, data_idx, cols
+
+    def _a1_for(self, cols: dict[str, int], folds: list[str], data_idx: int, default_col: int) -> str:
+        for fold in folds:
+            if fold in cols:
+                return f"{self._col_letters(cols[fold])}{data_idx + 1}"
+        return f"{self._col_letters(default_col)}{data_idx + 1}"
+
+    def _glossary_list(self, rows: list, *name_folds: str) -> list[str]:
+        header_idx = -1
+        col = -1
+        want = set(name_folds)
+        for i, row in enumerate(rows or []):
+            for c, raw in enumerate(row or []):
+                fold = self._header_fold(str(raw or ""))
+                if fold in want:
+                    header_idx = i
                     col = c
                     break
-            data_idx = header_idx + 1
+            if col >= 0:
+                break
+        if col < 0:
+            return []
+        out: list[str] = []
+        for row in (rows or [])[header_idx + 1 :]:
+            name = _cell(row, col)
+            if not name:
+                continue
+            low = name.lower()
+            if low in ("theme name", "settings") or "glossary" in low:
+                continue
+            out.append(name)
+        return out
 
+    def _theme_names(self, rows: list) -> list[str]:
+        listed = self._glossary_list(rows, "themename")
+        if listed:
+            return listed
         db = -1
         for i, row in enumerate(rows or []):
             a = _cell(row, 0).lower()
@@ -796,7 +842,7 @@ class SheetsBackend:
                 break
         if db < 0:
             db = 5
-        themes: list[str] = []
+        names: list[str] = []
         for row in (rows or [])[db:]:
             name = _cell(row, 0)
             low = name.lower()
@@ -804,21 +850,151 @@ class SheetsBackend:
                 continue
             if "glossary" in low:
                 continue
-            themes.append(name)
-        key = str(want_name or "").strip().lower()
-        canonical = ""
-        for name in themes:
-            if name.lower() == key:
-                canonical = name
-                break
-        if not canonical:
-            raise ValueError("theme is not in Themes Database")
-        return f"{self._col_letters(col)}{data_idx + 1}", canonical
+            names.append(name)
+        return names
 
-    def write_theme(self, theme: str, sheet_id: str | None = None) -> dict:
-        name = str(theme or "").strip()
-        if not name or len(name) > 64:
+    def _canonical_theme(self, rows: list, want_name: str) -> str:
+        key = str(want_name or "").strip().lower()
+        if not key or len(key) > 64:
             raise ValueError("invalid theme")
+        for name in self._theme_names(rows):
+            if name.lower() == key:
+                return name
+        raise ValueError("theme is not in Themes Database")
+
+    @staticmethod
+    def _is_none_token(raw: str) -> bool:
+        s = str(raw or "").strip().lower()
+        return (not s) or s in (
+            "none",
+            "off",
+            "0",
+            "false",
+            "no",
+            "-",
+            "—",
+            "–",
+            "n/a",
+            "solid",
+        )
+
+    def _match_glossary(self, values: list[str], want: str, kinds: str) -> str:
+        key = re.sub(r"[^a-z0-9]+", "", str(want or "").lower())
+        if kinds == "none" or self._is_none_token(want):
+            for v in values:
+                if self._is_none_token(v):
+                    return v
+            return "none"
+        for v in values:
+            fold = re.sub(r"[^a-z0-9]+", "", v.lower())
+            if fold == key:
+                return v
+        if kinds == "color":
+            aliases = {
+                "main": ("maincolor", "main"),
+                "secondary": ("secondarycolor", "secondary"),
+                "highlight": ("highlightcolor", "highlight"),
+                "special": (
+                    "highlightcolorspecial",
+                    "special",
+                    "highlightspecial",
+                ),
+            }
+            want_ids = None
+            for role, names in aliases.items():
+                if key in names or key == role:
+                    want_ids = names + (role,)
+                    break
+            if want_ids:
+                for v in values:
+                    fold = re.sub(r"[^a-z0-9]+", "", v.lower())
+                    if fold in want_ids:
+                        return v
+                    if "special" in want_ids and "special" in fold:
+                        return v
+                fallbacks = {
+                    "main": "main color",
+                    "secondary": "secondary color",
+                    "highlight": "highlight color",
+                    "special": "highlight color (special)",
+                }
+                for role, names in aliases.items():
+                    if key in names or key == role:
+                        return fallbacks[role]
+        if kinds == "wallpaper":
+            for v in values:
+                fold = v.lower()
+                if key and key in re.sub(r"[^a-z0-9]+", "", fold):
+                    return v
+                if "galaxy" in key and "galaxy" in fold:
+                    return v
+                if "film" in key and "film" in fold:
+                    return v
+            if "film" in key:
+                return "film.jpg"
+            if key and key not in ("upload",):
+                return "galaxy-bg.jpg"
+        if kinds == "pattern":
+            if key and "stripe" in key:
+                for v in values:
+                    if "stripe" in v.lower():
+                        return v
+                return "stripes"
+        if values:
+            return values[0]
+        return str(want or "").strip() or "none"
+
+    def _background_updates(self, rows: list, body: dict) -> dict[str, str]:
+        """Exclusive BG Color / Pattern / Wallpaper. Pattern wins on the board."""
+        colors = self._glossary_list(rows, "colorpickerfordropdowns", "colorpicker")
+        patterns = self._glossary_list(rows, "patterns", "patternoptions")
+        wallpapers = self._glossary_list(rows, "wallpaperoptions", "wallpapers")
+        none_pat = self._match_glossary(patterns, "none", "none")
+        none_wp = self._match_glossary(wallpapers, "none", "none")
+        mode = str(body.get("background") or "").strip().lower()
+        bg_color = str(body.get("bgColor") or body.get("bg_color") or "").strip()
+        pattern = str(body.get("patternType") or body.get("pattern") or "").strip()
+        wallpaper = str(
+            body.get("wallpaper") or body.get("bgWallpaper") or ""
+        ).strip()
+        if mode in ("pattern", "wallpaper"):
+            pass
+        elif mode:
+            if not bg_color:
+                bg_color = mode
+            mode = "color"
+        else:
+            if wallpaper and not self._is_none_token(wallpaper) and wallpaper != "upload":
+                mode = "wallpaper"
+            elif pattern and not self._is_none_token(pattern):
+                mode = "pattern"
+            else:
+                mode = "color"
+        if not bg_color:
+            bg_color = "main"
+        color_val = self._match_glossary(colors, bg_color, "color")
+        if mode == "pattern":
+            return {
+                "bgcolor": color_val,
+                "bgpattern": self._match_glossary(
+                    patterns, pattern or "stripes", "pattern"
+                ),
+                "bgwallpaper": none_wp,
+            }
+        if mode == "wallpaper":
+            wp = wallpaper if wallpaper != "upload" else "galaxy"
+            return {
+                "bgcolor": color_val,
+                "bgpattern": none_pat,
+                "bgwallpaper": self._match_glossary(wallpapers, wp, "wallpaper"),
+            }
+        return {
+            "bgcolor": color_val,
+            "bgpattern": none_pat,
+            "bgwallpaper": none_wp,
+        }
+
+    def write_style(self, body: dict, sheet_id: str | None = None) -> dict:
         sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
         title = self._style_tab_title(sid)
         safe_title = "'" + title.replace("'", "''") + "'"
@@ -836,37 +1012,114 @@ class SheetsBackend:
                 .execute()
             )
         rows = result.get("values") or []
-        a1, canonical = self._theme_selector_target(rows, name)
-        target = safe_title + "!" + a1
+        _header_idx, data_idx, cols = self._settings_layout(rows)
+        field_a1 = {
+            "themeselector": self._a1_for(
+                cols, ["themeselector"], data_idx, 0
+            ),
+            "bgcolor": self._a1_for(
+                cols, ["bgcolor", "backgroundcolor"], data_idx, 1
+            ),
+            "bgpattern": self._a1_for(
+                cols, ["bgpattern", "backgroundpattern"], data_idx, 2
+            ),
+            "bgwallpaper": self._a1_for(
+                cols, ["bgwallpaper", "backgroundwallpaper", "bgimage"],
+                data_idx,
+                3,
+            ),
+            "bgscrollspeed": self._a1_for(
+                cols,
+                ["bgscrollspeed", "backgroundscrollspeed", "scrollspeed"],
+                data_idx,
+                7,
+            ),
+        }
+        values: dict[str, str] = {}
+        wrote_theme = False
+        wrote_bg = False
+        theme = str(body.get("theme") or body.get("themeName") or "").strip()
+        if theme:
+            values["themeselector"] = self._canonical_theme(rows, theme)
+            wrote_theme = True
+        bg_keys = (
+            "background",
+            "bgColor",
+            "bg_color",
+            "patternType",
+            "pattern",
+            "wallpaper",
+            "bgWallpaper",
+        )
+        if any(k in body and body.get(k) not in (None, "") for k in bg_keys):
+            values.update(self._background_updates(rows, body))
+            wrote_bg = True
+        if "scrollSpeed" in body and body.get("scrollSpeed") not in (None, ""):
+            try:
+                speed = int(round(float(body.get("scrollSpeed"))))
+            except (TypeError, ValueError) as e:
+                raise ValueError("invalid scrollSpeed") from e
+            values["bgscrollspeed"] = str(speed)
+            wrote_bg = True
+        if not values:
+            raise ValueError("nothing to write")
+        data = [
+            {
+                "range": safe_title + "!" + field_a1[fold],
+                "values": [[val]],
+            }
+            for fold, val in values.items()
+            if fold in field_a1
+        ]
         with self._api_lock:
             updated = (
                 self.sheets.spreadsheets()
                 .values()
-                .update(
+                .batchUpdate(
                     spreadsheetId=sid,
-                    range=target,
-                    valueInputOption="USER_ENTERED",
-                    body={"values": [[canonical]]},
+                    body={
+                        "valueInputOption": "USER_ENTERED",
+                        "data": data,
+                    },
                 )
                 .execute()
             )
         if sid == self.sheet_id:
             _flush_data_caches()
+        ranges = [
+            (u.get("updatedRange") or "")
+            for u in (updated.get("responses") or [])
+        ]
         _log(
-            f"theme write {source_name or sid} {target}={canonical!r} "
-            f"cells={updated.get('updatedCells')} "
+            f"style write {source_name or sid} {values} "
+            f"cells={updated.get('totalUpdatedCells')} "
             f"({time.time() - t0:.2f}s)"
         )
         return {
             "ok": True,
-            "theme": canonical,
-            "range": updated.get("updatedRange") or target,
+            "theme": values.get("themeselector") or theme,
+            "background": {
+                "bgColor": values.get("bgcolor"),
+                "bgPattern": values.get("bgpattern"),
+                "bgWallpaper": values.get("bgwallpaper"),
+                "scrollSpeed": values.get("bgscrollspeed"),
+            }
+            if wrote_bg
+            else None,
+            "wroteTheme": wrote_theme,
+            "wroteBackground": wrote_bg,
+            "range": ", ".join([r for r in ranges if r]),
             "sheetId": sid,
             "sourceName": source_name,
         }
 
+    def write_theme(self, theme: str, sheet_id: str | None = None) -> dict:
+        return self.write_style({"theme": theme}, sheet_id)
 
-def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
+
+def make_handler(
+    api: dict, root: Path, bind: str = "127.0.0.1", api_only: bool = False
+):
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(root), **kwargs)
@@ -918,7 +1171,7 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
 
         def do_POST(self):
             parsed = urlparse(self.path)
-            if parsed.path == "/api/manager/theme":
+            if parsed.path in ("/api/manager/theme", "/api/manager/style"):
                 backend = self._backend()
                 if not backend:
                     self._json(
@@ -933,24 +1186,27 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
                 if err:
                     self._json(400, err)
                     return
-                theme = str(
-                    body.get("theme") or body.get("themeName") or ""
-                ).strip()
                 sheet_id = str(body.get("sheetId") or "").strip()
                 try:
-                    result = backend.write_theme(theme, sheet_id or None)
+                    result = backend.write_style(body, sheet_id or None)
                     self._json(200, result)
                 except ValueError as e:
                     self._json(400, {"error": str(e)})
                 except KeyError as e:
                     self._json(404, {"error": str(e)})
                 except Exception as e:
-                    _log(f"theme write error: {e}")
+                    _log(f"style write error: {e}")
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return
             if parsed.path != "/api/manager/fallback":
                 self.send_error(404, "Not found")
+                return
+            if api_only:
+                self._json(
+                    501,
+                    {"error": "fallback store is local-only"},
+                )
                 return
             body, err = self._read_json_body()
             if err:
@@ -1229,19 +1485,34 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
                     self._json(500, {"error": str(e)})
                 return
 
-            # Static files
+            # Static files — never on the hosted API (would leak the tree).
+            if api_only:
+                self._json(404, {"error": "not found"})
+                return
             return SimpleHTTPRequestHandler.do_GET(self)
 
     return Handler
 
 
+def _hosted() -> bool:
+    return bool(
+        os.environ.get("PORT")
+        or os.environ.get("K_SERVICE")
+        or os.environ.get("TOKI_API_ONLY") in ("1", "true", "yes")
+    )
+
+
 def main():
     ap = argparse.ArgumentParser(description="TokiMenu static + Sheets API server")
-    ap.add_argument("--port", type=int, default=int(os.environ.get("TOKI_PORT", "8765")))
+    default_port = int(os.environ.get("PORT") or os.environ.get("TOKI_PORT") or "8765")
+    default_bind = os.environ.get("TOKI_BIND") or (
+        "0.0.0.0" if _hosted() else "127.0.0.1"
+    )
+    ap.add_argument("--port", type=int, default=default_port)
     ap.add_argument(
         "--bind",
-        default=os.environ.get("TOKI_BIND", "127.0.0.1"),
-        help="Bind address (default 127.0.0.1)",
+        default=default_bind,
+        help="Bind address (default 127.0.0.1; 0.0.0.0 when hosted)",
     )
     ap.add_argument(
         "--sheet-id",
@@ -1262,6 +1533,12 @@ def main():
         "--no-api",
         action="store_true",
         help="Static files only (no Sheets proxy)",
+    )
+    ap.add_argument(
+        "--api-only",
+        action="store_true",
+        default=_hosted(),
+        help="API only (no static files). Default on Cloud Run / TOKI_API_ONLY.",
     )
     args = ap.parse_args()
 
@@ -1291,13 +1568,14 @@ def main():
                 _resolve_key(args.key),
                 settings_sheet_id=args.settings_sheet_id,
             )
-            tabs = backend.refresh_meta(force=True)
             api["backend"] = backend
+            tabs = backend.refresh_meta(force=True)
             _log(f"tabs: {len(tabs['title_by_gid'])}")
             _log("Sheets API proxy: /api/sheets/csv?gid=…  (/api/sheets/xlsx → 410)")
-            t0 = time.time()
-            backend.warm_csv_cache(force=True)
-            _log(f"startup csv warm done in {time.time() - t0:.2f}s")
+            if not args.api_only:
+                t0 = time.time()
+                backend.warm_csv_cache(force=True)
+                _log(f"startup csv warm done in {time.time() - t0:.2f}s")
             live = backend.refresh_settings(force=False)
             src = (live or {}).get("dataSource") or ""
             set_terminal_title(window_title(args.port, args.bind, src))
@@ -1309,14 +1587,20 @@ def main():
             _log("Serving static files only; boards need public sheet or fix credentials.")
             traceback.print_exc()
 
-    # Bind first so the launcher health-check does not time out while Google loads.
+    # Hosted: init Sheets before listen so Cloud Run does not take traffic
+    # while the robot is still waking up. Local: bind first so the launcher
+    # health-check does not time out.
+    if args.api_only:
+        _init_sheets()
     httpd = ThreadingHTTPServer(
-        (args.bind, args.port), make_handler(api, ROOT, bind=args.bind)
+        (args.bind, args.port),
+        make_handler(api, ROOT, bind=args.bind, api_only=bool(args.api_only)),
     )
     set_terminal_title(window_title(args.port, args.bind))
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
     _log(f"window: {window_title(args.port, args.bind)}")
-    threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
+    if not args.api_only:
+        threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

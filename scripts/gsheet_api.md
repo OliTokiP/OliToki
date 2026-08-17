@@ -147,7 +147,8 @@ That process holds the key and exposes:
 - `GET /api/health`
 - `GET /api/sheets/csv?gid=…`
 - `GET /api/sheets/xlsx`
-- `POST /api/manager/theme` `{ theme, sheetId? }` — Theme Selector (A3) on the selected catalog
+- `POST /api/manager/style` `{ theme?, background?, bgColor?, patternType?, wallpaper?, scrollSpeed?, sheetId? }` — Theme Selector (A3) + exclusive BG Color / Pattern / Wallpaper (B3 / C3 / D3)
+- `POST /api/manager/theme` `{ theme, sheetId? }` — same adapter, theme-only
 
 `menu.js` auto-detects `/api/health` and uses the proxy so **General access can stay Restricted**.
 

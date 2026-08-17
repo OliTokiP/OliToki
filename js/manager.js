@@ -1,7 +1,8 @@
 /**
  * OliToki Menu Manager — layout + sheet read.
  * Draft theme tokens restyle the app immediately. Confirm-on-back Yes writes
- * Theme Selector on the selected catalog (via TOKI_MANAGER_SHEET.writeTheme).
+ * Theme Selector and the Background conglomerate (BG Color / Pattern /
+ * Wallpaper) on the selected catalog (via TOKI_MANAGER_SHEET.writeStyle).
  */
 (function () {
   "use strict";
@@ -569,14 +570,6 @@
           : d.bgColor || d.background
       ),
     });
-    if (d.background === "pattern" || d.background === "wallpaper") {
-      html += row({
-        key: "bgColor",
-        label: "Background Color",
-        value: labelOf(D.colorRoles, d.bgColor || "main"),
-        child: true,
-      });
-    }
     if (d.background === "pattern") {
       html += row({
         key: "patternType",
@@ -1328,34 +1321,61 @@
     });
   }
 
-  function yesToast(needTheme, wrote, fb) {
-    if (needTheme) {
+  function styleSnap(d) {
+    d = d || {};
+    return {
+      themeName: d.themeName || "",
+      background: d.background || "",
+      bgColor: d.bgColor || "",
+      patternType: d.patternType || "",
+      wallpaper: d.wallpaper || "",
+      scrollSpeed: d.scrollSpeed,
+    };
+  }
+
+  function yesToast(needed, wrote, fb) {
+    if (needed) {
       if (wrote && wrote.ok) {
         var src = wrote.sourceName || "sheet";
+        var bits = [];
+        if (wrote.wroteTheme) bits.push("Theme");
+        if (wrote.wroteBackground) bits.push("background");
+        var what = bits.length ? bits.join(" and ") : "Style";
         return fb
-          ? "Theme saved to " + src
-          : "Theme saved to " + src + " (fallback not written)";
+          ? what + " saved to " + src
+          : what + " saved to " + src + " (fallback not written)";
       }
       return fb
-        ? "Could not write theme to sheet — saved locally"
-        : "Could not write theme or fallback";
+        ? "Could not write style to sheet — saved locally"
+        : "Could not write style or fallback";
     }
     return fb
       ? "Saved fallback"
       : "Saved for this session (could not write fallback)";
   }
 
-  function persistThemeWrite() {
+  function persistStyleWrite() {
     var sheet = window.TOKI_MANAGER_SHEET;
-    var theme = String((state.draft && state.draft.themeName) || "").trim();
-    var onSheet = state.lastSheet && state.lastSheet.themeName;
-    if (!theme || theme === onSheet) {
+    var d = state.draft || {};
+    var prev = (state.lastSheet && state.lastSheet.style) || {
+      themeName: state.lastSheet && state.lastSheet.themeName,
+    };
+    var next = styleSnap(d);
+    var themeChanged = !!(next.themeName && next.themeName !== prev.themeName);
+    var bgChanged =
+      next.background !== prev.background ||
+      next.bgColor !== prev.bgColor ||
+      next.patternType !== prev.patternType ||
+      next.wallpaper !== prev.wallpaper ||
+      Number(next.scrollSpeed) !== Number(prev.scrollSpeed);
+    if (!themeChanged && !bgChanged) {
       return Promise.resolve({ needed: false, wrote: null });
     }
-    if (!sheet || !sheet.writeTheme) {
+    var writer = sheet && (sheet.writeStyle || sheet.writeTheme);
+    if (!writer) {
       return Promise.resolve({
         needed: true,
-        wrote: { ok: false, error: "Theme write not available" },
+        wrote: { ok: false, error: "Style write not available" },
       });
     }
     var src = dataSource();
@@ -1363,10 +1383,23 @@
       (src && src.sheetId) ||
       (state.lastSheet && state.lastSheet.sheetId) ||
       "";
-    return sheet.writeTheme(theme, sheetId).then(function (wrote) {
+    var payload = { sheetId: sheetId };
+    if (themeChanged) payload.theme = next.themeName;
+    if (bgChanged) {
+      payload.background = next.background;
+      payload.bgColor = next.bgColor;
+      payload.patternType = next.patternType;
+      payload.wallpaper = next.wallpaper === "upload" ? "" : next.wallpaper;
+      payload.scrollSpeed = next.scrollSpeed;
+    }
+    var req = sheet.writeStyle
+      ? sheet.writeStyle(payload)
+      : sheet.writeTheme(next.themeName, sheetId);
+    return req.then(function (wrote) {
       if (wrote && wrote.ok) {
         if (!state.lastSheet) state.lastSheet = {};
-        state.lastSheet.themeName = wrote.theme || theme;
+        state.lastSheet.themeName = next.themeName;
+        state.lastSheet.style = next;
         if (wrote.sheetId) state.lastSheet.sheetId = wrote.sheetId;
         if (wrote.sourceName) state.lastSheet.sourceName = wrote.sourceName;
       }
@@ -1381,24 +1414,24 @@
       var next = state.pendingLeave;
       state.pendingLeave = null;
       renderDialog();
-      persistThemeWrite()
-        .then(function (themeResult) {
+      persistStyleWrite()
+        .then(function (styleResult) {
           return persistFallback().then(function (fb) {
             return {
-              needTheme: !!(themeResult && themeResult.needed),
-              wrote: themeResult && themeResult.wrote,
+              needed: !!(styleResult && styleResult.needed),
+              wrote: styleResult && styleResult.wrote,
               fb: fb,
             };
           });
         })
         .then(function (out) {
-          toast(yesToast(out.needTheme, out.wrote, out.fb));
+          toast(yesToast(out.needed, out.wrote, out.fb));
           if (next) next();
           else renderAll();
         })
         .catch(function (err) {
           console.warn("Menu Manager save failed", err);
-          toast("Could not write theme to sheet — saved for this session");
+          toast("Could not write style to sheet — saved for this session");
           if (next) next();
           else renderAll();
         });
@@ -2130,6 +2163,7 @@
       themeName: payload.draft && payload.draft.themeName
         ? payload.draft.themeName
         : "",
+      style: styleSnap(payload.draft),
       fieldValidations: payload.fieldValidations || null,
       motionStyles: payload.motionStyles || {},
     };

@@ -9,6 +9,9 @@
   "use strict";
 
   var SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY";
+  if (!global.TOKI_API_BASE) {
+    global.TOKI_API_BASE = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
+  }
 
   var DATA_SOURCES = [
     {

@@ -5568,6 +5568,16 @@
    * not running (legacy "Anyone with the link" setup).
    */
   let _sheetsApiProxy = null; // null = unknown, true/false after probe
+  let _sheetsApiBase = ""; // "" = same-origin; else Cloud Run origin
+
+  function tokiApiUrl(path) {
+    const p = path.charAt(0) === "/" ? path : "/" + path;
+    const base = (
+      _sheetsApiBase ||
+      String((typeof window !== "undefined" && window.TOKI_API_BASE) || "")
+    ).replace(/\/$/, "");
+    return base ? base + p : p;
+  }
   /** From OliToki Menu Settings (via /api/settings). */
   let liveSettings = {
     dataSource: "",
@@ -5578,32 +5588,35 @@
 
   async function detectSheetsApiProxy() {
     if (_sheetsApiProxy != null) return _sheetsApiProxy;
-    try {
-      const res = await fetch("/api/health", { cache: "no-store" });
-      if (!res.ok) {
-        _sheetsApiProxy = false;
-        tokiInfo(
-          "sheets proxy: no (/api/health " + res.status + ") → public export"
-        );
-        return false;
-      }
-      const j = await res.json();
-      _sheetsApiProxy = !!(j && j.sheetsApi);
-      if (_sheetsApiProxy) {
-        tokiInfo(
-          "sheets proxy: yes",
-          j.email || "",
-          j.dataSource ? "dataSource=" + j.dataSource : ""
-        );
-      } else {
-        tokiInfo("sheets proxy: health ok but sheetsApi false → public export");
-      }
-      return _sheetsApiProxy;
-    } catch (e) {
-      _sheetsApiProxy = false;
-      tokiInfo("sheets proxy: unreachable → public export", String(e && e.message || e));
-      return false;
+    const configured = String(
+      (typeof window !== "undefined" && window.TOKI_API_BASE) || ""
+    ).replace(/\/$/, "");
+    const candidates = ["/api/health"];
+    if (configured) candidates.push(configured + "/api/health");
+    for (let i = 0; i < candidates.length; i++) {
+      try {
+        const res = await fetch(candidates[i], { cache: "no-store" });
+        if (!res.ok) continue;
+        const j = await res.json();
+        if (j && j.sheetsApi) {
+          _sheetsApiProxy = true;
+          _sheetsApiBase =
+            candidates[i].indexOf("http") === 0
+              ? candidates[i].replace(/\/api\/health$/, "")
+              : "";
+          tokiInfo(
+            "sheets proxy: yes",
+            j.email || "",
+            j.dataSource ? "dataSource=" + j.dataSource : "",
+            _sheetsApiBase ? "via " + _sheetsApiBase : "same-origin"
+          );
+          return true;
+        }
+      } catch (e) {}
     }
+    _sheetsApiProxy = false;
+    tokiInfo("sheets proxy: unreachable → public export");
+    return false;
   }
 
   function settingsSheetId() {
@@ -5763,7 +5776,7 @@
       const useProxy = await detectSheetsApiProxy();
       if (useProxy) {
         try {
-          const res = await fetch("/api/settings?t=" + Date.now(), {
+          const res = await fetch(tokiApiUrl("/api/settings") + "?t=" + Date.now(), {
             cache: "no-store",
           });
           if (res.ok) {
@@ -5856,7 +5869,8 @@
     let url;
     if (useProxy) {
       url =
-        "/api/sheets/csv?gid=" +
+        tokiApiUrl("/api/sheets/csv") +
+        "?gid=" +
         encodeURIComponent(String(gid)) +
         (force ? "&force=1" : "") +
         "&t=" +
