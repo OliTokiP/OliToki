@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9d76a3f",
-  "hashFull": "9d76a3f7d152eb56fc19356bf0638a7132d270c7",
-  "subject": "QA: 2026-08-16 Testing to see if the image file uploaded worked. Respond very quickly with desc (pass 1)"
+  "hash": "35258a3",
+  "hashFull": "35258a381628ee35695ed12fdcdb8500de3f5206",
+  "subject": "QA: 2026-08-16 Ticket titles being cutoff if too long (pass 1)"
 };
