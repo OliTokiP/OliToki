@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "a553baa",
-  "hashFull": "a553baac9537eba6fdd690152dd00cfe5c9c714c",
-  "subject": "Late Night Commit"
+  "hash": "acc53b4",
+  "hashFull": "acc53b4535846568ed21f7c83077f55a0023a841",
+  "subject": "QA: 2026-08-16 Ken Burns and Slideshow both broken (pass 2)"
 };

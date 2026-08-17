@@ -799,8 +799,19 @@
       /* Do not start motion until the sheet has resolved. loadSheet →
          renderAll used to remount mid Punch-In, so the plate snapped and
          the next photo just appeared (0696e41 never had that remount). */
-      if (state.sheetSource === "loading") parkPreviewStill();
-      else startPreviewCycle();
+      if (state.sheetSource === "loading") {
+        parkPreviewStill();
+      } else {
+        // Guardrail: rAF after innerHTML lets layout + CSS vars on .preview
+        // (incl. --ease-fade / --ease-out) settle before snap + 20ms kick.
+        // Prevents races from nav handlers or sheet apply. Keeps KB/Slideshow
+        // reliable (MOTION_GLOSSARY 3, 4).
+        requestAnimationFrame(function () {
+          if (state.screen === "style" && state.sheetSource !== "loading") {
+            startPreviewCycle();
+          }
+        });
+      }
     } else {
       stopPreviewCycle();
     }
@@ -1657,9 +1668,11 @@
     return 1;
   }
 
-  /* Same plate runner as 0696e41 (last time Slideshow / Ken Burns faded).
-     Drive scale() directly — --hero-zoom alone does not start a transform
-     transition. Timing functions are the named eases from that commit. */
+  /* Plate runner per MOTION_GLOSSARY 3 (Slideshow) and 4 (Ken Burns).
+     .preview-plate owns fade (opacity 0→1/1→0). .preview-anim owns Ken Burns
+     scale only (0.93→1 on in; reverse on out). Sticker is sibling, fades but
+     does not scale. Inline transform + explicit transition to ensure it runs.
+     Uses --ease-* to match glossary + live boards. */
   function setPlate(opacity, zoom, dur, kind) {
     var plate = els.app.querySelector(".preview-plate");
     var anim = els.app.querySelector(".preview-anim");
@@ -1667,10 +1680,10 @@
     var phases = motionPhases();
     var fade = phases.opacityDur || 0.45;
     var move = Math.max(0.02, dur || phases.punchIn);
-    var zoomEase = kind === "out" ? "ease" : "ease-out";
+    var zoomEase = kind === "out" ? "var(--ease-fade, ease)" : "var(--ease-out, ease-out)";
     var z = Number(zoom);
     if (!isFinite(z)) z = 1;
-    plate.style.transition = "opacity " + fade + "s ease";
+    plate.style.transition = "opacity " + fade + "s var(--ease-fade, ease)";
     plate.style.setProperty("--hero-zoom", String(z));
     plate.classList.toggle(
       "is-kb-in",
@@ -1684,7 +1697,7 @@
     plate.style.opacity = String(opacity);
     var sticker = els.app.querySelector(".preview-sticker");
     if (sticker && !sticker.hidden) {
-      sticker.style.transition = "opacity " + fade + "s ease";
+      sticker.style.transition = "opacity " + fade + "s var(--ease-fade, ease)";
       sticker.style.opacity = String(opacity);
     }
   }
@@ -2258,6 +2271,7 @@
   function handleLocationChange() {
     var target = parseScreenFromHash();
     var prevScreen = state.screen;
+    var prevBoard = state.boardId;
     var isDirtyStyle = prevScreen === "style" && !eq(state.draft, state.committed);
     var leavingDirtyStyle = isDirtyStyle && target.screen !== "style";
     if (leavingDirtyStyle) {
@@ -2277,7 +2291,18 @@
       return;
     }
     readHash();
-    renderAll();
+    var boardChanged = (target.boardId || null) !== (prevBoard || null);
+    if (target.screen !== prevScreen || boardChanged) {
+      renderAll();
+    } else {
+      // Same screen (hashchange/pop from our writeHash when entering Style,
+      // or other self events). Skip renderAll — a rebuild would remount
+      // .preview-plate / .preview-anim and tear down the running cycle
+      // (gen++, cleared timers, snap lost). This regressed after back-button
+      // support. Guardrail protects Ken Burns / Slideshow fade+zoom.
+      // (MOTION_GLOSSARY 3 and 4.)
+      writeHash(false);
+    }
   }
 
   function applySheetPayload(payload) {
