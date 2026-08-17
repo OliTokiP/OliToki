@@ -1,7 +1,8 @@
 /**
- * OliToki Menu Manager — one-way sheet read.
+ * OliToki Menu Manager — sheet read + theme write.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
- * Never writes. Field-name draft only (no column indexes in the UI).
+ * Field-name draft only (no column indexes in the UI). Theme confirm
+ * posts the name to /api/manager/theme; the server maps Theme Selector (A3).
  * Number pills follow a validator in the Settings header — same CSV
  * Pages already reads. House style:
  *   BG Scroll Speed (0<=5)
@@ -1204,10 +1205,46 @@
     }
   }
 
+  async function writeTheme(themeName, sheetId) {
+    var name = String(themeName || "").trim();
+    if (!name) return { ok: false, error: "missing theme" };
+    var useProxy = await detectProxy();
+    if (!useProxy) {
+      return { ok: false, error: "Needs local Menu Manager server" };
+    }
+    try {
+      var res = await fetch("/api/manager/theme", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme: name,
+          sheetId: String(sheetId || "").trim(),
+        }),
+      });
+      var j = {};
+      try {
+        j = await res.json();
+      } catch (e) {
+        j = {};
+      }
+      if (!res.ok || !j.ok) {
+        return {
+          ok: false,
+          error: (j && j.error) || ("HTTP " + res.status),
+        };
+      }
+      return j;
+    } catch (err) {
+      console.warn("manager-sheet: theme write failed", err);
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  }
+
   global.TOKI_MANAGER_SHEET = {
     load: load,
     loadFallback: loadFallback,
     saveFallback: saveFallback,
+    writeTheme: writeTheme,
     styleGid: STYLE_GID,
   };
 })(window);

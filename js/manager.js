@@ -1,7 +1,7 @@
 /**
- * OliToki Menu Manager — layout + one-way sheet read.
- * Draft theme tokens restyle the app immediately. Confirm-on-back is local only
- * (no Google Sheet writes).
+ * OliToki Menu Manager — layout + sheet read.
+ * Draft theme tokens restyle the app immediately. Confirm-on-back Yes writes
+ * Theme Selector on the selected catalog (via TOKI_MANAGER_SHEET.writeTheme).
  */
 (function () {
   "use strict";
@@ -1328,21 +1328,79 @@
     });
   }
 
+  function yesToast(needTheme, wrote, fb) {
+    if (needTheme) {
+      if (wrote && wrote.ok) {
+        var src = wrote.sourceName || "sheet";
+        return fb
+          ? "Theme saved to " + src
+          : "Theme saved to " + src + " (fallback not written)";
+      }
+      return fb
+        ? "Could not write theme to sheet — saved locally"
+        : "Could not write theme or fallback";
+    }
+    return fb
+      ? "Saved fallback"
+      : "Saved for this session (could not write fallback)";
+  }
+
+  function persistThemeWrite() {
+    var sheet = window.TOKI_MANAGER_SHEET;
+    var theme = String((state.draft && state.draft.themeName) || "").trim();
+    var onSheet = state.lastSheet && state.lastSheet.themeName;
+    if (!theme || theme === onSheet) {
+      return Promise.resolve({ needed: false, wrote: null });
+    }
+    if (!sheet || !sheet.writeTheme) {
+      return Promise.resolve({
+        needed: true,
+        wrote: { ok: false, error: "Theme write not available" },
+      });
+    }
+    var src = dataSource();
+    var sheetId =
+      (src && src.sheetId) ||
+      (state.lastSheet && state.lastSheet.sheetId) ||
+      "";
+    return sheet.writeTheme(theme, sheetId).then(function (wrote) {
+      if (wrote && wrote.ok) {
+        if (!state.lastSheet) state.lastSheet = {};
+        state.lastSheet.themeName = wrote.theme || theme;
+        if (wrote.sheetId) state.lastSheet.sheetId = wrote.sheetId;
+        if (wrote.sourceName) state.lastSheet.sourceName = wrote.sourceName;
+      }
+      return { needed: true, wrote: wrote };
+    });
+  }
+
   function confirmChoice(val) {
     if (val === "yes") {
       state.committed = clone(state.draft);
       state.dialog = null;
       var next = state.pendingLeave;
       state.pendingLeave = null;
-      persistFallback().then(function (wrote) {
-        toast(
-          wrote
-            ? "Saved fallback"
-            : "Saved for this session (could not write fallback)"
-        );
-        if (next) next();
-        else renderAll();
-      });
+      persistThemeWrite()
+        .then(function (themeResult) {
+          return persistFallback().then(function (fb) {
+            return {
+              needTheme: !!(themeResult && themeResult.needed),
+              wrote: themeResult && themeResult.wrote,
+              fb: fb,
+            };
+          });
+        })
+        .then(function (out) {
+          toast(yesToast(out.needTheme, out.wrote, out.fb));
+          if (next) next();
+          else renderAll();
+        })
+        .catch(function (err) {
+          console.warn("Menu Manager save failed", err);
+          toast("Could not write theme to sheet — saved for this session");
+          if (next) next();
+          else renderAll();
+        });
       return;
     }
     if (val === "no") {
@@ -2068,6 +2126,9 @@
     state.lastSheet = {
       sourceName: payload.sourceName || "",
       sheetId: payload.sheetId || "",
+      themeName: payload.draft && payload.draft.themeName
+        ? payload.draft.themeName
+        : "",
       fieldValidations: payload.fieldValidations || null,
       motionStyles: payload.motionStyles || {},
     };

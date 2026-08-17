@@ -829,7 +829,7 @@ class SheetsBackend:
                 .values()
                 .get(
                     spreadsheetId=sid,
-                    range=safe_title + "!A1:A40",
+                    range=safe_title + "!A1:Z40",
                     majorDimension="ROWS",
                     valueRenderOption="FORMATTED_VALUE",
                 )
@@ -900,26 +900,61 @@ def make_handler(api: dict, root: Path, bind: str = "127.0.0.1"):
             self.send_header("Access-Control-Allow-Headers", "*")
             self.end_headers()
 
-        def do_POST(self):
-            parsed = urlparse(self.path)
-            if parsed.path != "/api/manager/fallback":
-                self.send_error(404, "Not found")
-                return
+        def _read_json_body(self, max_bytes: int = 2_000_000):
             try:
                 n = int(self.headers.get("Content-Length") or "0")
             except ValueError:
                 n = 0
-            if n <= 0 or n > 2_000_000:
-                self._json(400, {"error": "bad content-length"})
-                return
+            if n <= 0 or n > max_bytes:
+                return None, {"error": "bad content-length"}
             raw = self.rfile.read(n)
             try:
                 body = json.loads(raw.decode("utf-8"))
             except Exception:
-                self._json(400, {"error": "invalid json"})
-                return
+                return None, {"error": "invalid json"}
             if not isinstance(body, dict):
-                self._json(400, {"error": "expected object"})
+                return None, {"error": "expected object"}
+            return body, None
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            if parsed.path == "/api/manager/theme":
+                backend = self._backend()
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                body, err = self._read_json_body(16_384)
+                if err:
+                    self._json(400, err)
+                    return
+                theme = str(
+                    body.get("theme") or body.get("themeName") or ""
+                ).strip()
+                sheet_id = str(body.get("sheetId") or "").strip()
+                try:
+                    result = backend.write_theme(theme, sheet_id or None)
+                    self._json(200, result)
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except KeyError as e:
+                    self._json(404, {"error": str(e)})
+                except Exception as e:
+                    _log(f"theme write error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
+                return
+            if parsed.path != "/api/manager/fallback":
+                self.send_error(404, "Not found")
+                return
+            body, err = self._read_json_body()
+            if err:
+                self._json(400, err)
                 return
             sid = re.sub(
                 r"[^a-z0-9-]+",
