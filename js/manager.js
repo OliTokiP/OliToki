@@ -1346,13 +1346,32 @@
     window.open(url, "_blank", "noopener");
   }
 
+  function previewMotionStyle() {
+    var TM = window.TOKI_MOTION;
+    var mode = state.draft.presentation;
+    if (TM && typeof TM.styleForMode === "function") {
+      return TM.styleForMode(mode, D.motionStyles);
+    }
+    return TM ? TM.styleByMode(mode) : D.motionDefaults;
+  }
+
+  function previewSpeed() {
+    return Number(state.draft.presentationSpeed);
+  }
+
+  /* 0 parks. 1–5 scale Beta Motion times (3 = 1×). */
+  function presentationMotionOn(speed) {
+    var n = speed != null ? Number(speed) : Number(state.draft.presentationSpeed);
+    return n > 0;
+  }
+
   function motionPhases() {
     var TM = window.TOKI_MOTION;
     var mode = state.draft.presentation;
-    var style = TM
-      ? TM.styleByMode(mode)
-      : D.motionDefaults;
-    var speed = Number(state.draft.presentationSpeed) || 0;
+    var style = previewMotionStyle();
+    if (TM && TM.scaleStyleTimes && presentationMotionOn()) {
+      style = TM.scaleStyleTimes(style, previewSpeed()) || style;
+    }
     var encore = mode === "encore";
     var kb = mode === "kenburns";
     var punchIn = style.punchIn != null ? style.punchIn : 3.4;
@@ -1368,7 +1387,7 @@
       opacityDur: TM ? TM.OPACITY_DUR : 0.45,
       zoomMin: kb ? 0.93 : 1,
       zoomMax: kb ? 1 : encore ? (style.zoomTo || 1.24) : 1,
-      paused: speed <= 0,
+      paused: !presentationMotionOn(),
     };
   }
 
@@ -1613,21 +1632,10 @@
   }
 
   function retargetMotion() {
-    var gen = previewCtl.gen;
-    var phases = motionPhases();
-    var mode = state.draft.presentation;
-    previewCtl.timers.forEach(clearTimeout);
-    previewCtl.timers = [];
-    if (!previewCtl.phase) {
-      runPreviewBlock(state.previewIndex || 0, gen);
-      return;
-    }
-    if (mode === "encore") {
-      runPreviewBlock(state.previewIndex || 0, gen);
-      return;
-    }
-    /* Ken Burns / Slideshow: restart the shared block (same as the board). */
-    runPreviewBlock(state.previewIndex || 0, gen);
+    /* Same as a board reload: kill the running block and punch in again
+       at the new tempo. Mid-run retarget used to keep zoom at 1.24 so
+       speed tiles looked like they did nothing. */
+    startPreviewCycle();
   }
 
   function runPreviewBlock(index, gen) {
@@ -1642,9 +1650,8 @@
       var TM = window.TOKI_MOTION;
       var stage = encoreStageEl();
       if (!TM || !stage) return;
-      var speed = Number(state.draft.presentationSpeed) || 0;
       applyEncoreChrome(items[i]);
-      if (speed <= 0) {
+      if (!presentationMotionOn()) {
         var originP = TM.encoreSlotOrigin(stage, i);
         if (originP) TM.setEncoreZoomOrigin(stage, originP.x, originP.y);
         TM.encoreSnap(stage, {
@@ -1668,7 +1675,8 @@
           pinchPx: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
           zoomTo: TM.ENCORE.zoomTo,
           fpsCap: TOKI_MOTION.encoreFpsCap(state.draft.encoreStyle),
-          style: TM.ENCORE,
+          style: previewMotionStyle(),
+          speed: previewSpeed(),
         },
         {
           afterMs: function (ms, fn) {
@@ -1696,15 +1704,15 @@
     var TM = window.TOKI_MOTION;
     var plate = els.app.querySelector("#hero-plate");
     if (!TM || !plate) return;
-    var style = TM.styleByMode(state.draft.presentation);
-    var speed = Number(state.draft.presentationSpeed) || 0;
-    if (speed <= 0) {
+    var style = previewMotionStyle();
+    if (!presentationMotionOn()) {
       TM.heroSnap(plate, 1, style.zoomMax);
       syncPreviewNums(i, false);
       return;
     }
     previewCtl.phase = "in";
     TM.runHeroBlock(plate, style, {
+      speed: previewSpeed(),
       afterMs: function (ms, fn) {
         previewAfter(ms, gen, fn);
       },
@@ -1817,6 +1825,9 @@
     previewCtl.raf = 0;
     previewCtl.phase = null;
     previewCtl.wp = null;
+    if (window.TOKI_MOTION && window.TOKI_MOTION.cancelEncoreZoomStepper) {
+      window.TOKI_MOTION.cancelEncoreZoomStepper();
+    }
   }
 
   function bindPillDrag() {
@@ -2015,6 +2026,20 @@
     if (payload.themes && payload.themes.length) {
       D.themes = payload.themes;
     }
+    if (payload.colorRoles && payload.colorRoles.length) {
+      D.colorRoles = payload.colorRoles;
+      var extras = [];
+      var bi;
+      for (bi = 0; bi < (D.backgroundOptions || []).length; bi++) {
+        var b = D.backgroundOptions[bi];
+        if (b && (b.id === "pattern" || b.id === "wallpaper")) extras.push(b);
+      }
+      D.backgroundOptions = D.colorRoles.concat(extras);
+    }
+    if (payload.wallpapers && payload.wallpapers.length) {
+      D.wallpapers = payload.wallpapers;
+    }
+    D.motionStyles = payload.motionStyles || {};
     if (payload.speedTiles) {
       D.speedTiles = {
         scroll: Object.assign({}, D.speedTiles.scroll, payload.speedTiles.scroll),

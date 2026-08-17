@@ -14,6 +14,7 @@
 
   var SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY";
   var STYLE_GID = "183083022";
+  var BETA_FEATURES_GID = "1710200195";
 
   var STYLE_SETTINGS = {
     themeSelector: 0,
@@ -394,9 +395,13 @@
     if (!parts.spec) return null;
     var rule = parseLabelSpec(parts.spec);
     if (!rule) return null;
-    if (rule.type === "ONE_OF_RANGE") {
+    if (parseA1Range(parts.spec)) {
       var resolved = resolveA1Values(rows, parts.spec);
-      if (resolved.length) rule = { type: "ONE_OF_LIST", values: resolved };
+      rule = {
+        type: resolved.length ? "ONE_OF_LIST" : "ONE_OF_RANGE",
+        values: resolved.length ? resolved : rule.values,
+        a1: parts.spec,
+      };
     }
     return { name: parts.name, rule: rule };
   }
@@ -743,36 +748,142 @@
     return parseSettingsRows(parseCsv(text));
   }
 
+  function isThemeNameJunk(name) {
+    var low = String(name || "").trim().toLowerCase();
+    if (!low) return true;
+    if (low === "theme name" || low === "settings") return true;
+    if (low.indexOf("glossary") !== -1) return true;
+    if (low.indexOf("themes database") === 0) return true;
+    return false;
+  }
+
+  function themeFromRow(row, nameOverride) {
+    var name = nameOverride || cell(row, STYLE_THEME.themeName);
+    if (isThemeNameJunk(name)) return null;
+    return {
+      name: name,
+      main: hexOrEmpty(cell(row, STYLE_THEME.mainColor)) || "#000000",
+      secondary: hexOrEmpty(cell(row, STYLE_THEME.secondaryColor)) || "#FFFFFF",
+      highlight: hexOrEmpty(cell(row, STYLE_THEME.highlight)) || "#26BBCB",
+      special: hexOrEmpty(cell(row, STYLE_THEME.highlightSpecial)) || "#FFF900",
+      patternColor1: colorRole(cell(row, STYLE_THEME.patternColor1)),
+      patternColor2: colorRole(cell(row, STYLE_THEME.patternColor2)),
+    };
+  }
+
+  function finishThemes(themes) {
+    var defaults = { patternColor1: "special", patternColor2: "highlight" };
+    var i;
+    for (i = 0; i < themes.length; i++) {
+      var low = String(themes[i].name || "").replace(/\s+/g, "").toLowerCase();
+      if (low !== "tokidefault") continue;
+      if (themes[i].patternColor1) defaults.patternColor1 = themes[i].patternColor1;
+      if (themes[i].patternColor2) defaults.patternColor2 = themes[i].patternColor2;
+    }
+    for (i = 0; i < themes.length; i++) {
+      if (!themes[i].patternColor1) themes[i].patternColor1 = defaults.patternColor1;
+      if (!themes[i].patternColor2) themes[i].patternColor2 = defaults.patternColor2;
+    }
+    return themes;
+  }
+
   function parseThemes(rows) {
     var start = findSectionData(rows, "themes database");
     if (start < 0) start = 5;
     var themes = [];
-    var defaults = { patternColor1: "special", patternColor2: "highlight" };
-    for (var i = start; i < (rows || []).length; i++) {
-      var name = cell(rows[i], STYLE_THEME.themeName);
-      if (!name) continue;
-      var low = name.toLowerCase();
-      if (low === "theme name" || low.indexOf("glossary") !== -1) continue;
-      var theme = {
-        name: name,
-        main: hexOrEmpty(cell(rows[i], STYLE_THEME.mainColor)) || "#000000",
-        secondary: hexOrEmpty(cell(rows[i], STYLE_THEME.secondaryColor)) || "#FFFFFF",
-        highlight: hexOrEmpty(cell(rows[i], STYLE_THEME.highlight)) || "#26BBCB",
-        special: hexOrEmpty(cell(rows[i], STYLE_THEME.highlightSpecial)) || "#FFF900",
-        patternColor1: colorRole(cell(rows[i], STYLE_THEME.patternColor1)),
-        patternColor2: colorRole(cell(rows[i], STYLE_THEME.patternColor2)),
-      };
-      if (low.replace(/\s+/g, "") === "tokidefault") {
-        if (theme.patternColor1) defaults.patternColor1 = theme.patternColor1;
-        if (theme.patternColor2) defaults.patternColor2 = theme.patternColor2;
-      }
-      themes.push(theme);
+    var i;
+    for (i = start; i < (rows || []).length; i++) {
+      var theme = themeFromRow(rows[i]);
+      if (theme) themes.push(theme);
     }
-    themes.forEach(function (t) {
-      if (!t.patternColor1) t.patternColor1 = defaults.patternColor1;
-      if (!t.patternColor2) t.patternColor2 = defaults.patternColor2;
-    });
-    return themes;
+    return finishThemes(themes);
+  }
+
+  function themesFromA1(rows, spec) {
+    var a1 = parseA1Range(spec);
+    if (!a1) return [];
+    var r2 = a1.r2 || (rows || []).length;
+    var r1 = Math.min(a1.r1, r2);
+    r2 = Math.max(a1.r1, r2);
+    var themes = [];
+    var r;
+    for (r = r1; r <= r2; r++) {
+      var row = (rows || [])[r - 1];
+      if (!row) continue;
+      var pointed = cell(row, a1.c1);
+      if (!pointed) continue;
+      var theme = themeFromRow(row, pointed);
+      if (theme) themes.push(theme);
+    }
+    return finishThemes(themes);
+  }
+
+  function selectThemes(rows, headerRules) {
+    var rule = fieldValidation(headerRules, ["Theme Selector"]);
+    if (rule && rule.a1) {
+      var listed = themesFromA1(rows, rule.a1);
+      if (listed.length) return listed;
+    }
+    return parseThemes(rows);
+  }
+
+  function colorRolesFromRule(rule) {
+    if (!rule || !rule.values || !rule.values.length) return null;
+    var stock = (global.TOKI_MANAGER_DATA && global.TOKI_MANAGER_DATA.colorRoles) || [];
+    var out = [];
+    var seen = {};
+    var i;
+    for (i = 0; i < rule.values.length; i++) {
+      var raw = rule.values[i];
+      var id = colorRole(raw);
+      if (!id || seen[id]) continue;
+      seen[id] = true;
+      var label = raw;
+      var s;
+      for (s = 0; s < stock.length; s++) {
+        if (stock[s].id === id) {
+          label = stock[s].label;
+          break;
+        }
+      }
+      out.push({ id: id, label: label });
+    }
+    return out.length ? out : null;
+  }
+
+  function wallpapersFromRule(rule) {
+    if (!rule || !rule.values || !rule.values.length) return null;
+    var stock = (global.TOKI_MANAGER_DATA && global.TOKI_MANAGER_DATA.wallpapers) || [];
+    var out = [];
+    var seen = {};
+    var i;
+    var s;
+    for (i = 0; i < rule.values.length; i++) {
+      var raw = rule.values[i];
+      var id;
+      if (noneValue(raw)) id = "none";
+      else if (String(raw).toLowerCase().indexOf("film") !== -1) id = "film";
+      else if (String(raw).toLowerCase().indexOf("galaxy") !== -1) id = "galaxy";
+      else {
+        id = String(raw)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "wp";
+      }
+      if (seen[id]) continue;
+      seen[id] = true;
+      var known = null;
+      for (s = 0; s < stock.length; s++) {
+        if (stock[s].id === id) {
+          known = stock[s];
+          break;
+        }
+      }
+      if (known) out.push(known);
+      else if (id === "none") out.push({ id: "none", label: "None" });
+      else out.push({ id: id, label: raw, src: String(raw) });
+    }
+    return out.length ? out : null;
   }
 
   function parseStyleDraft(rows, themes, speedTiles) {
@@ -857,7 +968,7 @@
         "secondary",
       presentationSpeed: clampSpeed(
         cell(row, colPres),
-        1,
+        3,
         presMin,
         presMax
       ),
@@ -885,11 +996,49 @@
     }
   }
 
-  function buildPayload(settings, styleRows, validationFields) {
+  function motionLog(map) {
+    if (!map) return "motion=(none)";
+    var names = Object.keys(map);
+    if (!names.length) return "motion=(none)";
+    return names
+      .map(function (n) {
+        var s = map[n];
+        return n + " " + s.punchIn + "/" + s.hold + "/" + s.punchOut;
+      })
+      .join(" | ");
+  }
+
+  async function fetchBetaMotion(sheetId, force) {
+    try {
+      var rows = await fetchCsv(BETA_FEATURES_GID, sheetId, force);
+      var TM = global.TOKI_MOTION;
+      if (TM && typeof TM.parseMotionStylesTable === "function") {
+        return TM.parseMotionStylesTable(rows);
+      }
+      return {};
+    } catch (err) {
+      console.warn("manager-sheet: Beta Motion failed", err);
+      return {};
+    }
+  }
+
+  function buildPayload(settings, styleRows, validationFields, motionStyles) {
     var headerRules = rulesFromStyleRows(styleRows);
     var merged = Object.assign({}, validationFields || {}, headerRules);
     var speedTiles = buildSpeedTiles(validationFields || null, headerRules);
-    var themes = parseThemes(styleRows);
+    var themes = selectThemes(styleRows, headerRules);
+    var themeRule = fieldValidation(headerRules, ["Theme Selector"]);
+    console.info(
+      "Menu Manager themes from",
+      themeRule && themeRule.a1 ? themeRule.a1 : "Themes Database walk",
+      themes.map(function (t) { return t.name; })
+    );
+    var colorRoles = colorRolesFromRule(
+      fieldValidation(headerRules, ["BG Color", "Background Color"])
+    );
+    var wallpapers = wallpapersFromRule(
+      fieldValidation(headerRules, ["BG Wallpaper", "Background Wallpaper"])
+    );
     var style = parseStyleDraft(styleRows, themes, speedTiles);
     var sources = catalogToSources(settings.catalog);
     var dsId = sourceId(settings.dataSource || settings.sourceName);
@@ -917,9 +1066,12 @@
       sheetId: settings.sheetId || "",
       dataSources: sources,
       themes: themes,
+      colorRoles: colorRoles,
+      wallpapers: wallpapers,
       draft: draft,
       speedTiles: speedTiles,
       fieldValidations: merged,
+      motionStyles: motionStyles || {},
     };
   }
 
@@ -934,26 +1086,39 @@
     var settings;
     var styleRows;
     var validationFields = null;
+    var motionStyles = {};
     if (useProxy) {
-      var triple = await Promise.all([
+      var quad = await Promise.all([
         fetchSettings(force),
         fetchCsv(STYLE_GID, "", force),
         fetchValidations(STYLE_GID, force),
+        fetchBetaMotion("", force),
       ]);
-      settings = triple[0];
-      styleRows = triple[1];
-      validationFields = triple[2];
+      settings = quad[0];
+      styleRows = quad[1];
+      validationFields = quad[2];
+      motionStyles = quad[3] || {};
     } else {
       settings = await fetchSettings(force);
       if (!settings.sheetId && settings.catalog && settings.catalog.length) {
         settings.sheetId = settings.catalog[0].sheetId || "";
       }
-      styleRows = await fetchCsv(STYLE_GID, settings.sheetId, force);
+      var pair = await Promise.all([
+        fetchCsv(STYLE_GID, settings.sheetId, force),
+        fetchBetaMotion(settings.sheetId, force),
+      ]);
+      styleRows = pair[0];
+      motionStyles = pair[1] || {};
     }
     if (!settings.sheetId && settings.catalog && settings.catalog.length) {
       settings.sheetId = settings.catalog[0].sheetId || "";
     }
-    var payload = buildPayload(settings, styleRows, validationFields);
+    var payload = buildPayload(
+      settings,
+      styleRows,
+      validationFields,
+      motionStyles
+    );
     var ms =
       (typeof performance !== "undefined" && performance.now
         ? performance.now()
@@ -979,6 +1144,7 @@
         ((st.presentation && st.presentation.max) != null
           ? st.presentation.max
           : "?"),
+      motionLog(motionStyles),
       Math.round(ms) + "ms",
       force ? "force" : "cache-ok"
     );

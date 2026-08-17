@@ -2172,6 +2172,12 @@
    * Wind-up/Wind-down 0 = no override (use Punch-in / Punch-out on first/last).
    */
   function parseMotionStylesTable(rows) {
+    if (
+      window.TOKI_MOTION &&
+      typeof window.TOKI_MOTION.parseMotionStylesTable === "function"
+    ) {
+      return window.TOKI_MOTION.parseMotionStylesTable(rows);
+    }
     const styles = {};
     if (!rows || !rows.length) return styles;
 
@@ -11919,6 +11925,66 @@
     }, wait);
   }
 
+  function presentationTempoNow() {
+    if (
+      !window.TOKI_MOTION ||
+      typeof window.TOKI_MOTION.presentationTempo !== "function"
+    ) {
+      return 1;
+    }
+    return window.TOKI_MOTION.presentationTempo(config.slideshowSpeed);
+  }
+
+  function scaleMotionStyleForSpeed(style) {
+    if (
+      !window.TOKI_MOTION ||
+      typeof window.TOKI_MOTION.scaleStyleTimes !== "function"
+    ) {
+      return style;
+    }
+    return window.TOKI_MOTION.scaleStyleTimes(style, config.slideshowSpeed) || style;
+  }
+
+  /** Speed 0: freeze the current block at its settled pose. */
+  function parkPresentationStill() {
+    stopMotionEngine();
+    _presentationRunning = false;
+    const slide = (usesBoardSlides() && slides[activeIndex]) || slides[0];
+    if (!slide || !window.TOKI_MOTION) return;
+    const style = getMotionStyle(motionStyleNameForSlide(slide));
+    const encore =
+      motionStyleIsEncore(style) ||
+      slide.type === "encore" ||
+      slide.type === "portrait";
+    if (encore) {
+      const stage = els.familyPortrait;
+      if (!stage) return;
+      const origin = window.TOKI_MOTION.encoreSlotOrigin(
+        stage,
+        slide.itemIndex || 0
+      );
+      if (origin) {
+        window.TOKI_MOTION.setEncoreZoomOrigin(stage, origin.x, origin.y);
+      }
+      const overview = slide.type === "portrait";
+      window.TOKI_MOTION.encoreSnap(stage, {
+        zoom: overview ? 1 : window.TOKI_MOTION.readEncoreZoomTo(stage),
+        pinch: overview ? 0 : encoreHolePinchPx(),
+        dimmed: !overview,
+        opacity: 1,
+      });
+      return;
+    }
+    const plate = heroMotionEl();
+    if (plate) {
+      window.TOKI_MOTION.heroSnap(
+        plate,
+        1,
+        style.zoomMax != null ? style.zoomMax : 1
+      );
+    }
+  }
+
   function engineEntranceSec(style, isFirstInSegment) {
     if (isFirstInSegment && style.windUp > 0) return style.windUp;
     return style.punchIn;
@@ -12474,10 +12540,14 @@
       !nextSlide || isPresSegmentBoundary(slide, nextSlide);
 
     const styleName = motionStyleNameForSlide(slide);
-    const style = getMotionStyle(styleName);
-    // FP overview uses same phase digits as the segment's motion style
+    const rawStyle = getMotionStyle(styleName);
+    const tempo = presentationTempoNow();
+    if (!(tempo > 0)) {
+      parkPresentationStill();
+      return;
+    }
+    const style = scaleMotionStyleForSpeed(rawStyle);
     const entranceSec = engineEntranceSec(style, isFirstInSegment);
-    // Encore (and FP attached to Encore): optional Hold scale; KB/Slideshow use sheet Hold as-is
     const holdSec = motionStyleIsEncore(style)
       ? encoreHoldSeconds(style.hold)
       : style.hold;
@@ -12513,36 +12583,151 @@
       "hold=",
       holdSec,
       "out=",
-      exitSec
+      exitSec,
+      "speed=",
+      config.slideshowSpeed,
+      "tempo=",
+      Number(tempo.toFixed(4))
     );
 
-    motionRunEntrance(
-      slide,
-      style,
-      entranceSec,
-      gen,
-      function () {
-        if (gen !== _motionEngineGen) return;
-        kenBurnsRunHold(holdSec, gen, function () {
+    const after = function (ms, fn) {
+      afterMs(ms, gen, fn);
+    };
+    const nextBlock = function () {
+      if (gen !== _motionEngineGen || !_motionEngineRunning) return;
+      motionEngineRunBlock(i + 1, gen);
+    };
+
+    // Family Portrait overview stays on the live-only path.
+    if (slide.type === "portrait") {
+      motionRunEntrance(
+        slide,
+        style,
+        entranceSec,
+        gen,
+        function () {
           if (gen !== _motionEngineGen) return;
-          motionRunExit(
-            slide,
-            style,
-            exitSec,
-            gen,
-            function () {
-              if (gen !== _motionEngineGen || !_motionEngineRunning) return;
-              motionEngineRunBlock(i + 1, gen);
-            },
-            {
-              isLastInSegment: isLastInSegment,
-              nextSlide: nextSlide,
-            }
-          );
+          kenBurnsRunHold(holdSec, gen, function () {
+            if (gen !== _motionEngineGen) return;
+            motionRunExit(
+              slide,
+              style,
+              exitSec,
+              gen,
+              nextBlock,
+              { isLastInSegment: isLastInSegment, nextSlide: nextSlide }
+            );
+          });
+        },
+        { isFirstInSegment: isFirstInSegment, prevSlide: prevSlide }
+      );
+      return;
+    }
+
+    if (motionStyleIsEncore(rawStyle)) {
+      const stage = encorePrepareSurface(slide);
+      if (!stage) {
+        finishHideFamilyPortrait();
+        encoreArmHighlight(slide, exitSec);
+        after(entranceSec * 1000, function () {
+          kenBurnsRunHold(holdSec, gen, function () {
+            encoreClearHighlight(exitSec);
+            after(exitSec * 1000, nextBlock);
+          });
         });
-      },
-      { isFirstInSegment: isFirstInSegment, prevSlide: prevSlide }
-    );
+        return;
+      }
+      const presItem = resolvePresItem(slide.itemIndex, slide);
+      if (presItem) {
+        _lastEncoreBowItem = presItem;
+        applyEncoreSpotlightChrome(presItem);
+      } else {
+        applyEncoreSpotlightChrome(null);
+      }
+      encoreArmHighlight(slide, exitSec);
+      window.TOKI_MOTION.runEncoreBlock(
+        stage,
+        {
+          first: !!isFirstInSegment,
+          last: !!isLastInSegment,
+          origin: window.TOKI_MOTION.encoreSlotOrigin(stage, slide.itemIndex),
+          pinchPx: encoreHolePinchPx(),
+          zoomTo: window.TOKI_MOTION.readEncoreZoomTo(stage),
+          fpsCap: encoreHardShadowFpsCap(),
+          style: rawStyle,
+          speed: config.slideshowSpeed,
+        },
+        {
+          afterMs: after,
+          onExit: function () {
+            encoreClearHighlight(exitSec);
+          },
+          onDone: function () {
+            if (isLastInSegment) finishHideFamilyPortrait();
+            nextBlock();
+          },
+        }
+      );
+      return;
+    }
+
+    const plate = heroMotionEl();
+    const item = resolvePresItem(slide.itemIndex, slide) || {
+      image: slide.image,
+      images: slide.images,
+      isNew: !!slide.isNew,
+    };
+    const textOnly = !!slide.textOnly || !slide.image;
+    if (textOnly) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      finishHideFamilyPortrait();
+      engineArmHighlightIn(exitSec);
+      if (slide.segment === "box") {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      }
+      after(entranceSec * 1000, function () {
+        kenBurnsRunHold(holdSec, gen, function () {
+          engineHighlightFadeOut(exitSec);
+          after(exitSec * 1000, nextBlock);
+        });
+      });
+      return;
+    }
+
+    engineLoadHeroImage(item, function (ok) {
+      if (gen !== _motionEngineGen) return;
+      engineArmHighlightIn(exitSec);
+      if (slide.segment === "box") {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      }
+      if (!ok || !plate) {
+        after((entranceSec + holdSec + exitSec) * 1000, nextBlock);
+        return;
+      }
+      window.TOKI_MOTION.runHeroBlock(plate, rawStyle, {
+        speed: config.slideshowSpeed,
+        first: !!isFirstInSegment,
+        last: !!isLastInSegment,
+        afterMs: after,
+        onFeature: setFeatureActive,
+        onExit: function () {
+          engineHighlightFadeOut(exitSec);
+        },
+        onDone: nextBlock,
+      });
+    });
   }
 
   function startMotionEngineAt(index) {
@@ -14146,10 +14331,24 @@
       return;
     }
 
-    // Motion engine ONLY — Beta Motion Punch/Hold/Out. No Board-4-only clocks.
+    // Motion engine — Beta Motion digits × Presentation Speed tempo (3 = 1×).
     if (isPresentationEngine() && usesBoardSlides()) {
-      const sample = getMotionStyle(
-        motionStyleNameForSlide(slides[activeIndex] || slides[0])
+      const tempo = presentationTempoNow();
+      if (!(tempo > 0)) {
+        _presentationRunning = false;
+        parkPresentationStill();
+        tokiInfo(
+          "presentation parked (Presentation Speed =",
+          config.slideshowSpeed,
+          ")"
+        );
+        updateDebugVisuals();
+        return;
+      }
+      const sample = scaleMotionStyleForSpeed(
+        getMotionStyle(
+          motionStyleNameForSlide(slides[activeIndex] || slides[0])
+        )
       );
       if (!(sample.hold > 0) && !(sample.punchIn > 0)) {
         _presentationRunning = false;
@@ -14172,9 +14371,12 @@
         sample.hold,
         "punchOut=",
         sample.punchOut,
+        "speed=",
+        config.slideshowSpeed,
+        "tempo=",
+        Number(tempo.toFixed(4)),
         "zoom=",
-        motionStyleUsesZoom(sample) ? "yes" : "no",
-        "| digits from Beta Motion (not Presentation Speed)"
+        motionStyleUsesZoom(sample) ? "yes" : "no"
       );
       updateDebugVisuals();
       return;

@@ -72,6 +72,150 @@
     return String((style && style.name) || "").toLowerCase() === "encore";
   }
 
+  function motionCell(row, idx) {
+    if (!row || idx == null || idx < 0 || idx >= row.length) return "";
+    var v = row[idx];
+    return v == null ? "" : String(v).trim();
+  }
+
+  function parseMotionSeconds(raw, fallback) {
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return fallback;
+    }
+    var n = Number(raw);
+    if (!isFinite(n) || n < 0) return fallback;
+    return n;
+  }
+
+  /**
+   * Beta Features → Motion table. Same columns the live board reads.
+   * Wind-up / Wind-down empty or 0 = no override (use Punch-In / Punch-Out).
+   */
+  function parseMotionStylesTable(rows) {
+    var styles = {};
+    if (!rows || !rows.length) return styles;
+    var motionIdx = -1;
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (motionCell(rows[i], 0).toLowerCase() === "motion") {
+        motionIdx = i;
+        break;
+      }
+    }
+    if (motionIdx < 0) return styles;
+    var headerIdx = -1;
+    for (i = motionIdx + 1; i < Math.min(motionIdx + 8, rows.length); i++) {
+      if (motionCell(rows[i], 0).toLowerCase().indexOf("motion style") !== -1) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx < 0) return styles;
+    for (i = headerIdx + 1; i < rows.length; i++) {
+      var name = motionCell(rows[i], 0);
+      if (!name) continue;
+      var lower = name.toLowerCase();
+      if (
+        lower === "boards" ||
+        lower === "style and theme" ||
+        lower === "swipe up" ||
+        lower === "veil shadow settings" ||
+        lower.indexOf("name of motion") === 0
+      ) {
+        if (lower.indexOf("name of motion") === 0) continue;
+        break;
+      }
+      if (
+        !motionCell(rows[i], 2) &&
+        !motionCell(rows[i], 3) &&
+        lower !== "ken burns" &&
+        lower !== "encore"
+      ) {
+        if (lower === "herotext" || lower.indexOf("include footer") === 0) {
+          break;
+        }
+      }
+      styles[name] = {
+        name: name,
+        explanation: motionCell(rows[i], 1),
+        windUp: parseMotionSeconds(motionCell(rows[i], 2), 0),
+        punchIn: parseMotionSeconds(motionCell(rows[i], 3), 3.4),
+        hold: parseMotionSeconds(motionCell(rows[i], 4), 1),
+        punchOut: parseMotionSeconds(motionCell(rows[i], 5), 0.45),
+        windDown: parseMotionSeconds(motionCell(rows[i], 6), 0),
+        notes: motionCell(rows[i], 7),
+      };
+    }
+    return styles;
+  }
+
+  function lookupSheetStyle(map, name) {
+    if (!map || !name) return null;
+    if (map[name]) return map[name];
+    var want = String(name).toLowerCase();
+    var keys = Object.keys(map);
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === want) return map[keys[i]];
+    }
+    return null;
+  }
+
+  /** Presentation Speed tile 3 = medium = 1× Beta Motion digits. */
+  var PRESENTATION_TEMPO_MED = 3;
+
+  /**
+   * Duration multiplier for a Presentation Speed tile.
+   * 0 → parked. 3 → 1×. Each step is a half-stop (×√2):
+   * 1 crawl 2×, 2 slow √2×, 3 medium 1×, 4 fast 1/√2×, 5 very fast ½×.
+   */
+  function presentationTempo(speed) {
+    var n = Number(speed);
+    if (!isFinite(n) || n <= 0) return 0;
+    return Math.pow(2, (PRESENTATION_TEMPO_MED - n) / 2);
+  }
+
+  function scaleDuration(sec, tempo) {
+    var s = Number(sec);
+    var t = Number(tempo);
+    if (!(s > 0) || !(t > 0)) return 0;
+    return s * t;
+  }
+
+  function scaleStyleTimes(style, speed) {
+    var tempo = presentationTempo(speed);
+    if (!style || !(tempo > 0) || tempo === 1) return style;
+    var out = {};
+    var k;
+    for (k in style) {
+      if (Object.prototype.hasOwnProperty.call(style, k)) out[k] = style[k];
+    }
+    out.punchIn = scaleDuration(style.punchIn, tempo);
+    out.hold = scaleDuration(style.hold, tempo);
+    out.punchOut = scaleDuration(style.punchOut, tempo);
+    out.windUp = scaleDuration(style.windUp, tempo);
+    out.windDown = scaleDuration(style.windDown, tempo);
+    return out;
+  }
+
+  /** Base runner style (zoom/chrome) + Beta Motion phase digits when present. */
+  function styleForMode(mode, sheetMap) {
+    var base = styleByMode(mode);
+    var sheet = lookupSheetStyle(sheetMap, base.name);
+    if (!sheet) return base;
+    var out = {};
+    var k;
+    for (k in base) {
+      if (Object.prototype.hasOwnProperty.call(base, k)) out[k] = base[k];
+    }
+    out.windUp = sheet.windUp;
+    out.punchIn = sheet.punchIn;
+    out.hold = sheet.hold;
+    out.punchOut = sheet.punchOut;
+    out.windDown = sheet.windDown;
+    return out;
+  }
+
   function encoreVeilIn(punchIn) {
     var p = Number(punchIn);
     var base = p > 0 ? p : OPACITY_DUR;
@@ -216,12 +360,31 @@
    */
   function runHeroBlock(plate, style, hooks) {
     hooks = hooks || {};
+    style = style || KEN_BURNS;
     var afterMs = hooks.afterMs || function (ms, fn) {
       setTimeout(fn, ms);
     };
-    var entranceSec = style.punchIn != null ? style.punchIn : 3.4;
+    var speed = hooks.speed;
+    if (speed != null) {
+      if (!(presentationTempo(speed) > 0)) {
+        if (hooks.onParked) hooks.onParked();
+        return;
+      }
+      style = scaleStyleTimes(style, speed) || style;
+    }
+    var entranceSec =
+      hooks.first && style.windUp > 0
+        ? style.windUp
+        : style.punchIn != null
+          ? style.punchIn
+          : 3.4;
     var holdSec = style.hold != null ? style.hold : 1;
-    var exitSec = style.punchOut != null ? style.punchOut : 0.45;
+    var exitSec =
+      hooks.last && style.windDown > 0
+        ? style.windDown
+        : style.punchOut != null
+          ? style.punchOut
+          : 0.45;
     if (hooks.onEntrance) hooks.onEntrance();
     heroPunchIn(plate, style, entranceSec, hooks);
     afterMs(entranceSec * 1000, function () {
@@ -267,20 +430,51 @@
     stage.style.setProperty("--encore-hole-y", PORTRAIT_STAGE_H * 0.5 + "px");
   }
 
+  function pinchTargets(stage) {
+    var out = [];
+    if (!stage) return out;
+    out.push(stage);
+    var rig = stage.querySelector(".family-portrait-rig");
+    var veil = stage.querySelector(".family-portrait-veil");
+    if (rig) out.push(rig);
+    if (veil) out.push(veil);
+    return out;
+  }
+
   function setEncoreHolePinch(stage, px) {
-    var node = encorePinchNode(stage);
-    if (!node) return;
-    node.style.setProperty("--encore-hole-pinch", Math.max(0, px) + "px");
+    var v = Math.max(0, px) + "px";
+    var nodes = pinchTargets(stage);
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      nodes[i].style.setProperty("--encore-hole-pinch", v);
+    }
   }
 
   function snapEncoreHolePinch(stage, px) {
-    var node = encorePinchNode(stage);
-    if (!node) return;
-    var prev = node.style.transition;
-    node.style.transition = "none";
-    node.style.setProperty("--encore-hole-pinch", Math.max(0, px) + "px");
-    void node.offsetWidth;
-    node.style.transition = prev;
+    var nodes = pinchTargets(stage);
+    var prev = [];
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      prev[i] = nodes[i].style.transition;
+      nodes[i].style.transition = "none";
+    }
+    setEncoreHolePinch(stage, px);
+    for (i = 0; i < nodes.length; i++) void nodes[i].offsetWidth;
+    for (i = 0; i < nodes.length; i++) nodes[i].style.transition = prev[i];
+  }
+
+  function armEncorePinchTransition(stage, sec, easeVar, easeFallback) {
+    var veil = stage && stage.querySelector(".family-portrait-veil");
+    if (!veil) return;
+    veil.style.transition =
+      "opacity var(--motion-veil, 1.7s) var(--ease-fade, ease), " +
+      "--encore-hole-pinch " +
+      sec +
+      "s var(" +
+      easeVar +
+      ", " +
+      easeFallback +
+      ")";
   }
 
   function encoreHolePinchPx(spotlightType) {
@@ -489,6 +683,9 @@
       stage.style.transition = "opacity " + opSec + "s var(--ease-fade, ease)";
       stage.classList.remove("is-zoom-out");
       if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
+      if (doPinch && !fpsCap) {
+        armEncorePinchTransition(stage, entranceSec, "--ease-out", "ease-out");
+      }
       if (
         !tryEncoreFpsZoom(
           stage,
@@ -522,6 +719,9 @@
         doPinch,
         fpsCap
       );
+    }
+    if (doPinch && !fpsCap) {
+      armEncorePinchTransition(stage, entranceSec, "--ease-out", "ease-out");
     }
     if (
       !tryEncoreFpsZoom(
@@ -783,10 +983,29 @@
       setTimeout(fn, ms);
     };
     var style = opts.style || ENCORE;
-    var entranceSec = style.punchIn != null ? style.punchIn : 3.4;
-    var holdSec = encoreHold(style.hold != null ? style.hold : 1);
-    var exitSec = style.punchOut != null ? style.punchOut : 0.45;
+    var speed = opts.speed != null ? opts.speed : hooks.speed;
+    if (speed != null) {
+      if (!(presentationTempo(speed) > 0)) {
+        if (hooks.onParked) hooks.onParked();
+        return;
+      }
+      style = scaleStyleTimes(style, speed) || style;
+    }
     var first = opts.first !== false;
+    var last = !!opts.last;
+    var entranceSec =
+      first && style.windUp > 0
+        ? style.windUp
+        : style.punchIn != null
+          ? style.punchIn
+          : 3.4;
+    var holdSec = encoreHold(style.hold != null ? style.hold : 1);
+    var exitSec =
+      last && style.windDown > 0
+        ? style.windDown
+        : style.punchOut != null
+          ? style.punchOut
+          : 0.45;
     if (hooks.onEntrance) hooks.onEntrance();
     encorePunchIn(stage, {
       first: first,
@@ -829,6 +1048,14 @@
     PORTRAIT_STAGE_H: PORTRAIT_STAGE_H,
     ENCORE_HOLE_PINCH_OUT: ENCORE_HOLE_PINCH_OUT,
     styleByMode: styleByMode,
+    parseMotionSeconds: parseMotionSeconds,
+    parseMotionStylesTable: parseMotionStylesTable,
+    lookupSheetStyle: lookupSheetStyle,
+    styleForMode: styleForMode,
+    PRESENTATION_TEMPO_MED: PRESENTATION_TEMPO_MED,
+    presentationTempo: presentationTempo,
+    scaleDuration: scaleDuration,
+    scaleStyleTimes: scaleStyleTimes,
     usesZoom: usesZoom,
     isEncore: isEncore,
     encoreVeilIn: encoreVeilIn,
@@ -852,6 +1079,7 @@
     setEncoreHolePinch: setEncoreHolePinch,
     setEncoreVeilDimmed: setEncoreVeilDimmed,
     tryEncoreFpsZoom: tryEncoreFpsZoom,
+    cancelEncoreZoomStepper: cancelEncoreZoomStepper,
     readEncoreZoomTo: readEncoreZoomTo,
     encoreHolePinchPx: encoreHolePinchPx,
     encoreFpsCap: encoreFpsCap,

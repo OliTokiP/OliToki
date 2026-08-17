@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "4619464",
-  "hashFull": "461946425c69ac95f0959e795c99c58d0e7214cf",
-  "subject": "Header Validations Changed"
+  "hash": "87b353f",
+  "hashFull": "87b353fa002b26a6ad6a766d7c415cd5ed1fb92d",
+  "subject": "QA: 2026-08-17 Images to display in Obsidian for tickets (pass 1)"
 };

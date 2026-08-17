@@ -96,7 +96,9 @@
   z-index: 2;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade);
+  transition:
+    opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade),
+    --encore-hole-pinch var(--motion-punch-in, 3.4s) var(--ease-out);
   transform: translateZ(0);
   --veil-hole-x: calc(
     var(--encore-hole-x, 50%) + var(--veil-extend, 20px)

@@ -180,7 +180,7 @@
     encoreStyle: "hard_shadow",
     encoreSpot: "black",
     encoreBg: "secondary",
-    presentationSpeed: 1,
+    presentationSpeed: 3,
     dataSource: "restaurant",
     requireRestart: "yes",
     systemFont: "poppins",
@@ -208,6 +208,7 @@
     previewItems: PREVIEW_ITEMS,
     speedTiles: SPEED_TILES,
     motionDefaults: MOTION_DEFAULTS,
+    motionStyles: {},
     sticker: STICKER,
     defaultDraft: DEFAULT_DRAFT,
   };

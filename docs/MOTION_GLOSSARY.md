@@ -61,8 +61,7 @@ Wind-up → Punch-in → Hold → Punch-out → Wind-down
 | `--ease-fade` | `cubic-bezier(0.4, 0, 0.2, 1)` | Opacity, highlight color, Punch-Out camera |
 | `--ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | Punch-In camera / zoom settle |
 
-**Presentation Speed (sheet):** seconds the **block** is meant to occupy on the live board (`parseSlideshowSpeed`, default `3`). `0` = paused.  
-**Manager tiles today:** `0` = stop, `≥1` = go. **Do not retune** until sheets are wired.
+**Presentation Speed (Style I3, tiles 0–5):** not seconds. Tempo key on Beta Motion digits (`TOKI_MOTION.presentationTempo`). `0` = parked. `3` = medium = 1× sheet Punch/Hold/Out. Each step is a half-stop (`×√2`): 1 crawl 2×, 2 slow √2×, 4 fast 1/√2×, 5 very fast ½×. Same function on the live board and Menu Manager.
 
 Engine sequence today (`motionEngineRunBlock`):
 
