@@ -1034,10 +1034,17 @@ class SheetsBackend:
                 data_idx,
                 7,
             ),
+            "presentationspeed": self._a1_for(
+                cols,
+                ["presentationspeed", "slideshowspeed"],
+                data_idx,
+                8,
+            ),
         }
         values: dict[str, str] = {}
         wrote_theme = False
         wrote_bg = False
+        wrote_speeds = False
         theme = str(body.get("theme") or body.get("themeName") or "").strip()
         if theme:
             values["themeselector"] = self._canonical_theme(rows, theme)
@@ -1054,13 +1061,29 @@ class SheetsBackend:
         if any(k in body and body.get(k) not in (None, "") for k in bg_keys):
             values.update(self._background_updates(rows, body))
             wrote_bg = True
-        if "scrollSpeed" in body and body.get("scrollSpeed") not in (None, ""):
+
+        def _int_speed(raw, name: str) -> str:
             try:
-                speed = int(round(float(body.get("scrollSpeed"))))
+                n = int(round(float(raw)))
             except (TypeError, ValueError) as e:
-                raise ValueError("invalid scrollSpeed") from e
-            values["bgscrollspeed"] = str(speed)
-            wrote_bg = True
+                raise ValueError("invalid " + name) from e
+            if n < 0 or n > 30:
+                raise ValueError("invalid " + name)
+            return str(n)
+
+        if "scrollSpeed" in body and body.get("scrollSpeed") not in (None, ""):
+            values["bgscrollspeed"] = _int_speed(
+                body.get("scrollSpeed"), "scrollSpeed"
+            )
+            wrote_speeds = True
+        if "presentationSpeed" in body and body.get("presentationSpeed") not in (
+            None,
+            "",
+        ):
+            values["presentationspeed"] = _int_speed(
+                body.get("presentationSpeed"), "presentationSpeed"
+            )
+            wrote_speeds = True
         if not values:
             raise ValueError("nothing to write")
         data = [
@@ -1108,6 +1131,9 @@ class SheetsBackend:
             else None,
             "wroteTheme": wrote_theme,
             "wroteBackground": wrote_bg,
+            "wroteSpeeds": wrote_speeds,
+            "scrollSpeed": values.get("bgscrollspeed"),
+            "presentationSpeed": values.get("presentationspeed"),
             "range": ", ".join([r for r in ranges if r]),
             "sheetId": sid,
             "sourceName": source_name,

@@ -1,8 +1,9 @@
 /**
  * OliToki Menu Manager — layout + sheet read.
  * Draft theme tokens restyle the app immediately. Confirm-on-back Yes writes
- * Theme Selector and the Background conglomerate (BG Color / Pattern /
- * Wallpaper) on the selected catalog (via TOKI_MANAGER_SHEET.writeStyle).
+ * Theme Selector, Background (BG Color / Pattern / Wallpaper), and the
+ * speed pills (scroll + presentation) on the selected catalog
+ * (via TOKI_MANAGER_SHEET.writeStyle).
  */
 (function () {
   "use strict";
@@ -1330,6 +1331,7 @@
       patternType: d.patternType || "",
       wallpaper: d.wallpaper || "",
       scrollSpeed: d.scrollSpeed,
+      presentationSpeed: d.presentationSpeed,
     };
   }
 
@@ -1340,6 +1342,7 @@
         var bits = [];
         if (wrote.wroteTheme) bits.push("Theme");
         if (wrote.wroteBackground) bits.push("background");
+        if (wrote.wroteSpeeds) bits.push("speeds");
         var what = bits.length ? bits.join(" and ") : "Style";
         return fb
           ? what + " saved to " + src
@@ -1366,9 +1369,12 @@
       next.background !== prev.background ||
       next.bgColor !== prev.bgColor ||
       next.patternType !== prev.patternType ||
-      next.wallpaper !== prev.wallpaper ||
+      next.wallpaper !== prev.wallpaper;
+    var scrollChanged =
       Number(next.scrollSpeed) !== Number(prev.scrollSpeed);
-    if (!themeChanged && !bgChanged) {
+    var presChanged =
+      Number(next.presentationSpeed) !== Number(prev.presentationSpeed);
+    if (!themeChanged && !bgChanged && !scrollChanged && !presChanged) {
       return Promise.resolve({ needed: false, wrote: null });
     }
     var writer = sheet && (sheet.writeStyle || sheet.writeTheme);
@@ -1390,8 +1396,9 @@
       payload.bgColor = next.bgColor;
       payload.patternType = next.patternType;
       payload.wallpaper = next.wallpaper === "upload" ? "" : next.wallpaper;
-      payload.scrollSpeed = next.scrollSpeed;
     }
+    if (scrollChanged) payload.scrollSpeed = next.scrollSpeed;
+    if (presChanged) payload.presentationSpeed = next.presentationSpeed;
     var req = sheet.writeStyle
       ? sheet.writeStyle(payload)
       : sheet.writeTheme(next.themeName, sheetId);
