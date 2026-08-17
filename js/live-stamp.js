@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "c0bf254",
-  "hashFull": "c0bf2547cf285666144a03c960b0d0ea1250b9eb",
-  "subject": "QA: 2026-08-17 ALL NEW TICKETS MARKED AS DRAFT (pass 1)"
+  "hash": "5df62e5",
+  "hashFull": "5df62e58e7b5e64876aedbb0731077b68e481caf",
+  "subject": "QA: 2026-08-17 Drafts showing Feedback 1 (pass 1)"
 };
