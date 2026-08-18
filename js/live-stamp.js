@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "49dddce",
-  "hashFull": "49dddcef224a82f43d18c97d61fa5e5d4d466730",
-  "subject": "QA: 2026-08-18 Images supersampling in mini-display preview (pass 1)"
+  "hash": "8d63262",
+  "hashFull": "8d63262e29babcaa4424a7641dd9ac81529426d6",
+  "subject": "QA: 2026-08-17 Make drafts editable (pass 5)"
 };
