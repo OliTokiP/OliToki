@@ -972,8 +972,8 @@ img {
   background-color: var(--special);
   mix-blend-mode: color;
   pointer-events: none;
-  -webkit-mask-image: url("../assets/stickers/Sticker-Body.webp");
-  mask-image: url("../assets/stickers/Sticker-Body.webp");
+  -webkit-mask-image: url("../assets/stickers/Sticker-Body-sm.webp");
+  mask-image: url("../assets/stickers/Sticker-Body-sm.webp");
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
@@ -1139,8 +1139,8 @@ img {
   background-color: var(--special);
   mix-blend-mode: color;
   pointer-events: none;
-  -webkit-mask-image: url("../assets/stickers/Sticker-Body.webp");
-  mask-image: url("../assets/stickers/Sticker-Body.webp");
+  -webkit-mask-image: url("../assets/stickers/Sticker-Body-sm.webp");
+  mask-image: url("../assets/stickers/Sticker-Body-sm.webp");
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;

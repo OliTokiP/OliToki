@@ -21,6 +21,13 @@
   var CHECK_SVG =
     '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.4 8.2l3.6 3.6 7.6-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+  /* Mini preview uses the -sm asset variants (lower memory / bandwidth in
+     manager UI; matches the -sm food images already in PREVIEW_ITEMS). */
+  var PREVIEW_STICKER = {
+    body: "assets/stickers/Sticker-Body-sm.webp",
+    shadow: "assets/stickers/Sticker-Shadow-sm.webp",
+  };
+
   var state = {
     screen: "home",
     boardId: null,
@@ -851,13 +858,28 @@
   }
 
   function wallpaperSrc() {
+    /* Always emit -sm for mini preview (see PREVIEW_STICKER). */
+    var id = state.draft.wallpaper;
+    if (id === "film") return "assets/bgs/Film/film-bg-sm.webp";
+    if (id === "galaxy") return "assets/bgs/Galaxy/galaxy-bg-sm.webp";
     var paper = wallpaperPaper();
-    return paper && paper.src ? paper.src : "";
+    var s = paper && paper.src ? paper.src : "";
+    if (s && !/-sm\./i.test(s)) {
+      s = s.replace(/(\.[^.]+)$/, "-sm$1");
+    }
+    return s;
   }
 
   function wallpaperFallback() {
+    var id = state.draft.wallpaper;
+    if (id === "film") return "assets/bgs/Film/film-bg-sm.jpg";
+    if (id === "galaxy") return "assets/bgs/Galaxy/galaxy-bg-sm.jpg";
     var paper = wallpaperPaper();
-    return (paper && paper.fallback) || "";
+    var f = (paper && paper.fallback) || "";
+    if (f && !/-sm\./i.test(f)) {
+      f = f.replace(/(\.[^.]+)$/, "-sm$1");
+    }
+    return f;
   }
 
   function previewHtml() {
@@ -930,11 +952,11 @@
       (first.isNew ? "" : " hidden") +
       ">" +
       '<img class="preview-sticker-shadow" alt="" src="' +
-      D.sticker.shadow +
+      PREVIEW_STICKER.shadow +
       '">' +
       '<div class="preview-sticker-body">' +
       '<img class="preview-sticker-body-img" alt="" src="' +
-      D.sticker.body +
+      PREVIEW_STICKER.body +
       '">' +
       '<span class="preview-sticker-tint"></span></div>' +
       '<span class="preview-sticker-label">New!</span></div>' +
@@ -2008,7 +2030,7 @@
       return { src: it.src, isNew: !!it.isNew, itemIndex: i };
     });
     previewCtl.lattice = TM.fillEncorePlates(stage, items, {
-      sticker: D.sticker,
+      sticker: PREVIEW_STICKER,
     });
     return previewCtl.lattice;
   }
