@@ -105,6 +105,13 @@ def _cell(row: list, idx: int) -> str:
     return str(v).strip()
 
 
+def _is_heavy_filter_header(raw: str) -> bool:
+    h = str(raw or "").strip().lower()
+    if "heavy" not in h:
+        return False
+    return "fps" in h or "30" in h or "filter" in h or "fitler" in h
+
+
 def _parse_yes(raw: str, default: bool = False) -> bool:
     s = str(raw or "").strip().lower()
     if not s:
@@ -140,6 +147,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     data_source = ""
     require_restart = False
     system_font = "roboto"
+    limit_heavy_filters = True
     catalog: list[dict] = []
 
     header_idx = None
@@ -157,13 +165,17 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         require_restart = _parse_yes(_cell(rows[header_idx + 1], 1), False)
         header = rows[header_idx] or []
         for c, cell in enumerate(header):
-            if "system font" in str(cell or "").strip().lower():
+            label = str(cell or "").strip().lower()
+            if "system font" in label:
                 raw = _cell(rows[header_idx + 1], c).lower()
                 if "poppin" in raw:
                     system_font = "poppins"
                 elif "roboto" in raw:
                     system_font = "roboto"
-                break
+            if _is_heavy_filter_header(label):
+                limit_heavy_filters = _parse_yes(
+                    _cell(rows[header_idx + 1], c), True
+                )
 
     if catalog_idx is not None:
         for row in rows[catalog_idx + 1 :]:
@@ -198,6 +210,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         "dataSource": data_source or "Alpha Copy",
         "requireRestart": require_restart,
         "systemFont": system_font,
+        "limitHeavyFilters": bool(limit_heavy_filters),
         "sheetId": sheet_id,
         "sourceName": (match or {}).get("name") or "",
         "sourceUrl": (match or {}).get("url") or "",
@@ -1548,6 +1561,9 @@ def make_handler(
                             "dataSource": live.get("dataSource"),
                             "requireRestart": bool(live.get("requireRestart")),
                             "systemFont": live.get("systemFont") or "roboto",
+                            "limitHeavyFilters": live.get("limitHeavyFilters")
+                            if "limitHeavyFilters" in live
+                            else True,
                             "sheetId": backend.sheet_id,
                             "sourceName": live.get("sourceName"),
                             "sourceUrl": live.get("sourceUrl") or "",

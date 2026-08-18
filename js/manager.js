@@ -542,6 +542,11 @@
         label: "System Font",
         value: labelOf(D.fonts, state.draft.systemFont),
       }) +
+      row({
+        key: "limitHeavyFilters",
+        label: "Limit Heavy Filters to 30FPS",
+        value: labelOf(D.yesNo, state.draft.limitHeavyFilters),
+      }) +
       linksBlock() +
       "</div></div></section>"
     );
@@ -841,6 +846,11 @@
       d.presentationSpeed,
       "presentation"
     );
+    html += row({
+      key: "limitHeavyFilters",
+      label: "Limit Heavy Filters to 30FPS",
+      value: labelOf(D.yesNo, d.limitHeavyFilters),
+    });
     return html;
   }
 
@@ -1246,6 +1256,19 @@
         },
         set: function (id) {
           state.draft.systemFont = id;
+        },
+      };
+    }
+    if (key === "limitHeavyFilters") {
+      return {
+        title: "Limit Heavy Filters to 30FPS",
+        kind: "trueFalse",
+        options: D.yesNo,
+        get: function () {
+          return state.draft.limitHeavyFilters;
+        },
+        set: function (id) {
+          state.draft.limitHeavyFilters = id;
         },
       };
     }
@@ -2269,7 +2292,10 @@
           origin: TM.encoreSlotOrigin(stage, i),
           pinchPx: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
           zoomTo: TM.ENCORE.zoomTo,
-          fpsCap: TOKI_MOTION.encoreFpsCap(state.draft.encoreStyle),
+          fpsCap: TOKI_MOTION.encoreFpsCap(
+            state.draft.encoreStyle,
+            state.draft.limitHeavyFilters !== "no"
+          ),
           style: previewMotionStyle(),
           speed: previewSpeed(),
         },

@@ -661,6 +661,7 @@
     var dataSource = "";
     var requireRestart = "no";
     var systemFont = "roboto";
+    var limitHeavyFilters = "yes";
     var catalog = [];
     var headerIdx = -1;
     var catalogIdx = -1;
@@ -682,9 +683,12 @@
       requireRestart = parseYesNo(cell(rows[headerIdx + 1], 1), false);
       var header = rows[headerIdx] || [];
       for (var c = 0; c < header.length; c++) {
-        if (String(header[c] || "").toLowerCase().indexOf("system font") !== -1) {
+        var h = String(header[c] || "").toLowerCase();
+        if (h.indexOf("system font") !== -1) {
           systemFont = parseSystemFont(cell(rows[headerIdx + 1], c));
-          break;
+        }
+        if (isHeavyFilterHeader(h)) {
+          limitHeavyFilters = parseYesNo(cell(rows[headerIdx + 1], c), true);
         }
       }
     }
@@ -714,10 +718,22 @@
       dataSource: dataSource || "Alpha Copy",
       requireRestart: requireRestart,
       systemFont: systemFont,
+      limitHeavyFilters: limitHeavyFilters,
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || dataSource || "",
       catalog: catalog,
     };
+  }
+
+  function isHeavyFilterHeader(raw) {
+    var h = String(raw || "").trim().toLowerCase();
+    if (h.indexOf("heavy") === -1) return false;
+    return (
+      h.indexOf("fps") !== -1 ||
+      h.indexOf("30") !== -1 ||
+      h.indexOf("filter") !== -1 ||
+      h.indexOf("fitler") !== -1
+    );
   }
 
   function catalogToSources(catalog) {
@@ -753,6 +769,7 @@
             dataSource: j.dataSource || "",
             requireRestart: parseYesNo(j.requireRestart, false),
             systemFont: parseSystemFont(j.systemFont),
+            limitHeavyFilters: parseYesNo(j.limitHeavyFilters, true),
             sheetId: j.sheetId || "",
             sourceName: j.sourceName || j.dataSource || "",
             catalog: catalog,
@@ -1083,6 +1100,7 @@
       dataSource: dsId,
       requireRestart: settings.requireRestart,
       systemFont: settings.systemFont,
+      limitHeavyFilters: settings.limitHeavyFilters || "yes",
     };
     return {
       ok: true,

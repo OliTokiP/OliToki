@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2c74a43",
-  "hashFull": "2c74a437f1cafa494763858e23a0b54bad542d3a",
-  "subject": "QA: 2026-08-18 Wallpaper should update on Manager side mini-display before saving (pass 1)"
+  "hash": "d0e11eb",
+  "hashFull": "d0e11ebcb5a7c240df48f5c83e01cd767ebb28e6",
+  "subject": "added 30fps control"
 };

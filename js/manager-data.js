@@ -187,6 +187,7 @@
     dataSource: "restaurant",
     requireRestart: "yes",
     systemFont: "poppins",
+    limitHeavyFilters: "yes",
   };
 
   global.TOKI_MANAGER_DATA = {

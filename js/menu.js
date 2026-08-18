@@ -939,9 +939,9 @@
   }
 
   /**
-   * On-disk wallpaper stems. Sheet tokens (`film`, `film.jpg`, `galaxy`,
-   * `galaxy-bg.jpg`) all collapse here (names come from the bgs/ folders).
-   * Extension and -sm are chosen later.
+   * On-disk wallpaper stems. Preferred sheet tokens: "film", "galaxy".
+   * Legacy "*-bg.jpg" etc also supported. Names from bgs/ folders.
+   * Extension/-sm chosen later.
    */
   const WALLPAPER_STEM = {
     film: "assets/bgs/Film/film-bg",
@@ -3517,8 +3517,7 @@
     ) {
       return null;
     }
-    // Support bare names (film / galaxy) and legacy film.jpg / galaxy-bg.jpg tokens.
-    // Both map to the folder-based file stem. Code resolves -bg, webp, and -sm.
+    // Supports bare "film"/"galaxy" (current gsheet) + legacy names; maps to folder stem.
     const file = token.replace(/^\/+/, "");
     const stem = wallpaperStem(file);
     if (stem) return stem + ".webp";
@@ -5806,6 +5805,7 @@
     dataSource: "",
     requireRestart: false,
     systemFont: "roboto",
+    limitHeavyFilters: true,
     sheetId: "",
   };
 
@@ -5878,6 +5878,7 @@
       }
     }
     let systemFont = "roboto";
+    let limitHeavyFilters = true;
     if (headerIdx >= 0 && headerIdx + 1 < rows.length) {
       dataSource = String((rows[headerIdx + 1] && rows[headerIdx + 1][0]) || "").trim();
       requireRestart = parseYesNo(
@@ -5889,7 +5890,12 @@
         const h = String(header[c] || "").trim().toLowerCase();
         if (h.indexOf("system font") !== -1) {
           systemFont = parseSystemFontName(rows[headerIdx + 1] && rows[headerIdx + 1][c]);
-          break;
+        }
+        if (isHeavyFilterHeader(h)) {
+          limitHeavyFilters = parseYesNo(
+            rows[headerIdx + 1] && rows[headerIdx + 1][c],
+            true
+          );
         }
       }
     }
@@ -5919,9 +5925,21 @@
       dataSource: dataSource || "Alpha Copy",
       requireRestart: requireRestart,
       systemFont: systemFont,
+      limitHeavyFilters: limitHeavyFilters,
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || "",
     };
+  }
+
+  function isHeavyFilterHeader(raw) {
+    const h = String(raw || "").trim().toLowerCase();
+    if (h.indexOf("heavy") === -1) return false;
+    return (
+      h.indexOf("fps") !== -1 ||
+      h.indexOf("30") !== -1 ||
+      h.indexOf("filter") !== -1 ||
+      h.indexOf("fitler") !== -1
+    );
   }
 
   function parseSystemFontName(raw) {
@@ -5959,6 +5977,8 @@
       dataSource: j.dataSource || "",
       requireRestart: !!j.requireRestart,
       systemFont: parseSystemFontName(j.systemFont),
+      limitHeavyFilters:
+        j.limitHeavyFilters == null ? true : !!j.limitHeavyFilters,
       sheetId: j.sheetId || "",
     };
     if (liveSettings.sheetId) {
@@ -5970,6 +5990,7 @@
       "dataSource=" + (liveSettings.dataSource || "?"),
       "requireRestart=" + liveSettings.requireRestart,
       "systemFont=" + (liveSettings.systemFont || "roboto"),
+      "limitHeavyFilters=" + liveSettings.limitHeavyFilters,
       "sheet=" + (liveSettings.sheetId || "?")
     );
   }
@@ -6005,13 +6026,16 @@
           if (res.ok) {
             const j = await res.json();
             applyLiveSettingsPayload(j);
-            // Older toki_server omits systemFont — fill from public Settings.
-            if (!j.systemFont) {
+            // Older toki_server omits systemFont / the FPS cap — fill from public Settings.
+            if (!j.systemFont || j.limitHeavyFilters == null) {
               try {
                 const pub = await fetchLiveSettingsFromPublicExport();
-                if (pub && pub.systemFont) {
+                if (pub && pub.systemFont && !j.systemFont) {
                   liveSettings.systemFont = pub.systemFont;
                   applySystemFont(pub.systemFont);
+                }
+                if (pub && pub.limitHeavyFilters != null && j.limitHeavyFilters == null) {
+                  liveSettings.limitHeavyFilters = !!pub.limitHeavyFilters;
                 }
               } catch (fontErr) {
                 tokiWarn(
@@ -10778,8 +10802,13 @@
 
   function encoreHardShadowFpsCap() {
     if (!isEncoreSegmentNow()) return 0;
+    const limitOn =
+      liveSettings && liveSettings.limitHeavyFilters == null
+        ? true
+        : !!(liveSettings && liveSettings.limitHeavyFilters);
     return TOKI_MOTION.encoreFpsCap(
-      normalizedEncoreSpotlightType(config.encoreSpotlightType)
+      normalizedEncoreSpotlightType(config.encoreSpotlightType),
+      limitOn
     );
   }
 

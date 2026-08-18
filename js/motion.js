@@ -518,7 +518,8 @@
     return 40;
   }
 
-  function encoreFpsCap(spotlightType) {
+  function encoreFpsCap(spotlightType, limitOn) {
+    if (limitOn === false) return 0;
     return String(spotlightType || "") === "hard_shadow" ? 30 : 0;
   }
 
