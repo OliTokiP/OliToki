@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "d0e11eb",
-  "hashFull": "d0e11ebcb5a7c240df48f5c83e01cd767ebb28e6",
-  "subject": "added 30fps control"
+  "hash": "cb87496",
+  "hashFull": "cb8749659668a2af161f5680d8e136ca994f9e88",
+  "subject": "QA: 2026-08-17 Wallpaper list should say film and galaxy (pass 2)"
 };
