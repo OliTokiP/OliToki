@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <title>Deployer — OliToki</title>
+  <style>
+    :root { color-scheme: light dark; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font: 16px/1.4 system-ui, sans-serif;
+      margin: 0 auto;
+      padding: 1.25rem;
+      max-width: 36rem;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    .sub { color: #666; margin: 0 0 1.25rem; font-size: .95rem; }
+    .live {
+      font-weight: 600;
+      padding: .65rem .85rem;
+      border-radius: 10px;
+      background: #eee;
+      margin: 0 0 .75rem;
+      font-size: .92rem;
+    }
+    .live p { margin: .2rem 0; font-weight: 500; }
+    label, .lab { display: block; font-weight: 600; margin: 1rem 0 .35rem; }
+    input[type=text], textarea {
+      width: 100%; box-sizing: border-box; font: inherit;
+      padding: .55rem .65rem; border: 1px solid #bbb; border-radius: 8px;
+      font-size: 16px;
+    }
+    .picks { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .pick {
+      font-weight: 500; margin: 0; padding: .65rem .85rem;
+      border: 1px solid #bbb; border-radius: 8px;
+      display: flex; gap: .45rem; align-items: center;
+      min-height: 44px;
+    }
+    .row { display: flex; align-items: flex-start; gap: .5rem; margin-top: 1rem; }
+    .row label { margin: 0; font-weight: 500; }
+    button {
+      margin-top: 1.25rem; width: 100%; font: inherit; font-weight: 700;
+      padding: .85rem; border: 0; border-radius: 10px;
+      background: #1a1a1a; color: #fff;
+    }
+    button.danger { background: #8b1e1e; }
+    .tiny { color: #666; font-size: .88rem; }
+    a { color: inherit; }
+    .warn {
+      border: 1px dashed #bbb; border-radius: 8px; padding: .65rem .8rem;
+      margin-top: 1rem; font-size: .92rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      .live { background: #2a2a2a; }
+      .sub, .tiny { color: #aaa; }
+    }
+  </style>
+</head>
+<body>
+  <p class="tiny"><a href="new-bug.html">← Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+  <h1>Deployer</h1>
+  <p class="sub">Phone is enough. This files a GitHub issue; Actions ships the website and API. Your laptop is not the live server.</p>
+  <div class="live" id="live">Checking restaurant vs testing…</div>
+
+  <form id="form">
+    <div class="lab">Target</div>
+    <div class="picks">
+      <label class="pick"><input type="checkbox" name="target" value="testing" checked /> Testing</label>
+      <label class="pick"><input type="checkbox" name="target" value="restaurant" /> Restaurant</label>
+    </div>
+
+    <div class="lab">Ship</div>
+    <div class="picks">
+      <label class="pick"><input type="checkbox" name="ship" value="both" checked /> Website + API</label>
+      <label class="pick"><input type="checkbox" name="ship" value="website" /> Website only</label>
+      <label class="pick"><input type="checkbox" name="ship" value="api" /> API only</label>
+    </div>
+
+    <div class="lab">Source commit</div>
+    <div class="picks">
+      <label class="pick"><input type="checkbox" name="source" value="main" checked /> main (today’s work)</label>
+      <label class="pick"><input type="checkbox" name="source" value="testing" /> testing (promote)</label>
+      <label class="pick"><input type="checkbox" name="source" value="other" /> Other SHA / branch</label>
+    </div>
+    <label id="source-extra" hidden>SHA or branch
+      <input type="text" name="sourceRef" placeholder="abc1234 or a branch name" autocomplete="off" />
+    </label>
+
+    <div class="lab">Data source pin</div>
+    <div class="picks">
+      <label class="pick"><input type="checkbox" name="pin" value="auto" checked /> Auto (testing → Alpha, restaurant → Restaurant)</label>
+      <label class="pick"><input type="checkbox" name="pin" value="alpha" /> Force Alpha Copy</label>
+      <label class="pick"><input type="checkbox" name="pin" value="restaurant" /> Force Restaurant Copy</label>
+    </div>
+    <p class="tiny">Auto is what you want. Testing serves unmerged code against Alpha. Restaurant TVs stay on Restaurant Copy even if someone flips the Settings cell.</p>
+
+    <div class="row">
+      <input type="checkbox" name="promote" id="promote" />
+      <label for="promote">Promote testing → restaurant (ignore Source and use the testing branch)</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" name="dry" id="dry" />
+      <label for="dry">Dry run (comment the plan, do not ship)</label>
+    </div>
+    <div class="row" id="confirm-row" hidden>
+      <input type="checkbox" name="confirm" id="confirm" />
+      <label for="confirm">I am shipping to the dining room. TVs will update.</label>
+    </div>
+
+    <label>Notes
+      <textarea name="notes" rows="3" placeholder="What is in this ship? Optional."></textarea>
+    </label>
+
+    <div class="warn" id="summary">Shipping <strong>main</strong> → <strong>testing</strong> (website + API), Alpha sheet.</div>
+    <button type="submit" id="go">File deploy</button>
+  </form>
+
+  <script>
+    const REPO = "OliTokiP/OliToki";
+    const PAGES = "https://olitokip.github.io/OliToki";
+    const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
+
+    function onlyOne(name) {
+      const boxes = [...document.querySelectorAll('input[name="' + name + '"]')];
+      boxes.forEach((box) => {
+        box.addEventListener("change", () => {
+          if (box.checked) boxes.forEach((o) => { if (o !== box) o.checked = false; });
+          updateSummary();
+        });
+      });
+      return boxes;
+    }
+    const targets = onlyOne("target");
+    const ships = onlyOne("ship");
+    const sources = onlyOne("source");
+    const pins = onlyOne("pin");
+
+    function picked(list, fallback) {
+      const on = list.find((b) => b.checked);
+      return on ? on.value : fallback;
+    }
+    function target() { return picked(targets, "testing"); }
+    function ship() { return picked(ships, "both"); }
+    function source() { return picked(sources, "main"); }
+    function pin() { return picked(pins, "auto"); }
+
+    function updateSummary() {
+      const t = target();
+      const extra = document.getElementById("source-extra");
+      extra.hidden = source() !== "other";
+      document.getElementById("confirm-row").hidden = t !== "restaurant";
+      const go = document.getElementById("go");
+      go.classList.toggle("danger", t === "restaurant");
+      go.textContent = t === "restaurant" ? "File restaurant deploy" : "File testing deploy";
+
+      let src = source();
+      if (document.getElementById("promote").checked) src = "testing";
+      if (src === "other") {
+        src = (document.querySelector("[name=sourceRef]").value || "").trim() || "(type a SHA)";
+      }
+      const pinVal = pin();
+      const sheet =
+        pinVal === "alpha" ? "Alpha" :
+        pinVal === "restaurant" ? "Restaurant" :
+        (t === "restaurant" ? "Restaurant" : "Alpha");
+      const dry = document.getElementById("dry").checked ? " · dry run" : "";
+      document.getElementById("summary").innerHTML =
+        "Shipping <strong>" + src + "</strong> → <strong>" + t + "</strong> (" +
+        ship() + "), " + sheet + " sheet" + dry + ".";
+    }
+    document.getElementById("promote").addEventListener("change", updateSummary);
+    document.getElementById("dry").addEventListener("change", updateSummary);
+    document.querySelector("[name=sourceRef]").addEventListener("input", updateSummary);
+    updateSummary();
+
+    function short(sha) {
+      return String(sha || "").slice(0, 7).toLowerCase();
+    }
+
+    async function branchHead(branch) {
+      const res = await fetch(
+        "https://api.github.com/repos/" + REPO + "/commits/" + encodeURIComponent(branch),
+        { headers: { Accept: "application/vnd.github+json" } }
+      );
+      if (!res.ok) return "";
+      const j = await res.json();
+      return short(j.sha);
+    }
+
+    async function stampFrom(url) {
+      try {
+        const text = await fetch(url + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
+          r.ok ? r.text() : ""
+        );
+        const m = String(text).match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
+        return short(m ? m[1] : "");
+      } catch (e) {
+        return "";
+      }
+    }
+
+    async function apiHealth(url) {
+      try {
+        const j = await fetch(url + "/api/health?t=" + Date.now()).then((r) =>
+          r.ok ? r.json() : null
+        );
+        return j || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function refreshLive() {
+      const el = document.getElementById("live");
+      try {
+        const testingApi =
+          (window.TOKI_TESTING_API || "").replace(/\/$/, "") || "";
+        const testingSite =
+          (window.TOKI_TESTING_SITE || "").replace(/\/$/, "") || testingApi;
+        const [main, testing, restaurant, pageHash, restHealth, testHealth] =
+          await Promise.all([
+            branchHead("main"),
+            branchHead("testing"),
+            branchHead("restaurant"),
+            stampFrom(PAGES),
+            apiHealth(RESTAURANT_API),
+            testingApi ? apiHealth(testingApi) : Promise.resolve(null),
+          ]);
+        const pageOk = restaurant && pageHash && restaurant === pageHash;
+        const lines = [];
+        lines.push(
+          "Restaurant site: " + (pageOk ? "🟢 " : "🔴 ") +
+          "live `" + (pageHash || "?") + "` · branch `" + (restaurant || "missing") + "`"
+        );
+        lines.push(
+          "Restaurant API: " +
+          (restHealth && restHealth.ok ? "🟢 " : "🔴 ") +
+          (restHealth && restHealth.dataSource ? restHealth.dataSource : "down") +
+          (restHealth && restHealth.env ? " · env " + restHealth.env : "")
+        );
+        lines.push("testing branch: `" + (testing || "missing") + "`");
+        if (testHealth) {
+          lines.push(
+            "Testing API: 🟢 " +
+            (testHealth.dataSource || "") +
+            (testHealth.env ? " · env " + testHealth.env : "")
+          );
+        } else if (testingSite) {
+          lines.push("Testing site: 🔴 " + testingSite);
+        } else {
+          lines.push("Testing site: not shipped yet — first Testing deploy creates it");
+        }
+        lines.push("main (work): `" + (main || "?") + "`");
+        el.innerHTML = lines.map((l) => "<p>" + l + "</p>").join("");
+      } catch (e) {
+        el.textContent = "Could not read GitHub / API status.";
+      }
+    }
+    refreshLive();
+    setInterval(refreshLive, 30000);
+
+    document.getElementById("form").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const t = target();
+      if (t === "restaurant" && !document.getElementById("confirm").checked) {
+        alert("Check “I am shipping to the dining room” for a restaurant deploy.");
+        return;
+      }
+      let src = source();
+      if (document.getElementById("promote").checked) src = "testing";
+      if (src === "other") {
+        src = (document.querySelector("[name=sourceRef]").value || "").trim();
+        if (!src) {
+          alert("Type a SHA or branch for Other.");
+          return;
+        }
+      }
+      const notes = (document.querySelector("[name=notes]").value || "").trim();
+      const title =
+        (document.getElementById("dry").checked ? "Dry run: " : "Deploy: ") +
+        src + " → " + t;
+      const body = [
+        "### toki-deploy",
+        "- target: " + t,
+        "- ship: " + ship(),
+        "- source: " + src,
+        "- pin: " + pin(),
+        "- promote: " + (document.getElementById("promote").checked ? "yes" : "no"),
+        "- dry-run: " + (document.getElementById("dry").checked ? "yes" : "no"),
+        "- confirm-restaurant: " + (document.getElementById("confirm").checked ? "yes" : "no"),
+        "- notes: " + (notes || "(none)"),
+      ].join("\n");
+      location.href =
+        "https://github.com/" + REPO + "/issues/new?labels=toki-deploy&title=" +
+        encodeURIComponent(title) +
+        "&body=" + encodeURIComponent(body);
+    });
+  </script>
+  <script src="js/env.js?v=20260818dep1"></script>
+</body>
+</html>

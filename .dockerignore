@@ -1,0 +1,19 @@
+.git
+.github
+.obsidian
+.kilo
+.continue
+backups
+docs
+mockups
+screenshots
+secrets
+deprecated
+Open Toki Menus.app
+Toki Git Commit.app
+**/__pycache__
+**/*.pyc
+*.xlsx
+*.numbers
+*.aep
+*.psd

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2a15c43",
-  "hashFull": "2a15c43d41a54a56f45ad762ca8c1102a7c81d28",
-  "subject": "Add phone Deployer: testing vs restaurant branches, env pin, Actions ship"
+  "hash": "7731981",
+  "hashFull": "773198183acef923fa5dbcb11131392dc5a4baa6",
+  "subject": "Add deploy.html phone form and Cloud Run web dockerignore"
 };
