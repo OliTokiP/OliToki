@@ -5972,14 +5972,45 @@
     tokiInfo("System Font:", font, font === "poppins" ? "scale 0.92" : "scale 1");
   }
 
+  function pinnedWorkbook() {
+    const want = String(
+      (typeof window !== "undefined" && window.TOKI_DEFAULT_SOURCE) || ""
+    )
+      .trim()
+      .toLowerCase();
+    const env = String(
+      (typeof window !== "undefined" && window.TOKI_ENV) || "local"
+    )
+      .trim()
+      .toLowerCase();
+    const id =
+      want ||
+      (env === "restaurant" ? "restaurant" : env === "testing" ? "alpha" : "");
+    if (!id || env === "local") return null;
+    if (id.indexOf("alpha") !== -1) {
+      return {
+        dataSource: "Alpha Copy",
+        sheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
+      };
+    }
+    if (id.indexOf("restaurant") !== -1) {
+      return {
+        dataSource: "Restaurant Copy",
+        sheetId: "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+      };
+    }
+    return null;
+  }
+
   function applyLiveSettingsPayload(j) {
+    const pin = pinnedWorkbook();
     liveSettings = {
-      dataSource: j.dataSource || "",
+      dataSource: (pin && pin.dataSource) || j.dataSource || "",
       requireRestart: !!j.requireRestart,
       systemFont: parseSystemFontName(j.systemFont),
       limitHeavyFilters:
         j.limitHeavyFilters == null ? true : !!j.limitHeavyFilters,
-      sheetId: j.sheetId || "",
+      sheetId: (pin && pin.sheetId) || j.sheetId || "",
     };
     if (liveSettings.sheetId) {
       cfg.googleSheetId = liveSettings.sheetId;

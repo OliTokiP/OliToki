@@ -22,7 +22,8 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - `css/menu.css` — shared board styles
 - `data/` — optional CSV fallbacks
 - `assets/`, `food-pics/` — images
-- `scripts/` — `toki_server.py`, `gsheet_client.py`, sync / git helpers
+- `scripts/` — `toki_server.py`, `gsheet_client.py`, sync / git helpers, `toki_deploy.py`
+- `deploy.html` — phone Deployer (testing vs restaurant). See [docs/DEPLOYER.md](docs/DEPLOYER.md)
 - `docs/` — architecture, product, data model, style guide
 - `secrets/` — service account JSON (**gitignored**; never commit)
 - `Open Toki Menus.app` — launcher (Local / Remote, focus, chrome, portrait stack)
@@ -76,3 +77,4 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - `Start Toki Menu.command` — local preview
 - `Open Toki Menus.app` — multi-window / wall launcher
 - Optional local proxy: `scripts/toki_server.py` (see `scripts/gsheet_api.md`)
+- Live ship: `deploy.html` / GitHub Actions — **main** is work, **testing** is beta, **restaurant** is TVs. A git push to main does not update TVs.

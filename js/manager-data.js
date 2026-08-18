@@ -18,11 +18,15 @@
       id: "restaurant",
       name: "Restaurant Copy",
       sheetId: "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+      env: "restaurant",
+      siteUrl: global.TOKI_RESTAURANT_SITE || "https://olitokip.github.io/OliToki",
     },
     {
       id: "alpha",
       name: "Alpha Copy",
       sheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
+      env: "testing",
+      siteUrl: global.TOKI_TESTING_SITE || "",
     },
   ];
 
@@ -184,7 +188,7 @@
     encoreSpot: "black",
     encoreBg: "secondary",
     presentationSpeed: 3,
-    dataSource: "restaurant",
+    dataSource: global.TOKI_DEFAULT_SOURCE || "restaurant",
     requireRestart: "yes",
     systemFont: "poppins",
     limitHeavyFilters: "yes",

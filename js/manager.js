@@ -348,10 +348,36 @@
     });
   }
 
+  function codeEnv() {
+    return String(window.TOKI_ENV || "local").trim().toLowerCase() || "local";
+  }
+
+  function sourceSiteUrl(src) {
+    if (!src) return "";
+    if (src.siteUrl) return String(src.siteUrl).replace(/\/$/, "");
+    if (src.env === "restaurant") {
+      return String(window.TOKI_RESTAURANT_SITE || "https://olitokip.github.io/OliToki").replace(/\/$/, "");
+    }
+    if (src.env === "testing") {
+      return String(window.TOKI_TESTING_SITE || "").replace(/\/$/, "");
+    }
+    return "";
+  }
+
   function statusBlock() {
     var t = currentTheme();
+    var env = codeEnv();
+    var envLine =
+      env === "local"
+        ? "Code: local (Settings sheet picks the workbook)"
+        : env === "testing"
+          ? "Code: testing · Alpha sheet (unmerged)"
+          : "Code: restaurant · Restaurant sheet";
     return (
       '<div class="status">' +
+      "<p>" +
+      escapeHtml(envLine) +
+      "</p>" +
       "<p>Data Source: " +
       escapeHtml(dataSource().name) +
       "</p>" +
@@ -1239,12 +1265,33 @@
       return {
         title: "Data Source",
         options: D.dataSources.map(function (s) {
-          return { id: s.id, label: s.name };
+          var extra = "";
+          if (s.env === "testing") extra = " · testing / unmerged";
+          if (s.env === "restaurant") extra = " · restaurant";
+          return { id: s.id, label: (s.name || s.id) + extra };
         }),
         get: function () {
           return state.draft.dataSource;
         },
         set: function (id) {
+          var src = find(D.dataSources, id);
+          var here = codeEnv();
+          var want = src && src.env;
+          if (src && want && here !== "local" && want !== here) {
+            var dest = sourceSiteUrl(src);
+            if (dest) {
+              toast("Opening " + (src.name || id) + " on " + want);
+              location.href = dest + "/manager.html" + (location.hash || "#/system");
+              return;
+            }
+            toast(
+              (src.name || id) +
+                " lives on the " +
+                want +
+                " site — ship that branch from Deployer first"
+            );
+            return;
+          }
           state.draft.dataSource = id;
         },
       };

@@ -1,0 +1,54 @@
+name: Deploy
+description: Ship main (or a SHA) to testing or restaurant
+title: "Deploy: "
+labels: ["toki-deploy"]
+body:
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target
+      options:
+        - testing
+        - restaurant
+    validations:
+      required: true
+  - type: dropdown
+    id: ship
+    attributes:
+      label: Ship
+      options:
+        - both
+        - website
+        - api
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Branch or SHA. Use testing when promoting.
+      placeholder: main
+    validations:
+      required: true
+  - type: dropdown
+    id: pin
+    attributes:
+      label: Data source pin
+      options:
+        - auto
+        - alpha
+        - restaurant
+    validations:
+      required: true
+  - type: checkboxes
+    id: flags
+    attributes:
+      label: Flags
+      options:
+        - label: Promote testing → restaurant
+        - label: Dry run
+        - label: I am shipping to the dining room
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes

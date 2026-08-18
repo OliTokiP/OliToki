@@ -33,6 +33,7 @@
   /**
    * Hosted Sheets proxy (Cloud Run). Empty = same-origin `/api` (local toki_server).
    * GitHub Pages / phones fall back to this when `/api/health` is missing.
+   * js/env.js (loaded first) wins on restaurant / testing.
    */
   var API_BASE = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
 

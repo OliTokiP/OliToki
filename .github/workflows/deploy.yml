@@ -1,0 +1,181 @@
+name: Deployer
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: testing or restaurant
+        required: true
+        type: choice
+        options: [testing, restaurant]
+      source:
+        description: Branch or SHA
+        required: true
+        default: main
+      ship:
+        description: What to ship
+        required: true
+        type: choice
+        default: both
+        options: [both, website, api]
+      pin:
+        description: Data source pin
+        required: true
+        type: choice
+        default: auto
+        options: [auto, alpha, restaurant]
+      dry_run:
+        description: Comment the plan only
+        type: boolean
+        default: false
+      confirm_restaurant:
+        description: Required for restaurant
+        type: boolean
+        default: false
+      notes:
+        description: What is in this ship
+        required: false
+        default: ""
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: toki-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'toki-deploy') ||
+      (github.event.action == 'opened' && contains(join(github.event.issue.labels.*.name, ','), 'toki-deploy'))
+    runs-on: ubuntu-latest
+    env:
+      TOKI_TESTING_API: ${{ vars.TOKI_TESTING_API }}
+      TOKI_TESTING_SITE: ${{ vars.TOKI_TESTING_SITE }}
+    steps:
+      - name: Guard collaborators
+        if: github.event_name == 'issues'
+        run: |
+          assoc="${{ github.event.issue.author_association }}"
+          case "$assoc" in
+            OWNER|MEMBER|COLLABORATOR) echo "ok $assoc" ;;
+            *) echo "refusing $assoc"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "OliTokiP"
+          git config user.email "317138617+OliTokiP@users.noreply.github.com"
+
+      - name: Write issue body
+        if: github.event_name == 'issues'
+        run: |
+          cat > /tmp/toki-deploy-issue.md <<'EOF'
+          ${{ github.event.issue.body }}
+          EOF
+
+      - name: Plan + ship git
+        id: ship
+        run: |
+          set -euo pipefail
+          ARGS=()
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            ARGS+=(--issue-file /tmp/toki-deploy-issue.md)
+          else
+            ARGS+=(--target "${{ inputs.target }}" --source "${{ inputs.source }}" --ship "${{ inputs.ship }}" --pin "${{ inputs.pin }}" --notes "${{ inputs.notes }}")
+            if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS+=(--dry-run); fi
+            if [ "${{ inputs.confirm_restaurant }}" = "true" ]; then ARGS+=(--confirm-restaurant); fi
+          fi
+          python3 scripts/toki_deploy.py "${ARGS[@]}" | tee /tmp/toki-deploy.out
+          TARGET=$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("/tmp/toki-deploy.out").read_text()
+          m = re.search(r"- target: `([^`]+)`", text)
+          print(m.group(1) if m else "")
+          PY
+          )
+          SHIP=$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("/tmp/toki-deploy.out").read_text()
+          m = re.search(r"- ship: `([^`]+)`", text)
+          print(m.group(1) if m else "both")
+          PY
+          )
+          DRY=$(grep -c '"dry": true' /tmp/toki-deploy.out || true)
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "ship=$SHIP" >> "$GITHUB_OUTPUT"
+          echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+
+      - name: Comment plan
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/toki-deploy.out', 'utf8').slice(0, 6000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body || '(no deployer output)',
+            });
+
+      - name: Stage Cloud Run contexts
+        if: steps.ship.outputs.dry != '1'
+        run: |
+          cp scripts/toki_server.py scripts/cloud-run/toki_server.py
+          cp scripts/cloud-run/Dockerfile.web Dockerfile
+
+      - id: auth
+        if: steps.ship.outputs.dry != '1' && (steps.ship.outputs.ship == 'api' || steps.ship.outputs.ship == 'both' || (steps.ship.outputs.ship == 'website' && steps.ship.outputs.target == 'testing'))
+        uses: google-github-actions/auth@v2
+        continue-on-error: true
+        with:
+          credentials_json: ${{ secrets.TOKI_GCP_SA }}
+
+      - name: Cloud Run (restaurant API)
+        if: >
+          steps.auth.outcome == 'success' &&
+          steps.ship.outputs.dry != '1' &&
+          (steps.ship.outputs.ship == 'api' || steps.ship.outputs.ship == 'both') &&
+          steps.ship.outputs.target == 'restaurant'
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: toki-api
+          region: us-central1
+          source: scripts/cloud-run
+          env_vars: TOKI_API_ONLY=1,TOKI_ENV=restaurant,TOKI_FORCE_SOURCE=restaurant
+          secrets: TOKI_SA_JSON=toki-sa-json:latest
+          flags: --allow-unauthenticated --memory 512Mi --timeout 60 --max-instances 2
+
+      - name: Cloud Run (testing site + API)
+        if: >
+          steps.auth.outcome == 'success' &&
+          steps.ship.outputs.dry != '1' &&
+          steps.ship.outputs.target == 'testing'
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: toki-api-testing
+          region: us-central1
+          source: .
+          env_vars: TOKI_API_ONLY=0,TOKI_ENV=testing,TOKI_FORCE_SOURCE=alpha
+          secrets: TOKI_SA_JSON=toki-sa-json:latest
+          flags: --allow-unauthenticated --memory 1Gi --timeout 60 --max-instances 2 --port 8080
+
+      - name: Note missing GCP secret
+        if: >
+          steps.ship.outputs.dry != '1' &&
+          (steps.ship.outputs.ship == 'api' || steps.ship.outputs.ship == 'both' || steps.ship.outputs.target == 'testing') &&
+          steps.auth.outcome != 'success'
+        run: |
+          echo "Website git ship done. Cloud Run skipped — add repo secret TOKI_GCP_SA."
+          echo "Until then, from the Mac: scripts/cloud-run/deploy.sh (restaurant) or TOKI_GCP_SERVICE=toki-api-testing TOKI_DEPLOY_MODE=web ./deploy.sh"

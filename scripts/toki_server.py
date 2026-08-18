@@ -19,6 +19,8 @@ Env:
   TOKI_PORT       port (default 8765). Cloud Run sets PORT — that wins.
   TOKI_BIND       bind address (default 127.0.0.1; 0.0.0.0 when PORT/TOKI_API_ONLY)
   TOKI_API_ONLY   1 = API only, no static files (hosted)
+  TOKI_ENV        local | testing | restaurant (Deployer pin)
+  TOKI_FORCE_SOURCE  restaurant | alpha — ignore Settings Data Source cell
 """
 
 from __future__ import annotations
@@ -206,7 +208,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
                     break
 
     sheet_id = (match and match.get("sheetId")) or fallback_sheet_id
-    return {
+    data = {
         "dataSource": data_source or "Alpha Copy",
         "requireRestart": require_restart,
         "systemFont": system_font,
@@ -217,6 +219,38 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         "catalog": catalog,
         "resolvedFromCatalog": bool(match and match.get("sheetId")),
     }
+    return apply_force_source(data)
+
+
+def apply_force_source(data: dict) -> dict:
+    """Restaurant/testing pin: Settings cell must not flip the other site."""
+    force = (os.environ.get("TOKI_FORCE_SOURCE") or "").strip().lower()
+    if not force:
+        env = (os.environ.get("TOKI_ENV") or "").strip().lower()
+        if env == "restaurant":
+            force = "restaurant"
+        elif env == "testing":
+            force = "alpha"
+    if not force:
+        return data
+    catalog = data.get("catalog") or []
+    match = None
+    for c in catalog:
+        name = (c.get("name") or "").strip().lower()
+        if not name:
+            continue
+        if force in name or name in force:
+            match = c
+            break
+    if not match or not match.get("sheetId"):
+        return data
+    data["dataSource"] = match.get("name") or data.get("dataSource")
+    data["sheetId"] = match["sheetId"]
+    data["sourceName"] = match.get("name") or ""
+    data["sourceUrl"] = match.get("url") or ""
+    data["forcedSource"] = force
+    data["resolvedFromCatalog"] = True
+    return data
 
 
 def _flush_data_caches() -> None:
@@ -1630,6 +1664,10 @@ def make_handler(
                         "requireRestart": (live or {}).get("requireRestart"),
                         "root": str(ROOT),
                         "bind": bind,
+                        "env": (os.environ.get("TOKI_ENV") or "local"),
+                        "forcedSource": (live or {}).get("forcedSource")
+                        or (os.environ.get("TOKI_FORCE_SOURCE") or ""),
+                        "revision": os.environ.get("K_REVISION") or "",
                         "email": (
                             backend.creds.service_account_email
                             if backend
@@ -1664,6 +1702,8 @@ def make_handler(
                                 live.get("resolvedFromCatalog")
                             ),
                             "catalog": live.get("catalog") or [],
+                            "forcedSource": live.get("forcedSource") or "",
+                            "env": os.environ.get("TOKI_ENV") or "local",
                         },
                     )
                 except Exception as e:

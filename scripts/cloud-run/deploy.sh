@@ -8,7 +8,21 @@ REPO="$(cd "$ROOT/../.." && pwd)"
 PROJECT="${TOKI_GCP_PROJECT:-menudesigner}"
 REGION="${TOKI_GCP_REGION:-us-central1}"
 SERVICE="${TOKI_GCP_SERVICE:-toki-api}"
+MODE="${TOKI_DEPLOY_MODE:-api}"
+ENV_NAME="${TOKI_ENV:-}"
+FORCE_SOURCE="${TOKI_FORCE_SOURCE:-}"
 KEY="${TOKI_SA_KEY:-$REPO/secrets/google-service-account.json}"
+if [[ -z "$ENV_NAME" ]]; then
+  if [[ "$SERVICE" == *testing* ]]; then ENV_NAME=testing
+  elif [[ "$MODE" == "web" ]]; then ENV_NAME=testing
+  else ENV_NAME=restaurant
+  fi
+fi
+if [[ -z "$FORCE_SOURCE" ]]; then
+  if [[ "$ENV_NAME" == "testing" ]]; then FORCE_SOURCE=alpha
+  else FORCE_SOURCE=restaurant
+  fi
+fi
 
 if [[ ! -f "$KEY" ]]; then
   echo "missing service account json: $KEY" >&2
@@ -16,7 +30,17 @@ if [[ ! -f "$KEY" ]]; then
 fi
 
 cp "$ROOT/../toki_server.py" "$ROOT/toki_server.py"
-trap 'rm -f "$ROOT/toki_server.py"' EXIT
+trap 'rm -f "$ROOT/toki_server.py" "$REPO/Dockerfile"' EXIT
+if [[ "$MODE" == "web" ]]; then
+  cp "$ROOT/Dockerfile.web" "$REPO/Dockerfile"
+  SOURCE_DIR="$REPO"
+  API_ONLY=0
+  MEMORY="${TOKI_MEMORY:-1Gi}"
+else
+  SOURCE_DIR="$ROOT"
+  API_ONLY=1
+  MEMORY="${TOKI_MEMORY:-512Mi}"
+fi
 
 gcloud config set project "$PROJECT"
 gcloud services enable run.googleapis.com secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project "$PROJECT"
@@ -36,14 +60,14 @@ gcloud secrets add-iam-policy-binding toki-sa-json \
 gcloud run deploy "$SERVICE" \
   --project "$PROJECT" \
   --region "$REGION" \
-  --source "$ROOT" \
+  --source "$SOURCE_DIR" \
   --allow-unauthenticated \
-  --memory 512Mi \
+  --memory "$MEMORY" \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 2 \
   --timeout 60 \
-  --set-env-vars "TOKI_API_ONLY=1" \
+  --set-env-vars "TOKI_API_ONLY=${API_ONLY},TOKI_ENV=${ENV_NAME},TOKI_FORCE_SOURCE=${FORCE_SOURCE}" \
   --set-secrets "TOKI_SA_JSON=toki-sa-json:latest" \
   --quiet
 

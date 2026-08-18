@@ -736,16 +736,59 @@
     );
   }
 
+  function decorateSource(src) {
+    var id = src && src.id ? src.id : "";
+    if (id === "restaurant") {
+      src.env = "restaurant";
+      src.siteUrl =
+        global.TOKI_RESTAURANT_SITE || "https://olitokip.github.io/OliToki";
+    } else if (id === "alpha") {
+      src.env = "testing";
+      src.siteUrl = global.TOKI_TESTING_SITE || "";
+    }
+    return src;
+  }
+
   function catalogToSources(catalog) {
     return (catalog || [])
       .filter(function (c) { return c && (c.name || c.sheetId); })
       .map(function (c) {
-        return {
+        return decorateSource({
           id: sourceId(c.name),
           name: c.name,
           sheetId: c.sheetId || "",
-        };
+        });
       });
+  }
+
+  function pinnedSourceId() {
+    var raw = String(global.TOKI_DEFAULT_SOURCE || "").trim();
+    if (raw) return sourceId(raw);
+    var env = String(global.TOKI_ENV || "local").trim().toLowerCase();
+    if (env === "restaurant") return "restaurant";
+    if (env === "testing") return "alpha";
+    return "";
+  }
+
+  function applyPinnedSource(settings) {
+    if (!settings) return settings;
+    var want = pinnedSourceId();
+    if (!want) return settings;
+    var sources = catalogToSources(settings.catalog);
+    var i;
+    var match = null;
+    for (i = 0; i < sources.length; i++) {
+      if (sources[i].id === want) {
+        match = sources[i];
+        break;
+      }
+    }
+    if (!match) return settings;
+    settings.dataSource = match.name;
+    settings.sourceName = match.name;
+    if (match.sheetId) settings.sheetId = match.sheetId;
+    settings.forcedSource = want;
+    return settings;
   }
 
   async function fetchSettings(force) {
@@ -765,7 +808,7 @@
               if (pub.catalog && pub.catalog.length) catalog = pub.catalog;
             } catch (e) {}
           }
-          return {
+          return applyPinnedSource({
             dataSource: j.dataSource || "",
             requireRestart: parseYesNo(j.requireRestart, false),
             systemFont: parseSystemFont(j.systemFont),
@@ -773,7 +816,7 @@
             sheetId: j.sheetId || "",
             sourceName: j.sourceName || j.dataSource || "",
             catalog: catalog,
-          };
+          });
         }
       } catch (err) {
         console.warn("manager-sheet: /api/settings failed", err);
@@ -784,7 +827,7 @@
 
   async function fetchSettingsPublic() {
     var text = await fetchText(publicCsvUrl(settingsSheetId(), 0));
-    return parseSettingsRows(parseCsv(text));
+    return applyPinnedSource(parseSettingsRows(parseCsv(text)));
   }
 
   function isThemeNameJunk(name) {
