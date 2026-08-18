@@ -561,6 +561,11 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
   /* opacity + transition: css/motion.css */
 }
 
+/* Author display:block can beat [hidden] on AbleSign / older WebViews. */
+#hero-plate[hidden] {
+  display: none !important;
+}
+
 /* Only the photo (and multi lattice) zoom — not the New sticker sibling */
 #hero-plate .hero-anim {
   position: absolute;
@@ -578,6 +583,13 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
   height: 100%;
   object-fit: fill; /* 1500×1000 → same 3:2 aspect */
   user-select: none;
+}
+
+/* Failed / empty Plate Image: no UA broken-image glyph (sits on the Logo). */
+#hero:not([src]),
+#hero[src=""],
+img[data-toki-broken="1"] {
+  visibility: hidden !important;
 }
 
 /*

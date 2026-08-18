@@ -605,6 +605,135 @@
    * If a .webp 404s, try .png then .jpg (one chain per element).
    * Safe when only one format exists.
    */
+  /**
+   * Live <img> nodes whose last src produced no pixels.
+   * Toki Debug HUD "Broken images" lists these (AbleSign has no other tracker).
+   */
+  const _brokenRasters = [];
+
+  function brokenRasterLabel(img, src) {
+    const raw =
+      src ||
+      (img && (img.getAttribute("src") || (img.dataset && img.dataset.tokiMaster))) ||
+      "";
+    const file = String(raw).split("?")[0];
+    const slash = Math.max(file.lastIndexOf("/"), file.lastIndexOf("\\"));
+    const name = slash >= 0 ? file.slice(slash + 1) : file;
+    const where =
+      (img && img.id) ||
+      (img && img.className && String(img.className).trim().split(/\s+/)[0]) ||
+      "img";
+    return name ? where + " · " + name : where;
+  }
+
+  function listBrokenRasters() {
+    return _brokenRasters.slice();
+  }
+
+  function clearRasterBroken(img) {
+    if (!img) return;
+    const wasBroken = !!(img.dataset && img.dataset.tokiBroken === "1");
+    if (wasBroken) {
+      if (img.id === "hero") img.style.visibility = "";
+      if (img.classList && img.classList.contains("family-portrait-bg-img")) {
+        img.hidden = false;
+      }
+      const slot = img.closest && img.closest(".family-portrait-slot");
+      if (slot) slot.removeAttribute("hidden");
+    }
+    if (img.dataset) img.dataset.tokiBroken = "";
+    img.removeAttribute("data-toki-broken");
+    let changed = false;
+    for (let i = _brokenRasters.length - 1; i >= 0; i--) {
+      if (_brokenRasters[i].img === img) {
+        _brokenRasters.splice(i, 1);
+        changed = true;
+      }
+    }
+    if (changed) {
+      try {
+        updateDebugVisuals();
+      } catch (e) {}
+    }
+  }
+
+  function markRasterBroken(img, src) {
+    if (!img) return;
+    if (img.dataset && img.dataset.tokiParked === "1") return;
+    const url =
+      src ||
+      img.getAttribute("src") ||
+      (img.dataset && img.dataset.tokiMaster) ||
+      "";
+    if (!url) return;
+    img.dataset.tokiBroken = "1";
+    img.setAttribute("data-toki-broken", "1");
+    if (img.id === "hero") img.style.visibility = "hidden";
+    if (img.classList && img.classList.contains("galaxy-layer")) {
+      img.hidden = true;
+    }
+    if (img.classList && img.classList.contains("family-portrait-bg-img")) {
+      img.hidden = true;
+    }
+    const slot = img.closest && img.closest(".family-portrait-slot");
+    if (slot) slot.setAttribute("hidden", "");
+    let found = null;
+    for (let i = 0; i < _brokenRasters.length; i++) {
+      if (_brokenRasters[i].img === img) {
+        found = _brokenRasters[i];
+        break;
+      }
+    }
+    const label = brokenRasterLabel(img, url);
+    if (found) {
+      found.src = url;
+      found.label = label;
+    } else {
+      _brokenRasters.push({ img: img, src: url, label: label });
+      tokiWarn("broken image", label, url);
+    }
+    try {
+      updateDebugVisuals();
+    } catch (e) {}
+  }
+
+  function installBrokenImageWatch() {
+    if (document.documentElement.dataset.tokiBrokenWatch === "1") return;
+    document.documentElement.dataset.tokiBrokenWatch = "1";
+    document.addEventListener(
+      "error",
+      function (e) {
+        const el = e.target;
+        if (!el || el.tagName !== "IMG") return;
+        if (el.dataset && el.dataset.tokiParked === "1") return;
+        const src = el.getAttribute("src") || "";
+        if (!src) return;
+        // Hide the UA broken-image glyph immediately; fallbacks may still recover.
+        el.dataset.tokiBroken = "1";
+        el.setAttribute("data-toki-broken", "1");
+        window.setTimeout(function () {
+          if (el.naturalWidth > 0) {
+            clearRasterBroken(el);
+            return;
+          }
+          if (!el.complete) return;
+          markRasterBroken(el, el.getAttribute("src") || src);
+        }, 50);
+      },
+      true
+    );
+    document.addEventListener(
+      "load",
+      function (e) {
+        const el = e.target;
+        if (!el || el.tagName !== "IMG") return;
+        if (el.naturalWidth > 0) clearRasterBroken(el);
+      },
+      true
+    );
+  }
+  installBrokenImageWatch();
+
   function attachWebpFallback(el) {
     if (!el || el.dataset.webpFbBound === "1") return;
     el.dataset.webpFbBound = "1";
@@ -631,6 +760,7 @@
         return;
       }
       el.removeEventListener("error", onRasterError);
+      markRasterBroken(el, src);
     });
   }
 
@@ -13949,6 +14079,10 @@
     const wantSticker = !!(item.isNew && config && config.showSticker !== false);
 
     const show = function () {
+      if (img && img.naturalWidth > 0) {
+        img.style.visibility = "";
+        clearRasterBroken(img);
+      }
       plate.hidden = false;
       // Sticker presence while plate is at opacity 0; then plate fade carries it
       applyPlateSticker(wantSticker);
@@ -13988,8 +14122,14 @@
         item.image,
         show,
         function () {
+          markRasterBroken(img, item.image);
+          if (img) img.style.visibility = "hidden";
           hideHeroPlate({ clearSrc: true, hideSticker: !wantSticker });
           if (wantSticker) {
+            if (img) {
+              img.style.visibility = "hidden";
+              img.removeAttribute("src");
+            }
             plate.hidden = false;
             applyPlateSticker(true);
             requestAnimationFrame(function () {
@@ -14916,6 +15056,7 @@
       { id: "heroMulti", label: "Hero Multi", impact: "High" },
       { id: "softRefresh", label: "Soft Refresh", impact: "Medium" },
       { id: "requireRestart", label: "Require Restart", impact: "Info" },
+      { id: "brokenImages", label: "Broken images", impact: "Info" },
     ];
 
     const overrides = {}; // id -> boolean forced via console API
@@ -15043,6 +15184,9 @@
 
           case "requireRestart":
             return !!(liveSettings && liveSettings.requireRestart);
+
+          case "brokenImages":
+            return listBrokenRasters().length > 0;
 
           case "softRefresh":
             // Require Restart = Settings hard-off: no poll, no "active".
@@ -15181,6 +15325,15 @@
             return liveSettings && liveSettings.requireRestart
               ? "settings ON"
               : "settings OFF";
+          case "brokenImages": {
+            const broken = listBrokenRasters();
+            if (!broken.length) return "none";
+            return broken
+              .map(function (b) {
+                return b.label || b.src;
+              })
+              .join(", ");
+          }
           case "bgWallpaper": {
             if (!config.bgImage) {
               if (config.bgPattern && isStripesPatternToken(config.bgPattern)) {
