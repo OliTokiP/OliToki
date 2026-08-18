@@ -1352,60 +1352,19 @@
     }
   }
 
-  async function writeStyle(payload) {
-    payload = payload || {};
-    var useProxy = await detectProxy();
-    if (!useProxy) {
-      return { ok: false, error: "Needs local Menu Manager server" };
-    }
-    try {
-      var res = await fetch(apiUrl("/api/manager/style"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      var j = {};
-      try {
-        j = await res.json();
-      } catch (e) {
-        j = {};
-      }
-      if (!res.ok || !j.ok) {
-        return {
-          ok: false,
-          error: (j && j.error) || ("HTTP " + res.status),
-        };
-      }
-      return j;
-    } catch (err) {
-      console.warn("manager-sheet: style write failed", err);
-      return { ok: false, error: String((err && err.message) || err) };
-    }
-  }
-
-  async function writeTheme(themeName, sheetId) {
-    var name = String(themeName || "").trim();
-    if (!name) return { ok: false, error: "missing theme" };
-    return writeStyle({
-      theme: name,
-      sheetId: String(sheetId || "").trim(),
-    });
-  }
-
-  async function writeBoard(payload) {
-    payload = payload || {};
+  async function postManager(path, payload) {
     await detectProxy();
-    var urls = ["/api/manager/board"];
-    var via = apiUrl("/api/manager/board");
+    var urls = [path];
+    var via = apiUrl(path);
     if (via && urls.indexOf(via) < 0) urls.push(via);
-    var last = { ok: false, error: "Board write failed" };
+    var last = { ok: false, error: "Write failed" };
     var i;
     for (i = 0; i < urls.length; i++) {
       try {
         var res = await fetch(urls[i], {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload || {}),
         });
         var j = {};
         try {
@@ -1422,8 +1381,28 @@
         last = { ok: false, error: String((err && err.message) || err) };
       }
     }
-    console.warn("manager-sheet: board write failed", last.error);
     return last;
+  }
+
+  async function writeStyle(payload) {
+    var out = await postManager("/api/manager/style", payload || {});
+    if (!out.ok) console.warn("manager-sheet: style write failed", out.error);
+    return out;
+  }
+
+  async function writeTheme(themeName, sheetId) {
+    var name = String(themeName || "").trim();
+    if (!name) return { ok: false, error: "missing theme" };
+    return writeStyle({
+      theme: name,
+      sheetId: String(sheetId || "").trim(),
+    });
+  }
+
+  async function writeBoard(payload) {
+    var out = await postManager("/api/manager/board", payload || {});
+    if (!out.ok) console.warn("manager-sheet: board write failed", out.error);
+    return out;
   }
 
   global.TOKI_MANAGER_SHEET = {

@@ -49,6 +49,8 @@
     boardCommitted: null,
     lastBoardSnap: {},
     itemDragging: false,
+    confirmLeave: false,
+    persistInFlight: false,
   };
 
   var previewCtl = {
@@ -1704,10 +1706,9 @@
       : "Saved for this session (could not write fallback)";
   }
 
-  function persistStyleWrite(prevSnap) {
+  function persistStyleWrite(prevSnap, nextSnap) {
     var sheet = window.TOKI_MANAGER_SHEET;
-    var d = state.draft || {};
-    var next = styleSnap(d);
+    var next = nextSnap || styleSnap(state.draft);
     var prev =
       prevSnap ||
       (state.lastSheet && state.lastSheet.style) ||
@@ -1777,13 +1778,13 @@
     });
   }
 
-  function persistBoardWrite(prevSnap) {
+  function persistBoardWrite(prevSnap, nextSnap) {
     var b = state.boardDraft;
     if (!b || b.kind === "announcements") {
       return Promise.resolve({ needed: false, wrote: null });
     }
     var sheet = window.TOKI_MANAGER_SHEET;
-    var next = boardSettingsSnap(b);
+    var next = nextSnap || boardSettingsSnap(b);
     var prev = prevSnap || state.lastBoardSnap[b.id] || null;
     var payload = { gid: b.gid || "" };
     var src = dataSource();
@@ -1830,7 +1831,9 @@
     if (val === "yes") {
       var onBoard = state.screen === "board" && state.boardDraft;
       var boardPrev = null;
+      var boardNext = onBoard ? boardSettingsSnap(state.boardDraft) : null;
       var stylePrev = styleSnap(state.committed);
+      var styleNext = styleSnap(state.draft);
       if (state.lastSheet && state.lastSheet.style) {
         stylePrev = Object.assign({}, stylePrev, state.lastSheet.style);
       }
@@ -1844,11 +1847,15 @@
       state.dialog = null;
       var next = state.pendingLeave;
       state.pendingLeave = null;
+      state.confirmLeave = !!next;
+      state.persistInFlight = true;
       renderDialog();
+      if (next) next();
+      else renderAll();
       var persist = onBoard
         ? Promise.all([
-            persistBoardWrite(boardPrev),
-            persistStyleWrite(stylePrev),
+            persistBoardWrite(boardPrev, boardNext),
+            persistStyleWrite(stylePrev, styleNext),
           ]).then(function (pair) {
             var board = pair[0] || {};
             var style = pair[1] || {};
@@ -1860,7 +1867,7 @@
               kind: "both",
             };
           })
-        : persistStyleWrite(stylePrev);
+        : persistStyleWrite(stylePrev, styleNext);
       persist
         .then(function (result) {
           if (onBoard) {
@@ -1881,19 +1888,18 @@
           });
         })
         .then(function (out) {
+          state.persistInFlight = false;
+          if (out && out.wrote && out.wrote.ok) state.sheetDirty = false;
           toast(yesToast(out.needed, out.wrote, out.fb, out.kind));
-          if (next) next();
-          else renderAll();
         })
         .catch(function (err) {
+          state.persistInFlight = false;
           console.warn("Menu Manager save failed", err);
           toast(
             onBoard
               ? "Could not write board to sheet — saved for this session"
               : "Could not write style to sheet — saved for this session"
           );
-          if (next) next();
-          else renderAll();
         });
       return;
     }
@@ -2744,6 +2750,12 @@
     var target = parseScreenFromHash();
     var prevScreen = state.screen;
     var prevBoard = state.boardId;
+    if (state.confirmLeave) {
+      state.confirmLeave = false;
+      readHash();
+      renderAll();
+      return;
+    }
     var isDirtyStyle = prevScreen === "style" && !eq(state.draft, state.committed);
     var leavingDirtyStyle = isDirtyStyle && target.screen !== "style";
     if (leavingDirtyStyle) {
@@ -2868,8 +2880,11 @@
         fromSheet.presentationSpeed,
         "presentation"
       );
-      state.committed = clone(fromSheet);
-      if (!state.sheetDirty) {
+      if (state.sheetDirty || state.persistInFlight) {
+        /* Keep the in-edit draft/committed. A late sheet load used to
+           reset committed and bounce Confirm after Yes. */
+      } else {
+        state.committed = clone(fromSheet);
         state.draft = clone(fromSheet);
         applyQueryParams();
       }
