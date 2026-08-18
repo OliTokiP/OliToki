@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "1b33ed6",
-  "hashFull": "1b33ed65491502919819a4c013df051f63142730",
-  "subject": "QA: 2026-08-18 Permalink in menu board editors should copy link to clipboard (pass 1)"
+  "hash": "5143a30",
+  "hashFull": "5143a302169acb1f08e0c22bf2e72987c810b8f3",
+  "subject": "QA: 2026-08-18 Add Favorite toggle to New Tickets, Draft Edit and Ticket View. Also add property on Obsidian level (pass 2)"
 };
