@@ -1040,11 +1040,30 @@ class SheetsBackend:
                 data_idx,
                 8,
             ),
+            "encorespotlighttype": self._a1_for(
+                cols,
+                ["encorespotlighttype", "encorestyle"],
+                data_idx,
+                10,
+            ),
+            "encorespotlightcolor": self._a1_for(
+                cols,
+                ["encorespotlightcolor", "encorespot"],
+                data_idx,
+                11,
+            ),
+            "encorebackgroundcolor": self._a1_for(
+                cols,
+                ["encorebackgroundcolor", "encorebg", "encorebackground"],
+                data_idx,
+                12,
+            ),
         }
         values: dict[str, str] = {}
         wrote_theme = False
         wrote_bg = False
         wrote_speeds = False
+        wrote_encore = False
         theme = str(body.get("theme") or body.get("themeName") or "").strip()
         if theme:
             values["themeselector"] = self._canonical_theme(rows, theme)
@@ -1084,6 +1103,26 @@ class SheetsBackend:
                 body.get("presentationSpeed"), "presentationSpeed"
             )
             wrote_speeds = True
+        if "encoreStyle" in body or "encoreSpotlightType" in body:
+            values["encorespotlighttype"] = self._as_encore_style(
+                body.get("encoreStyle") or body.get("encoreSpotlightType")
+            )
+            wrote_encore = True
+        if "encoreSpot" in body or "encoreSpotlightColor" in body:
+            values["encorespotlightcolor"] = self._as_encore_spot(
+                body.get("encoreSpot") or body.get("encoreSpotlightColor")
+            )
+            wrote_encore = True
+        if "encoreBg" in body or "encoreBackground" in body:
+            colors = self._glossary_list(
+                rows, "colorpickerfordropdowns", "colorpicker"
+            )
+            values["encorebackgroundcolor"] = self._match_glossary(
+                colors,
+                body.get("encoreBg") or body.get("encoreBackground") or "",
+                "color",
+            )
+            wrote_encore = True
         if not values:
             raise ValueError("nothing to write")
         data = [
@@ -1107,8 +1146,7 @@ class SheetsBackend:
                 )
                 .execute()
             )
-        if sid == self.sheet_id:
-            _flush_data_caches()
+        _flush_data_caches()
         ranges = [
             (u.get("updatedRange") or "")
             for u in (updated.get("responses") or [])
@@ -1132,6 +1170,7 @@ class SheetsBackend:
             "wroteTheme": wrote_theme,
             "wroteBackground": wrote_bg,
             "wroteSpeeds": wrote_speeds,
+            "wroteEncore": wrote_encore,
             "scrollSpeed": values.get("bgscrollspeed"),
             "presentationSpeed": values.get("presentationspeed"),
             "range": ", ".join([r for r in ranges if r]),
@@ -1141,6 +1180,26 @@ class SheetsBackend:
 
     def write_theme(self, theme: str, sheet_id: str | None = None) -> dict:
         return self.write_style({"theme": theme}, sheet_id)
+
+    @staticmethod
+    def _as_encore_style(raw) -> str:
+        s = re.sub(r"[^a-z0-9]+", "", str(raw or "").lower())
+        if "soft" in s:
+            return "soft"
+        if "hardshadow" in s or s in ("shadow", "hardwithshadow"):
+            return "hard_shadow"
+        if "hard" in s:
+            return "hard"
+        raise ValueError("invalid encoreStyle")
+
+    @staticmethod
+    def _as_encore_spot(raw) -> str:
+        s = re.sub(r"[^a-z0-9]+", "", str(raw or "").lower())
+        if "highlight" in s or "special" in s:
+            return "highlight"
+        if "black" in s or "main" in s:
+            return "black"
+        raise ValueError("invalid encoreSpot")
 
     def _tab_title_for_gid(self, spreadsheet_id: str, gid: str) -> str:
         want = str(gid or "").strip()

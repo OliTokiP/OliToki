@@ -3,9 +3,11 @@
  * Draft theme tokens restyle the app immediately. Confirm-on-back Yes writes
  * Theme Selector, Background (BG Color / Pattern / Wallpaper), and the
  * speed pills (scroll + presentation) on the selected catalog
- * (via TOKI_MANAGER_SHEET.writeStyle). Board Yes writes Menu Title,
+ * (via TOKI_MANAGER_SHEET.writeStyle), including Presentation Speed and
+ * Encore spotlight/background (global Style K/L/M). Board Yes writes Menu Title,
  * Family Portrait, Presentation Mode, and Include Descriptions?
- * (via TOKI_MANAGER_SHEET.writeBoard). Inventory order stays local.
+ * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
+ * Inventory order stays local.
  */
 (function () {
   "use strict";
@@ -1044,7 +1046,7 @@
     if (key === "boardPresentation") {
       return {
         title: "Presentation Style",
-        note: "Note: Presentation styles are applied per-board.",
+        note: "Encore settings are global.",
         options: D.presentationStyles,
         get: function () {
           return (state.boardDraft || {}).presentation;
@@ -1138,7 +1140,7 @@
     if (key === "presentation") {
       return {
         title: "Presentation Style",
-        note: "Note: Presentation styles are applied per-board.",
+        note: "Encore settings are global.",
         options: D.presentationStyles,
         get: function () {
           return state.draft.presentation;
@@ -1417,8 +1419,12 @@
     renderAll();
   }
 
+  function styleDirty() {
+    return !eq(state.draft, state.committed);
+  }
+
   function leaveBoard(next) {
-    if (boardDirty()) {
+    if (boardDirty() || styleDirty()) {
       state.pendingLeave = next;
       state.dialog = "confirm";
       renderDialog();
@@ -1632,26 +1638,36 @@
       wallpaper: d.wallpaper || "",
       scrollSpeed: d.scrollSpeed,
       presentationSpeed: d.presentationSpeed,
+      encoreStyle: d.encoreStyle || "",
+      encoreSpot: d.encoreSpot || "",
+      encoreBg: d.encoreBg || "",
     };
   }
 
   function yesToast(needed, wrote, fb, kind) {
-    if (kind === "board") {
-      if (needed) {
-        if (wrote && wrote.ok) {
-          return "Board saved to " + (wrote.sourceName || "sheet");
-        }
-        return "Could not write board to sheet — saved for this session";
-      }
-      return "Saved for this session";
+    var src = (wrote && wrote.sourceName) || "sheet";
+    if (kind === "board" || kind === "both") {
+      if (!needed) return "Saved for this session";
+      var boardOk = !!(wrote && (wrote.wroteBoard || (kind === "board" && wrote.ok)));
+      var styleOk = !!(
+        wrote &&
+        (wrote.wroteTheme ||
+          wrote.wroteBackground ||
+          wrote.wroteSpeeds ||
+          wrote.wroteEncore)
+      );
+      if (boardOk && styleOk) return "Board and Style saved to " + src;
+      if (boardOk) return "Board saved to " + src;
+      if (styleOk) return "Style saved to " + src;
+      return "Could not write to sheet — saved for this session";
     }
     if (needed) {
       if (wrote && wrote.ok) {
-        var src = wrote.sourceName || "sheet";
         var bits = [];
         if (wrote.wroteTheme) bits.push("Theme");
         if (wrote.wroteBackground) bits.push("background");
         if (wrote.wroteSpeeds) bits.push("speeds");
+        if (wrote.wroteEncore) bits.push("Encore");
         var what = bits.length ? bits.join(" and ") : "Style";
         return fb
           ? what + " saved to " + src
@@ -1666,13 +1682,14 @@
       : "Saved for this session (could not write fallback)";
   }
 
-  function persistStyleWrite() {
+  function persistStyleWrite(prevSnap) {
     var sheet = window.TOKI_MANAGER_SHEET;
     var d = state.draft || {};
-    var prev = (state.lastSheet && state.lastSheet.style) || {
-      themeName: state.lastSheet && state.lastSheet.themeName,
-    };
     var next = styleSnap(d);
+    var prev =
+      prevSnap ||
+      (state.lastSheet && state.lastSheet.style) ||
+      styleSnap(state.committed);
     var themeChanged = !!(next.themeName && next.themeName !== prev.themeName);
     var bgChanged =
       next.background !== prev.background ||
@@ -1683,7 +1700,17 @@
       Number(next.scrollSpeed) !== Number(prev.scrollSpeed);
     var presChanged =
       Number(next.presentationSpeed) !== Number(prev.presentationSpeed);
-    if (!themeChanged && !bgChanged && !scrollChanged && !presChanged) {
+    var encoreChanged =
+      next.encoreStyle !== prev.encoreStyle ||
+      next.encoreSpot !== prev.encoreSpot ||
+      next.encoreBg !== prev.encoreBg;
+    if (
+      !themeChanged &&
+      !bgChanged &&
+      !scrollChanged &&
+      !presChanged &&
+      !encoreChanged
+    ) {
       return Promise.resolve({ needed: false, wrote: null });
     }
     var writer = sheet && (sheet.writeStyle || sheet.writeTheme);
@@ -1708,6 +1735,11 @@
     }
     if (scrollChanged) payload.scrollSpeed = next.scrollSpeed;
     if (presChanged) payload.presentationSpeed = next.presentationSpeed;
+    if (encoreChanged) {
+      payload.encoreStyle = next.encoreStyle;
+      payload.encoreSpot = next.encoreSpot;
+      payload.encoreBg = next.encoreBg;
+    }
     var req = sheet.writeStyle
       ? sheet.writeStyle(payload)
       : sheet.writeTheme(next.themeName, sheetId);
@@ -1776,19 +1808,37 @@
     if (val === "yes") {
       var onBoard = state.screen === "board" && state.boardDraft;
       var boardPrev = null;
+      var stylePrev = styleSnap(state.committed);
+      if (state.lastSheet && state.lastSheet.style) {
+        stylePrev = Object.assign({}, stylePrev, state.lastSheet.style);
+      }
       if (onBoard) {
         boardPrev =
           state.lastBoardSnap[state.boardDraft.id] ||
           boardSettingsSnap(state.boardCommitted);
         state.boardCommitted = clone(state.boardDraft);
-      } else {
-        state.committed = clone(state.draft);
       }
+      state.committed = clone(state.draft);
       state.dialog = null;
       var next = state.pendingLeave;
       state.pendingLeave = null;
       renderDialog();
-      var persist = onBoard ? persistBoardWrite(boardPrev) : persistStyleWrite();
+      var persist = onBoard
+        ? Promise.all([
+            persistBoardWrite(boardPrev),
+            persistStyleWrite(stylePrev),
+          ]).then(function (pair) {
+            var board = pair[0] || {};
+            var style = pair[1] || {};
+            var wrote = Object.assign({}, style.wrote || {}, board.wrote || {});
+            if (board.wrote && board.wrote.ok) wrote.wroteBoard = true;
+            return {
+              needed: !!(board.needed || style.needed),
+              wrote: wrote,
+              kind: "both",
+            };
+          })
+        : persistStyleWrite(stylePrev);
       persist
         .then(function (result) {
           if (onBoard) {
@@ -1796,7 +1846,7 @@
               needed: !!(result && result.needed),
               wrote: result && result.wrote,
               fb: false,
-              kind: "board",
+              kind: "both",
             };
           }
           return persistFallback().then(function (fb) {
@@ -1828,9 +1878,8 @@
     if (val === "no") {
       if (state.screen === "board" && state.boardCommitted) {
         state.boardDraft = clone(state.boardCommitted);
-      } else {
-        state.draft = clone(state.committed);
       }
+      state.draft = clone(state.committed);
       state.dialog = null;
       applyTheme();
       var nextNo = state.pendingLeave;
@@ -2693,7 +2742,7 @@
     }
     var leavingDirtyBoard =
       prevScreen === "board" &&
-      boardDirty() &&
+      (boardDirty() || styleDirty()) &&
       (target.screen !== "board" ||
         (target.boardId || null) !== (prevBoard || null));
     if (leavingDirtyBoard) {
@@ -2928,9 +2977,26 @@
         ? state.lastBoardSnap[state.boardDraft.id] ||
           boardSettingsSnap(state.boardCommitted)
         : null;
+      var permaStylePrev = styleSnap(state.committed);
+      if (state.lastSheet && state.lastSheet.style) {
+        permaStylePrev = Object.assign({}, permaStylePrev, state.lastSheet.style);
+      }
       if (state.boardDraft) state.boardCommitted = clone(state.boardDraft);
+      state.committed = clone(state.draft);
       var href = state.boardDraft && state.boardDraft.permalink;
-      persistBoardWrite(permaPrev).then(function (out) {
+      Promise.all([
+        persistBoardWrite(permaPrev),
+        persistStyleWrite(permaStylePrev),
+      ]).then(function (pair) {
+        var out = {
+          needed: !!(pair[0] && pair[0].needed) || !!(pair[1] && pair[1].needed),
+          wrote: Object.assign(
+            {},
+            (pair[1] && pair[1].wrote) || {},
+            (pair[0] && pair[0].wrote) || {}
+          ),
+        };
+        if (pair[0] && pair[0].wrote && pair[0].wrote.ok) out.wrote.wroteBoard = true;
         if (href) {
           window.open(href, "_blank", "noopener");
           if (out && out.needed && out.wrote && out.wrote.ok) {

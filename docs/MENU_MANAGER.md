@@ -32,7 +32,7 @@ It should feel like a polished iPhone Settings app. Desktop is a centered phone 
 | **This app’s chrome** | Immediately, from a **draft** cache (CSS variables) |
 | **TV boards** | After Save writes Theme, Background, and speed cells — boards pick them up on their next sheet load |
 
-Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm writes the Theme dropdown and the **Background** conglomerate on the **selected catalog** (`POST /api/manager/style`). The UI sends field names; the server adapter maps Theme Selector (**A3**), BG Color (**B3**), BG Pattern (**C3**), BG Wallpaper (**D3**). Pattern wins on the live board, so a color or wallpaper choice writes `none` into the unused of C/D. **BG Scroll Speed** (**H3**) and **Presentation Speed** (**I3**) write when those pills change. Other Style fields stay local. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
+Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm writes the Theme dropdown and the **Background** conglomerate on the **selected catalog** (`POST /api/manager/style`). The UI sends field names; the server adapter maps Theme Selector (**A3**), BG Color (**B3**), BG Pattern (**C3**), BG Wallpaper (**D3**). Pattern wins on the live board, so a color or wallpaper choice writes `none` into the unused of C/D. **BG Scroll Speed** (**H3**) and **Presentation Speed** (**I3**) write when those pills change. Encore children — Spotlight Type (**K3**), Spotlight Color (**L3**), Background Color (**M3**) — are **global** even when edited on a board. Board Yes also persists dirty Style fields. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
 
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
@@ -105,7 +105,7 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 
 ## 6. Not in this prototype
 
-- Writes for Style presentation / Encore knobs, OliToki Menu Settings, or Data Source
+- Writes for OliToki Menu Settings or Data Source
 - Board inventory row reorder (drag is local-feel only; no row write)
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 
