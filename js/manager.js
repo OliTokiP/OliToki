@@ -36,6 +36,7 @@
     lastSheet: null,
     boardDraft: null,
     boardCommitted: null,
+    itemDragging: false,
   };
 
   var previewCtl = {
@@ -423,12 +424,10 @@
   }
 
   function footerBar(label, act) {
+    var labelHtml =
+      '<span class="footer-label">' + escapeHtml(label) + "</span>";
     if (!act) {
-      return (
-        '<div class="footer-bar footer-soon"><span>' +
-        escapeHtml(label) +
-        "</span></div>"
-      );
+      return '<div class="footer-bar footer-soon">' + labelHtml + "</div>";
     }
     return (
       '<button class="footer-bar" type="button" data-act="' +
@@ -436,9 +435,9 @@
       '">' +
       '<span class="plus-circle" aria-hidden="true">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>' +
-      "</span><span>" +
-      escapeHtml(label) +
-      "</span></button>"
+      "</span>" +
+      labelHtml +
+      "</button>"
     );
   }
 
@@ -622,16 +621,26 @@
       escapeHtml(b.permalink || "—") +
       "</span></button>";
     html += '<div class="row-subheader">Menu Items</div>';
-    var list = b.items || [];
+    html +=
+      '<div class="item-list" id="board-item-list">' +
+      itemListHtml(b.items || []) +
+      "</div>";
+    return html;
+  }
+
+  function itemListHtml(items) {
+    var html = "";
     var i;
-    for (i = 0; i < list.length; i++) {
+    for (i = 0; i < items.length; i++) {
       html +=
         '<div class="item-row" data-item="' +
         i +
         '">' +
-        '<span class="item-handle" aria-hidden="true"></span>' +
+        '<button class="item-handle" type="button" aria-label="Reorder ' +
+        escapeHtml(items[i].name) +
+        '"></button>' +
         '<span class="item-name">' +
-        escapeHtml(list[i].name) +
+        escapeHtml(items[i].name) +
         "</span></div>";
     }
     return html;
@@ -674,6 +683,7 @@
   }
 
   function refreshBoardRows() {
+    if (state.itemDragging) return;
     var existing = els.app.querySelector(".screen-board");
     if (!existing) return;
     syncPreviewFromDraft(existing.querySelector(".preview"));
@@ -914,6 +924,7 @@
       if (existingBoard) {
         refreshBoardRows();
         applyTheme();
+        bindItemReorder();
         if (!previewCtl.phase) startPreviewCycle();
         return;
       }
@@ -945,6 +956,7 @@
       if (sc && state.screen === "style") sc.scrollTop = state.styleScroll;
       restorePillScroll();
       bindWpFallback();
+      if (state.screen === "board") bindItemReorder();
       startPreviewCycle();
     } else {
       stopPreviewCycle();
@@ -2282,6 +2294,169 @@
     }
   }
 
+  function bindItemReorder() {
+    var board = els.app.querySelector(".screen-board");
+    if (!board || board.getAttribute("data-reorder")) return;
+    board.setAttribute("data-reorder", "1");
+    board.addEventListener("pointerdown", onItemHandleDown);
+  }
+
+  function onItemHandleDown(e) {
+    if (e.button != null && e.button !== 0) return;
+    var handle = e.target.closest(".item-handle");
+    if (!handle) return;
+    var row = handle.closest(".item-row");
+    var list = document.getElementById("board-item-list");
+    if (!row || !list || !list.contains(row) || row.classList.contains("item-placeholder")) {
+      return;
+    }
+    e.preventDefault();
+    startItemDrag(e, list, row, handle);
+  }
+
+  function startItemDrag(e, list, row, handle) {
+    var from = Number(row.getAttribute("data-item"));
+    if (!isFinite(from)) return;
+    var scroll = document.getElementById("board-scroll");
+    var board = els.app.querySelector(".screen-board");
+    var startRect = row.getBoundingClientRect();
+    var y0 = e.clientY;
+    var x0 = e.clientX;
+    var offsetY = e.clientY - startRect.top;
+    var pid = e.pointerId;
+    var dragging = false;
+    var placeholder = null;
+    var lastY = e.clientY;
+    var autoDir = 0;
+    var raf = 0;
+    var THRESH = 6;
+    try {
+      handle.setPointerCapture(pid);
+    } catch (err) {}
+
+    function placeAt(clientY) {
+      lastY = clientY;
+      row.style.top = clientY - offsetY + "px";
+      if (!placeholder) return;
+      var statics = [];
+      var nodes = list.querySelectorAll(".item-row");
+      var i;
+      for (i = 0; i < nodes.length; i++) {
+        if (nodes[i] !== row && nodes[i] !== placeholder) statics.push(nodes[i]);
+      }
+      var insertBefore = null;
+      for (i = 0; i < statics.length; i++) {
+        var rr = statics[i].getBoundingClientRect();
+        if (clientY < rr.top + rr.height / 2) {
+          insertBefore = statics[i];
+          break;
+        }
+      }
+      if (insertBefore) {
+        if (placeholder.nextSibling !== insertBefore) insertBefore.before(placeholder);
+      } else if (statics.length) {
+        var last = statics[statics.length - 1];
+        if (last.nextSibling !== placeholder) last.after(placeholder);
+      }
+    }
+
+    function edgeScroll(clientY) {
+      if (!scroll) {
+        autoDir = 0;
+        return;
+      }
+      var box = scroll.getBoundingClientRect();
+      var edge = 20;
+      var max = scroll.scrollHeight - scroll.clientHeight;
+      if (clientY < box.top + edge && scroll.scrollTop > 0) autoDir = -10;
+      else if (clientY > box.bottom - edge && scroll.scrollTop < max - 1) autoDir = 10;
+      else autoDir = 0;
+      if (autoDir && !raf) raf = requestAnimationFrame(tick);
+    }
+
+    function tick() {
+      raf = 0;
+      if (!dragging) return;
+      if (autoDir && scroll) {
+        scroll.scrollTop += autoDir;
+        placeAt(lastY);
+      }
+      if (autoDir) raf = requestAnimationFrame(tick);
+    }
+
+    function begin() {
+      dragging = true;
+      state.itemDragging = true;
+      if (board) board.classList.add("is-item-dragging");
+      placeholder = document.createElement("div");
+      placeholder.className = "item-row item-placeholder";
+      placeholder.style.height = startRect.height + "px";
+      row.after(placeholder);
+      row.classList.add("is-dragging");
+      row.style.position = "fixed";
+      row.style.width = startRect.width + "px";
+      row.style.height = startRect.height + "px";
+      row.style.left = startRect.left + "px";
+      row.style.top = startRect.top + "px";
+      row.style.zIndex = "8";
+    }
+
+    function move(ev) {
+      if (ev.pointerId !== pid) return;
+      if (!dragging) {
+        if (Math.abs(ev.clientY - y0) < THRESH && Math.abs(ev.clientX - x0) < THRESH) {
+          return;
+        }
+        begin();
+      }
+      ev.preventDefault();
+      placeAt(ev.clientY);
+      edgeScroll(ev.clientY);
+    }
+
+    function finish() {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      try {
+        handle.releasePointerCapture(pid);
+      } catch (err) {}
+      if (dragging && placeholder && state.boardDraft && state.boardDraft.items) {
+        var items = state.boardDraft.items.slice();
+        var next = [];
+        var kids = Array.prototype.slice.call(list.children);
+        var k;
+        for (k = 0; k < kids.length; k++) {
+          var el = kids[k];
+          if (el === placeholder) next.push(items[from]);
+          else if (el.classList.contains("item-row") && el !== row) {
+            next.push(items[Number(el.getAttribute("data-item"))]);
+          }
+        }
+        if (next.length === items.length) state.boardDraft.items = next;
+        list.innerHTML = itemListHtml(state.boardDraft.items);
+      } else {
+        row.classList.remove("is-dragging");
+        row.style.position = "";
+        row.style.width = "";
+        row.style.height = "";
+        row.style.left = "";
+        row.style.top = "";
+        row.style.zIndex = "";
+        if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+      }
+      if (board) board.classList.remove("is-item-dragging");
+      dragging = false;
+      state.itemDragging = false;
+    }
+
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+  }
+
   function renderAll() {
     renderScreen();
     renderPicker();
@@ -2381,6 +2556,24 @@
       var styleHash = "#/menu/style";
       if (location.hash !== styleHash) {
         history.replaceState(null, "", styleHash);
+      }
+      state.pendingLeave = function () {
+        history.back();
+      };
+      state.dialog = "confirm";
+      renderAll();
+      return;
+    }
+    var leavingDirtyBoard =
+      prevScreen === "board" &&
+      boardDirty() &&
+      (target.screen !== "board" ||
+        (target.boardId || null) !== (prevBoard || null));
+    if (leavingDirtyBoard) {
+      state.picker = null;
+      var boardHash = "#/menu/board/" + prevBoard;
+      if (location.hash !== boardHash) {
+        history.replaceState(null, "", boardHash);
       }
       state.pendingLeave = function () {
         history.back();

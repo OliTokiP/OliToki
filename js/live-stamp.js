@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "0f04852",
-  "hashFull": "0f048520d36a5803008b2d254ff707d934a114e4",
-  "subject": "QA: 2026-08-17 Under Version in system settings, include latest git commit comment (pass 3)"
+  "hash": "0c0737c",
+  "hashFull": "0c0737c8ae7dbb9c0696b748768d30d031ba8e2f",
+  "subject": "QA: 2026-08-17 Add individual board settings (pass 2)"
 };

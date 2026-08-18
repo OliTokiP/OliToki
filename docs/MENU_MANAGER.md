@@ -48,7 +48,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 | `#/system` | System Settings (Data Source, Require Restart, System Font, Sheet link) |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
-| `#/menu/board/1` … `/3` | Board editor (title, family portrait, presentation, descriptions, items) |
+| `#/menu/board/1` … `/3` | Board editor (title, family portrait, presentation, descriptions, drag-reorder items) |
 | `#/menu/board/4` | Announcements (title + permalink; schema differs) |
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
@@ -71,6 +71,8 @@ Context-driven children (same idea as the mockup):
 Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
+
+**Board editor (1–3):** hamburger handles drag-reorder Menu Items in the local draft only (no inventory sheet write). Confirm-on-back still Yes / No / Keep Editing. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
 
 **Number pills (BG Scroll Speed / Presentation Speed):** read a validator in the Settings **header label** (same public CSV as themes). House style is the cute form already on Restaurant Copy:
 
@@ -104,7 +106,7 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 ## 6. Not in this prototype
 
 - Writes for presentation / Encore, OliToki Menu Settings, or Data Source
-- Board / box / announcement item editors
+- Board / box / announcement item editors (inventory drag is local-feel only; no row write)
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 
 System Font applies to **this app** (`html[data-system-font]`). Board type still follows `css/system-font.css` on the TV pages.

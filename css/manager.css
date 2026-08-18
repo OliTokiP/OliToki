@@ -360,6 +360,11 @@ img {
   font-size: 0.8125rem;
 }
 
+.item-list {
+  display: flex;
+  flex-direction: column;
+}
+
 .item-row {
   display: flex;
   align-items: center;
@@ -368,16 +373,61 @@ img {
   background: var(--highlight);
   color: var(--main);
   border-bottom: 1.5px solid var(--highlight-line);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .item-handle {
+  position: relative;
   flex: 0 0 18px;
+  min-width: 18px;
   height: 14px;
+  padding: 0;
   background:
     linear-gradient(var(--main), var(--main)) 0 0 / 100% 2px no-repeat,
     linear-gradient(var(--main), var(--main)) 0 6px / 100% 2px no-repeat,
     linear-gradient(var(--main), var(--main)) 0 12px / 100% 2px no-repeat;
   opacity: 0.45;
+  touch-action: none;
+  cursor: grab;
+}
+
+.screen-board.is-item-dragging {
+  cursor: grabbing;
+}
+
+.screen-board.is-item-dragging .style-scroll {
+  touch-action: none;
+}
+
+.item-handle::before {
+  content: "";
+  position: absolute;
+  inset: -16px -12px;
+}
+
+.item-row.is-dragging {
+  z-index: 8;
+  margin: 0;
+  box-shadow: 0 14px 32px rgba(20, 40, 55, 0.34);
+  pointer-events: none;
+  cursor: grabbing;
+  transform: scale(1.02);
+}
+
+.item-row.is-dragging .item-handle {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
+.item-placeholder {
+  background: color-mix(in srgb, var(--highlight) 40%, var(--secondary));
+  border-bottom: 1.5px solid var(--highlight-line);
+}
+
+.item-placeholder .item-handle,
+.item-placeholder .item-name {
+  visibility: hidden;
 }
 
 .item-name {
@@ -1174,28 +1224,36 @@ img {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   min-height: calc(var(--footer-h) + env(safe-area-inset-bottom, 0px));
   padding: 14px 18px calc(18px + env(safe-area-inset-bottom, 0px));
   background: var(--secondary);
   color: var(--main);
   border-top: 1px solid color-mix(in srgb, var(--main) 8%, var(--secondary));
-  z-index: 3;
 }
 
-.footer-bar span {
+.footer-label {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 54px;
+  text-align: center;
   font-size: 1.2rem;
   font-weight: 700;
 }
 
 .plus-circle {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  margin-block: auto;
   width: 36px;
   height: 36px;
   border: 2.5px solid var(--main);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
 }
 
 .plus-circle svg {
