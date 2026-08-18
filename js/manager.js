@@ -34,6 +34,8 @@
     sheetDirty: false,
     sheetSource: "loading",
     lastSheet: null,
+    boardDraft: null,
+    boardCommitted: null,
   };
 
   var previewCtl = {
@@ -520,11 +522,13 @@
     items +=
       '<button class="nav-item" type="button" data-act="go" data-to="style">Style and Theme</button>';
     D.boards.forEach(function (b) {
+      var label =
+        (b.number ? b.number + ". " : "") + (b.menuTitle || b.title);
       items +=
         '<button class="nav-item" type="button" data-act="go" data-to="board" data-board="' +
-        b.id +
+        escapeHtml(b.id) +
         '">' +
-        escapeHtml(b.title) +
+        escapeHtml(label) +
         "</button>";
     });
     items += "</div></div>";
@@ -537,25 +541,144 @@
     );
   }
 
+  function ensureBoardDraft() {
+    var id = resolveBoardId(state.boardId);
+    state.boardId = id;
+    var src = find(D.boards, id);
+    if (!src) return null;
+    if (!state.boardDraft || state.boardDraft.id !== id) {
+      state.boardDraft = clone(src);
+      state.boardCommitted = clone(src);
+    }
+    return state.boardDraft;
+  }
+
+  function resolveBoardId(id) {
+    if (id === "announcements") {
+      var four = find(D.boards, "4");
+      if (four) return "4";
+    }
+    return id;
+  }
+
+  function boardDirty() {
+    return !!(
+      state.boardDraft &&
+      state.boardCommitted &&
+      !eq(state.boardDraft, state.boardCommitted)
+    );
+  }
+
+  function boardRows() {
+    var b = state.boardDraft || ensureBoardDraft();
+    if (!b) return "";
+    var html = "";
+    html += row({
+      key: "boardTitle",
+      label: "Menu Title",
+      value: b.menuTitle || b.title || "",
+    });
+    if (b.kind !== "announcements") {
+      html += row({
+        key: "boardFamily",
+        label: "Family Portrait (Shows Spread of All Items)",
+        value: labelOf(D.yesNo, b.familyPortrait),
+      });
+      html += row({
+        key: "boardPresentation",
+        label: "Presentation Style",
+        value: labelOf(D.presentationStyles, b.presentation),
+      });
+      if (b.presentation === "encore") {
+        html += row({
+          key: "encoreStyle",
+          label: "Encore Spotlight Style",
+          value: labelOf(D.encoreStyles, state.draft.encoreStyle),
+          child: true,
+        });
+        html += row({
+          key: "encoreSpot",
+          label: "Encore Spotlight Color",
+          value: labelOf(D.encoreSpotColors, state.draft.encoreSpot),
+          child: true,
+        });
+        html += row({
+          key: "encoreBg",
+          label: "Encore Background",
+          value: labelOf(D.colorRoles, state.draft.encoreBg),
+          child: true,
+        });
+      }
+      html += row({
+        key: "boardDesc",
+        label: "Include Item Descriptions",
+        value: labelOf(D.yesNo, b.includeDescriptions),
+      });
+    }
+    html +=
+      '<button class="row" type="button" data-act="open-permalink">' +
+      '<span class="row-label">Permalink</span>' +
+      '<span class="row-value row-value-url">' +
+      escapeHtml(b.permalink || "—") +
+      "</span></button>";
+    html += '<div class="row-subheader">Menu Items</div>';
+    var list = b.items || [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      html +=
+        '<div class="item-row" data-item="' +
+        i +
+        '">' +
+        '<span class="item-handle" aria-hidden="true"></span>' +
+        '<span class="item-name">' +
+        escapeHtml(list[i].name) +
+        "</span></div>";
+    }
+    return html;
+  }
+
   function screenBoard() {
-    var board = find(D.boards, state.boardId);
-    var feats = D.comingSoonFeatures
-      .map(function (f) {
-        return "<dd>" + escapeHtml(f) + "</dd>";
-      })
-      .join("");
+    var b = ensureBoardDraft();
+    if (!b) {
+      return (
+        '<section class="screen screen-soon">' +
+        header("Board") +
+        '<div class="soon-body"><h2 class="soon-title">Unknown board</h2></div></section>'
+      );
+    }
+    if (b.kind === "announcements" || b.id === "4" || b.id === "announcements") {
+      var soonTitle =
+        (b.number ? b.number + ". " : "") + (b.menuTitle || b.title || "Announcements");
+      return (
+        '<section class="screen screen-soon">' +
+        header(soonTitle) +
+        '<div class="soon-body">' +
+        '<h2 class="soon-title">Coming Soon</h2>' +
+        '<p class="soon-sub">Announcements editor is out of scope this pass.</p>' +
+        "</div></section>"
+      );
+    }
+    var title =
+      (b.number ? b.number + ". " : "") + (b.menuTitle || b.title);
     return (
-      '<section class="screen screen-soon">' +
-      header(board.title) +
-      '<div class="soon-body">' +
-      '<h2 class="soon-title">Coming Soon</h2>' +
-      '<p class="soon-sub">(edit google sheet for now)</p>' +
-      '<dl class="soon-features"><dt>Features:</dt>' +
-      feats +
-      "</dl></div>" +
+      '<section class="screen screen-board">' +
+      header(title) +
+      previewHtml() +
+      '<div class="style-scroll" id="board-scroll">' +
+      '<div class="rows bounce-inner">' +
+      boardRows() +
+      "</div></div>" +
       footerBar("Add Item From Toast", "toast-add") +
       "</section>"
     );
+  }
+
+  function refreshBoardRows() {
+    var existing = els.app.querySelector(".screen-board");
+    if (!existing) return;
+    syncPreviewFromDraft(existing.querySelector(".preview"));
+    var wrap = existing.querySelector(".rows");
+    if (wrap) wrap.innerHTML = boardRows();
   }
 
   function styleRows() {
@@ -677,7 +800,7 @@
 
   function previewHtml() {
     var d = state.draft;
-    var encore = d.presentation === "encore";
+    var encore = previewPresentation() === "encore";
     var fill = encore
       ? roleHex(d.encoreBg)
       : d.background === "pattern" || d.background === "wallpaper"
@@ -786,6 +909,16 @@
     else if (state.screen === "style") html = screenStyle();
     else if (state.screen === "board") html = screenBoard();
 
+    if (state.screen === "board") {
+      var existingBoard = els.app.querySelector(".screen-board");
+      if (existingBoard) {
+        refreshBoardRows();
+        applyTheme();
+        if (!previewCtl.phase) startPreviewCycle();
+        return;
+      }
+    }
+
     if (state.screen === "style") {
       var existing = els.app.querySelector(".screen-style");
       if (existing) {
@@ -805,15 +938,13 @@
     els.app.innerHTML = html;
     applyTheme();
     if (state.screen === "home") attachPeak();
-    if (state.screen === "style") {
-      var sc = document.getElementById("style-scroll");
-      if (sc) sc.scrollTop = state.styleScroll;
+    if (state.screen === "style" || state.screen === "board") {
+      var sc = document.getElementById(
+        state.screen === "board" ? "board-scroll" : "style-scroll"
+      );
+      if (sc && state.screen === "style") sc.scrollTop = state.styleScroll;
       restorePillScroll();
       bindWpFallback();
-      /* 0696e41 started the cycle immediately. Waiting for the sheet parked
-         the plate at opacity 1, then a later remount made the next photo
-         just appear. Start now; renderScreen's existing-screen path will
-         not remount the plate when the sheet arrives. */
       startPreviewCycle();
     } else {
       stopPreviewCycle();
@@ -821,6 +952,46 @@
   }
 
   function pickerSpec(key) {
+    if (key === "boardTitle") {
+      return { kind: "text" };
+    }
+    if (key === "boardFamily") {
+      return {
+        title: "Family Portrait",
+        options: D.yesNo,
+        get: function () {
+          return (state.boardDraft || {}).familyPortrait;
+        },
+        set: function (id) {
+          if (state.boardDraft) state.boardDraft.familyPortrait = id;
+        },
+      };
+    }
+    if (key === "boardDesc") {
+      return {
+        title: "Include Item Descriptions",
+        options: D.yesNo,
+        get: function () {
+          return (state.boardDraft || {}).includeDescriptions;
+        },
+        set: function (id) {
+          if (state.boardDraft) state.boardDraft.includeDescriptions = id;
+        },
+      };
+    }
+    if (key === "boardPresentation") {
+      return {
+        title: "Presentation Style",
+        note: "Note: Presentation styles are applied per-board.",
+        options: D.presentationStyles,
+        get: function () {
+          return (state.boardDraft || {}).presentation;
+        },
+        set: function (id) {
+          if (state.boardDraft) state.boardDraft.presentation = id;
+        },
+      };
+    }
     if (key === "theme") {
       return {
         title: "Theme",
@@ -1101,6 +1272,34 @@
         '<button class="btn-primary" type="button" data-act="confirm" data-val="no">No</button>' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="keep">Keep Editing</button>' +
         "</div></div>";
+    } else if (state.dialog === "board-title") {
+      var cur = (state.boardDraft && (state.boardDraft.menuTitle || state.boardDraft.title)) || "";
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Menu Title</h2>" +
+        '<input class="dialog-input" id="board-title-input" type="text" maxlength="48" value="' +
+        escapeHtml(cur) +
+        '">' +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="board-title-save">Save</button>' +
+        '<button class="btn-primary" type="button" data-act="board-title-cancel">Cancel</button>' +
+        "</div></div>";
+      setTimeout(function () {
+        var inp = document.getElementById("board-title-input");
+        if (inp) {
+          inp.focus();
+          inp.select();
+        }
+      }, 30);
+    } else if (state.dialog === "open-permalink") {
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Save board and open permalink?</h2>" +
+        "<p class=\"tiny\">This overwrites the live sheet for this board, then opens the permalink.</p>" +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="permalink-yes">Yes</button>' +
+        '<button class="btn-primary" type="button" data-act="permalink-no">No</button>' +
+        "</div></div>";
     } else if (state.dialog === "create") {
       els.dialog.innerHTML =
         '<div class="dialog-card" role="dialog">' +
@@ -1156,6 +1355,16 @@
     renderAll();
   }
 
+  function leaveBoard(next) {
+    if (boardDirty()) {
+      state.pendingLeave = next;
+      state.dialog = "confirm";
+      renderDialog();
+      return;
+    }
+    next();
+  }
+
   function leaveStyle(next) {
     if (!eq(state.draft, state.committed)) {
       state.pendingLeave = next;
@@ -1183,7 +1392,13 @@
       });
       return;
     }
-    if (state.screen === "board" || state.screen === "system" || state.screen === "menu") {
+    if (state.screen === "board") {
+      leaveBoard(function () {
+        history.back();
+      });
+      return;
+    }
+    if (state.screen === "system" || state.screen === "menu") {
       history.back();
       return;
     }
@@ -1192,6 +1407,11 @@
   function openPicker(key) {
     var spec = pickerSpec(key);
     if (!spec) return;
+    if (key === "boardTitle") {
+      state.dialog = "board-title";
+      renderDialog();
+      return;
+    }
     if (spec.kind === "zeroOne") {
       toggleZeroOne(key);
       return;
@@ -1220,13 +1440,26 @@
     if (state.picker === "wallpaper" && id === "upload") {
       return;
     }
-    var wasPresentation = state.picker === "presentation";
+    var pickKey = state.picker;
+    var wasPresentation = pickKey === "presentation";
     var oldPres = wasPresentation ? state.draft.presentation : null;
     spec.set(id);
     state.picker = null;
-    state.sheetDirty = true;
+    if (state.screen !== "board") state.sheetDirty = true;
+    else if (
+      pickKey === "encoreStyle" ||
+      pickKey === "encoreSpot" ||
+      pickKey === "encoreBg"
+    ) {
+      state.sheetDirty = true;
+    }
     applyTheme();
     renderAll();
+    if (pickKey === "boardPresentation") {
+      previewCtl.encoreFirst = true;
+      if (id === "encore") fillPortraitGrid();
+      retargetMotion();
+    }
     if (wasPresentation && state.screen === "style") {
       var newPres = state.draft.presentation;
       if (oldPres !== newPres) {
@@ -1421,7 +1654,11 @@
 
   function confirmChoice(val) {
     if (val === "yes") {
-      state.committed = clone(state.draft);
+      if (state.screen === "board" && state.boardDraft) {
+        state.boardCommitted = clone(state.boardDraft);
+      } else {
+        state.committed = clone(state.draft);
+      }
       state.dialog = null;
       var next = state.pendingLeave;
       state.pendingLeave = null;
@@ -1450,7 +1687,11 @@
       return;
     }
     if (val === "no") {
-      state.draft = clone(state.committed);
+      if (state.screen === "board" && state.boardCommitted) {
+        state.boardDraft = clone(state.boardCommitted);
+      } else {
+        state.draft = clone(state.committed);
+      }
       state.dialog = null;
       applyTheme();
       var nextNo = state.pendingLeave;
@@ -1476,9 +1717,16 @@
     window.open(url, "_blank", "noopener");
   }
 
+  function previewPresentation() {
+    if (state.screen === "board" && state.boardDraft && state.boardDraft.presentation) {
+      return state.boardDraft.presentation;
+    }
+    return state.draft.presentation;
+  }
+
   function previewMotionStyle() {
     var TM = window.TOKI_MOTION;
-    var mode = state.draft.presentation;
+    var mode = previewPresentation();
     if (TM && typeof TM.styleForMode === "function") {
       return TM.styleForMode(mode, D.motionStyles);
     }
@@ -1497,7 +1745,7 @@
 
   function motionPhases() {
     var TM = window.TOKI_MOTION;
-    var mode = state.draft.presentation;
+    var mode = previewPresentation();
     var style = previewMotionStyle();
     if (TM && TM.scaleStyleTimes && presentationMotionOn()) {
       style = TM.scaleStyleTimes(style, previewSpeed()) || style;
@@ -1593,7 +1841,7 @@
     var sticker = els.app.querySelector(".preview-sticker");
     if (img) img.src = item.src;
     if (sticker) sticker.hidden = !item.isNew;
-    if (state.draft.presentation === "encore") {
+    if (previewPresentation() === "encore") {
       applyEncoreChrome(item);
     }
     armHighlightClock(motionPhases().punchOut);
@@ -1711,7 +1959,7 @@
   function beginPhase(phase, gen, snap) {
     if (gen !== previewCtl.gen) return;
     var phases = motionPhases();
-    var mode = state.draft.presentation;
+    var mode = previewPresentation();
     var encore = mode === "encore";
     var TM = window.TOKI_MOTION;
     var zoomTo = TM && TM.ENCORE ? TM.ENCORE.zoomTo : 1.24;
@@ -1777,7 +2025,7 @@
     state.previewIndex = i;
     previewCtl.itemIndex = i;
     applyPreviewItem(items[i]);
-    if (state.draft.presentation === "encore") {
+    if (previewPresentation() === "encore") {
       var TM = window.TOKI_MOTION;
       var stage = encoreStageEl();
       if (!TM || !stage) return;
@@ -1870,7 +2118,7 @@
     var items = D.previewItems;
     var item = items[state.previewIndex || 0] || items[0];
     if (item) applyPreviewItem(item);
-    if (state.draft.presentation === "encore") {
+    if (previewPresentation() === "encore") {
       fillPortraitGrid();
       var stageStill = encoreStageEl();
       if (window.TOKI_MOTION && stageStill) {
@@ -1896,7 +2144,7 @@
   function syncPreviewFromDraft(preview) {
     if (!preview) return;
     var d = state.draft;
-    var encore = d.presentation === "encore";
+    var encore = previewPresentation() === "encore";
     preview.classList.toggle("is-encore", encore);
     var fill = encore
       ? roleHex(d.encoreBg)
@@ -1945,7 +2193,7 @@
     stopPreviewCycle();
     previewCtl.encoreFirst = true;
     previewCtl.lattice = null;
-    if (state.draft.presentation === "encore") {
+    if (previewPresentation() === "encore") {
       fillPortraitGrid();
     }
     var gen = previewCtl.gen;
@@ -2161,6 +2409,16 @@
     if (payload.dataSources && payload.dataSources.length) {
       D.dataSources = payload.dataSources;
     }
+    if (payload.boards && payload.boards.length) {
+      D.boards = payload.boards;
+      if (state.screen === "board" && state.boardId && !boardDirty()) {
+        var fresh = find(D.boards, resolveBoardId(state.boardId));
+        if (fresh) {
+          state.boardDraft = clone(fresh);
+          state.boardCommitted = clone(fresh);
+        }
+      }
+    }
     if (payload.themes && payload.themes.length) {
       D.themes = payload.themes;
     }
@@ -2327,6 +2585,34 @@
       openSheet();
     } else if (act === "open-settings-sheet") {
       window.open(D.settingsSheetUrl, "_blank", "noopener");
+    } else if (act === "open-permalink") {
+      state.dialog = "open-permalink";
+      renderDialog();
+    } else if (act === "permalink-no") {
+      state.dialog = null;
+      renderDialog();
+    } else if (act === "permalink-yes") {
+      state.dialog = null;
+      renderDialog();
+      if (state.boardDraft) state.boardCommitted = clone(state.boardDraft);
+      var href = state.boardDraft && state.boardDraft.permalink;
+      if (href) {
+        window.open(href, "_blank", "noopener");
+        toast("Opened permalink (sheet overwrite not wired yet)");
+      } else toast("No permalink on this board");
+    } else if (act === "board-title-cancel") {
+      state.dialog = null;
+      renderDialog();
+    } else if (act === "board-title-save") {
+      var inp = document.getElementById("board-title-input");
+      var next = inp ? String(inp.value || "").trim() : "";
+      if (state.boardDraft && next) {
+        state.boardDraft.menuTitle = next;
+        state.boardDraft.title = next;
+      }
+      state.dialog = null;
+      renderDialog();
+      renderAll();
     } else if (act === "toast-add") {
       toast("Coming soon — add items from Toast.");
     } else if (act === "copy-hex") {

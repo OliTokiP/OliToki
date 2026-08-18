@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2fd61f7",
-  "hashFull": "2fd61f70170040faacc9eb9b4c0fa33111103672",
-  "subject": "QA: 2026-08-17 Make drafts editable (pass 1)"
+  "hash": "0f04852",
+  "hashFull": "0f048520d36a5803008b2d254ff707d934a114e4",
+  "subject": "QA: 2026-08-17 Under Version in system settings, include latest git commit comment (pass 3)"
 };

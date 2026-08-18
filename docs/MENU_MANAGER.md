@@ -48,8 +48,8 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 | `#/system` | System Settings (Data Source, Require Restart, System Font, Sheet link) |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
-| `#/menu/board/1` … `/3` | Coming Soon (board authoring) |
-| `#/menu/board/announcements` | Coming Soon |
+| `#/menu/board/1` … `/3` | Board editor (title, family portrait, presentation, descriptions, items) |
+| `#/menu/board/4` | Announcements (title + permalink; schema differs) |
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 

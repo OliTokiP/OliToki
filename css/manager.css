@@ -346,6 +346,50 @@ img {
   background: color-mix(in srgb, var(--special) 50%, var(--secondary));
 }
 
+.row-subheader {
+  padding: 14px 16px 8px;
+  background: var(--highlight);
+  color: var(--main);
+  font-size: 1rem;
+  font-weight: 700;
+  border-bottom: 1.5px solid var(--highlight-line);
+}
+
+.row-value-url {
+  word-break: break-all;
+  font-size: 0.8125rem;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--highlight);
+  color: var(--main);
+  border-bottom: 1.5px solid var(--highlight-line);
+}
+
+.item-handle {
+  flex: 0 0 18px;
+  height: 14px;
+  background:
+    linear-gradient(var(--main), var(--main)) 0 0 / 100% 2px no-repeat,
+    linear-gradient(var(--main), var(--main)) 0 6px / 100% 2px no-repeat,
+    linear-gradient(var(--main), var(--main)) 0 12px / 100% 2px no-repeat;
+  opacity: 0.45;
+}
+
+.item-name {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--secondary);
+  border: 1.5px solid var(--highlight-line);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
 .links-block {
   gap: 10px;
 }

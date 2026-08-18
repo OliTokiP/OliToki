@@ -18,6 +18,7 @@
   var SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY";
   var STYLE_GID = "183083022";
   var BETA_FEATURES_GID = "1710200195";
+  var INFO_GID = "605471002";
 
   var STYLE_SETTINGS = {
     themeSelector: 0,
@@ -1096,6 +1097,123 @@
     };
   }
 
+  function parseGidToken(raw) {
+    var s = String(raw || "").trim();
+    var m = s.match(/gid=(\d+)/i);
+    if (m) return m[1];
+    if (/^\d{6,}$/.test(s)) return s;
+    return "";
+  }
+
+  function parsePresentationMode(raw) {
+    var s = foldKey(raw);
+    if (!s) return "kenburns";
+    if (s.indexOf("encore") !== -1) return "encore";
+    if (s.indexOf("slide") !== -1) return "slideshow";
+    return "kenburns";
+  }
+
+  function parseInfoCatalog(rows) {
+    var out = [];
+    var i;
+    for (i = 0; i < (rows || []).length; i++) {
+      var a = cell(rows[i], 0);
+      var b = cell(rows[i], 1);
+      var c = cell(rows[i], 2);
+      if (!a || foldKey(a) === "menu") continue;
+      if (!/^\d+$/.test(a)) continue;
+      var gid = parseGidToken(c);
+      if (!gid) continue;
+      out.push({
+        id: a,
+        number: a,
+        permalink: b,
+        gid: gid,
+      });
+    }
+    return out;
+  }
+
+  function parseBoardTab(rows, meta) {
+    meta = meta || {};
+    var start = findSectionData(rows, "settings");
+    if (start < 0) start = 2;
+    var headers = rows[start - 1] || [];
+    var data = rows[start] || [];
+    var colTitle = headerIndex(headers, ["Menu Title", "Title"]);
+    var colFam = headerIndex(headers, ["Family Portrait"]);
+    var colPres = headerIndex(headers, ["Presentation Mode", "Presentation Style"]);
+    var colDesc = headerIndex(headers, ["Include Descriptions?", "Include Item Descriptions"]);
+    if (colTitle < 0) colTitle = 0;
+    var title = cell(data, colTitle) || ("Board " + (meta.number || meta.id || ""));
+    var kind = colPres < 0 && colFam < 0 ? "announcements" : "board";
+    var items = [];
+    var inv = findSectionData(rows, "inventory");
+    if (inv >= 0) {
+      var ih = rows[inv - 1] || [];
+      var nameCol = headerIndex(ih, ["Item"]);
+      if (nameCol < 0) nameCol = 0;
+      var r;
+      for (r = inv; r < rows.length; r++) {
+        var name = cell(rows[r], nameCol);
+        if (!name) continue;
+        if (foldKey(name) === "item") continue;
+        items.push({ name: name, row: r + 1 });
+      }
+    } else if (kind === "announcements") {
+      var ar = start + 2;
+      for (; ar < (rows || []).length; ar++) {
+        var at = cell(rows[ar], 0);
+        if (!at) continue;
+        if (foldKey(at).indexOf("announcementtitle") !== -1) continue;
+        items.push({ name: at, row: ar + 1 });
+      }
+    }
+    return {
+      id: String(meta.id || meta.number || ""),
+      number: String(meta.number || meta.id || ""),
+      title: title,
+      menuTitle: title,
+      gid: meta.gid || "",
+      permalink: meta.permalink || "",
+      kind: kind,
+      familyPortrait: parseYesNo(colFam >= 0 ? cell(data, colFam) : "no", false),
+      presentation: parsePresentationMode(colPres >= 0 ? cell(data, colPres) : ""),
+      includeDescriptions: parseYesNo(
+        colDesc >= 0 ? cell(data, colDesc) : "no",
+        false
+      ),
+      items: items,
+    };
+  }
+
+  async function loadBoards(sheetId, force) {
+    var infoRows;
+    try {
+      infoRows = await fetchCsv(INFO_GID, sheetId, force);
+    } catch (err) {
+      console.warn("manager-sheet: Info tab failed", err);
+      return [];
+    }
+    var catalog = parseInfoCatalog(infoRows);
+    if (!catalog.length) return [];
+    var packs = await Promise.all(
+      catalog.map(function (c) {
+        return fetchCsv(c.gid, sheetId, force)
+          .then(function (rows) {
+            return parseBoardTab(rows, c);
+          })
+          .catch(function (err) {
+            console.warn("manager-sheet: board " + c.id + " failed", err);
+            return parseBoardTab([], c);
+          });
+      })
+    );
+    return packs.filter(function (b) {
+      return b && b.id;
+    });
+  }
+
   async function load(opts) {
     opts = opts || {};
     var force = !!opts.force;
@@ -1134,12 +1252,19 @@
     if (!settings.sheetId && settings.catalog && settings.catalog.length) {
       settings.sheetId = settings.catalog[0].sheetId || "";
     }
+    var boards = [];
+    try {
+      boards = await loadBoards(settings.sheetId, force);
+    } catch (err) {
+      console.warn("manager-sheet: boards catalog failed", err);
+    }
     var payload = buildPayload(
       settings,
       styleRows,
       validationFields,
       motionStyles
     );
+    payload.boards = boards;
     var ms =
       (typeof performance !== "undefined" && performance.now
         ? performance.now()
