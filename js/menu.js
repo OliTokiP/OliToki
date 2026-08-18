@@ -940,12 +940,14 @@
 
   /**
    * On-disk wallpaper stems. Sheet tokens (`film`, `film.jpg`, `galaxy`,
-   * `galaxy-bg.jpg`) all collapse here. Extension and -sm are chosen later.
+   * `galaxy-bg.jpg`) all collapse here (names come from the bgs/ folders).
+   * Extension and -sm are chosen later.
    */
   const WALLPAPER_STEM = {
-    film: "assets/bgs/film",
-    galaxy: "assets/bgs/galaxy-bg",
-    "galaxy-bg": "assets/bgs/galaxy-bg",
+    film: "assets/bgs/Film/film-bg",
+    "film-bg": "assets/bgs/Film/film-bg",
+    galaxy: "assets/bgs/Galaxy/galaxy-bg",
+    "galaxy-bg": "assets/bgs/Galaxy/galaxy-bg",
   };
 
   function wallpaperStem(file) {
@@ -958,6 +960,9 @@
     } else if (base.indexOf("/") !== -1) {
       return null;
     }
+    // Folder layout (names from bgs/ subfolders): strip "Film/" or "Galaxy/"
+    // prefix so bare "film", "galaxy", or "*-bg" tokens (legacy or not) resolve.
+    base = base.replace(/^[^/]+\//, "");
     base = base
       .replace(/\.(webp|jpe?g|png|gif)$/i, "")
       .replace(/-sm$/i, "")
@@ -1227,7 +1232,7 @@
     "Before placing your order, please inform us if you have a food allergy.<br />" +
     "Consuming raw or undercooked food may lead to foodborne illness.";
 
-  const DEFAULT_BG_IMAGE = "assets/bgs/galaxy-bg.webp";
+  const DEFAULT_BG_IMAGE = "assets/bgs/Galaxy/galaxy-bg.webp";
   const BG_IMAGE_FOLDER = "assets/bgs";
   const STICKER_BODY_SRC = "assets/stickers/Sticker-Body.webp";
   const STICKER_SHADOW_SRC = "assets/stickers/Sticker-Shadow.webp";
@@ -1352,7 +1357,7 @@
     secondaryColor: "#ffffff",
     // Stage BG: color plate always on; image optional on top with FX
     bgColor: "#000000",
-    // null until Style sheet says otherwise — do not preload galaxy-bg
+    // null until Style sheet says otherwise — do not preload wallpaper
     bgImage: null,
     bgBlur: 0, // 0–1 (0 = filter:none, 1 = BG_BLUR_MAX_PX)
     bgBlendMode: "normal",
@@ -3512,8 +3517,8 @@
     ) {
       return null;
     }
-    // Support bare names (film / galaxy) and the sheet's current
-    // film.jpg / galaxy-bg.jpg tokens. Both map to the real file stem.
+    // Support bare names (film / galaxy) and legacy film.jpg / galaxy-bg.jpg tokens.
+    // Both map to the folder-based file stem. Code resolves -bg, webp, and -sm.
     const file = token.replace(/^\/+/, "");
     const stem = wallpaperStem(file);
     if (stem) return stem + ".webp";
@@ -4699,7 +4704,7 @@
 
     /**
      * Box Color Picker → solid hex or image surface.
-     * Supports Main/Secondary/Highlight/Special/Override fill + galaxy-bg.jpg etc.
+     * Supports Main/Secondary/Highlight/Special/Override fill + wallpaper tokens (film, galaxy) etc.
      */
     function boxSurfaceFrom(box, legacyBg) {
       const choice =
@@ -5579,7 +5584,7 @@
   }
 
   /**
-   * Apply box body overrides: solid theme colors or image (e.g. galaxy-bg.jpg).
+   * Apply box body overrides: solid theme colors or image (e.g. galaxy).
    * Solid text = Main/Secondary by contrast. Image text = Secondary (dark photos).
    */
   function applyBoxChrome() {
