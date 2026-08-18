@@ -133,7 +133,9 @@ jobs:
         if: steps.ship.outputs.dry != '1'
         run: |
           cp scripts/toki_server.py scripts/cloud-run/toki_server.py
-          cp scripts/cloud-run/Dockerfile.web Dockerfile
+          chmod +x scripts/cloud-run/stage-web.sh
+          scripts/cloud-run/stage-web.sh "$GITHUB_WORKSPACE/web-context"
+          echo "web context $(du -sh web-context | awk '{print $1}')"
 
       - id: auth
         if: steps.ship.outputs.dry != '1' && (steps.ship.outputs.ship == 'api' || steps.ship.outputs.ship == 'both' || (steps.ship.outputs.ship == 'website' && steps.ship.outputs.target == 'testing'))
@@ -166,7 +168,7 @@ jobs:
         with:
           service: toki-api-testing
           region: us-central1
-          source: .
+          source: web-context
           env_vars: TOKI_API_ONLY=0,TOKI_ENV=testing,TOKI_FORCE_SOURCE=alpha
           secrets: TOKI_SA_JSON=toki-sa-json:latest
           flags: --allow-unauthenticated --memory 1Gi --timeout 60 --max-instances 2 --port 8080

@@ -30,12 +30,18 @@ if [[ ! -f "$KEY" ]]; then
 fi
 
 cp "$ROOT/../toki_server.py" "$ROOT/toki_server.py"
-trap 'rm -f "$ROOT/toki_server.py" "$REPO/Dockerfile"' EXIT
+STAGE=""
+cleanup() {
+  rm -f "$ROOT/toki_server.py" "$REPO/Dockerfile"
+  if [[ -n "$STAGE" && -d "$STAGE" ]]; then rm -rf "$STAGE"; fi
+}
+trap cleanup EXIT
 if [[ "$MODE" == "web" ]]; then
-  cp "$ROOT/Dockerfile.web" "$REPO/Dockerfile"
-  SOURCE_DIR="$REPO"
+  STAGE="$("$ROOT/stage-web.sh")"
+  SOURCE_DIR="$STAGE"
   API_ONLY=0
   MEMORY="${TOKI_MEMORY:-1Gi}"
+  echo "web context $(du -sh "$STAGE" | awk '{print $1}') in $STAGE"
 else
   SOURCE_DIR="$ROOT"
   API_ONLY=1
