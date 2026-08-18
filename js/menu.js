@@ -635,6 +635,9 @@
     const wasBroken = !!(img.dataset && img.dataset.tokiBroken === "1");
     if (wasBroken) {
       if (img.id === "hero") img.style.visibility = "";
+      if (img.classList && img.classList.contains("galaxy-layer")) {
+        img.hidden = false;
+      }
       if (img.classList && img.classList.contains("family-portrait-bg-img")) {
         img.hidden = false;
       }
@@ -876,18 +879,46 @@
   }
 
   /**
+   * On-disk wallpaper stems. Sheet tokens (`film`, `film.jpg`, `galaxy`,
+   * `galaxy-bg.jpg`) all collapse here. Extension and -sm are chosen later.
+   */
+  const WALLPAPER_STEM = {
+    film: "assets/bgs/film",
+    galaxy: "assets/bgs/galaxy-bg",
+    "galaxy-bg": "assets/bgs/galaxy-bg",
+  };
+
+  function wallpaperStem(file) {
+    let base = String(file || "")
+      .trim()
+      .replace(/^\/+/, "");
+    if (!base) return null;
+    if (/^assets\/bgs\//i.test(base)) {
+      base = base.replace(/^assets\/bgs\//i, "");
+    } else if (base.indexOf("/") !== -1) {
+      return null;
+    }
+    base = base
+      .replace(/\.(webp|jpe?g|png|gif)$/i, "")
+      .replace(/-sm$/i, "")
+      .toLowerCase();
+    return WALLPAPER_STEM[base] || null;
+  }
+
+  /**
    * Wallpaper path for this window. 1080p / wall / modest viewports get
-   * galaxy-bg-sm (1920×1280) instead of the 3600×2400 master.
+   * the 1920×1280 -sm sibling instead of the 3600×2400 master.
    */
   function displayFriendlyBgPath(path) {
     if (!path) return path;
     const s = String(path);
-    if (/galaxy-bg-sm|galaxy-bg-xs/i.test(s)) return toWebpPath(s);
+    if (/galaxy-bg-xs/i.test(s)) return toWebpPath(s);
     const b = displayPixelBudget();
     const need = Math.max(b.w, b.h);
     const useSm = isPreviewWall() || need <= 1920 * 1.15;
-    if (useSm && /galaxy-bg/i.test(s)) {
-      return toWebpPath("assets/bgs/galaxy-bg-sm.jpg");
+    const stem = wallpaperStem(s);
+    if (stem) {
+      return toWebpPath(stem + (useSm ? "-sm.webp" : ".webp"));
     }
     return toWebpPath(s);
   }
@@ -3421,9 +3452,11 @@
     ) {
       return null;
     }
-    // Support bare names (e.g. "film") the same way item images do.
-    // If the sheet already specifies an extension (film.jpg), respect it.
+    // Support bare names (film / galaxy) and the sheet's current
+    // film.jpg / galaxy-bg.jpg tokens. Both map to the real file stem.
     const file = token.replace(/^\/+/, "");
+    const stem = wallpaperStem(file);
+    if (stem) return stem + ".webp";
     let path;
     let forceWebpPreference = false;
     if (file.indexOf("assets/") === 0 || file.indexOf("/") !== -1) {
@@ -3518,7 +3551,7 @@
     const token = (tokens[0] || s).replace(/^["']|["']$/g, "");
     const low = token.toLowerCase();
 
-    if (/\.(jpe?g|png|webp|gif)$/i.test(low)) {
+    if (/\.(jpe?g|png|webp|gif)$/i.test(low) || wallpaperStem(token)) {
       const path = parseBgImagePath(token);
       return {
         bgMode: "image",
@@ -4619,13 +4652,8 @@
         .replace(/^["']|["']$/g, "");
       const low = token.toLowerCase();
 
-      if (token && /\.(jpe?g|png|webp|gif)$/i.test(low)) {
-        const file = token.replace(/^\/+/, "");
-        const path = toWebpPath(
-          file.indexOf("assets/") === 0 || file.indexOf("food-pics/") === 0
-            ? file
-            : BG_IMAGE_FOLDER + "/" + file
-        );
+      if (token && (/\.(jpe?g|png|webp|gif)$/i.test(low) || wallpaperStem(token))) {
+        const path = displayFriendlyBgPath(parseBgImagePath(token));
         // Galaxy-style photos are dark → Secondary (white) text reads best
         return {
           mode: "image",
