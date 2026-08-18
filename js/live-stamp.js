@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "d697cd8",
-  "hashFull": "d697cd80c2f375477fae3b8ef8e7d9455a69f3e4",
-  "subject": "QA: 2026-08-17 Broken image link on ablesign (pass 2)"
+  "hash": "0375e5a",
+  "hashFull": "0375e5afbd0b9ec35af1a52bcbd851d9b24f4ea1",
+  "subject": "QA: 2026-08-17 Make drafts editable (pass 3)"
 };
