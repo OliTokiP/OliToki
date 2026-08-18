@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "ffdedb3",
-  "hashFull": "ffdedb3b67221fa5915ee92683d93bb46bf2b701",
-  "subject": "QA: 2026-08-17 Make drafts editable (pass 4)"
+  "hash": "70c2acc",
+  "hashFull": "70c2acce293b7bf4d6a18da5b75fd9c46560089d",
+  "subject": "QA: 2026-08-17 Wallpaper list should say film and galaxy (pass 1)"
 };
