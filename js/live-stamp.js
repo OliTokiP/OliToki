@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "3a939fd",
-  "hashFull": "3a939fd39f2fc06a0ae9c7a55363e5c3f662caeb",
-  "subject": "checkpoint 2026-08-17 23:46"
+  "hash": "23292e3",
+  "hashFull": "23292e3b28833ca408d80d9beeee30fe30e6a418",
+  "subject": "QA: 2026-08-17 Make drafts editable (pass 2)"
 };
