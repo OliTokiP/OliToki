@@ -1142,6 +1142,141 @@ class SheetsBackend:
     def write_theme(self, theme: str, sheet_id: str | None = None) -> dict:
         return self.write_style({"theme": theme}, sheet_id)
 
+    def _tab_title_for_gid(self, spreadsheet_id: str, gid: str) -> str:
+        want = str(gid or "").strip()
+        if not want:
+            raise ValueError("missing gid")
+        with self._api_lock:
+            meta = (
+                self.sheets.spreadsheets()
+                .get(
+                    spreadsheetId=spreadsheet_id,
+                    fields="sheets.properties(sheetId,title)",
+                )
+                .execute()
+            )
+        for sh in meta.get("sheets") or []:
+            p = sh.get("properties") or {}
+            if str(p.get("sheetId")) == want:
+                title = str(p.get("title") or "").strip()
+                if title:
+                    return title
+        raise KeyError("No sheet with gid=" + want)
+
+    @staticmethod
+    def _as_bool01(raw) -> str:
+        s = str(raw if raw is not None else "").strip().lower()
+        if s in ("1", "yes", "y", "true", "on"):
+            return "1"
+        if s in ("0", "no", "n", "false", "off"):
+            return "0"
+        raise ValueError("invalid yes/no")
+
+    @staticmethod
+    def _as_presentation_mode(raw) -> str:
+        s = re.sub(r"[^a-z0-9]+", "", str(raw or "").lower())
+        if "encore" in s:
+            return "encore"
+        if "slide" in s:
+            return "slideshow"
+        if "ken" in s or "burn" in s:
+            return "ken burns"
+        raise ValueError("invalid presentation")
+
+    def write_board(self, body: dict, sheet_id: str | None = None) -> dict:
+        """Write Board 1–3 Settings cells by field name (row under Settings)."""
+        sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
+        gid = str(body.get("gid") or "").strip()
+        title = self._tab_title_for_gid(sid, gid)
+        safe_title = "'" + title.replace("'", "''") + "'"
+        t0 = time.time()
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=sid,
+                    range=safe_title + "!A1:Z12",
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        rows = result.get("values") or []
+        _header_idx, data_idx, cols = self._settings_layout(rows)
+        field_a1 = {
+            "menutitle": self._a1_for(cols, ["menutitle", "title"], data_idx, 0),
+            "familyportrait": self._a1_for(cols, ["familyportrait"], data_idx, 1),
+            "presentationmode": self._a1_for(
+                cols, ["presentationmode", "presentationstyle"], data_idx, 2
+            ),
+            "includedescriptions": self._a1_for(
+                cols,
+                ["includedescriptions", "includeitemdescriptions"],
+                data_idx,
+                6,
+            ),
+        }
+        values: dict[str, str] = {}
+        if "menuTitle" in body or "title" in body:
+            name = str(body.get("menuTitle") or body.get("title") or "").strip()
+            if not name:
+                raise ValueError("missing menuTitle")
+            values["menutitle"] = name
+        if "familyPortrait" in body:
+            values["familyportrait"] = self._as_bool01(body.get("familyPortrait"))
+        if "presentation" in body or "presentationMode" in body:
+            values["presentationmode"] = self._as_presentation_mode(
+                body.get("presentation") or body.get("presentationMode")
+            )
+        if "includeDescriptions" in body:
+            values["includedescriptions"] = self._as_bool01(
+                body.get("includeDescriptions")
+            )
+        if not values:
+            raise ValueError("nothing to write")
+        data = [
+            {
+                "range": safe_title + "!" + field_a1[fold],
+                "values": [[val]],
+            }
+            for fold, val in values.items()
+            if fold in field_a1
+        ]
+        with self._api_lock:
+            updated = (
+                self.sheets.spreadsheets()
+                .values()
+                .batchUpdate(
+                    spreadsheetId=sid,
+                    body={
+                        "valueInputOption": "USER_ENTERED",
+                        "data": data,
+                    },
+                )
+                .execute()
+            )
+        _flush_data_caches()
+        ranges = [
+            (u.get("updatedRange") or "")
+            for u in (updated.get("responses") or [])
+        ]
+        _log(
+            f"board write {source_name or sid} gid={gid} {values} "
+            f"cells={updated.get('totalUpdatedCells')} "
+            f"({time.time() - t0:.2f}s)"
+        )
+        return {
+            "ok": True,
+            "wroteBoard": True,
+            "gid": gid,
+            "tab": title,
+            "values": values,
+            "range": ", ".join([r for r in ranges if r]),
+            "sheetId": sid,
+            "sourceName": source_name,
+        }
+
 
 def make_handler(
     api: dict, root: Path, bind: str = "127.0.0.1", api_only: bool = False
@@ -1222,6 +1357,34 @@ def make_handler(
                     self._json(404, {"error": str(e)})
                 except Exception as e:
                     _log(f"style write error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
+                return
+            if parsed.path == "/api/manager/board":
+                backend = self._backend()
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                body, err = self._read_json_body(16_384)
+                if err:
+                    self._json(400, err)
+                    return
+                sheet_id = str(body.get("sheetId") or "").strip()
+                try:
+                    result = backend.write_board(body, sheet_id or None)
+                    self._json(200, result)
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except KeyError as e:
+                    self._json(404, {"error": str(e)})
+                except Exception as e:
+                    _log(f"board write error: {e}")
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return

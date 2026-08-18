@@ -3,7 +3,9 @@
  * Draft theme tokens restyle the app immediately. Confirm-on-back Yes writes
  * Theme Selector, Background (BG Color / Pattern / Wallpaper), and the
  * speed pills (scroll + presentation) on the selected catalog
- * (via TOKI_MANAGER_SHEET.writeStyle).
+ * (via TOKI_MANAGER_SHEET.writeStyle). Board Yes writes Menu Title,
+ * Family Portrait, Presentation Mode, and Include Descriptions?
+ * (via TOKI_MANAGER_SHEET.writeBoard). Inventory order stays local.
  */
 (function () {
   "use strict";
@@ -36,6 +38,7 @@
     lastSheet: null,
     boardDraft: null,
     boardCommitted: null,
+    lastBoardSnap: {},
     itemDragging: false,
   };
 
@@ -548,6 +551,7 @@
     if (!state.boardDraft || state.boardDraft.id !== id) {
       state.boardDraft = clone(src);
       state.boardCommitted = clone(src);
+      if (!state.lastBoardSnap[id]) rememberBoardSnap(src);
     }
     return state.boardDraft;
   }
@@ -566,6 +570,35 @@
       state.boardCommitted &&
       !eq(state.boardDraft, state.boardCommitted)
     );
+  }
+
+  function boardSettingsSnap(b) {
+    b = b || {};
+    return {
+      menuTitle: String(b.menuTitle || b.title || ""),
+      familyPortrait: b.familyPortrait === "yes" ? "yes" : "no",
+      presentation: b.presentation || "kenburns",
+      includeDescriptions: b.includeDescriptions === "yes" ? "yes" : "no",
+    };
+  }
+
+  function rememberBoardSnap(b) {
+    if (!b || !b.id) return;
+    state.lastBoardSnap[b.id] = boardSettingsSnap(b);
+  }
+
+  function applyBoardToCatalog(b) {
+    if (!b || !b.id) return;
+    var i;
+    for (i = 0; i < D.boards.length; i++) {
+      if (D.boards[i].id !== b.id) continue;
+      D.boards[i].menuTitle = b.menuTitle || b.title;
+      D.boards[i].title = b.menuTitle || b.title;
+      D.boards[i].familyPortrait = b.familyPortrait;
+      D.boards[i].presentation = b.presentation;
+      D.boards[i].includeDescriptions = b.includeDescriptions;
+      return;
+    }
   }
 
   function boardRows() {
@@ -1585,7 +1618,16 @@
     };
   }
 
-  function yesToast(needed, wrote, fb) {
+  function yesToast(needed, wrote, fb, kind) {
+    if (kind === "board") {
+      if (needed) {
+        if (wrote && wrote.ok) {
+          return "Board saved to " + (wrote.sourceName || "sheet");
+        }
+        return "Could not write board to sheet — saved for this session";
+      }
+      return "Saved for this session";
+    }
     if (needed) {
       if (wrote && wrote.ok) {
         var src = wrote.sourceName || "sheet";
@@ -1664,9 +1706,57 @@
     });
   }
 
+  function persistBoardWrite() {
+    var b = state.boardDraft;
+    if (!b || b.kind === "announcements") {
+      return Promise.resolve({ needed: false, wrote: null });
+    }
+    var sheet = window.TOKI_MANAGER_SHEET;
+    var next = boardSettingsSnap(b);
+    var prev = state.lastBoardSnap[b.id] || boardSettingsSnap(state.boardCommitted || {});
+    var payload = { gid: b.gid || "" };
+    var src = dataSource();
+    payload.sheetId =
+      (src && src.sheetId) ||
+      (state.lastSheet && state.lastSheet.sheetId) ||
+      "";
+    var changed = false;
+    if (next.menuTitle !== prev.menuTitle) {
+      payload.menuTitle = next.menuTitle;
+      changed = true;
+    }
+    if (next.familyPortrait !== prev.familyPortrait) {
+      payload.familyPortrait = next.familyPortrait;
+      changed = true;
+    }
+    if (next.presentation !== prev.presentation) {
+      payload.presentation = next.presentation;
+      changed = true;
+    }
+    if (next.includeDescriptions !== prev.includeDescriptions) {
+      payload.includeDescriptions = next.includeDescriptions;
+      changed = true;
+    }
+    if (!changed) return Promise.resolve({ needed: false, wrote: null });
+    if (!sheet || !sheet.writeBoard) {
+      return Promise.resolve({
+        needed: true,
+        wrote: { ok: false, error: "Board write not available" },
+      });
+    }
+    return sheet.writeBoard(payload).then(function (wrote) {
+      if (wrote && wrote.ok) {
+        rememberBoardSnap(b);
+        applyBoardToCatalog(b);
+      }
+      return { needed: true, wrote: wrote };
+    });
+  }
+
   function confirmChoice(val) {
     if (val === "yes") {
-      if (state.screen === "board" && state.boardDraft) {
+      var onBoard = state.screen === "board" && state.boardDraft;
+      if (onBoard) {
         state.boardCommitted = clone(state.boardDraft);
       } else {
         state.committed = clone(state.draft);
@@ -1675,24 +1765,38 @@
       var next = state.pendingLeave;
       state.pendingLeave = null;
       renderDialog();
-      persistStyleWrite()
-        .then(function (styleResult) {
+      var persist = onBoard ? persistBoardWrite() : persistStyleWrite();
+      persist
+        .then(function (result) {
+          if (onBoard) {
+            return {
+              needed: !!(result && result.needed),
+              wrote: result && result.wrote,
+              fb: false,
+              kind: "board",
+            };
+          }
           return persistFallback().then(function (fb) {
             return {
-              needed: !!(styleResult && styleResult.needed),
-              wrote: styleResult && styleResult.wrote,
+              needed: !!(result && result.needed),
+              wrote: result && result.wrote,
               fb: fb,
+              kind: "style",
             };
           });
         })
         .then(function (out) {
-          toast(yesToast(out.needed, out.wrote, out.fb));
+          toast(yesToast(out.needed, out.wrote, out.fb, out.kind));
           if (next) next();
           else renderAll();
         })
         .catch(function (err) {
           console.warn("Menu Manager save failed", err);
-          toast("Could not write style to sheet — saved for this session");
+          toast(
+            onBoard
+              ? "Could not write board to sheet — saved for this session"
+              : "Could not write style to sheet — saved for this session"
+          );
           if (next) next();
           else renderAll();
         });
@@ -2604,6 +2708,16 @@
     }
     if (payload.boards && payload.boards.length) {
       D.boards = payload.boards;
+      var bi;
+      for (bi = 0; bi < payload.boards.length; bi++) {
+        var pack = payload.boards[bi];
+        var keepDirty =
+          state.screen === "board" &&
+          boardDirty() &&
+          state.boardDraft &&
+          state.boardDraft.id === pack.id;
+        if (!keepDirty) rememberBoardSnap(pack);
+      }
       if (state.screen === "board" && state.boardId && !boardDirty()) {
         var fresh = find(D.boards, resolveBoardId(state.boardId));
         if (fresh) {
@@ -2789,10 +2903,24 @@
       renderDialog();
       if (state.boardDraft) state.boardCommitted = clone(state.boardDraft);
       var href = state.boardDraft && state.boardDraft.permalink;
-      if (href) {
-        window.open(href, "_blank", "noopener");
-        toast("Opened permalink (sheet overwrite not wired yet)");
-      } else toast("No permalink on this board");
+      persistBoardWrite().then(function (out) {
+        if (href) {
+          window.open(href, "_blank", "noopener");
+          if (out && out.needed && out.wrote && out.wrote.ok) {
+            toast("Board saved — opened permalink");
+          } else if (out && out.needed) {
+            toast("Could not write board — opened permalink");
+          } else {
+            toast("Opened permalink");
+          }
+        } else toast("No permalink on this board");
+      }).catch(function (err) {
+        console.warn("Menu Manager permalink save failed", err);
+        if (href) {
+          window.open(href, "_blank", "noopener");
+          toast("Could not write board — opened permalink");
+        } else toast("No permalink on this board");
+      });
     } else if (act === "board-title-cancel") {
       state.dialog = null;
       renderDialog();

@@ -1,7 +1,7 @@
 # OliToki Menu Manager
 
 **Last updated:** 2026-08-17  
-**Status:** mobile layout + sheet read + Theme Selector write (A3)
+**Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
 
@@ -72,7 +72,7 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Board editor (1–3):** hamburger handles drag-reorder Menu Items in the local draft only (no inventory sheet write). Confirm-on-back still Yes / No / Keep Editing. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
+**Board editor (1–3):** hamburger handles drag-reorder Menu Items in the local draft only (no inventory sheet write). Confirm-on-back Yes writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), and **Include Descriptions?** (0/1) on that board tab (`POST /api/manager/board`). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
 
 **Number pills (BG Scroll Speed / Presentation Speed):** read a validator in the Settings **header label** (same public CSV as themes). House style is the cute form already on Restaurant Copy:
 
@@ -93,10 +93,10 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `manager.html` | Shell |
 | `css/manager.css` | Layout + theme tokens |
 | `js/manager-data.js` | Offline catalogs, defaults, asset paths |
-| `js/manager-sheet.js` | Settings + Style and Theme read; Theme + Background write via `/api/manager/style` |
+| `js/manager-sheet.js` | Settings + Style and Theme + board tab read; Theme + Background write via `/api/manager/style`; board Settings via `/api/manager/board` |
 | `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
-| `js/manager.js` | Router, draft/commit, preview; Yes writes Theme + Background |
-| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style` |
+| `js/manager.js` | Router, draft/commit, preview; Yes writes Theme + Background or board Settings |
+| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board` |
 | `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme + Background use the server adapter (`Theme Selector` / A3, `BG Color` / B3, `BG Pattern` / C3, `BG Wallpaper` / D3). Number options should come from sheet dataValidation when present, not hard-coded spans.
@@ -105,8 +105,8 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 
 ## 6. Not in this prototype
 
-- Writes for presentation / Encore, OliToki Menu Settings, or Data Source
-- Board / box / announcement item editors (inventory drag is local-feel only; no row write)
+- Writes for Style presentation / Encore knobs, OliToki Menu Settings, or Data Source
+- Board inventory row reorder (drag is local-feel only; no row write)
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 
 System Font applies to **this app** (`html[data-system-font]`). Board type still follows `css/system-font.css` on the TV pages.

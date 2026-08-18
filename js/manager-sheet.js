@@ -4,6 +4,8 @@
  * Field-name draft only (no column indexes in the UI). Confirm posts
  * theme + background to /api/manager/style; the server maps Theme
  * Selector (A3) and BG Color / Pattern / Wallpaper (B3 / C3 / D3).
+ * Board Settings Yes posts /api/manager/board (Menu Title, Family Portrait,
+ * Presentation Mode, Include Descriptions?) — field names, not columns.
  * Switching to a color writes none into C3 and D3 (pattern wins on boards).
  * Number pills follow a validator in the Settings header — same CSV
  * Pages already reads. House style:
@@ -1390,12 +1392,44 @@
     });
   }
 
+  async function writeBoard(payload) {
+    payload = payload || {};
+    var useProxy = await detectProxy();
+    if (!useProxy) {
+      return { ok: false, error: "Needs local Menu Manager server" };
+    }
+    try {
+      var res = await fetch(apiUrl("/api/manager/board"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      var j = {};
+      try {
+        j = await res.json();
+      } catch (e) {
+        j = {};
+      }
+      if (!res.ok || !j.ok) {
+        return {
+          ok: false,
+          error: (j && j.error) || ("HTTP " + res.status),
+        };
+      }
+      return j;
+    } catch (err) {
+      console.warn("manager-sheet: board write failed", err);
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  }
+
   global.TOKI_MANAGER_SHEET = {
     load: load,
     loadFallback: loadFallback,
     saveFallback: saveFallback,
     writeStyle: writeStyle,
     writeTheme: writeTheme,
+    writeBoard: writeBoard,
     styleGid: STYLE_GID,
   };
 })(window);
