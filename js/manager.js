@@ -866,11 +866,6 @@
       d.presentationSpeed,
       "presentation"
     );
-    html += row({
-      key: "limitHeavyFilters",
-      label: "Limit Heavy Filters to 30FPS",
-      value: labelOf(D.yesNo, d.limitHeavyFilters),
-    });
     return html;
   }
 
