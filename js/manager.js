@@ -2374,6 +2374,25 @@
     var wpp = preview.querySelector(".preview-wallpaper");
     if (pat) pat.hidden = encore || d.background !== "pattern";
     if (wpp) wpp.hidden = encore || d.background !== "wallpaper";
+    // Sync wallpaper image srcs from draft so the selector immediately updates
+    // the mini-display preview (both crossfade layers) before any Save.
+    // wallpaperSrc/wallpaperFallback always return the -sm variant for preview.
+    if (wpp) {
+      var wpSrc = wallpaperSrc();
+      var wpFb = wallpaperFallback();
+      var wpImgs = wpp.querySelectorAll(".preview-wp-img");
+      for (var wi = 0; wi < wpImgs.length; wi++) {
+        var img = wpImgs[wi];
+        if (wpSrc && img.getAttribute("src") !== wpSrc) {
+          img.setAttribute("src", wpSrc);
+        }
+        if (wpFb) {
+          img.setAttribute("data-fallback", wpFb);
+        } else if (img.hasAttribute("data-fallback")) {
+          img.removeAttribute("data-fallback");
+        }
+      }
+    }
     if (pat && !pat.hidden) {
       var track = pat.querySelector(".preview-pattern-track");
       if (track) {
