@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "f5c0d4b",
-  "hashFull": "f5c0d4b6fa10f6f00911250a10599d4f579e7680",
-  "subject": "QA: 2026-08-18 Add Piggyback button to closed tickets. (pass 1)"
+  "hash": "1b33ed6",
+  "hashFull": "1b33ed65491502919819a4c013df051f63142730",
+  "subject": "QA: 2026-08-18 Permalink in menu board editors should copy link to clipboard (pass 1)"
 };

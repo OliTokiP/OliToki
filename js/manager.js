@@ -336,6 +336,18 @@
     });
   }
 
+  function copyPermalink() {
+    var b = state.boardDraft || ensureBoardDraft();
+    var href = b && b.permalink;
+    if (!href) {
+      toast("No permalink on this board");
+      return;
+    }
+    copyText(href).then(function (ok) {
+      toast(ok ? "Copied permalink" : "Could not copy permalink");
+    });
+  }
+
   function statusBlock() {
     var t = currentTheme();
     return (
@@ -689,7 +701,7 @@
       });
     }
     html +=
-      '<button class="row" type="button" data-act="open-permalink">' +
+      '<button class="row" type="button" data-act="copy-permalink">' +
       '<span class="row-label">Permalink</span>' +
       '<span class="row-value row-value-url">' +
       escapeHtml(b.permalink || "—") +
@@ -1410,15 +1422,6 @@
           inp.select();
         }
       }, 30);
-    } else if (state.dialog === "open-permalink") {
-      els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Save board and open permalink?</h2>" +
-        "<p class=\"tiny\">This overwrites the live sheet for this board, then opens the permalink.</p>" +
-        '<div class="dialog-actions">' +
-        '<button class="btn-primary" type="button" data-act="permalink-yes">Yes</button>' +
-        '<button class="btn-primary" type="button" data-act="permalink-no">No</button>' +
-        "</div></div>";
     } else if (state.dialog === "create") {
       els.dialog.innerHTML =
         '<div class="dialog-card" role="dialog">' +
@@ -3072,56 +3075,8 @@
       openSheet();
     } else if (act === "open-settings-sheet") {
       window.open(D.settingsSheetUrl, "_blank", "noopener");
-    } else if (act === "open-permalink") {
-      state.dialog = "open-permalink";
-      renderDialog();
-    } else if (act === "permalink-no") {
-      state.dialog = null;
-      renderDialog();
-    } else if (act === "permalink-yes") {
-      state.dialog = null;
-      renderDialog();
-      var permaPrev = state.boardDraft
-        ? state.lastBoardSnap[state.boardDraft.id] ||
-          boardSettingsSnap(state.boardCommitted)
-        : null;
-      var permaStylePrev = styleSnap(state.committed);
-      if (state.lastSheet && state.lastSheet.style) {
-        permaStylePrev = Object.assign({}, permaStylePrev, state.lastSheet.style);
-      }
-      if (state.boardDraft) state.boardCommitted = clone(state.boardDraft);
-      state.committed = clone(state.draft);
-      var href = state.boardDraft && state.boardDraft.permalink;
-      Promise.all([
-        persistBoardWrite(permaPrev),
-        persistStyleWrite(permaStylePrev),
-      ]).then(function (pair) {
-        var out = {
-          needed: !!(pair[0] && pair[0].needed) || !!(pair[1] && pair[1].needed),
-          wrote: Object.assign(
-            {},
-            (pair[1] && pair[1].wrote) || {},
-            (pair[0] && pair[0].wrote) || {}
-          ),
-        };
-        if (pair[0] && pair[0].wrote && pair[0].wrote.ok) out.wrote.wroteBoard = true;
-        if (href) {
-          window.open(href, "_blank", "noopener");
-          if (out && out.needed && out.wrote && out.wrote.ok) {
-            toast("Board saved — opened permalink");
-          } else if (out && out.needed) {
-            toast("Could not write board — opened permalink");
-          } else {
-            toast("Opened permalink");
-          }
-        } else toast("No permalink on this board");
-      }).catch(function (err) {
-        console.warn("Menu Manager permalink save failed", err);
-        if (href) {
-          window.open(href, "_blank", "noopener");
-          toast("Could not write board — opened permalink");
-        } else toast("No permalink on this board");
-      });
+    } else if (act === "copy-permalink") {
+      copyPermalink();
     } else if (act === "board-title-cancel") {
       state.dialog = null;
       renderDialog();
