@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "eb42d07",
-  "hashFull": "eb42d075e15f1a9a6cd26bfa2769dad2c0e0cce7",
-  "subject": "QA: 2026-08-17 Add individual board settings (pass 6)"
+  "hash": "f5c0d4b",
+  "hashFull": "f5c0d4b6fa10f6f00911250a10599d4f579e7680",
+  "subject": "QA: 2026-08-18 Add Piggyback button to closed tickets. (pass 1)"
 };
