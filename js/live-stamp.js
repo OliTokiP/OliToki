@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5f9faa2",
-  "hashFull": "5f9faa2a8df7467435d1a3668c593efdd1923f32",
-  "subject": "Deployer: record testing Cloud Run URL"
+  "hash": "1d4dbf3",
+  "hashFull": "1d4dbf33395931fe88d27539e23b2c51efcc5e36",
+  "subject": "Cloud Run testing: honor TOKI_API_ONLY=0 so HTML is served"
 };

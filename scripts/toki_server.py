@@ -1891,11 +1891,16 @@ def make_handler(
 
 
 def _hosted() -> bool:
-    return bool(
-        os.environ.get("PORT")
-        or os.environ.get("K_SERVICE")
-        or os.environ.get("TOKI_API_ONLY") in ("1", "true", "yes")
-    )
+    return bool(os.environ.get("PORT") or os.environ.get("K_SERVICE"))
+
+
+def _api_only_default() -> bool:
+    raw = (os.environ.get("TOKI_API_ONLY") or "").strip().lower()
+    if raw in ("0", "false", "no"):
+        return False
+    if raw in ("1", "true", "yes"):
+        return True
+    return bool(os.environ.get("K_SERVICE"))
 
 
 def main():
@@ -1933,8 +1938,8 @@ def main():
     ap.add_argument(
         "--api-only",
         action="store_true",
-        default=_hosted(),
-        help="API only (no static files). Default on Cloud Run / TOKI_API_ONLY.",
+        default=_api_only_default(),
+        help="API only (no static files). Default on Cloud Run unless TOKI_API_ONLY=0.",
     )
     args = ap.parse_args()
 
