@@ -605,6 +605,12 @@
     );
   }
 
+  function itemsSnap(b) {
+    return ((b && b.items) || []).map(function (it) {
+      return { name: String((it && it.name) || ""), row: it && it.row ? it.row : 0 };
+    });
+  }
+
   function boardSettingsSnap(b) {
     b = b || {};
     return {
@@ -612,6 +618,7 @@
       familyPortrait: b.familyPortrait === "yes" ? "yes" : "no",
       presentation: b.presentation || "kenburns",
       includeDescriptions: b.includeDescriptions === "yes" ? "yes" : "no",
+      items: itemsSnap(b),
     };
   }
 
@@ -630,6 +637,7 @@
       D.boards[i].familyPortrait = b.familyPortrait;
       D.boards[i].presentation = b.presentation;
       D.boards[i].includeDescriptions = b.includeDescriptions;
+      if (b.items) D.boards[i].items = clone(b.items);
       return;
     }
   }
@@ -1704,6 +1712,9 @@
           wrote.wroteEncore)
       );
       if (boardOk && styleOk) return "Board and Style saved to " + src;
+      if (boardOk && wrote && wrote.wroteInventory) {
+        return "Board items saved to " + src;
+      }
       if (boardOk) return "Board saved to " + src;
       if (styleOk) return "Style saved to " + src;
       return "Could not write to sheet — saved for this session";
@@ -1832,6 +1843,15 @@
       payload.includeDescriptions = next.includeDescriptions;
       changed = true;
     }
+    var nextItems = next.items || itemsSnap(b);
+    var prevItems = (prev && prev.items) || [];
+    var itemsChanged =
+      JSON.stringify(nextItems.map(function (it) { return it.name; })) !==
+      JSON.stringify(prevItems.map(function (it) { return it.name; }));
+    if (itemsChanged) {
+      payload.items = nextItems;
+      changed = true;
+    }
     if (!changed) return Promise.resolve({ needed: false, wrote: null });
     if (!sheet || !sheet.writeBoard) {
       return Promise.resolve({
@@ -1841,6 +1861,12 @@
     }
     return sheet.writeBoard(payload).then(function (wrote) {
       if (wrote && wrote.ok) {
+        if (wrote.itemRows && wrote.itemRows.length && b.items) {
+          b.items = wrote.itemRows;
+          if (state.boardCommitted && state.boardCommitted.id === b.id) {
+            state.boardCommitted.items = clone(wrote.itemRows);
+          }
+        }
         rememberBoardSnap(b);
         applyBoardToCatalog(b);
       } else {

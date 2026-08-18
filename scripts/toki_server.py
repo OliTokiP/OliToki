@@ -1255,12 +1255,89 @@ class SheetsBackend:
             return "ken burns"
         raise ValueError("invalid presentation")
 
+    def _inventory_data(self, rows: list):
+        inv_label = -1
+        for i, row in enumerate(rows or []):
+            a = _cell(row, 0).strip().lower()
+            if a == "inventory" or a.startswith("inventory"):
+                inv_label = i
+                break
+        if inv_label < 0 or inv_label + 2 > len(rows or []):
+            raise ValueError("no inventory block")
+        header_idx = inv_label + 1
+        data_start = header_idx + 1
+        headers = list((rows[header_idx] if header_idx < len(rows) else []) or [])
+        data = []
+        for i in range(data_start, len(rows or [])):
+            row = list(rows[i] or [])
+            name = _cell(row, 0)
+            if not name:
+                continue
+            fold = re.sub(r"[^a-z0-9]+", "", name.lower())
+            if fold in ("settings", "inventory"):
+                break
+            data.append((i, row))
+        if not data:
+            raise ValueError("inventory is empty")
+        return header_idx, data_start, headers, data
+
+    def _reorder_inventory(self, rows: list, items: list) -> tuple[list, int, list]:
+        _header_idx, data_start, headers, data = self._inventory_data(rows)
+        by_excel = {idx + 1: vals for idx, vals in data}
+        by_name: dict[str, list] = {}
+        for _idx, vals in data:
+            n = _cell(vals, 0)
+            if n and n not in by_name:
+                by_name[n] = vals
+        used: set[int] = set()
+        ordered: list[list] = []
+        item_rows: list[dict] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = str(it.get("name") or "").strip()
+            vals = None
+            raw_row = it.get("row")
+            if raw_row not in (None, ""):
+                try:
+                    vals = by_excel.get(int(raw_row))
+                except (TypeError, ValueError):
+                    vals = None
+            if vals is None and name:
+                vals = by_name.get(name)
+            if vals is None:
+                continue
+            key = id(vals)
+            if key in used:
+                continue
+            used.add(key)
+            ordered.append(vals)
+        leftovers = [vals for _idx, vals in data if id(vals) not in used]
+        block = ordered + leftovers
+        width = 1
+        for r in [headers] + block:
+            if len(r) > width:
+                width = len(r)
+        padded = []
+        for r in block:
+            row = list(r)
+            if len(row) < width:
+                row.extend([""] * (width - len(row)))
+            padded.append(row)
+        for i, vals in enumerate(padded):
+            item_rows.append(
+                {"name": _cell(vals, 0), "row": data_start + i + 1}
+            )
+        return padded, data_start, item_rows
+
     def write_board(self, body: dict, sheet_id: str | None = None) -> dict:
-        """Write Board 1–3 Settings cells by field name (row under Settings)."""
+        """Write Board 1–3 Settings cells and/or inventory row order."""
         sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
         gid = str(body.get("gid") or "").strip()
         title = self._tab_title_for_gid(sid, gid)
         safe_title = "'" + title.replace("'", "''") + "'"
+        items = body.get("items")
+        want_inv = isinstance(items, list) and len(items) > 0
         t0 = time.time()
         with self._api_lock:
             result = (
@@ -1268,7 +1345,7 @@ class SheetsBackend:
                 .values()
                 .get(
                     spreadsheetId=sid,
-                    range=safe_title + "!A1:Z12",
+                    range=safe_title + ("!A1:Z80" if want_inv else "!A1:Z12"),
                     majorDimension="ROWS",
                     valueRenderOption="FORMATTED_VALUE",
                 )
@@ -1305,8 +1382,6 @@ class SheetsBackend:
             values["includedescriptions"] = self._as_bool01(
                 body.get("includeDescriptions")
             )
-        if not values:
-            raise ValueError("nothing to write")
         data = [
             {
                 "range": safe_title + "!" + field_a1[fold],
@@ -1315,6 +1390,21 @@ class SheetsBackend:
             for fold, val in values.items()
             if fold in field_a1
         ]
+        item_rows = None
+        wrote_inv = False
+        if want_inv:
+            padded, data_start, item_rows = self._reorder_inventory(rows, items)
+            end_col = self._col_letters(max(len(padded[0]) - 1, 0))
+            end_row = data_start + len(padded)
+            data.append(
+                {
+                    "range": f"{safe_title}!A{data_start + 1}:{end_col}{end_row}",
+                    "values": padded,
+                }
+            )
+            wrote_inv = True
+        if not data:
+            raise ValueError("nothing to write")
         with self._api_lock:
             updated = (
                 self.sheets.spreadsheets()
@@ -1335,15 +1425,17 @@ class SheetsBackend:
         ]
         _log(
             f"board write {source_name or sid} gid={gid} {values} "
-            f"cells={updated.get('totalUpdatedCells')} "
+            f"inv={wrote_inv} cells={updated.get('totalUpdatedCells')} "
             f"({time.time() - t0:.2f}s)"
         )
         return {
             "ok": True,
-            "wroteBoard": True,
+            "wroteBoard": bool(values) or wrote_inv,
+            "wroteInventory": wrote_inv,
             "gid": gid,
             "tab": title,
             "values": values,
+            "itemRows": item_rows,
             "range": ", ".join([r for r in ranges if r]),
             "sheetId": sid,
             "sourceName": source_name,

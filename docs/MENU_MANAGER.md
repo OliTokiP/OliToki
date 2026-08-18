@@ -72,7 +72,7 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Board editor (1–3):** hamburger handles drag-reorder Menu Items in the local draft only (no inventory sheet write). Confirm-on-back Yes writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), and **Include Descriptions?** (0/1) on that board tab (`POST /api/manager/board`). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
+**Board editor (1–3):** hamburger handles drag-reorder Menu Items. Confirm-on-back Yes writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), **Include Descriptions?** (0/1), and — if the list moved — the **Inventory** block as whole rows in the new order (`POST /api/manager/board`). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
 
 **Number pills (BG Scroll Speed / Presentation Speed):** read a validator in the Settings **header label** (same public CSV as themes). House style is the cute form already on Restaurant Copy:
 
@@ -106,7 +106,6 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 ## 6. Not in this prototype
 
 - Writes for OliToki Menu Settings or Data Source
-- Board inventory row reorder (drag is local-feel only; no row write)
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 
 System Font applies to **this app** (`html[data-system-font]`). Board type still follows `css/system-font.css` on the TV pages.
