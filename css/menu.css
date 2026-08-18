@@ -585,11 +585,13 @@ body.presentation-static #veggies-box .wrap-item.active.hl-on {
   user-select: none;
 }
 
-/* Failed / empty Plate Image: no UA broken-image glyph (sits on the Logo). */
+/* Never paint the UA broken-image glyph (AbleSign ignores visibility:hidden).
+   Empty spot until the bitmap has pixels; failed src is stripped in JS. */
 #hero:not([src]),
 #hero[src=""],
-img[data-toki-broken="1"] {
-  visibility: hidden !important;
+img[data-toki-broken="1"],
+img.toki-await-decode:not(.toki-decoded) {
+  display: none !important;
 }
 
 /*

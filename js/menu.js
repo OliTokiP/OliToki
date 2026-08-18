@@ -630,14 +630,33 @@
     return _brokenRasters.slice();
   }
 
+  function markRasterDecoded(img) {
+    if (!img || img.tagName !== "IMG") return;
+    if (img.naturalWidth > 0) {
+      img.classList.add("toki-decoded");
+      img.removeAttribute("data-toki-pending");
+    }
+  }
+
+  function armRasterUntilDecode(img) {
+    if (!img || img.tagName !== "IMG") return;
+    img.classList.add("toki-await-decode");
+    if (img.complete && img.naturalWidth > 0) {
+      markRasterDecoded(img);
+    } else {
+      img.classList.remove("toki-decoded");
+    }
+    if (img.dataset && img.dataset.tokiAwaitBound === "1") return;
+    if (img.dataset) img.dataset.tokiAwaitBound = "1";
+    img.addEventListener("load", function () {
+      if (img.naturalWidth > 0) markRasterDecoded(img);
+    });
+  }
+
   function clearRasterBroken(img) {
     if (!img) return;
     const wasBroken = !!(img.dataset && img.dataset.tokiBroken === "1");
     if (wasBroken) {
-      if (img.id === "hero") img.style.visibility = "";
-      if (img.classList && img.classList.contains("galaxy-layer")) {
-        img.hidden = false;
-      }
       if (img.classList && img.classList.contains("family-portrait-bg-img")) {
         img.hidden = false;
       }
@@ -646,6 +665,7 @@
     }
     if (img.dataset) img.dataset.tokiBroken = "";
     img.removeAttribute("data-toki-broken");
+    if (img.naturalWidth > 0) markRasterDecoded(img);
     let changed = false;
     for (let i = _brokenRasters.length - 1; i >= 0; i--) {
       if (_brokenRasters[i].img === img) {
@@ -671,7 +691,9 @@
     if (!url) return;
     img.dataset.tokiBroken = "1";
     img.setAttribute("data-toki-broken", "1");
-    if (img.id === "hero") img.style.visibility = "hidden";
+    img.classList.remove("toki-decoded");
+    // Strip the failed URL so AbleSign has nothing to draw a glyph for.
+    if (img.getAttribute("src")) img.removeAttribute("src");
     if (img.classList && img.classList.contains("galaxy-layer")) {
       img.hidden = true;
     }
@@ -703,6 +725,41 @@
   function installBrokenImageWatch() {
     if (document.documentElement.dataset.tokiBrokenWatch === "1") return;
     document.documentElement.dataset.tokiBrokenWatch = "1";
+
+    function armTree(root) {
+      if (!root) return;
+      if (root.tagName === "IMG") armRasterUntilDecode(root);
+      if (!root.querySelectorAll) return;
+      const list = root.querySelectorAll("img");
+      for (let i = 0; i < list.length; i++) armRasterUntilDecode(list[i]);
+    }
+
+    armTree(document);
+    const mo = new MutationObserver(function (muts) {
+      for (let i = 0; i < muts.length; i++) {
+        const m = muts[i];
+        if (m.type === "attributes" && m.target && m.target.tagName === "IMG") {
+          const img = m.target;
+          if (img.dataset && img.dataset.tokiParked === "1") continue;
+          if (!img.getAttribute("src") || !(img.complete && img.naturalWidth > 0)) {
+            img.classList.remove("toki-decoded");
+          }
+          armRasterUntilDecode(img);
+          continue;
+        }
+        const nodes = m.addedNodes || [];
+        for (let j = 0; j < nodes.length; j++) {
+          if (nodes[j].nodeType === 1) armTree(nodes[j]);
+        }
+      }
+    });
+    mo.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["src"],
+    });
+
     document.addEventListener(
       "error",
       function (e) {
@@ -711,7 +768,7 @@
         if (el.dataset && el.dataset.tokiParked === "1") return;
         const src = el.getAttribute("src") || "";
         if (!src) return;
-        // Hide the UA broken-image glyph immediately; fallbacks may still recover.
+        el.classList.remove("toki-decoded");
         el.dataset.tokiBroken = "1";
         el.setAttribute("data-toki-broken", "1");
         window.setTimeout(function () {
@@ -730,7 +787,10 @@
       function (e) {
         const el = e.target;
         if (!el || el.tagName !== "IMG") return;
-        if (el.naturalWidth > 0) clearRasterBroken(el);
+        if (el.naturalWidth > 0) {
+          markRasterDecoded(el);
+          clearRasterBroken(el);
+        }
       },
       true
     );
@@ -14108,7 +14168,7 @@
 
     const show = function () {
       if (img && img.naturalWidth > 0) {
-        img.style.visibility = "";
+        markRasterDecoded(img);
         clearRasterBroken(img);
       }
       plate.hidden = false;
@@ -14151,13 +14211,9 @@
         show,
         function () {
           markRasterBroken(img, item.image);
-          if (img) img.style.visibility = "hidden";
           hideHeroPlate({ clearSrc: true, hideSticker: !wantSticker });
           if (wantSticker) {
-            if (img) {
-              img.style.visibility = "hidden";
-              img.removeAttribute("src");
-            }
+            if (img) img.removeAttribute("src");
             plate.hidden = false;
             applyPlateSticker(true);
             requestAnimationFrame(function () {
