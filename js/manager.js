@@ -167,7 +167,24 @@
     document.documentElement.classList.toggle("is-font-ready", fontsAreReady());
   }
 
+  function preloadFonts() {
+    if (!document.fonts || typeof document.fonts.load !== "function") return;
+    // Preload both at boot. This ensures:
+    // - Picker previews (which render inline font-family for Poppins/Roboto)
+    //   do not cause first-use of the family name.
+    // - fontsAreReady + .is-font-ready (and the 0.96 scale for poppins) are
+    //   driven by actual load timing from page start, not by first tap on the
+    //   System Font selector (which was previously injecting the name and
+    //   flipping the scale as a side-effect of renderPicker + applyTheme).
+    ["Poppins", "Roboto"].forEach(function (fam) {
+      try {
+        document.fonts.load('16px "' + fam + '"').then(syncFontReadyClass).catch(syncFontReadyClass);
+      } catch (e) {}
+    });
+  }
+
   function watchFonts() {
+    preloadFonts();
     syncFontReadyClass();
     if (!document.fonts) return;
     if (document.fonts.ready) {

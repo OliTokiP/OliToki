@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "abaccb1",
-  "hashFull": "abaccb1707e14f2483e8c032321223d8766f600f",
-  "subject": "QA: 2026-08-17 Add individual board settings (pass 3)"
+  "hash": "8e219ae",
+  "hashFull": "8e219ae10bc1e663364f0f982e4f1e6eaae66dce",
+  "subject": "QA: 2026-08-17 Text shrinks ever so slightly when the user taps the font selector, regardless of whether they actually pick something different. (pass 1)"
 };
