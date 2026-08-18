@@ -20,8 +20,13 @@ if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 import write_env  # noqa: E402
 
-DEFAULT_TESTING_API = os.environ.get("TOKI_TESTING_API", "").strip()
-DEFAULT_TESTING_SITE = os.environ.get("TOKI_TESTING_SITE", "").strip()
+DEFAULT_TESTING_API = (
+    os.environ.get("TOKI_TESTING_API")
+    or "https://toki-api-testing-3rx5m3qpzq-uc.a.run.app"
+).strip()
+DEFAULT_TESTING_SITE = (
+    os.environ.get("TOKI_TESTING_SITE") or DEFAULT_TESTING_API
+).strip()
 RESTAURANT_SITE = "https://olitokip.github.io/OliToki"
 RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app"
 

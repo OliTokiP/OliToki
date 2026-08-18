@@ -15,6 +15,8 @@ ENV_PATH = ROOT / "js" / "env.js"
 
 RESTAURANT_SITE = "https://olitokip.github.io/OliToki"
 RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app"
+TESTING_SITE = "https://toki-api-testing-3rx5m3qpzq-uc.a.run.app"
+TESTING_API = TESTING_SITE
 RESTAURANT_SOURCE = "restaurant"
 TESTING_SOURCE = "alpha"
 
@@ -22,8 +24,8 @@ TESTING_SOURCE = "alpha"
 def render(
     env: str,
     *,
-    testing_site: str = "",
-    testing_api: str = "",
+    testing_site: str = TESTING_SITE,
+    testing_api: str = TESTING_API,
     default_source: str = "",
     restaurant_site: str = RESTAURANT_SITE,
     restaurant_api: str = RESTAURANT_API,
@@ -77,8 +79,8 @@ def main() -> None:
         required=True,
         choices=("local", "testing", "restaurant"),
     )
-    ap.add_argument("--testing-site", default="")
-    ap.add_argument("--testing-api", default="")
+    ap.add_argument("--testing-site", default=TESTING_SITE)
+    ap.add_argument("--testing-api", default=TESTING_API)
     ap.add_argument("--default-source", default="")
     ap.add_argument("--restaurant-site", default=RESTAURANT_SITE)
     ap.add_argument("--restaurant-api", default=RESTAURANT_API)

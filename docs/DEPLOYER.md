@@ -11,7 +11,7 @@ Your laptop is staging. **main** is today’s work. **testing** is unmerged beta
 | Branch | Site | Sheet (forced) | API |
 |--------|------|----------------|-----|
 | `restaurant` | https://olitokip.github.io/OliToki/ | Restaurant Copy | `toki-api` |
-| `testing` | Cloud Run `toki-api-testing` | Alpha Copy | same service serves HTML + API |
+| `testing` | https://toki-api-testing-3rx5m3qpzq-uc.a.run.app/ | Alpha Copy | same service serves HTML + API |
 | `main` | not live | Settings sheet (local / Listener) | local `toki_server` |
 
 GitHub Pages **must** publish from `restaurant`, not `main`. Otherwise every Listener commit ships to the TVs.
@@ -38,7 +38,9 @@ On a live site, picking the other source **opens that site**. It does not flip t
 
 ## One-time GCP
 
-Repo secret `TOKI_GCP_SA` = a GCP service account JSON that can deploy Cloud Run in `menudesigner`. Until that exists, git ship still works; run API deploy from the Mac:
+Repo secret `TOKI_GCP_SA` is set (`toki-deployer@menudesigner`). Repo vars `TOKI_TESTING_API` / `TOKI_TESTING_SITE` point at the testing Cloud Run URL.
+
+Mac fallback (if Actions cannot reach GCP):
 
 ```bash
 # restaurant API
@@ -47,8 +49,6 @@ Repo secret `TOKI_GCP_SA` = a GCP service account JSON that can deploy Cloud Run
 # testing site + API
 TOKI_GCP_SERVICE=toki-api-testing TOKI_DEPLOY_MODE=web ./scripts/cloud-run/deploy.sh
 ```
-
-Then set repo variables `TOKI_TESTING_API` and `TOKI_TESTING_SITE` to that Cloud Run URL.
 
 ## Do not
 

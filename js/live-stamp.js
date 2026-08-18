@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "7731981",
-  "hashFull": "773198183acef923fa5dbcb11131392dc5a4baa6",
-  "subject": "Add deploy.html phone form and Cloud Run web dockerignore"
+  "hash": "5f9faa2",
+  "hashFull": "5f9faa2a8df7467435d1a3668c593efdd1923f32",
+  "subject": "Deployer: record testing Cloud Run URL"
 };
