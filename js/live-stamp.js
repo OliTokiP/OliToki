@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "bc20266",
-  "hashFull": "bc20266be9cf86528026a2976c96448b32c98e6b",
-  "subject": "QA: 2026-08-16 Auto-refresh on ready for review (pass 3)"
+  "hash": "3a939fd",
+  "hashFull": "3a939fd39f2fc06a0ae9c7a55363e5c3f662caeb",
+  "subject": "checkpoint 2026-08-17 23:46"
 };
