@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5143a30",
-  "hashFull": "5143a302169acb1f08e0c22bf2e72987c810b8f3",
-  "subject": "QA: 2026-08-18 Add Favorite toggle to New Tickets, Draft Edit and Ticket View. Also add property on Obsidian level (pass 2)"
+  "hash": "7eb4d32",
+  "hashFull": "7eb4d3270e95dec10a27921900396b8693a81946",
+  "subject": "QA: 2026-08-18 Animated ... to toggle switches on dashboard (pass 1)"
 };
