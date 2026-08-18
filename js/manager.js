@@ -1706,14 +1706,14 @@
     });
   }
 
-  function persistBoardWrite() {
+  function persistBoardWrite(prevSnap) {
     var b = state.boardDraft;
     if (!b || b.kind === "announcements") {
       return Promise.resolve({ needed: false, wrote: null });
     }
     var sheet = window.TOKI_MANAGER_SHEET;
     var next = boardSettingsSnap(b);
-    var prev = state.lastBoardSnap[b.id] || boardSettingsSnap(state.boardCommitted || {});
+    var prev = prevSnap || state.lastBoardSnap[b.id] || null;
     var payload = { gid: b.gid || "" };
     var src = dataSource();
     payload.sheetId =
@@ -1721,19 +1721,19 @@
       (state.lastSheet && state.lastSheet.sheetId) ||
       "";
     var changed = false;
-    if (next.menuTitle !== prev.menuTitle) {
+    if (!prev || next.menuTitle !== prev.menuTitle) {
       payload.menuTitle = next.menuTitle;
       changed = true;
     }
-    if (next.familyPortrait !== prev.familyPortrait) {
+    if (!prev || next.familyPortrait !== prev.familyPortrait) {
       payload.familyPortrait = next.familyPortrait;
       changed = true;
     }
-    if (next.presentation !== prev.presentation) {
+    if (!prev || next.presentation !== prev.presentation) {
       payload.presentation = next.presentation;
       changed = true;
     }
-    if (next.includeDescriptions !== prev.includeDescriptions) {
+    if (!prev || next.includeDescriptions !== prev.includeDescriptions) {
       payload.includeDescriptions = next.includeDescriptions;
       changed = true;
     }
@@ -1748,6 +1748,8 @@
       if (wrote && wrote.ok) {
         rememberBoardSnap(b);
         applyBoardToCatalog(b);
+      } else {
+        console.warn("Menu Manager board write failed", wrote && wrote.error);
       }
       return { needed: true, wrote: wrote };
     });
@@ -1756,7 +1758,11 @@
   function confirmChoice(val) {
     if (val === "yes") {
       var onBoard = state.screen === "board" && state.boardDraft;
+      var boardPrev = null;
       if (onBoard) {
+        boardPrev =
+          state.lastBoardSnap[state.boardDraft.id] ||
+          boardSettingsSnap(state.boardCommitted);
         state.boardCommitted = clone(state.boardDraft);
       } else {
         state.committed = clone(state.draft);
@@ -1765,7 +1771,7 @@
       var next = state.pendingLeave;
       state.pendingLeave = null;
       renderDialog();
-      var persist = onBoard ? persistBoardWrite() : persistStyleWrite();
+      var persist = onBoard ? persistBoardWrite(boardPrev) : persistStyleWrite();
       persist
         .then(function (result) {
           if (onBoard) {
@@ -2901,9 +2907,13 @@
     } else if (act === "permalink-yes") {
       state.dialog = null;
       renderDialog();
+      var permaPrev = state.boardDraft
+        ? state.lastBoardSnap[state.boardDraft.id] ||
+          boardSettingsSnap(state.boardCommitted)
+        : null;
       if (state.boardDraft) state.boardCommitted = clone(state.boardDraft);
       var href = state.boardDraft && state.boardDraft.permalink;
-      persistBoardWrite().then(function (out) {
+      persistBoardWrite(permaPrev).then(function (out) {
         if (href) {
           window.open(href, "_blank", "noopener");
           if (out && out.needed && out.wrote && out.wrote.ok) {

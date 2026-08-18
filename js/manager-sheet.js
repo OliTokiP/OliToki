@@ -1394,33 +1394,36 @@
 
   async function writeBoard(payload) {
     payload = payload || {};
-    var useProxy = await detectProxy();
-    if (!useProxy) {
-      return { ok: false, error: "Needs local Menu Manager server" };
-    }
-    try {
-      var res = await fetch(apiUrl("/api/manager/board"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      var j = {};
+    await detectProxy();
+    var urls = ["/api/manager/board"];
+    var via = apiUrl("/api/manager/board");
+    if (via && urls.indexOf(via) < 0) urls.push(via);
+    var last = { ok: false, error: "Board write failed" };
+    var i;
+    for (i = 0; i < urls.length; i++) {
       try {
-        j = await res.json();
-      } catch (e) {
-        j = {};
-      }
-      if (!res.ok || !j.ok) {
-        return {
+        var res = await fetch(urls[i], {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        var j = {};
+        try {
+          j = await res.json();
+        } catch (e) {
+          j = {};
+        }
+        if (res.ok && j.ok) return j;
+        last = {
           ok: false,
           error: (j && j.error) || ("HTTP " + res.status),
         };
+      } catch (err) {
+        last = { ok: false, error: String((err && err.message) || err) };
       }
-      return j;
-    } catch (err) {
-      console.warn("manager-sheet: board write failed", err);
-      return { ok: false, error: String((err && err.message) || err) };
     }
+    console.warn("manager-sheet: board write failed", last.error);
+    return last;
   }
 
   global.TOKI_MANAGER_SHEET = {
