@@ -1807,9 +1807,13 @@
     renderAll();
     if (pickKey === "confirmSave") {
       showConfirmSaveTooltip(id);
-    }
-    if (state.draft.confirmSave === "no" && systemSettingsDirty()) {
-      // "no" means per-change instant save for System Settings options (incl. this toggle).
+      // Special per Feedback: the "Confirm save?" toggle itself ALWAYS writes
+      // immediately (sheet + behavior), whether the prior value was yes or no.
+      // All *other* system options follow the current value of this setting.
+      state.pendingLeave = null;
+      confirmChoice("yes");
+    } else if (state.draft.confirmSave === "no" && systemSettingsDirty()) {
+      // When "Confirm save?" is no, other System Settings options save instantly.
       state.pendingLeave = null;
       confirmChoice("yes");
     }

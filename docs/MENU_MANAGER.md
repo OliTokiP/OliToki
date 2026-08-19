@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-19  
+**Last updated:** 2026-08-19 (Tooltip + system settings docs) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -100,6 +100,24 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme + Background use the server adapter (`Theme Selector` / A3, `BG Color` / B3, `BG Pattern` / C3, `BG Wallpaper` / D3). Number options should come from sheet dataValidation when present, not hard-coded spans.
+
+## Tooltip
+
+The `.tooltip` element (manager.html + manager.js + manager.css) is a reusable transient, centered callout for explaining the effect of a setting change after a binary Yes/No panel is dismissed.
+
+- Triggered from picker `choose()` for keys like `confirmSave`.
+- Horizontally centered in the device page (via `left:50% + translateX(-50%)`, reasonable vertical placement so it reads after the picker card closes).
+- Contains a bold title + bullet lines.
+- Auto-fades after ~6s. Can be dismissed by navigation actions (back, new pick, Escape).
+- Theme tokens: background `--secondary`, border `--highlight`.
+- Intended for reuse on other preference nuances. Keep copy short and actionable.
+
+Example usage (Confirm save?):
+
+- "yes" → "Save confirmation enabled." + guidance to use back button.
+- "no" → "Save confirmation surpassed." + instant-save warning.
+
+When adding new tooltips or similar post-choice explanations, prefer this component over new toast variants or inline notes.
 
 ---
 

@@ -460,6 +460,22 @@ class SheetsBackend:
             if "refresh timer" in low:
                 cols["refreshtimer"] = c
 
+        # === System Settings contract (Menu Manager) ===
+        # All user-accessible settings toggles/options shown in Menu Manager
+        # (dataSource, requireRestart, systemFont, limitHeavyFilters, confirmSave,
+        # refreshTimer, and future ones) live in the "OliToki Menu Settings" workbook
+        # on the Settings tab (first data row after the header row).
+        #
+        # - Client (manager-sheet.js) and server discover columns by fuzzy header match
+        #   on the Settings row, with documented default_col fallbacks for writes.
+        # - New settings features MUST be added as (or mapped to) a column in that sheet.
+        # - If during a Pass a new setting has no column yet, the Pass must include a
+        #   reminder to Lead to add the header cell + any validation row.
+        # - Writes go through POST /api/manager/settings (see writeSystem).
+        # - This keeps the "sheet is the database" model.
+        # See also: docs/MENU_MANAGER.md, js/manager.js (systemSettingsDirty + confirmChoice),
+        # and manager-sheet.js load path.
+
         def a1(*folds: str, default_col: int) -> str:
             for fold in folds:
                 if fold in cols:

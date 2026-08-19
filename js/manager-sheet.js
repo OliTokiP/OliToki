@@ -1485,8 +1485,13 @@
   async function writeSystem(payload) {
     // Persists Data Source / Require restart / System Font / Limit Heavy Filters /
     // Confirm Save / Refresh Timer into the OliToki Menu Settings workbook (top row values).
+    // See scripts/toki_server.py for the full "all new settings must be in the sheet" contract.
     // Server maps to the correct cells under the matching header. This makes e.g.
     // Refresh Timer and System Font affect the menu boards on their next settings load.
+    //
+    // All new user-accessible settings features must live in (or be mapped from) the
+    // Settings sheet. If a column does not exist yet for a feature worked on in a Pass,
+    // the Pass text must carry a reminder to Lead to add the header.
     var out = await postManager("/api/manager/settings", payload || {});
     if (!out.ok) console.warn("manager-sheet: system settings write failed", out.error);
     return out;
