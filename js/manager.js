@@ -1264,12 +1264,28 @@
     if (key === "dataSource") {
       return {
         title: "Data Source",
-        options: D.dataSources.map(function (s) {
-          var extra = "";
-          if (s.env === "testing") extra = " · testing / unmerged";
-          if (s.env === "restaurant") extra = " · restaurant";
-          return { id: s.id, label: (s.name || s.id) + extra };
-        }),
+        options: D.dataSources.slice()
+          .sort(function (a, b) {
+            var pa =
+              a.env === "restaurant" || a.id === "restaurant"
+                ? 0
+                : a.env === "testing" || a.id === "alpha"
+                ? 1
+                : 2;
+            var pb =
+              b.env === "restaurant" || b.id === "restaurant"
+                ? 0
+                : b.env === "testing" || b.id === "alpha"
+                ? 1
+                : 2;
+            if (pa !== pb) return pa - pb;
+            return String(a.name || a.id || "").localeCompare(
+              String(b.name || b.id || "")
+            );
+          })
+          .map(function (s) {
+            return { id: s.id, label: s.name || s.id };
+          }),
         get: function () {
           return state.draft.dataSource;
         },

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "3d7a3e5",
-  "hashFull": "3d7a3e526522f1894f14773a4d073aa2ca75f46c",
-  "subject": "QA: 2026-08-18 Empty queues should not appear (pass 1)"
+  "hash": "bd37898",
+  "hashFull": "bd378981a4357d88567c3fbc409fc4922003295d",
+  "subject": "QA: 2026-08-18 Suppress zoom on mobile (pass 1)"
 };
