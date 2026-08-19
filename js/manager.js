@@ -394,6 +394,13 @@
       "<p>Require restart: " +
       escapeHtml(labelOf(D.yesNo, state.draft.requireRestart)) +
       "</p>" +
+      (state.draft.requireRestart === "no"
+        ? "<p>Refresh Timer: " +
+          escapeHtml(
+            labelOf((D && D.refreshTimers) || [], state.draft.refreshTimer)
+          ) +
+          "</p>"
+        : "") +
       "<p>Version: " +
       escapeHtml(statusVersion()) +
       "</p>" +

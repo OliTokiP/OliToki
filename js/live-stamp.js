@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "bf0824f",
-  "hashFull": "bf0824f554dfc759a73349a3999aa0b8f88ab4ba",
-  "subject": "QA: 2026-08-19 Soft refresh clock not hooked up to settings (pass 1)"
+  "hash": "fcc94cc",
+  "hashFull": "fcc94cc75e15527d2c3cad349e639d80b64b383a",
+  "subject": "QA: 2026-08-18 Refresh Timer child of Require restart (pass 3)"
 };
