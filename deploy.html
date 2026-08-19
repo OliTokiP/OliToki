@@ -64,7 +64,7 @@
   </style>
 </head>
 <body>
-  <p class="tiny"><a href="suite.html">← Suite</a> · <a href="https://github.com/OliTokiP/OliToki/issues?q=is%3Aopen+label%3Atoki-qa">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+  <p class="tiny" id="nav"><a href="suite.html">← Suite</a> · Deployer · <a href="new-bug.html">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Deployer</h1>
   <p class="sub">Phone is enough. This files a GitHub issue; Actions ships the website and API. Your laptop is not the live server.</p>
   <div class="advice">
@@ -125,10 +125,16 @@
     <button type="submit" id="go">File deploy</button>
   </form>
 
+  <script src="js/surfaces.js?v=20260819nav1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
+    (function paintNav() {
+      const html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Deployer");
+      const el = document.getElementById("nav");
+      if (html && el) el.innerHTML = html;
+    })();
 
     function onlyOne(name) {
       const boxes = [...document.querySelectorAll('input[name="' + name + '"]')];

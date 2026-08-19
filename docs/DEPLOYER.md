@@ -1,8 +1,8 @@
 # Deployer
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-19
 
-Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
+Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards. The tiny top bar is the same on Suite, Deployer, Tickets, Menu Manager splash, and Listener home (`← Suite` on children; current page as text). Shared list: `js/surfaces.js` `nav`.
 
 Phone form: [`deploy.html`](../deploy.html). Worker: GitHub Actions [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 

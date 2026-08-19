@@ -183,11 +183,16 @@
     <button type="submit" id="go">Log ticket</button>
   </form>
 
-  <script src="js/surfaces.js?v=20260818suite1"></script>
+  <script src="js/surfaces.js?v=20260819nav1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
     const SUITE = window.TOKI_SUITE || {};
+    (function paintNav() {
+      const html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Tickets");
+      const el = document.getElementById("nav");
+      if (html && el) el.innerHTML = html;
+    })();
     const SURFACES = (SUITE.surfaces || []).map((s) => s.name).filter(Boolean);
     if (!SURFACES.length) {
       SURFACES.push("Listener", "Menu Manager", "Menu Screens", "Deployer", "Suite");

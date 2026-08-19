@@ -5,7 +5,34 @@
  * plus Queue pages. Tickets (new-bug.html and the Listener /new form)
  * pick from "surfaces". suite.html lists "tools". Launcher.md rows come
  * from "launcher". Screens under Menu Screens come from "screens".
+ *
+ * Keep this helper *above* TOKI_SUITE — Listener parses that object with a
+ * greedy `{...};` match and would swallow a function that follows it.
  */
+window.tokiSuiteNavHtml = function (currentName) {
+  var nav = ((window.TOKI_SUITE || {}).nav) || [];
+  var parts = [];
+  var i;
+  var item;
+  var label;
+  var href;
+  currentName = currentName || "";
+  for (i = 0; i < nav.length; i++) {
+    item = nav[i] || {};
+    label = item.name || "";
+    href = item.page || "";
+    if (!label) continue;
+    if (label === currentName) {
+      parts.push(label);
+    } else if (label === "Suite") {
+      parts.push('<a href="' + href + '">← Suite</a>');
+    } else {
+      parts.push('<a href="' + href + '">' + label + "</a>");
+    }
+  }
+  return parts.join(" · ");
+};
+
 window.TOKI_SUITE = {
   "surfaces": [
     { "name": "Listener", "page": "", "label": "Listener" },

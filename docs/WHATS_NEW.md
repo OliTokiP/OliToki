@@ -1,9 +1,21 @@
 # What’s New
 
-**Last updated:** 2026-08-18 21:30  
+**Last updated:** 2026-08-19 12:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-19 12:30 — ← Suite on Listener home + matching Suite bar
+
+**Boards / surface:** Listener homepage, Suite, Deployer, Tickets, Menu Manager splash  
+**Sheet:** none  
+**Summary:** Operator pages share one tiny top bar from `js/surfaces.js` `nav`. Children start with **← Suite**; the current page is plain text. Listener home now has that bar (links use this Mac’s menu server, rewritten to the hostname you used). Menu Manager splash gets the same bar. Deployer Tickets points at `new-bug.html`, same as Suite.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
 
 ---
 

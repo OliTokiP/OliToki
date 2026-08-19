@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-17  
+**Last updated:** 2026-08-19  
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -44,7 +44,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 | Route | Screen |
 |-------|--------|
-| `#/` | Splash — OliToki Menu Manager |
+| `#/` | Splash — OliToki Menu Manager. Tiny **← Suite** bar (same as Suite / Deployer / Tickets / Listener home). |
 | `#/system` | System Settings (Data Source, Require Restart, System Font, Sheet link) |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |

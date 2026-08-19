@@ -544,9 +544,23 @@
       .catch(function () {});
   }
 
+  function suiteNavHtml() {
+    if (typeof window.tokiSuiteNavHtml === "function") {
+      return window.tokiSuiteNavHtml("Menu Manager");
+    }
+    return (
+      '<a href="suite.html">← Suite</a> · ' +
+      '<a href="deploy.html">Deployer</a> · ' +
+      '<a href="new-bug.html">Tickets</a> · Menu Manager'
+    );
+  }
+
   function screenHome() {
     return (
       '<section class="screen screen-home">' +
+      '<p class="suite-nav" id="suite-nav">' +
+      suiteNavHtml() +
+      "</p>" +
       '<div class="home-hero">' +
       '<div class="home-peak" aria-hidden="true"></div>' +
       '<div class="home-cluster">' +

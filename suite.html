@@ -95,7 +95,7 @@
   </table>
   <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
 
-  <script src="js/surfaces.js?v=20260818suite1"></script>
+  <script src="js/surfaces.js?v=20260819nav1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
@@ -115,12 +115,8 @@
     }
 
     (function paintNav() {
-      const nav = SUITE.nav || [];
-      if (!nav.length) return;
-      document.getElementById("nav").innerHTML = nav.map((item) => {
-        if (item.name === "Suite") return "Suite";
-        return '<a href="' + item.page + '">' + item.name + "</a>";
-      }).join(" · ");
+      const html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Suite");
+      if (html) document.getElementById("nav").innerHTML = html;
     })();
 
     function card(item) {
