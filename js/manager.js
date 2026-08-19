@@ -549,24 +549,9 @@
       .catch(function () {});
   }
 
-  function suiteNavHtml() {
-    if (typeof window.tokiSuiteNavHtml === "function") {
-      return window.tokiSuiteNavHtml("Menu Manager");
-    }
-    return (
-      '<a href="suite.html">Suite</a> · ' +
-      '<a href="deploy.html">Deployer</a> · ' +
-      '<a href="http://127.0.0.1:18765/">Tickets</a> · ' +
-      '<span class="is-current">Menu Manager</span>'
-    );
-  }
-
   function screenHome() {
     return (
       '<section class="screen screen-home">' +
-      '<p class="suite-nav" id="suite-nav">' +
-      suiteNavHtml() +
-      "</p>" +
       '<div class="home-hero">' +
       '<div class="home-peak" aria-hidden="true"></div>' +
       '<div class="home-cluster">' +
@@ -1593,7 +1578,7 @@
     }, 4000);
   }
 
-  var TOOLTIP_FADE_MS = 280;
+  var TOOLTIP_FADE_MS = 400;
   var TOOLTIP_HOLD_MS = 6200;
 
   function reduceTooltipMotion() {
@@ -1603,29 +1588,24 @@
     );
   }
 
-  function measureTooltipCards() {
-    var map = {};
-    state.tooltipItems.forEach(function (item) {
-      if (item.el) map[item.id] = item.el.getBoundingClientRect();
-    });
-    return map;
-  }
-
-  function flipTooltipCards(before) {
-    if (reduceTooltipMotion()) return;
-    state.tooltipItems.forEach(function (item) {
-      if (!item.el || !before[item.id] || item.el.classList.contains("is-out")) {
-        return;
-      }
-      var after = item.el.getBoundingClientRect();
-      var dy = before[item.id].top - after.top;
-      if (Math.abs(dy) < 0.5) return;
-      item.el.style.transition = "none";
-      item.el.style.transform = "translateY(" + dy + "px)";
-      void item.el.offsetWidth;
-      item.el.style.transition = "";
-      item.el.style.transform = "";
-    });
+  function afterTooltipMotion(el, fn) {
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      if (el) el.removeEventListener("transitionend", onEnd);
+      fn();
+    }
+    function onEnd(e) {
+      if (e.target !== el) return;
+      finish();
+    }
+    if (!el || reduceTooltipMotion()) {
+      finish();
+      return;
+    }
+    el.addEventListener("transitionend", onEnd);
+    setTimeout(finish, TOOLTIP_FADE_MS + 80);
   }
 
   function tooltipMarkup(opts) {
@@ -1684,6 +1664,18 @@
     }
   }
 
+  function removeTooltipItem(id) {
+    var idx;
+    for (idx = 0; idx < state.tooltipItems.length; idx++) {
+      if (state.tooltipItems[idx].id !== id) continue;
+      var node = state.tooltipItems[idx].slot || state.tooltipItems[idx].el;
+      if (node && node.parentNode) node.parentNode.removeChild(node);
+      state.tooltipItems.splice(idx, 1);
+      break;
+    }
+    syncTooltipRoot();
+  }
+
   function dismissTooltip(id, immediate) {
     var i;
     var item = null;
@@ -1695,38 +1687,19 @@
     }
     if (!item) return;
     clearTimeout(item.timer);
-    if (immediate || !item.el || reduceTooltipMotion()) {
-      if (item.el && item.el.parentNode) item.el.parentNode.removeChild(item.el);
-      state.tooltipItems.splice(i, 1);
-      syncTooltipRoot();
+    if (immediate || reduceTooltipMotion()) {
+      removeTooltipItem(id);
       return;
     }
-    if (item.el.classList.contains("is-out")) return;
-    var before = measureTooltipCards();
-    item.el.classList.add("is-out");
-    item.el.classList.remove("is-on");
-    item.el.style.maxHeight = item.el.offsetHeight + "px";
-    void item.el.offsetHeight;
-    item.el.style.maxHeight = "0px";
-    item.el.style.paddingTop = "0px";
-    item.el.style.paddingBottom = "0px";
-    item.el.style.marginTop = "0px";
-    item.el.style.marginBottom = "0px";
-    item.el.style.borderWidth = "0px";
-    flipTooltipCards(before);
-    item.timer = setTimeout(function () {
-      var idx;
-      for (idx = 0; idx < state.tooltipItems.length; idx++) {
-        if (state.tooltipItems[idx].id === id) {
-          if (item.el && item.el.parentNode) {
-            item.el.parentNode.removeChild(item.el);
-          }
-          state.tooltipItems.splice(idx, 1);
-          break;
-        }
-      }
-      syncTooltipRoot();
-    }, TOOLTIP_FADE_MS);
+    if (item.el && item.el.classList.contains("is-out")) return;
+    if (item.el) {
+      item.el.classList.add("is-out");
+      item.el.classList.remove("is-on");
+    }
+    if (item.slot) item.slot.classList.remove("is-open");
+    afterTooltipMotion(item.slot || item.el, function () {
+      removeTooltipItem(id);
+    });
   }
 
   function dismissAllTooltips(immediate) {
@@ -1740,31 +1713,18 @@
       return;
     }
     ids.forEach(function (id) {
-      var item = null;
-      var i;
-      for (i = 0; i < state.tooltipItems.length; i++) {
-        if (state.tooltipItems[i].id === id) {
-          item = state.tooltipItems[i];
-          break;
-        }
-      }
-      if (!item || !item.el || item.el.classList.contains("is-out")) return;
-      clearTimeout(item.timer);
-      item.el.classList.add("is-out");
-      item.el.classList.remove("is-on");
-      item.timer = setTimeout(function () {
-        dismissTooltip(id, true);
-      }, TOOLTIP_FADE_MS);
+      dismissTooltip(id, false);
     });
-    var root = els.tooltipRoot;
-    if (root) root.classList.remove("is-on");
   }
 
   function showTooltip(opts) {
     var stack = els.tooltipStack;
     if (!stack) return;
     var id = ++state.tooltipSeq;
-    var before = measureTooltipCards();
+    var slot = document.createElement("div");
+    slot.className = "tooltip-slot";
+    var inner = document.createElement("div");
+    inner.className = "tooltip-slot-inner";
     var el = document.createElement("button");
     el.type = "button";
     el.className =
@@ -1772,20 +1732,34 @@
     el.setAttribute("data-act", "tooltip-dismiss");
     el.setAttribute("data-tip-id", String(id));
     el.innerHTML = tooltipMarkup(opts);
-    stack.appendChild(el);
-    var item = { id: id, el: el, timer: null };
+    inner.appendChild(el);
+    slot.appendChild(inner);
+    stack.appendChild(slot);
+    var item = { id: id, el: el, slot: slot, timer: null };
     state.tooltipItems.push(item);
     syncTooltipRoot();
-    flipTooltipCards(before);
-    requestAnimationFrame(function () {
+    if (reduceTooltipMotion()) {
+      slot.classList.add("is-open");
+      el.classList.add("is-on");
+    } else {
+      void slot.offsetWidth;
       requestAnimationFrame(function () {
-        el.classList.add("is-on");
+        requestAnimationFrame(function () {
+          slot.classList.add("is-open");
+          el.classList.add("is-on");
+        });
       });
-    });
+    }
     item.timer = setTimeout(function () {
       dismissTooltip(id, false);
     }, TOOLTIP_HOLD_MS);
     return id;
+  }
+
+  function showSaveNotice(msg) {
+    var text = String(msg || "").trim();
+    if (!text) return;
+    showTooltip({ kind: "save", title: text });
   }
 
   function showConfirmSaveTooltip(choice) {
@@ -2424,12 +2398,12 @@
         .then(function (out) {
           state.persistInFlight = false;
           if (out && out.wrote && out.wrote.ok) state.sheetDirty = false;
-          toast(yesToast(out.needed, out.wrote, out.fb, out.kind));
+          showSaveNotice(yesToast(out.needed, out.wrote, out.fb, out.kind));
         })
         .catch(function (err) {
           state.persistInFlight = false;
           console.warn("Menu Manager save failed", err);
-          toast(
+          showSaveNotice(
             onBoard
               ? "Could not write board to sheet — saved for this session"
               : wasSystemDirty
@@ -3582,7 +3556,7 @@
         if (opts.force) state.sheetDirty = false;
         applySheetPayload(payload);
         if (payload && payload.sourceName) {
-          toast("Loaded " + payload.sourceName + " from sheet");
+          showSaveNotice("Loaded " + payload.sourceName + " from sheet");
         }
       })
       .catch(function (err) {
@@ -3597,7 +3571,7 @@
         return fb(state.draft && state.draft.dataSource).then(function (payload) {
           if (payload && payload.ok) {
             applySheetPayload(payload);
-            toast("Loaded last saved fallback");
+            showSaveNotice("Loaded last saved fallback");
             return;
           }
           state.sheetSource = "local";

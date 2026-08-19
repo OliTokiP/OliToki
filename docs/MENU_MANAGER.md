@@ -44,7 +44,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 | Route | Screen |
 |-------|--------|
-| `#/` | Splash — OliToki Menu Manager. Same Suite bar as Suite / Deployer / Tickets (current page is text). |
+| `#/` | Splash — OliToki Menu Manager. |
 | `#/system` | System Settings (Data Source, Require Restart, System Font, Sheet link) |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
@@ -107,9 +107,9 @@ The `#tooltip-root` stack (manager.html + manager.js + manager.css) is a reusabl
 
 - Lives in the **mini-display** (top slot: `.status` or `.preview`, `--top-slot-h`). A shroud covers that slot only; the list below stays tappable.
 - Cards stack like Notification Center: oldest on top, newest below. The stack stays centered as cards enter or leave.
-- New cards fade in; each auto-fades after ~6s (oldest first). Tap a card to dismiss that card; tap the shroud or Escape to dismiss the stack. Leaving the screen clears them.
+- New cards fade and slide in (~0.4s). Each auto-fades and slides out after ~6s (oldest first). Existing cards physically slide as the centered stack grows or shrinks (Notification Center). Tap a card to dismiss that card; tap the shroud or Escape to dismiss the stack. Leaving the screen clears them.
 - **Info:** centered bold title (hard return) + left-aligned body. Multiple lines become a `•` list (soft return between items).
-- **Save:** inverted theme tokens (`--main` fill, `--secondary` type) via `kind: "save"`.
+- **Save:** inverted theme tokens (`--main` fill, `--secondary` type) via `kind: "save"`. Sheet save/load notices use this style in the stack — not the footer toast.
 - Theme tokens inherit the selected theme.
 
 Triggered from picker `choose()`:

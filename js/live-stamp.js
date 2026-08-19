@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9b31aa2",
-  "hashFull": "9b31aa260ebf8836357bd356982809df76076212",
-  "subject": "QA: 2026-08-19 Pill location determination unclear in queues (pass 2)"
+  "hash": "7123272",
+  "hashFull": "71232720c796cc81f0663289d23fda9f5f4273d3",
+  "subject": "QA: 2026-08-19 Tooltips should appear as stack, centered in mini-display, and get a shroud (pass 3)"
 };
