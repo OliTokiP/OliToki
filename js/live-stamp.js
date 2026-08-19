@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5ab3080",
-  "hashFull": "5ab3080f4bf78e843bc5b73c3a070f65b110231b",
-  "subject": "Document board URL codes (dpr, w, pause) on Suite and in docs"
+  "hash": "8b0ed4a",
+  "hashFull": "8b0ed4a4b56f3381a291c2d3ccaf0ceacc22ec86",
+  "subject": "QA: 2026-08-19 Add Surface Scope feature to ticket logging (pass 1)"
 };

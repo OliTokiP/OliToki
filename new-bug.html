@@ -59,6 +59,9 @@
     }
     #screens { display: none; }
     #screens.on { display: block; }
+    #scope-box { display: none; }
+    #scope-box.on { display: block; }
+    #scope-box .tiny { margin: 0 0 .45rem; }
     .row { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
     .row label { margin: 0; font-weight: 500; }
     button {
@@ -124,6 +127,12 @@
 
     <div class="lab">Surface</div>
     <div class="picks" id="surface-picks"></div>
+
+    <div id="scope-box">
+      <div class="lab">Scope</div>
+      <p class="tiny">Host surface is always in scope. Check extras this ticket may also change.</p>
+      <div class="picks" id="scope-picks"></div>
+    </div>
 
     <div id="screens">
       <div class="lab">Which screen</div>
@@ -240,6 +249,35 @@
       surfaceHost.appendChild(lab);
     });
     const surfaces = onlyOne("surface");
+    const scopeHost = document.getElementById("scope-picks");
+    const scopeBox = document.getElementById("scope-box");
+    function selectedSurfaceName() {
+      const on = surfaces.find((b) => b.checked);
+      return on ? on.value : "";
+    }
+    function renderScope() {
+      const host = selectedSurfaceName();
+      if (scopeBox) scopeBox.classList.toggle("on", !!host);
+      if (!scopeHost) return;
+      const prev = new Set(
+        [...scopeHost.querySelectorAll("input:checked")].map((i) => i.value)
+      );
+      scopeHost.innerHTML = "";
+      if (!host) return;
+      SURFACES.forEach((name) => {
+        if (name === host) return;
+        const lab = document.createElement("label");
+        lab.className = "pick";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.name = "scope";
+        box.value = name;
+        if (prev.has(name)) box.checked = true;
+        lab.appendChild(box);
+        lab.appendChild(document.createTextNode(" " + name));
+        scopeHost.appendChild(lab);
+      });
+    }
     const screenHost = document.getElementById("screen-picks");
     SCREEN_LIST.forEach((item) => {
       const lab = document.createElement("label");
@@ -302,8 +340,10 @@
     surfaces.forEach((box) => {
       box.addEventListener("change", () => {
         screenBox.classList.toggle("on", surfaceWantsScreen());
+        renderScope();
       });
     });
+    renderScope();
 
     // For drafts and piggyback tickets: prefilled type/surface show as filled greyed-out tiles (non-editable visual bookmark)
     if (isDraftOrPiggy || preSurface) {
@@ -427,6 +467,9 @@
       const queued = !draftChecked;
       const modelEl = document.querySelector('input[name="model"]:checked');
       const model = modelEl ? modelEl.value : "Auto";
+      const scope = [...document.querySelectorAll('input[name="scope"]:checked')]
+        .map((b) => b.value)
+        .filter((n) => n && n !== surf);
       const info = pageInfo();
       const isFeature = kind() === "feature";
       const k = isFeature ? "feature" : "ticket";
@@ -441,6 +484,7 @@
         "### toki-meta",
         "- type: " + k,
         "- surface: " + surf,
+        "- scope: " + (scope.length ? scope.join(", ") : ""),
         "- page: " + info.page,
         "- pageLabel: " + info.label,
         "- include: " + (include ? "true" : "false"),

@@ -12,8 +12,20 @@ body:
         - Menu Manager
         - Menu Screens
         - Deployer
+        - Suite
     validations:
       required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      description: Extra surfaces this ticket may also change. The host Surface above is always in scope — do not check it again.
+      options:
+        - label: Listener
+        - label: Menu Manager
+        - label: Menu Screens
+        - label: Deployer
+        - label: Suite
   - type: dropdown
     id: page
     attributes:
