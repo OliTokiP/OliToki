@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "f3d8bab",
-  "hashFull": "f3d8bab5533e827d1859db0b7fb78dc37eb67110",
-  "subject": "QA: 2026-08-19 More Tooltips for refactor + Save Stack behavior (pass 2)"
+  "hash": "818f379",
+  "hashFull": "818f379987fb3de760e5e55bf458b97b542d2569",
+  "subject": "QA: 2026-08-19 Pill location determination unclear in queues (pass 6)"
 };
