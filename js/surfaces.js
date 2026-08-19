@@ -2,9 +2,10 @@
  *
  * Add a surface: one object in "surfaces" (name + page).
  * Listener reads this file and creates QA/<name> + FEATURE REQUESTS/<name>
- * plus Queue pages. Tickets (new-bug.html and the Listener /new form)
- * pick from "surfaces". suite.html lists "tools". Launcher.md rows come
- * from "launcher". Screens under Menu Screens come from "screens".
+ * plus Queue pages. Tickets nav leads to Listener home (local panel); new-bug.html
+ * and the Listener /new form are the creation paths. "surfaces" for form.
+ * suite.html lists "tools". Launcher.md rows come from "launcher".
+ * Screens under Menu Screens come from "screens".
  *
  * Keep this helper *above* TOKI_SUITE — Listener parses that object with a
  * greedy `{...};` match and would swallow a function that follows it.
@@ -21,6 +22,9 @@ window.tokiSuiteNavHtml = function (currentName) {
     item = nav[i] || {};
     label = item.name || "";
     href = item.page || "";
+    if (label === "Tickets") {
+      href = tokiListenerHomeUrl();
+    }
     if (!label) continue;
     if (label === currentName) {
       parts.push(label);
@@ -32,6 +36,26 @@ window.tokiSuiteNavHtml = function (currentName) {
   }
   return parts.join(" · ");
 };
+
+function isLiveHost() {
+  try { return /github\.io/i.test(location.host); } catch (e) { return false; }
+}
+function tokiListenerHomeUrl() {
+  if (isLiveHost()) {
+    return "new-bug.html";
+  }
+  try {
+    var u = new URL(location.href);
+    u.port = "18765";
+    u.pathname = "/";
+    u.search = "";
+    u.hash = "";
+    return u.href;
+  } catch (e) {
+    return "http://127.0.0.1:18765/";
+  }
+}
+window.tokiGetTicketsUrl = tokiListenerHomeUrl;
 
 window.TOKI_SUITE = {
   "surfaces": [

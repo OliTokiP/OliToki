@@ -60,7 +60,7 @@
   </style>
 </head>
 <body>
-  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="new-bug.html">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Suite</h1>
   <p class="sub">Phone hub for the development tools. Same idea as Launcher: this copy, plus Live. Ship from Deployer. File tickets from Tickets.</p>
   <div class="live" id="live">Pages vs git: checking…</div>
@@ -95,7 +95,7 @@
   </table>
   <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
 
-  <script src="js/surfaces.js?v=20260819nav1"></script>
+  <script src="js/surfaces.js?v=20260819tix1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
@@ -120,8 +120,9 @@
     })();
 
     function card(item) {
+      var h = (item && item.name === "Tickets" && window.tokiGetTicketsUrl) ? window.tokiGetTicketsUrl() : (item.page || "#");
       return (
-        '<a class="card" href="' + item.page + '">' +
+        '<a class="card" href="' + h + '">' +
         item.name +
         (item.blurb ? '<span class="blurb">' + item.blurb + "</span>" : "") +
         "</a>"

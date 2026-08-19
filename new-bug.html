@@ -183,7 +183,7 @@
     <button type="submit" id="go">Log ticket</button>
   </form>
 
-  <script src="js/surfaces.js?v=20260819nav1"></script>
+  <script src="js/surfaces.js?v=20260819tix1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
@@ -211,6 +211,12 @@
     }
     if (!SURFACE_PAGES.Suite) {
       SURFACE_PAGES.Suite = { page: "suite.html", label: "Suite" };
+    }
+    if (!SURFACE_PAGES.Listener) {
+      SURFACE_PAGES.Listener = { page: "", label: "Listener" };
+    }
+    if (!SURFACE_PAGES["Menu Screens"]) {
+      SURFACE_PAGES["Menu Screens"] = { page: "", label: "Menu Screens" };
     }
     const SCREEN_LIST = SUITE.screens || [
       { page: "index.html", label: "1 · Bowls" },
@@ -257,6 +263,10 @@
     const scopeHost = document.getElementById("scope-picks");
     const scopeBox = document.getElementById("scope-box");
     function selectedSurfaceName() {
+      const on = surfaces.find((b) => b.checked);
+      return on ? on.value : "";
+    }
+    function surface() {
       const on = surfaces.find((b) => b.checked);
       return on ? on.value : "";
     }
@@ -321,6 +331,7 @@
     }
     if (preSurface) {
       surfaces.forEach((b) => { b.checked = (b.value === preSurface); });
+      renderScope();
     }
 
     function kind() {
@@ -344,7 +355,7 @@
     const screenBox = document.getElementById("screens");
     surfaces.forEach((box) => {
       box.addEventListener("change", () => {
-        screenBox.classList.toggle("on", surfaceWantsScreen());
+        try { screenBox.classList.toggle("on", surfaceWantsScreen()); } catch (e) {}
         renderScope();
       });
     });
@@ -355,11 +366,6 @@
       const typePicks = kinds[0] ? kinds[0].closest(".picks") : null;
       if ((preType || isDraftOrPiggy) && typePicks) lockPicks(typePicks);
       if (preSurface || isDraftOrPiggy) lockPicks(surfaceHost);
-    }
-
-    function surface() {
-      const on = surfaces.find((b) => b.checked);
-      return on ? on.value : "";
     }
 
     // --- attachments (apple file pickers for images + files) ---

@@ -552,7 +552,7 @@
     return (
       '<a href="suite.html">← Suite</a> · ' +
       '<a href="deploy.html">Deployer</a> · ' +
-      '<a href="new-bug.html">Tickets</a> · Menu Manager'
+      '<a href="http://127.0.0.1:18765/">Tickets</a> · Menu Manager'
     );
   }
 

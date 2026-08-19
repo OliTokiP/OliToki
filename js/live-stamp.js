@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "80f5e53",
-  "hashFull": "80f5e53875ade69fa00e9b3ddba38ea7a0a45aba",
-  "subject": "QA: 2026-08-19 Expand confirm save toggle in preferences (pass 1)"
+  "hash": "e779022",
+  "hashFull": "e7790224fa355b5a5ca15a499ca90a4060218ecc",
+  "subject": "QA: 2026-08-19 Navigation bar Tickets navigation button leads to new ticket page (pass 1)"
 };
