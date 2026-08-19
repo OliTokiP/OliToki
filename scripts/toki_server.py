@@ -21,6 +21,7 @@ Env:
   TOKI_API_ONLY   1 = API only, no static files (hosted)
   TOKI_ENV        local | testing | restaurant (Deployer pin)
   TOKI_FORCE_SOURCE  restaurant | alpha — ignore Settings Data Source cell
+  TOKI_NO_RELOAD  1 = do not auto-restart when this file changes (local only)
 """
 
 from __future__ import annotations
@@ -94,6 +95,44 @@ def set_terminal_title(title: str) -> None:
 
 def _log(msg: str) -> None:
     print(f"[toki_server] {msg}", flush=True)
+
+
+def _watch_api_and_reexec() -> None:
+    """Local only: restart this process when toki_server.py changes on disk."""
+    if _hosted():
+        return
+    if (os.environ.get("TOKI_NO_RELOAD") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    path = Path(__file__).resolve()
+
+    def _mtime() -> float:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    last = _mtime()
+
+    def loop() -> None:
+        nonlocal last
+        while True:
+            time.sleep(1.0)
+            now = _mtime()
+            if now <= 0 or now == last:
+                continue
+            last = now
+            time.sleep(1.2)
+            last = _mtime()
+            _log(f"API updated ({path.name}) — restarting")
+            argv = [sys.executable, str(path), *sys.argv[1:]]
+            os.execv(sys.executable, argv)
+
+    threading.Thread(target=loop, name="api-watch", daemon=True).start()
+    _log(f"watching {path.name} for API updates")
 
 
 def _cell(row: list, idx: int) -> str:
@@ -2156,6 +2195,7 @@ def main():
     set_terminal_title(window_title(args.port, args.bind))
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
     _log(f"window: {window_title(args.port, args.bind)}")
+    _watch_api_and_reexec()
     if not args.api_only:
         threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
     try:

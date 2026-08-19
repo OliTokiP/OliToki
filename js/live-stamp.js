@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "22b883c",
-  "hashFull": "22b883cb630ed043b39f1d736a45a6a88a570e49",
-  "subject": "Settings sheet writes via /api/manager/settings; Deployer set-and-forget copy"
+  "hash": "538d9f0",
+  "hashFull": "538d9f0aa79f1c5c8845017c725df05880c33a74",
+  "subject": "Local toki_server auto-restarts when the API file updates"
 };
