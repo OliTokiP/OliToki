@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "669736e",
-  "hashFull": "669736ee325a1a47bbcc65c1b03a481bc506ed34",
-  "subject": "QA: 2026-08-19 Tooltips should appear as stack, centered in mini-display, and get a shroud (pass 2)"
+  "hash": "d057949",
+  "hashFull": "d057949864128c457da9e1a9d44b45c083f160c0",
+  "subject": "QA: 2026-08-19 Ticket not marked Ready for review after Pass 1 (pass 1)"
 };
