@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "8c44a8b",
-  "hashFull": "8c44a8b4e3ba63e815439efb8ada0e9c58f957dd",
-  "subject": "Deployer: run from issue body even if GitHub drops the label"
+  "hash": "5b5731b",
+  "hashFull": "5b5731b1b827fc76e2e15c67eafdaaab0802b6d1",
+  "subject": "QA: 2026-08-18 Collapse empty queues on overview (pass 1)"
 };

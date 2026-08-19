@@ -1936,6 +1936,8 @@
           state.lastBoardSnap[state.boardDraft.id] ||
           boardSettingsSnap(state.boardCommitted);
         state.boardCommitted = clone(state.boardDraft);
+        applyBoardToCatalog(state.boardDraft);
+        rememberBoardSnap(state.boardDraft);
       }
       state.committed = clone(state.draft);
       state.dialog = null;
