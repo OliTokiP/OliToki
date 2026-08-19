@@ -8,7 +8,9 @@
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
  * System Settings persist via writeSystem + fallback. Confirm save? No skips the
- * confirm dialog and writes System, Style, and Board (incl. menu order) immediately.
+ * confirm dialog and writes System, Style, and Board immediately. Menu-item
+ * reorder waits 3s of idle before writing. Encore extras and item order get
+ * bespoke save cards in the tooltip stack (Board Saved on top).
  */
 (function () {
   "use strict";
@@ -57,6 +59,8 @@
     itemDragging: false,
     confirmLeave: false,
     persistInFlight: false,
+    itemOrderTimer: null,
+    pendingItemOrderSave: false,
   };
   state.draft.confirmSave = state.draft.confirmSave || "yes";
   state.committed.confirmSave = state.committed.confirmSave || "yes";
@@ -1086,7 +1090,7 @@
         refreshBoardRows();
         applyTheme();
         bindItemReorder();
-        if (!previewCtl.phase) startPreviewCycle();
+        if (encoreNeedsFill() || !previewCtl.phase) startPreviewCycle();
         return;
       }
     }
@@ -1102,7 +1106,7 @@
         // See MOTION_GLOSSARY §3/4. Hero motion is js/motion.js only.
         refreshStyleRows();
         applyTheme();
-        if (!previewCtl.phase) startPreviewCycle();
+        if (encoreNeedsFill() || !previewCtl.phase) startPreviewCycle();
         return;
       }
     }
@@ -1155,7 +1159,6 @@
     if (key === "boardPresentation") {
       return {
         title: "Presentation Style",
-        note: "Encore settings are global.",
         options: D.presentationStyles,
         get: function () {
           return (state.boardDraft || {}).presentation;
@@ -1249,7 +1252,6 @@
     if (key === "presentation") {
       return {
         title: "Presentation Style",
-        note: "Encore settings are global.",
         options: D.presentationStyles,
         get: function () {
           return state.draft.presentation;
@@ -1580,6 +1582,10 @@
 
   var TOOLTIP_FADE_MS = 400;
   var TOOLTIP_HOLD_MS = 6200;
+  var ITEM_ORDER_IDLE_MS = 3000;
+  var MSG_BOARD_SAVED = "Board Saved to Restaurant Settings";
+  var MSG_ENCORE_SAVED = "Global Encore Style Settings updated";
+  var MSG_ORDER_SAVED = "Menu Items Order Saved.";
 
   function playTooltipAnim(el, frames, onDone) {
     var finished = false;
@@ -1822,7 +1828,7 @@
   function showFamilyPortraitTooltip() {
     showTooltip({
       title: "Family Portrait Enabled",
-      body: "Shows spread of all products as first frame presentation",
+      body: "Shows spread of all items in first slide of presentation.",
     });
   }
 
@@ -1835,6 +1841,142 @@
         "Heavy Filter (resource intensive, may not run well on all systems)",
       ],
     });
+  }
+
+  function showRequireRestartTooltip(choice) {
+    var isYes = String(choice) === "yes";
+    showTooltip({
+      title: isYes ? "Soft refresh disabled." : "Soft refresh enabled.",
+      body: isYes
+        ? "TVs must be restarted for changes to take effect."
+        : "Menus will check for updates on a fixed timer - you don't have to do a thing.",
+    });
+  }
+
+  function showFilterCapTooltip() {
+    showTooltip({
+      title: "Filter Cap Enabled for Heavy Effects.",
+    });
+  }
+
+  function showEncoreHardTooltip() {
+    showTooltip({
+      title: "WARNING:",
+      body: "Performance issues with Fire Stick. Use with caution.",
+    });
+  }
+
+  function encoreFieldsChanged(prev, next) {
+    prev = prev || {};
+    next = next || {};
+    return (
+      String(prev.encoreStyle || "") !== String(next.encoreStyle || "") ||
+      String(prev.encoreSpot || "") !== String(next.encoreSpot || "") ||
+      String(prev.encoreBg || "") !== String(next.encoreBg || "")
+    );
+  }
+
+  function itemsOrderChanged(prev, next) {
+    function names(snap) {
+      return JSON.stringify(
+        ((snap && snap.items) || []).map(function (it) {
+          return it && it.name;
+        })
+      );
+    }
+    return names(prev) !== names(next);
+  }
+
+  function boardMetaChanged(prev, next) {
+    prev = prev || {};
+    next = next || {};
+    return (
+      String(prev.menuTitle || "") !== String(next.menuTitle || "") ||
+      String(prev.familyPortrait || "") !== String(next.familyPortrait || "") ||
+      String(prev.presentation || "") !== String(next.presentation || "") ||
+      String(prev.includeDescriptions || "") !==
+        String(next.includeDescriptions || "")
+    );
+  }
+
+  function clearItemOrderSaveTimer() {
+    if (state.itemOrderTimer) {
+      clearTimeout(state.itemOrderTimer);
+      state.itemOrderTimer = null;
+    }
+  }
+
+  function scheduleItemOrderSave() {
+    state.pendingItemOrderSave = true;
+    clearItemOrderSaveTimer();
+    state.itemOrderTimer = setTimeout(function () {
+      state.itemOrderTimer = null;
+      if (!state.pendingItemOrderSave) return;
+      if (!confirmSaveOff()) return;
+      if (!boardDirty()) {
+        state.pendingItemOrderSave = false;
+        return;
+      }
+      state.pendingLeave = null;
+      maybeAutoSave(true);
+    }, ITEM_ORDER_IDLE_MS);
+  }
+
+  function styleWroteOnlyEncore(wrote) {
+    return !!(
+      wrote &&
+      wrote.wroteEncore &&
+      !wrote.wroteTheme &&
+      !wrote.wroteBackground &&
+      !wrote.wroteSpeeds
+    );
+  }
+
+  function yesToastSkippingEncore(needed, wrote, fb, kind) {
+    if (!wrote || styleWroteOnlyEncore(wrote)) return "";
+    if (kind === "board" || kind === "both") return "";
+    var cloneWrote = Object.assign({}, wrote, { wroteEncore: false });
+    return yesToast(needed, cloneWrote, fb, kind);
+  }
+
+  function showSaveOutcome(out, flags) {
+    flags = flags || {};
+    var needed = !!(out && out.needed);
+    var wrote = (out && out.wrote) || null;
+    var fb = !!(out && out.fb);
+    var kind = (out && out.kind) || "";
+    if (!needed || !(wrote && wrote.ok)) {
+      showSaveNotice(yesToast(needed, wrote, fb, kind));
+      return;
+    }
+    var encoreSaved = !!flags.encoreDirty;
+    var orderSaved = !!flags.orderDirty;
+    var boardMeta = !!flags.boardMetaDirty;
+    var onBoard = !!flags.onBoard;
+    var confirmed = !!flags.confirmed;
+    var cards = [];
+    if (onBoard) {
+      if (confirmed && (boardMeta || encoreSaved || orderSaved)) {
+        cards.push(MSG_BOARD_SAVED);
+      } else if (!confirmed && boardMeta) {
+        cards.push(MSG_BOARD_SAVED);
+      }
+      if (encoreSaved) cards.push(MSG_ENCORE_SAVED);
+      if (orderSaved) cards.push(MSG_ORDER_SAVED);
+      if (cards.length) {
+        cards.forEach(function (text) {
+          showSaveNotice(text);
+        });
+        return;
+      }
+    }
+    if (encoreSaved) {
+      var styleMsg = yesToastSkippingEncore(needed, wrote, fb, kind);
+      if (styleMsg) showSaveNotice(styleMsg);
+      showSaveNotice(MSG_ENCORE_SAVED);
+      return;
+    }
+    showSaveNotice(yesToast(needed, wrote, fb, kind));
   }
 
   function rememberStyleScroll() {
@@ -2061,11 +2203,22 @@
       // Special: the "Confirm save?" toggle itself ALWAYS writes immediately
       // (sheet + behavior), whether the prior value was yes or no.
       // All other options — System, Style, Board — follow the current value.
+      clearItemOrderSaveTimer();
       state.pendingLeave = null;
       confirmChoice("yes", true);
+      if (id === "no" && boardDirty()) maybeAutoSave(true);
     } else if (confirmSaveOff()) {
       state.pendingLeave = null;
       maybeAutoSave(true);
+    }
+    if (pickKey === "requireRestart") {
+      showRequireRestartTooltip(id);
+    }
+    if (pickKey === "limitHeavyFilters" && id === "yes") {
+      showFilterCapTooltip();
+    }
+    if (pickKey === "encoreStyle" && id === "hard") {
+      showEncoreHardTooltip();
     }
     if (pickKey === "boardFamily" && id === "yes") {
       showFamilyPortraitTooltip();
@@ -2432,6 +2585,9 @@
             refreshTimer: state.committed ? state.committed.refreshTimer : "",
           }
         : null;
+      var confirmedSave = !confirmSaveOff();
+      clearItemOrderSaveTimer();
+      state.pendingItemOrderSave = false;
       if (onBoard) {
         boardPrev =
           state.lastBoardSnap[state.boardDraft.id] ||
@@ -2440,6 +2596,9 @@
         applyBoardToCatalog(state.boardDraft);
         rememberBoardSnap(state.boardDraft);
       }
+      var encoreDirty = encoreFieldsChanged(stylePrev, styleNext);
+      var orderDirty = !!(onBoard && itemsOrderChanged(boardPrev, boardNext));
+      var boardMetaDirty = !!(onBoard && boardMetaChanged(boardPrev, boardNext));
       state.committed = clone(state.draft);
       state.dialog = null;
       var next = state.pendingLeave;
@@ -2502,7 +2661,13 @@
         .then(function (out) {
           state.persistInFlight = false;
           if (out && out.wrote && out.wrote.ok) state.sheetDirty = false;
-          showSaveNotice(yesToast(out.needed, out.wrote, out.fb, out.kind));
+          showSaveOutcome(out, {
+            onBoard: onBoard,
+            confirmed: confirmedSave,
+            encoreDirty: encoreDirty,
+            orderDirty: orderDirty,
+            boardMetaDirty: boardMetaDirty,
+          });
         })
         .catch(function (err) {
           state.persistInFlight = false;
@@ -2640,6 +2805,13 @@
 
   function encoreStageEl() {
     return els.app.querySelector("#family-portrait-stage");
+  }
+
+  function encoreNeedsFill() {
+    if (previewPresentation() !== "encore") return false;
+    var stage = encoreStageEl();
+    if (!stage || stage.hidden) return true;
+    return !stage.querySelector(".family-portrait-item");
   }
 
   /** Fire Stick Silk cannot resolve 100cqi. Measure the preview box in px. */
@@ -3315,9 +3487,10 @@
         }
         if (next.length === items.length) state.boardDraft.items = next;
         list.innerHTML = itemListHtml(state.boardDraft.items);
-        if (confirmSaveOff()) {
+        var orderChanged = itemsOrderChanged({ items: items }, { items: next });
+        if (orderChanged && confirmSaveOff()) {
           state.pendingLeave = null;
-          maybeAutoSave(true);
+          scheduleItemOrderSave();
         }
       } else {
         row.classList.remove("is-dragging");
@@ -3397,12 +3570,28 @@
         showFamilyPortraitTooltip();
       } else if (tip === "encore") {
         showEncoreTooltip();
+      } else if (tip === "restart" || tip === "restart-yes") {
+        showRequireRestartTooltip("yes");
+      } else if (tip === "restart-no") {
+        showRequireRestartTooltip("no");
+      } else if (tip === "filter") {
+        showFilterCapTooltip();
+      } else if (tip === "hard") {
+        showEncoreHardTooltip();
       } else if (tip === "confirm" || tip === "yes") {
         showConfirmSaveTooltip("yes");
       } else if (tip === "no") {
         showConfirmSaveTooltip("no");
       } else if (tip === "save") {
         showTooltip({ kind: "save", title: "Data Saved to Sheet." });
+      } else if (tip === "encore-save") {
+        showSaveNotice(MSG_ENCORE_SAVED);
+      } else if (tip === "order") {
+        showSaveNotice(MSG_ORDER_SAVED);
+      } else if (tip === "board-save") {
+        showSaveNotice(MSG_BOARD_SAVED);
+        showSaveNotice(MSG_ENCORE_SAVED);
+        showSaveNotice(MSG_ORDER_SAVED);
       }
     }, 60);
   }
@@ -3652,9 +3841,10 @@
     state.sheetSource = "sheet";
     applyTheme();
     renderAll();
-    if (state.screen === "style") {
-      // Sheet may have new presentation/speed/etc. Retarget keeps the plate elements
-      // (no remount) but adopts the new phase timings/zoom per glossary.
+    if (state.screen === "style" || state.screen === "board") {
+      // Boot refresh lands on the board hash before the sheet arrives, so the
+      // first cycle is Ken Burns. When the sheet says Encore, retarget fills
+      // plates — otherwise the veil runs on an empty stage.
       retargetMotion();
     }
   }
