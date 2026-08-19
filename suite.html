@@ -48,6 +48,8 @@
     th:first-child, td:first-child { text-align: left; font-weight: 600; }
     tr { border-bottom: 1px solid #ddd; }
     th { font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; color: #666; }
+    .codes { font-size: .88rem; }
+    .codes td:first-child { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
     .tiny { color: #666; font-size: .88rem; }
     a { color: inherit; }
     @media (prefers-color-scheme: dark) {
@@ -73,6 +75,25 @@
   <div id="boards-wrap"></div>
 
   <p class="tiny" id="hint"></p>
+
+  <div class="lab">URL codes</div>
+  <p class="tiny">Stick on a board URL. First <code>?</code>, then <code>&amp;</code>. Fire Stick / AbleSign: <code>?w=1920&amp;dpr=1</code>.</p>
+  <table class="codes">
+    <thead>
+      <tr><th>Code</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>dpr=1</td><td>Honest 1× pixels. Stops AbleSign from loading 4K art on a 1080p stick.</td></tr>
+      <tr><td>w=1920</td><td>Pretend the stage is 1920 CSS pixels wide (<code>width</code> too).</td></tr>
+      <tr><td>h=1080</td><td>Pretend height is 1080 (<code>height</code>). Missing side is 16:9.</td></tr>
+      <tr><td>display=1920x1080</td><td>Same as w + h.</td></tr>
+      <tr><td>pause=1</td><td>Freeze motion (screenshots).</td></tr>
+      <tr><td>item=0</td><td>Start on that menu row.</td></tr>
+      <tr><td>debug=1</td><td>Dump debug table to the console.</td></tr>
+      <tr><td>preview=all</td><td>Wall preview path — not for TVs.</td></tr>
+    </tbody>
+  </table>
+  <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
 
   <script src="js/surfaces.js?v=20260818suite1"></script>
   <script>
