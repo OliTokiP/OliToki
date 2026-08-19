@@ -6,6 +6,7 @@
  * Selector (A3) and BG Color / Pattern / Wallpaper (B3 / C3 / D3).
  * Board Settings Yes posts /api/manager/board (Menu Title, Family Portrait,
  * Presentation Mode, Include Descriptions?) — field names, not columns.
+ * System Settings (incl. Confirm save?) post via /api/manager/settings (fallback always).
  * Switching to a color writes none into C3 and D3 (pattern wins on boards).
  * Number pills follow a validator in the Settings header — same CSV
  * Pages already reads. House style:
@@ -662,6 +663,7 @@
     var requireRestart = "no";
     var systemFont = "roboto";
     var limitHeavyFilters = "yes";
+    var confirmSave = "yes";
     var refreshTimer = "";
     var catalog = [];
     var headerIdx = -1;
@@ -690,6 +692,9 @@
         }
         if (isHeavyFilterHeader(h)) {
           limitHeavyFilters = parseYesNo(cell(rows[headerIdx + 1], c), true);
+        }
+        if (h.indexOf("confirm") !== -1 && h.indexOf("save") !== -1) {
+          confirmSave = parseYesNo(cell(rows[headerIdx + 1], c), true);
         }
         if (h.indexOf("refresh timer") !== -1) {
           refreshTimer = cell(rows[headerIdx + 1], c) || refreshTimer;
@@ -723,6 +728,7 @@
       requireRestart: requireRestart,
       systemFont: systemFont,
       limitHeavyFilters: limitHeavyFilters,
+      confirmSave: confirmSave,
       refreshTimer: refreshTimer || "",
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || dataSource || "",
@@ -818,6 +824,7 @@
             requireRestart: parseYesNo(j.requireRestart, false),
             systemFont: parseSystemFont(j.systemFont),
             limitHeavyFilters: parseYesNo(j.limitHeavyFilters, true),
+            confirmSave: parseYesNo(j.confirmSave, true),
             refreshTimer: j.refreshTimer || "",
             sheetId: j.sheetId || "",
             sourceName: j.sourceName || j.dataSource || "",
@@ -1151,6 +1158,7 @@
       refreshTimer: settings.refreshTimer || "30 seconds",
       systemFont: settings.systemFont,
       limitHeavyFilters: settings.limitHeavyFilters || "yes",
+      confirmSave: settings.confirmSave || "yes",
     };
     return {
       ok: true,

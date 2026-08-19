@@ -7,6 +7,7 @@
  * Encore spotlight/background (global Style K/L/M). Board Yes writes Menu Title,
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
+ * System Settings (incl. new Confirm save? toggle) persist via writeSystem + fallback.
  * Inventory order stays local.
  */
 (function () {
@@ -52,6 +53,8 @@
     confirmLeave: false,
     persistInFlight: false,
   };
+  state.draft.confirmSave = state.draft.confirmSave || "yes";
+  state.committed.confirmSave = state.committed.confirmSave || "yes";
 
   var previewCtl = {
     gen: 0,
@@ -592,6 +595,11 @@
         key: "limitHeavyFilters",
         label: "Limit Heavy Filters to 30FPS",
         value: labelOf(D.yesNo, state.draft.limitHeavyFilters),
+      }) +
+      row({
+        key: "confirmSave",
+        label: "Confirm save?",
+        value: labelOf(D.yesNo, state.draft.confirmSave),
       });
     return (
       '<section class="screen">' +
@@ -1376,6 +1384,19 @@
         },
       };
     }
+    if (key === "confirmSave") {
+      return {
+        title: "Confirm save?",
+        kind: "trueFalse",
+        options: D.yesNo,
+        get: function () {
+          return state.draft.confirmSave;
+        },
+        set: function (id) {
+          state.draft.confirmSave = id;
+        },
+      };
+    }
     return null;
   }
 
@@ -1567,7 +1588,7 @@
 
   function systemSettingsDirty() {
     if (!state.committed) return false;
-    var keys = ["dataSource", "requireRestart", "systemFont", "limitHeavyFilters"];
+    var keys = ["dataSource", "requireRestart", "systemFont", "limitHeavyFilters", "confirmSave"];
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
       if (state.draft[k] !== state.committed[k]) return true;
@@ -1597,6 +1618,11 @@
 
   function leaveSystem(next) {
     if (systemSettingsDirty()) {
+      if (state.draft.confirmSave === "no") {
+        state.pendingLeave = next;
+        confirmChoice("yes");
+        return;
+      }
       state.pendingLeave = next;
       state.dialog = "confirm";
       renderDialog();
@@ -2011,6 +2037,7 @@
       requireRestart: state.draft.requireRestart,
       systemFont: state.draft.systemFont,
       limitHeavyFilters: state.draft.limitHeavyFilters,
+      confirmSave: state.draft.confirmSave,
     };
     // Settings workbook id is known to server (different from catalog sheetId).
     // Writing here makes e.g. System Font affect the menu boards.
@@ -2036,6 +2063,7 @@
             requireRestart: state.committed ? state.committed.requireRestart : "",
             systemFont: state.committed ? state.committed.systemFont : "",
             limitHeavyFilters: state.committed ? state.committed.limitHeavyFilters : "",
+            confirmSave: state.committed ? state.committed.confirmSave : "",
           }
         : null;
       if (onBoard) {
@@ -3016,6 +3044,29 @@
       renderAll();
       return;
     }
+    var leavingDirtySystem =
+      prevScreen === "system" &&
+      systemSettingsDirty() &&
+      target.screen !== "system";
+    if (leavingDirtySystem) {
+      if (state.draft.confirmSave !== "no") {
+        // Browser back (or hash pop) from dirty system: bounce + show Confirm
+        // dialog (same as leaveSystem). Respect the Confirm save? toggle.
+        state.picker = null;
+        var sysHash = "#/system";
+        if (location.hash !== sysHash) {
+          history.replaceState(null, "", sysHash);
+        }
+        state.pendingLeave = function () {
+          history.back();
+        };
+        state.dialog = "confirm";
+        renderAll();
+        return;
+      }
+      // When "Confirm save?" is No, allow the nav; draft change stays until
+      // reload (internal back paths still auto-persist via leaveSystem).
+    }
     var leavingDirtyBoard =
       prevScreen === "board" &&
       (boardDirty() || styleDirty()) &&
@@ -3128,6 +3179,7 @@
     }
     if (payload.draft) {
       var fromSheet = Object.assign({}, D.defaultDraft, payload.draft);
+      fromSheet.confirmSave = fromSheet.confirmSave || "yes";
       // Keep draft numbers inside the live tile set (sheet conditionals).
       fromSheet.scrollSpeed = clampDraftSpeed(
         fromSheet.scrollSpeed,
