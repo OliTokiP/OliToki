@@ -4,18 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
-  <title>Deployer — OliToki</title>
+  <title>Deployer</title>
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819ch1" />
   <style>
-    :root { color-scheme: light dark; }
-    html { -webkit-text-size-adjust: 100%; }
-    body {
-      font: 16px/1.4 system-ui, sans-serif;
-      margin: 0 auto;
-      padding: 1.25rem;
-      max-width: 36rem;
-    }
-    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-    .sub { color: #666; margin: 0 0 1.25rem; font-size: .95rem; }
     .live {
       font-weight: 600;
       padding: .65rem .85rem;
@@ -46,8 +37,6 @@
       background: #1a1a1a; color: #fff;
     }
     button.danger { background: #8b1e1e; }
-    .tiny { color: #666; font-size: .88rem; }
-    a { color: inherit; }
     .advice {
       border: 1px solid #bbb; border-radius: 10px;
       padding: .7rem .85rem; margin: 0 0 1rem; font-size: .95rem;
@@ -59,12 +48,11 @@
     }
     @media (prefers-color-scheme: dark) {
       .live { background: #2a2a2a; }
-      .sub, .tiny { color: #aaa; }
     }
   </style>
 </head>
-<body>
-  <p class="tiny" id="nav"><a href="suite.html">← Suite</a> · Deployer · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+<body class="suite-page">
+  <p class="suite-nav" id="nav"><a href="suite.html">Suite</a> · <span class="is-current">Deployer</span> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Deployer</h1>
   <p class="sub">Phone is enough. This files a GitHub issue; Actions ships the website and API. Your laptop is not the live server.</p>
   <div class="advice">
@@ -125,7 +113,7 @@
     <button type="submit" id="go">File deploy</button>
   </form>
 
-  <script src="js/surfaces.js?v=20260819tix2"></script>
+  <script src="js/surfaces.js?v=20260819tix3"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";

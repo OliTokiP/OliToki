@@ -5,22 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
   <title>Suite</title>
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819ch1" />
   <style>
-    :root { color-scheme: light dark; }
-    html { -webkit-text-size-adjust: 100%; height: 100%; }
-    body {
-      font: 16px/1.4 system-ui, sans-serif;
-      margin: 0 auto;
-      padding: 1.25rem;
-      max-width: 36rem;
-      min-height: 100%;
-      box-sizing: border-box;
-    }
-    @media (display-mode: standalone), (min-width: 520px) {
-      body { padding: 1.5rem 1.75rem 2.25rem; max-width: 40rem; }
-    }
-    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-    .sub { color: #666; margin: 0 0 1.25rem; font-size: .95rem; }
     .live {
       font-weight: 600;
       padding: .65rem .85rem;
@@ -55,17 +41,15 @@
     th { font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; color: #666; }
     .codes { font-size: .88rem; }
     .codes td:first-child { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
-    .tiny { color: #666; font-size: .88rem; }
-    a { color: inherit; }
     @media (prefers-color-scheme: dark) {
       .live { background: #2a2a2a; }
-      .sub, .tiny, a.card .blurb, th { color: #aaa; }
+      a.card .blurb, th { color: #aaa; }
       tr { border-bottom-color: #333; }
     }
   </style>
 </head>
-<body>
-  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+<body class="suite-page">
+  <p class="suite-nav" id="nav"><span class="is-current">Suite</span> · <a href="deploy.html">Deployer</a> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Suite</h1>
   <p class="sub">Phone hub for the development tools. Same idea as Launcher: this copy, plus Live. Ship from Deployer. File tickets from Tickets.</p>
   <div class="live" id="live">Pages vs git: checking…</div>
@@ -100,7 +84,7 @@
   </table>
   <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
 
-  <script src="js/surfaces.js?v=20260819tix2"></script>
+  <script src="js/surfaces.js?v=20260819tix3"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";

@@ -28,9 +28,7 @@ window.tokiSuiteNavHtml = function (currentName) {
     }
     if (!label) continue;
     if (label === currentName) {
-      parts.push(label);
-    } else if (label === "Suite") {
-      parts.push('<a href="' + href + '">← Suite</a>');
+      parts.push('<span class="is-current">' + label + "</span>");
     } else {
       parts.push('<a href="' + href + '">' + label + "</a>");
     }

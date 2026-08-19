@@ -1,0 +1,64 @@
+/* Shared Suite chrome — same nav, type, and page inset on every operator surface. */
+:root {
+  color-scheme: light dark;
+  --toki-bg: #fff;
+  --toki-muted: #666;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --toki-bg: #111;
+    --toki-muted: #aaa;
+  }
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  height: 100%;
+  background: var(--toki-bg);
+}
+body.suite-page {
+  font: 16px/1.4 system-ui, sans-serif;
+  margin: 0 auto;
+  padding: 1.25rem;
+  max-width: 36rem;
+  min-height: 100%;
+  box-sizing: border-box;
+  background: var(--toki-bg);
+}
+.suite-nav {
+  font: 16px/1.4 system-ui, sans-serif;
+  font-weight: 500;
+  color: var(--toki-muted);
+  margin: 0 0 1rem;
+}
+.suite-nav a,
+.suite-nav .is-current {
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+}
+.suite-nav a:hover {
+  text-decoration: underline;
+}
+.suite-nav .is-current {
+  cursor: default;
+}
+body.suite-page h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 .25rem;
+}
+body.suite-page .sub {
+  color: var(--toki-muted);
+  margin: 0 0 1.25rem;
+  font-size: .95rem;
+  line-height: 1.4;
+}
+body.suite-page .tiny {
+  color: var(--toki-muted);
+  font-size: .88rem;
+}
+body.suite-page a {
+  color: inherit;
+}
