@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "6c833d4",
-  "hashFull": "6c833d4b17e1b45f4d5f521ef9290913bb23b29d",
-  "subject": "QA: 2026-08-19 Better Attachment Management (pass 3)"
+  "hash": "6281e0d",
+  "hashFull": "6281e0d001f150f8f97aa0f6bf6f056348700aaa",
+  "subject": "QA: 2026-08-19 Pill location determination unclear in queues (pass 4)"
 };
