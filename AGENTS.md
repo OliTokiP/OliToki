@@ -79,5 +79,6 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 
 - `Start Toki Menu.command` — local preview
 - `Open Toki Menus.app` — multi-window / wall launcher
+- `Suite.app` — Chrome app-mode window for Suite (no URL bar; Tickets / Deployer / Manager via the in-page nav)
 - Optional local proxy: `scripts/toki_server.py` (see `scripts/gsheet_api.md`)
 - Live ship: `deploy.html` / GitHub Actions — **main** is work, **testing** is beta, **restaurant** is TVs. A git push to main does not update TVs.
