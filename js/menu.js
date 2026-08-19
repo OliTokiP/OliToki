@@ -5797,9 +5797,12 @@
 
   function tokiApiUrl(path) {
     const p = path.charAt(0) === "/" ? path : "/" + path;
-    const base = (
+    // Same-origin proxy sets _sheetsApiBase to "". Do not fall through to Cloud Run.
+    if (_sheetsApiProxy && !_sheetsApiBase) return p;
+    const base = String(
       _sheetsApiBase ||
-      String((typeof window !== "undefined" && window.TOKI_API_BASE) || "")
+        (typeof window !== "undefined" && window.TOKI_API_BASE) ||
+        ""
     ).replace(/\/$/, "");
     return base ? base + p : p;
   }

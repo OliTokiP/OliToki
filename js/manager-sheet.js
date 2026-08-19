@@ -584,6 +584,7 @@
 
   function apiUrl(path) {
     var p = path.charAt(0) === "/" ? path : "/" + path;
+    if (_proxy && !_proxyBase) return p;
     var base = _proxyBase || String(global.TOKI_API_BASE || "").replace(/\/$/, "");
     return base ? base + p : p;
   }

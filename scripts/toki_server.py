@@ -135,6 +135,16 @@ def _watch_api_and_reexec() -> None:
     _log(f"watching {path.name} for API updates")
 
 
+_TIMER_VALUE_RE = re.compile(
+    r"^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$",
+    re.I,
+)
+
+
+def _is_timer_value(raw: str) -> bool:
+    return bool(_TIMER_VALUE_RE.match(str(raw or "").strip()))
+
+
 def _cell(row: list, idx: int) -> str:
     if not row or idx < 0 or idx >= len(row):
         return ""
@@ -219,7 +229,16 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
                     _cell(rows[header_idx + 1], c), True
                 )
             if "refresh timer" in label:
-                refresh_timer = _cell(rows[header_idx + 1], c) or refresh_timer
+                cand = _cell(rows[header_idx + 1], c)
+                if _is_timer_value(cand):
+                    refresh_timer = cand
+        if not refresh_timer and header_idx is not None:
+            data_row = rows[header_idx + 1] if header_idx + 1 < len(rows) else []
+            for c in range(len(data_row or [])):
+                cand = _cell(data_row, c)
+                if _is_timer_value(cand):
+                    refresh_timer = cand
+                    break
 
     if catalog_idx is not None:
         for row in rows[catalog_idx + 1 :]:

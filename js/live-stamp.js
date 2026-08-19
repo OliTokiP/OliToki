@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "3dd9afb",
-  "hashFull": "3dd9afb2e12c58e2e6dc9c487eaed7787e59c89d",
-  "subject": "QA: 2026-08-19 Soft refresh clock not hooked up to settings (pass 2)"
+  "hash": "26d39ac",
+  "hashFull": "26d39ace1121ed9b7096b98ea05eb5a4f3e29597",
+  "subject": "Refresh Timer: local boards talk to local API, not Cloud Run"
 };
