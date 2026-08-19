@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "fcc94cc",
-  "hashFull": "fcc94cc75e15527d2c3cad349e639d80b64b383a",
-  "subject": "QA: 2026-08-18 Refresh Timer child of Require restart (pass 3)"
+  "hash": "1af5c8f",
+  "hashFull": "1af5c8f43e11e688646767b87f5243db97bf4880",
+  "subject": "QA: 2026-08-19 Drafts and piggyback tickets should show filled but greyed out type and surface options at the top (pass 1)"
 };

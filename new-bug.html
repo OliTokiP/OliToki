@@ -42,6 +42,18 @@
       min-height: 44px;
       position: relative;
     }
+    .pick.locked {
+      background: #eee;
+      border-color: #ccc;
+      color: #666;
+      cursor: default;
+    }
+    .pick.locked input[type="checkbox"] {
+      opacity: 0.7;
+    }
+    @media (prefers-color-scheme: dark) {
+      .pick.locked { background: #2a2a2a; border-color: #444; color: #aaa; }
+    }
     .pick input[type="file"] {
       position: absolute; inset: 0; opacity: 0.02; width: 100%; height: 100%; cursor: pointer;
     }
@@ -247,9 +259,25 @@
       return !!(rec && rec.screens);
     }
 
+    function lockPicks(host) {
+      if (!host) return;
+      host.querySelectorAll(".pick").forEach((p) => {
+        p.classList.add("locked");
+        const inp = p.querySelector("input");
+        if (inp) inp.disabled = true;
+      });
+    }
+
+    const preType = params.get("type");
+    const preSurface = params.get("surface");
+    const isDraftOrPiggy = params.get("draft") === "1" || params.has("piggyback") || params.get("piggy") === "1" || params.get("grey") === "1";
+
     // Preselect from ?type=feature for links from New request note (keep compatibility)
-    if (params.get("type") === "feature") {
-      kinds.forEach((b) => { b.checked = (b.value === "feature"); });
+    if (preType === "feature" || preType === "ticket") {
+      kinds.forEach((b) => { b.checked = (b.value === preType); });
+    }
+    if (preSurface) {
+      surfaces.forEach((b) => { b.checked = (b.value === preSurface); });
     }
 
     function kind() {
@@ -276,6 +304,13 @@
         screenBox.classList.toggle("on", surfaceWantsScreen());
       });
     });
+
+    // For drafts and piggyback tickets: prefilled type/surface show as filled greyed-out tiles (non-editable visual bookmark)
+    if (isDraftOrPiggy || preSurface) {
+      const typePicks = kinds[0] ? kinds[0].closest(".picks") : null;
+      if ((preType || isDraftOrPiggy) && typePicks) lockPicks(typePicks);
+      if (preSurface || isDraftOrPiggy) lockPicks(surfaceHost);
+    }
 
     function surface() {
       const on = surfaces.find((b) => b.checked);
@@ -376,7 +411,8 @@
     document.getElementById("form").addEventListener("submit", (ev) => {
       ev.preventDefault();
       const surf = surface();
-      if (!surf) { alert(pickSurfaceMessage()); return; }
+      const surfaceWasPrefilled = !!preSurface || isDraftOrPiggy;
+      if (!surfaceWasPrefilled && !surf) { alert(pickSurfaceMessage()); return; }
       if (surfaceWantsScreen() && !screens.some((b) => b.checked)) {
         alert("Pick which screen.");
         return;
