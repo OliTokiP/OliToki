@@ -59,6 +59,8 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - Never commit `secrets/` or service account keys
 - Do not force-push or rewrite published history unless asked
 - Destructive git / sheet bulk writes: confirm with the user first
+- **Never kill the Toki Menu Server on :8765.** That process is local Menu Settings. Do not start `python -m http.server` (or any one-shot static server) on 8765. Verify against the already-running `toki_server.py`. If you need a throwaway server, pick another port and leave 8765 alone.
+- **Never treat a git push / Deployer ship as “reconnect the API.”** The service account key is a static Cloud Run secret (`toki-sa-json`) plus `secrets/google-service-account.json` on this Mac. Menu Settings must keep working locally and on the web without a ship. A ship is only for app-code changes.
 
 ## Docs to read first
 

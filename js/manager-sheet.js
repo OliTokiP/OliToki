@@ -581,6 +581,7 @@
   }
 
   var _proxyBase = "";
+  var _proxyAt = 0;
 
   function apiUrl(path) {
     var p = path.charAt(0) === "/" ? path : "/" + path;
@@ -589,28 +590,45 @@
     return base ? base + p : p;
   }
 
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
   async function detectProxy() {
-    if (_proxy != null) return _proxy;
+    // A true hit is sticky. A miss is not — Cloud Run cold-start reports
+    // sheetsApi:false for a moment; locking that would drop Menu Settings.
+    if (_proxy === true) return true;
+    if (_proxy === false && Date.now() - _proxyAt < 2000) return false;
     var configured = String(global.TOKI_API_BASE || "").replace(/\/$/, "");
     var candidates = ["/api/health"];
     if (configured) candidates.push(configured + "/api/health");
-    var i;
-    for (i = 0; i < candidates.length; i++) {
-      try {
-        var res = await fetch(candidates[i], { cache: "no-store" });
-        if (!res.ok) continue;
-        var j = await res.json();
-        if (j && j.sheetsApi) {
-          _proxy = true;
-          _proxyBase =
-            candidates[i].indexOf("http") === 0
-              ? candidates[i].replace(/\/api\/health$/, "")
-              : "";
-          return true;
-        }
-      } catch (e) {}
+    var attempt;
+    for (attempt = 0; attempt < 8; attempt++) {
+      var i;
+      var waking = false;
+      for (i = 0; i < candidates.length; i++) {
+        try {
+          var res = await fetch(candidates[i], { cache: "no-store" });
+          if (!res.ok) continue;
+          var j = await res.json();
+          if (j && j.sheetsApi) {
+            _proxy = true;
+            _proxyBase =
+              candidates[i].indexOf("http") === 0
+                ? candidates[i].replace(/\/api\/health$/, "")
+                : "";
+            return true;
+          }
+          if (j && j.ok && j.sheetsApi === false) waking = true;
+        } catch (e) {}
+      }
+      if (!waking && attempt >= 1) break;
+      await sleep(400);
     }
     _proxy = false;
+    _proxyAt = Date.now();
     return false;
   }
 
@@ -1434,6 +1452,16 @@
     var urls = [path];
     var via = apiUrl(path);
     if (via && urls.indexOf(via) < 0) urls.push(via);
+    // Settings workbook is shared. Restaurant Cloud Run URL is the static
+    // robot link — Menu Settings writes must not depend on a git push or
+    // on the testing container having recovered from a quota spike.
+    if (String(path).indexOf("/api/manager/settings") >= 0) {
+      var rest = String(global.TOKI_RESTAURANT_API || "").replace(/\/$/, "");
+      if (rest) {
+        var rurl = rest + (path.charAt(0) === "/" ? path : "/" + path);
+        if (urls.indexOf(rurl) < 0) urls.push(rurl);
+      }
+    }
     var last = { ok: false, error: "Write failed" };
     var i;
     for (i = 0; i < urls.length; i++) {

@@ -70,7 +70,40 @@ CSV_TTL = 90.0
 CSV_FORCE_COALESCE_S = 2.5
 _settings_lock = threading.Lock()
 _settings_cache: dict = {"at": 0.0, "data": None}
-SETTINGS_TTL = 15.0
+# Keep this above board-poll cadence. force=1 CSV must not re-read Settings
+# every time or the shared service account burns the 60 reads/min quota.
+SETTINGS_TTL = 30.0
+_GEXEC_PATCHED = False
+
+
+def _patch_sheets_retry() -> None:
+    """Retry 429/5xx on every googleapiclient execute(). One service account
+    is shared by local + restaurant + testing — a quota spike must not
+    permanently disable the API until the next git push."""
+    global _GEXEC_PATCHED
+    if _GEXEC_PATCHED:
+        return
+    try:
+        from googleapiclient.http import HttpRequest
+    except ImportError:
+        return
+    orig = HttpRequest.execute
+
+    def execute(self, *args, **kwargs):
+        delay = 0.75
+        for i in range(7):
+            try:
+                return orig(self, *args, **kwargs)
+            except Exception as e:
+                status = getattr(getattr(e, "resp", None), "status", None)
+                if status not in (429, 500, 503) or i == 6:
+                    raise
+                _log(f"Sheets HTTP {status}; retry {i + 1}/6 in {delay:.1f}s")
+                time.sleep(delay)
+                delay = min(delay * 1.7, 12.0)
+
+    HttpRequest.execute = execute  # type: ignore[method-assign]
+    _GEXEC_PATCHED = True
 
 
 def bind_where(bind: str) -> str:
@@ -357,6 +390,7 @@ def _load_creds(key_path: Path):
         creds = service_account.Credentials.from_service_account_file(
             str(key_path), scopes=SCOPES
         )
+    _patch_sheets_retry()
     sheets = build("sheets", "v4", credentials=creds, cache_discovery=False)
     return creds, sheets
 
@@ -755,7 +789,9 @@ class SheetsBackend:
         """
         gid = str(gid)
         now = time.time()
-        self.apply_live_sheet(force_settings=force)
+        # Settings TTL already covers Data Source flips. Board force-refresh
+        # must not spend a Settings read — that is how we hit 60/min.
+        self.apply_live_sheet(force_settings=False)
 
         if not force:
             with _csv_lock:
@@ -803,7 +839,7 @@ class SheetsBackend:
         """One tab only. Does not batchGet the rest of the workbook."""
         gid = str(gid)
         now = time.time()
-        self.apply_live_sheet(force_settings=force)
+        self.apply_live_sheet(force_settings=False)
         if not force:
             with _csv_lock:
                 hit = _csv_cache.get(gid)
@@ -2191,43 +2227,82 @@ def main():
             return sibling
         return key_path
 
-    def _init_sheets() -> None:
+    def _attach_backend() -> object | None:
+        """Load the robot key and publish backend immediately.
+
+        Warmup failures must not drop the backend — that is how testing
+        stayed sheetsApi:false until the next Deployer push.
+        """
         if args.no_api:
             _log("Sheets API disabled (--no-api)")
+            return None
+        backend = SheetsBackend(
+            args.sheet_id,
+            _resolve_key(args.key),
+            settings_sheet_id=args.settings_sheet_id,
+        )
+        api["backend"] = backend
+        _log("Sheets API attached (writes + reads on)")
+        return backend
+
+    def _warmup(backend) -> None:
+        if not backend:
             return
         try:
-            backend = SheetsBackend(
-                args.sheet_id,
-                _resolve_key(args.key),
-                settings_sheet_id=args.settings_sheet_id,
-            )
-            api["backend"] = backend
             tabs = backend.refresh_meta(force=True)
             _log(f"tabs: {len(tabs['title_by_gid'])}")
             _log(
                 "Sheets API proxy: /api/sheets/csv?gid=…  "
                 "POST /api/manager/style  (/api/sheets/xlsx → 410)"
             )
-            if not args.api_only:
+            # Hosted lazy-loads tabs. Full workbook warm on Cloud Run
+            # testing was ~20 reads and blew the 60/min quota on cold start.
+            if not args.api_only and not _hosted():
                 t0 = time.time()
                 backend.warm_csv_cache(force=True)
                 _log(f"startup csv warm done in {time.time() - t0:.2f}s")
             live = backend.refresh_settings(force=False)
             src = (live or {}).get("dataSource") or ""
             set_terminal_title(window_title(args.port, args.bind, src))
-        except SystemExit as e:
-            _log(f"WARNING: Sheets API unavailable: {e}")
-            _log("Serving static files only (Menu Manager still works).")
         except Exception as e:
-            _log(f"WARNING: Sheets API init failed: {e}")
-            _log("Serving static files only; boards need public sheet or fix credentials.")
+            _log(f"WARNING: Sheets warmup failed (API stays on): {e}")
             traceback.print_exc()
 
-    # Hosted: init Sheets before listen so Cloud Run does not take traffic
-    # while the robot is still waking up. Local: bind first so the launcher
-    # health-check does not time out.
-    if args.api_only:
-        _init_sheets()
+    def _init_sheets() -> None:
+        delay = 1.0
+        while True:
+            if api.get("backend") is not None:
+                _warmup(api["backend"])
+                return
+            try:
+                backend = _attach_backend()
+                _warmup(backend)
+                return
+            except SystemExit as e:
+                _log(f"WARNING: Sheets API unavailable: {e}")
+            except Exception as e:
+                _log(f"WARNING: Sheets API init failed: {e}")
+                traceback.print_exc()
+            _log(f"retrying Sheets attach in {delay:.1f}s (key is local; no git push)")
+            time.sleep(delay)
+            delay = min(delay * 1.6, 20.0)
+
+    def _init_in_background() -> None:
+        threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
+
+    # Hosted: attach the key before listen so /api/health is never
+    # sheetsApi:false on a live process. Local: bind first so the
+    # launcher health-check does not time out, then attach.
+    if _hosted() and not args.no_api:
+        delay = 0.5
+        while api.get("backend") is None:
+            try:
+                _attach_backend()
+            except Exception as e:
+                _log(f"WARNING: hosted Sheets attach: {e}")
+                time.sleep(delay)
+                delay = min(delay * 1.6, 8.0)
+        _init_in_background()
     httpd = ThreadingHTTPServer(
         (args.bind, args.port),
         make_handler(api, ROOT, bind=args.bind, api_only=bool(args.api_only)),
@@ -2236,8 +2311,8 @@ def main():
     _log(f"serving {ROOT} on http://{args.bind}:{args.port}/")
     _log(f"window: {window_title(args.port, args.bind)}")
     _watch_api_and_reexec()
-    if not args.api_only:
-        threading.Thread(target=_init_sheets, name="sheets-init", daemon=True).start()
+    if not _hosted() and not args.no_api:
+        _init_in_background()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

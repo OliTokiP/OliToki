@@ -10,6 +10,8 @@ Your laptop is staging. **main** is today’s work. **testing** is unmerged beta
 
 **Set and forget:** leave Ship on **Website + API**. One restaurant ship updates Pages and Cloud Run together. Menu edits do not need a redeploy. The laptop is not the live server. Only ship again when app code changes.
 
+The Sheets robot key is **not** in git. It lives in Cloud Run secret `toki-sa-json` and in `secrets/google-service-account.json` on the Mac. A Deployer push does not “reconnect” the API. If Menu Settings cannot write the sheet, the API process is down, cold, or quota-limited — ship will not restore a missing key. Both Cloud Run services stay at **min instances 1** so they do not scale to zero.
+
 ## Two branches
 
 | Branch | Site | Sheet (forced) | API |

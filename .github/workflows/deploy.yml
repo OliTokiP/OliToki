@@ -158,7 +158,7 @@ jobs:
           source: scripts/cloud-run
           env_vars: TOKI_API_ONLY=1,TOKI_ENV=restaurant,TOKI_FORCE_SOURCE=restaurant
           secrets: TOKI_SA_JSON=toki-sa-json:latest
-          flags: --allow-unauthenticated --memory 512Mi --timeout 60 --max-instances 2
+          flags: --allow-unauthenticated --memory 512Mi --timeout 60 --min-instances 1 --max-instances 2
 
       - name: Cloud Run (testing site + API)
         if: >
@@ -172,7 +172,7 @@ jobs:
           source: web-context
           env_vars: TOKI_API_ONLY=0,TOKI_ENV=testing,TOKI_FORCE_SOURCE=alpha
           secrets: TOKI_SA_JSON=toki-sa-json:latest
-          flags: --allow-unauthenticated --memory 1Gi --timeout 60 --max-instances 2 --port 8080
+          flags: --allow-unauthenticated --memory 1Gi --timeout 60 --min-instances 1 --max-instances 2 --port 8080
 
       - name: Note missing GCP secret
         if: >

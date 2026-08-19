@@ -5794,6 +5794,7 @@
    */
   let _sheetsApiProxy = null; // null = unknown, true/false after probe
   let _sheetsApiBase = ""; // "" = same-origin; else Cloud Run origin
+  let _sheetsApiProxyAt = 0;
 
   function tokiApiUrl(path) {
     const p = path.charAt(0) === "/" ? path : "/" + path;
@@ -5817,34 +5818,45 @@
   };
 
   async function detectSheetsApiProxy() {
-    if (_sheetsApiProxy != null) return _sheetsApiProxy;
+    if (_sheetsApiProxy === true) return true;
+    if (_sheetsApiProxy === false && Date.now() - _sheetsApiProxyAt < 2000) {
+      return false;
+    }
     const configured = String(
       (typeof window !== "undefined" && window.TOKI_API_BASE) || ""
     ).replace(/\/$/, "");
     const candidates = ["/api/health"];
     if (configured) candidates.push(configured + "/api/health");
-    for (let i = 0; i < candidates.length; i++) {
-      try {
-        const res = await fetch(candidates[i], { cache: "no-store" });
-        if (!res.ok) continue;
-        const j = await res.json();
-        if (j && j.sheetsApi) {
-          _sheetsApiProxy = true;
-          _sheetsApiBase =
-            candidates[i].indexOf("http") === 0
-              ? candidates[i].replace(/\/api\/health$/, "")
-              : "";
-          tokiInfo(
-            "sheets proxy: yes",
-            j.email || "",
-            j.dataSource ? "dataSource=" + j.dataSource : "",
-            _sheetsApiBase ? "via " + _sheetsApiBase : "same-origin"
-          );
-          return true;
-        }
-      } catch (e) {}
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let attempt = 0; attempt < 8; attempt++) {
+      let waking = false;
+      for (let i = 0; i < candidates.length; i++) {
+        try {
+          const res = await fetch(candidates[i], { cache: "no-store" });
+          if (!res.ok) continue;
+          const j = await res.json();
+          if (j && j.sheetsApi) {
+            _sheetsApiProxy = true;
+            _sheetsApiBase =
+              candidates[i].indexOf("http") === 0
+                ? candidates[i].replace(/\/api\/health$/, "")
+                : "";
+            tokiInfo(
+              "sheets proxy: yes",
+              j.email || "",
+              j.dataSource ? "dataSource=" + j.dataSource : "",
+              _sheetsApiBase ? "via " + _sheetsApiBase : "same-origin"
+            );
+            return true;
+          }
+          if (j && j.ok && j.sheetsApi === false) waking = true;
+        } catch (e) {}
+      }
+      if (!waking && attempt >= 1) break;
+      await sleep(400);
     }
     _sheetsApiProxy = false;
+    _sheetsApiProxyAt = Date.now();
     tokiInfo("sheets proxy: unreachable → public export");
     return false;
   }

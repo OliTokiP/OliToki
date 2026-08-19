@@ -70,7 +70,7 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --memory "$MEMORY" \
   --cpu 1 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 2 \
   --timeout 60 \
   --set-env-vars "TOKI_API_ONLY=${API_ONLY},TOKI_ENV=${ENV_NAME},TOKI_FORCE_SOURCE=${FORCE_SOURCE}" \
