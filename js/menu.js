@@ -15149,7 +15149,9 @@
           clearInterval(refreshTimer);
           refreshTimer = null;
         }
-        stopSettingsWatcher();
+        // Do not stopSettingsWatcher(). The watcher must stay alive so System Font,
+        // Refresh Timer, and toggling Require restart itself are observed from the
+        // OliToki Menu Settings sheet (per MENU_MANAGER). Data timer is paused only.
         tokiInfo("refresh: Require restart enabled — auto-refresh stopped");
         setFeatureActive("softRefresh", false, "require restart");
         return;
@@ -15228,9 +15230,9 @@
 
   function startSettingsWatcher() {
     stopSettingsWatcher();
-    // 10s fixed settings watch: cheap (just System Settings), allows Refresh Timer
-    // (and require restart) changes from the gsheet to immediately affect the
-    // armed soft refresh data clock and debug display. This completes the hookup.
+    // 10s fixed settings watch: cheap (just System Settings). Allows System Font,
+    // Refresh Timer, and require restart changes from the Settings sheet to take
+    // effect on boards without a manual reload. See MENU_MANAGER.
     settingsWatchTimer = setInterval(function () {
       fetchLiveSettings().then(function () {
         try {
@@ -15276,6 +15278,10 @@
         liveSettings.dataSource || "sheet"
       );
       setFeatureActive("softRefresh", false, "require restart");
+      // Start watcher for System Settings. System Font (and Refresh Timer /
+      // require flag) must reach boards via the 10s poll + applySystemFont
+      // even when data auto-refresh is gated by Require restart. See MENU_MANAGER.
+      startSettingsWatcher();
       return;
     }
     const sec = getRefreshIntervalSeconds();
@@ -15289,6 +15295,7 @@
       return;
     }
     // Start short settings watcher so timer setting changes re-arm promptly.
+    // (Also covers live System Font updates from Menu Manager → Settings sheet.)
     startSettingsWatcher();
     // Wall: stagger first tick so all four boards don't refetch in the same
     // frame every 30s (Fix 2). Interval stays at the live rate after that.

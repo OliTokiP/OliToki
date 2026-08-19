@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "cbddf3b",
-  "hashFull": "cbddf3b8dd9f0eb4a6cf71ad9a6951da7d10c720",
-  "subject": "QA: 2026-08-19 Drafts and piggyback tickets should show filled but greyed out type and surface options at the top (pass 2)"
+  "hash": "106f4ef",
+  "hashFull": "106f4efc5e5db5798ee061d8237017a29019efa5",
+  "subject": "QA: 2026-08-19 More Tooltips for refactor + Save Stack behavior (pass 1)"
 };
