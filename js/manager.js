@@ -40,7 +40,11 @@
     holdGrid: false,
     previewTimer: null,
     toastTimer: null,
-    tooltipTimer: null,
+    tooltipItems: [],
+    tooltipSeq: 0,
+    tooltipRootTimer: null,
+    pendingTip: null,
+    tipQueryApplied: false,
     styleScroll: 0,
     pillScroll: {},
     pendingLeave: null,
@@ -736,7 +740,7 @@
     if (b.kind !== "announcements") {
       html += row({
         key: "boardFamily",
-        label: "Family Portrait (Shows Spread of All Items)",
+        label: "Family Portrait",
         value: labelOf(D.yesNo, b.familyPortrait),
       });
       html += row({
@@ -1588,62 +1592,236 @@
     }, 4000);
   }
 
-  function hideConfirmTooltip() {
-    var el = els.tooltip;
-    if (!el) return;
-    clearTimeout(state.tooltipTimer);
-    if (el.hidden) return;
-    el.classList.remove("is-on");
-    el.classList.add("is-out");
-    state.tooltipTimer = setTimeout(function () {
-      el.hidden = true;
-      el.classList.remove("is-out");
-      el.innerHTML = "";
-    }, 280);
+  var TOOLTIP_FADE_MS = 280;
+  var TOOLTIP_HOLD_MS = 6200;
+
+  function reduceTooltipMotion() {
+    return !!(
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  }
+
+  function measureTooltipCards() {
+    var map = {};
+    state.tooltipItems.forEach(function (item) {
+      if (item.el) map[item.id] = item.el.getBoundingClientRect();
+    });
+    return map;
+  }
+
+  function flipTooltipCards(before) {
+    if (reduceTooltipMotion()) return;
+    state.tooltipItems.forEach(function (item) {
+      if (!item.el || !before[item.id] || item.el.classList.contains("is-out")) {
+        return;
+      }
+      var after = item.el.getBoundingClientRect();
+      var dy = before[item.id].top - after.top;
+      if (Math.abs(dy) < 0.5) return;
+      item.el.style.transition = "none";
+      item.el.style.transform = "translateY(" + dy + "px)";
+      void item.el.offsetWidth;
+      item.el.style.transition = "";
+      item.el.style.transform = "";
+    });
+  }
+
+  function tooltipMarkup(opts) {
+    var kind = opts.kind || "info";
+    if (kind === "save") {
+      return (
+        '<div class="tooltip-save">' +
+        escapeHtml(opts.title || opts.body || "") +
+        "</div>"
+      );
+    }
+    var html = "";
+    if (opts.title) {
+      html +=
+        '<div class="tooltip-title">' + escapeHtml(opts.title) + "</div>";
+    }
+    var lines = (opts.lines || []).filter(Boolean);
+    if (lines.length > 1) {
+      html +=
+        '<ul class="tooltip-list">' +
+        lines
+          .map(function (line) {
+            return (
+              "<li>" +
+              escapeHtml(String(line).replace(/^[•\-\s]+/, "")) +
+              "</li>"
+            );
+          })
+          .join("") +
+        "</ul>";
+    } else if (lines.length === 1) {
+      html +=
+        '<div class="tooltip-body">' +
+        escapeHtml(String(lines[0]).replace(/^[•\-\s]+/, "")) +
+        "</div>";
+    } else if (opts.body) {
+      html +=
+        '<div class="tooltip-body">' + escapeHtml(opts.body) + "</div>";
+    }
+    return html;
+  }
+
+  function syncTooltipRoot() {
+    var root = els.tooltipRoot;
+    if (!root) return;
+    if (state.tooltipItems.length) {
+      root.hidden = false;
+      void root.offsetWidth;
+      root.classList.add("is-on");
+    } else {
+      root.classList.remove("is-on");
+      clearTimeout(state.tooltipRootTimer);
+      state.tooltipRootTimer = setTimeout(function () {
+        if (!state.tooltipItems.length) root.hidden = true;
+      }, TOOLTIP_FADE_MS);
+    }
+  }
+
+  function dismissTooltip(id, immediate) {
+    var i;
+    var item = null;
+    for (i = 0; i < state.tooltipItems.length; i++) {
+      if (state.tooltipItems[i].id === id) {
+        item = state.tooltipItems[i];
+        break;
+      }
+    }
+    if (!item) return;
+    clearTimeout(item.timer);
+    if (immediate || !item.el || reduceTooltipMotion()) {
+      if (item.el && item.el.parentNode) item.el.parentNode.removeChild(item.el);
+      state.tooltipItems.splice(i, 1);
+      syncTooltipRoot();
+      return;
+    }
+    if (item.el.classList.contains("is-out")) return;
+    var before = measureTooltipCards();
+    item.el.classList.add("is-out");
+    item.el.classList.remove("is-on");
+    item.el.style.maxHeight = item.el.offsetHeight + "px";
+    void item.el.offsetHeight;
+    item.el.style.maxHeight = "0px";
+    item.el.style.paddingTop = "0px";
+    item.el.style.paddingBottom = "0px";
+    item.el.style.marginTop = "0px";
+    item.el.style.marginBottom = "0px";
+    item.el.style.borderWidth = "0px";
+    flipTooltipCards(before);
+    item.timer = setTimeout(function () {
+      var idx;
+      for (idx = 0; idx < state.tooltipItems.length; idx++) {
+        if (state.tooltipItems[idx].id === id) {
+          if (item.el && item.el.parentNode) {
+            item.el.parentNode.removeChild(item.el);
+          }
+          state.tooltipItems.splice(idx, 1);
+          break;
+        }
+      }
+      syncTooltipRoot();
+    }, TOOLTIP_FADE_MS);
+  }
+
+  function dismissAllTooltips(immediate) {
+    var ids = state.tooltipItems.map(function (item) {
+      return item.id;
+    });
+    if (immediate || reduceTooltipMotion()) {
+      ids.forEach(function (id) {
+        dismissTooltip(id, true);
+      });
+      return;
+    }
+    ids.forEach(function (id) {
+      var item = null;
+      var i;
+      for (i = 0; i < state.tooltipItems.length; i++) {
+        if (state.tooltipItems[i].id === id) {
+          item = state.tooltipItems[i];
+          break;
+        }
+      }
+      if (!item || !item.el || item.el.classList.contains("is-out")) return;
+      clearTimeout(item.timer);
+      item.el.classList.add("is-out");
+      item.el.classList.remove("is-on");
+      item.timer = setTimeout(function () {
+        dismissTooltip(id, true);
+      }, TOOLTIP_FADE_MS);
+    });
+    var root = els.tooltipRoot;
+    if (root) root.classList.remove("is-on");
+  }
+
+  function showTooltip(opts) {
+    var stack = els.tooltipStack;
+    if (!stack) return;
+    var id = ++state.tooltipSeq;
+    var before = measureTooltipCards();
+    var el = document.createElement("button");
+    el.type = "button";
+    el.className =
+      "tooltip-card" + (opts.kind === "save" ? " is-save" : " is-info");
+    el.setAttribute("data-act", "tooltip-dismiss");
+    el.setAttribute("data-tip-id", String(id));
+    el.innerHTML = tooltipMarkup(opts);
+    stack.appendChild(el);
+    var item = { id: id, el: el, timer: null };
+    state.tooltipItems.push(item);
+    syncTooltipRoot();
+    flipTooltipCards(before);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        el.classList.add("is-on");
+      });
+    });
+    item.timer = setTimeout(function () {
+      dismissTooltip(id, false);
+    }, TOOLTIP_HOLD_MS);
+    return id;
   }
 
   function showConfirmSaveTooltip(choice) {
-    var el = els.tooltip;
-    if (!el) return;
-    hideConfirmTooltip();
     var isYes = String(choice) === "yes";
-    var title = isYes
-      ? "Save confirmation enabled."
-      : "Save confirmation surpassed.";
-    var bullets = isYes
-      ? [
-          "• Press < to save page.",
-          "• Changes go live after save confirmation"
-        ]
-      : [
-          "• Options save on a per-change basis",
-          "• Database and menu are updated instantly",
-          "• Use with caution"
-        ];
-    var html =
-      '<div class="tooltip-title">' +
-      escapeHtml(title) +
-      "</div>" +
-      bullets
-        .map(function (b) {
-          return '<div class="tooltip-line">' + escapeHtml(b) + "</div>";
-        })
-        .join("");
-    el.innerHTML = html;
-    el.hidden = false;
-    el.classList.remove("is-out");
-    void el.offsetWidth;
-    el.classList.add("is-on");
-    clearTimeout(state.tooltipTimer);
-    state.tooltipTimer = setTimeout(function () {
-      el.classList.remove("is-on");
-      el.classList.add("is-out");
-      state.tooltipTimer = setTimeout(function () {
-        el.hidden = true;
-        el.classList.remove("is-out");
-        el.innerHTML = "";
-      }, 280);
-    }, 6200);
+    showTooltip({
+      title: isYes
+        ? "Save confirmation enabled."
+        : "Save confirmation surpassed.",
+      lines: isYes
+        ? [
+            "Press < to save page.",
+            "Changes go live after save confirmation"
+          ]
+        : [
+            "Options save on a per-change basis",
+            "Database and menu are updated instantly",
+            "Use with caution"
+          ],
+    });
+  }
+
+  function showFamilyPortraitTooltip() {
+    showTooltip({
+      title: "Family Portrait Enabled",
+      body: "Shows spread of all products as first frame presentation",
+    });
+  }
+
+  function showEncoreTooltip() {
+    showTooltip({
+      title: "Encore Enabled",
+      lines: [
+        "Shows all products in spread and zooms in on each individually",
+        "Overrides background with its own",
+        "Heavy Filter (resource intensive, may not run well on all systems)",
+      ],
+    });
   }
 
   function rememberStyleScroll() {
@@ -1652,7 +1830,7 @@
   }
 
   function go(screen, boardId) {
-    hideConfirmTooltip();
+    dismissAllTooltips(true);
     if (state.screen === "style") rememberStyleScroll();
     state.picker = null;
     state.dialog = null;
@@ -1713,7 +1891,6 @@
   }
 
   function back() {
-    hideConfirmTooltip();
     if (state.picker) {
       state.picker = null;
       renderPicker();
@@ -1724,6 +1901,7 @@
       renderDialog();
       return;
     }
+    dismissAllTooltips(true);
     if (state.screen === "style") {
       leaveStyle(function () {
         history.back();
@@ -1749,7 +1927,6 @@
   }
 
   function openPicker(key) {
-    hideConfirmTooltip();
     var spec = pickerSpec(key);
     if (!spec) return;
     if (key === "boardTitle") {
@@ -1784,7 +1961,6 @@
   }
 
   function choose(id) {
-    hideConfirmTooltip();
     var spec = pickerSpec(state.picker);
     if (!spec) return;
     if (state.picker === "wallpaper" && id === "upload") {
@@ -1816,6 +1992,15 @@
       // When "Confirm save?" is no, other System Settings options save instantly.
       state.pendingLeave = null;
       confirmChoice("yes");
+    }
+    if (pickKey === "boardFamily" && id === "yes") {
+      showFamilyPortraitTooltip();
+    }
+    if (
+      (pickKey === "boardPresentation" || pickKey === "presentation") &&
+      id === "encore"
+    ) {
+      showEncoreTooltip();
     }
     if (pickKey === "boardPresentation") {
       previewCtl.encoreFirst = true;
@@ -3079,6 +3264,28 @@
     }
   }
 
+  function flushPendingTip() {
+    var tip = state.pendingTip;
+    if (!tip) return;
+    state.pendingTip = null;
+    setTimeout(function () {
+      if (tip === "stack") {
+        showFamilyPortraitTooltip();
+        showEncoreTooltip();
+      } else if (tip === "family") {
+        showFamilyPortraitTooltip();
+      } else if (tip === "encore") {
+        showEncoreTooltip();
+      } else if (tip === "confirm" || tip === "yes") {
+        showConfirmSaveTooltip("yes");
+      } else if (tip === "no") {
+        showConfirmSaveTooltip("no");
+      } else if (tip === "save") {
+        showTooltip({ kind: "save", title: "Data Saved to Sheet." });
+      }
+    }, 60);
+  }
+
   function applyQueryParams() {
     var params = queryParams();
     if (params.get("pick")) state.picker = params.get("pick");
@@ -3101,6 +3308,11 @@
     if (params.get("speed") != null && params.get("speed") !== "") {
       var sp = parseInt(params.get("speed"), 10);
       if (!isNaN(sp)) state.draft.presentationSpeed = sp;
+    }
+    if (!state.tipQueryApplied) {
+      var tip = params.get("tip");
+      if (tip) state.pendingTip = tip;
+      state.tipQueryApplied = true;
     }
     if (params.get("holdGrid") === "1") {
       state.draft.presentation = "encore";
@@ -3190,6 +3402,7 @@
     readHash();
     var boardChanged = (target.boardId || null) !== (prevBoard || null);
     if (target.screen !== prevScreen || boardChanged) {
+      dismissAllTooltips(true);
       renderAll();
     } else {
       // Same screen (hashchange/pop from our writeHash when entering Style,
@@ -3406,8 +3619,12 @@
     } else if (act === "create-cancel") {
       state.dialog = null;
       renderDialog();
+    } else if (act === "tooltip-dismiss") {
+      var tipId = parseInt(t.getAttribute("data-tip-id"), 10);
+      if (!isNaN(tipId)) dismissTooltip(tipId, false);
+    } else if (act === "tooltip-dismiss-all") {
+      dismissAllTooltips(false);
     } else if (act === "picker-dismiss") {
-      hideConfirmTooltip();
       state.picker = null;
       renderPicker();
     } else if (act === "open-sheet") {
@@ -3440,7 +3657,10 @@
 
   function onKey(e) {
     if (e.key === "Escape") {
-      hideConfirmTooltip();
+      if (state.tooltipItems.length && !state.picker && !state.dialog) {
+        dismissAllTooltips(false);
+        return;
+      }
       back();
     }
   }
@@ -3484,7 +3704,8 @@
     els.picker = document.getElementById("picker");
     els.dialog = document.getElementById("dialog");
     els.toast = document.getElementById("toast");
-    els.tooltip = document.getElementById("tooltip");
+    els.tooltipRoot = document.getElementById("tooltip-root");
+    els.tooltipStack = document.getElementById("tooltip-stack");
     els.device.addEventListener("click", onClick);
     function blockHeroScroll(e) {
       if (e.target.closest && e.target.closest(".status, .preview, .header, .home-hero")) {
@@ -3505,6 +3726,7 @@
     watchFonts();
     fitDevice();
     renderAll();
+    flushPendingTip();
     loadSheet();
   }
 

@@ -232,6 +232,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     require_restart = False
     system_font = "roboto"
     limit_heavy_filters = True
+    confirm_save = True
     refresh_timer = ""
     catalog: list[dict] = []
 
@@ -261,6 +262,8 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
                 limit_heavy_filters = _parse_yes(
                     _cell(rows[header_idx + 1], c), True
                 )
+            if "confirm" in label and "save" in label:
+                confirm_save = _parse_yes(_cell(rows[header_idx + 1], c), True)
             if "refresh timer" in label:
                 cand = _cell(rows[header_idx + 1], c)
                 if _is_timer_value(cand):
@@ -307,6 +310,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         "requireRestart": require_restart,
         "systemFont": system_font,
         "limitHeavyFilters": bool(limit_heavy_filters),
+        "confirmSave": bool(confirm_save),
         "refreshTimer": refresh_timer or "",
         "sheetId": sheet_id,
         "sourceName": (match or {}).get("name") or "",
@@ -1960,6 +1964,9 @@ def make_handler(
                             "systemFont": live.get("systemFont") or "roboto",
                             "limitHeavyFilters": live.get("limitHeavyFilters")
                             if "limitHeavyFilters" in live
+                            else True,
+                            "confirmSave": live.get("confirmSave")
+                            if "confirmSave" in live
                             else True,
                             "refreshTimer": live.get("refreshTimer") or "",
                             "sheetId": backend.sheet_id,

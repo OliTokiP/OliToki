@@ -53,7 +53,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 
-QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`.
+QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`.
 
 ---
 
@@ -103,21 +103,24 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 
 ## Tooltip
 
-The `.tooltip` element (manager.html + manager.js + manager.css) is a reusable transient, centered callout for explaining the effect of a setting change after a binary Yes/No panel is dismissed.
+The `#tooltip-root` stack (manager.html + manager.js + manager.css) is a reusable overlay for post-choice explanations. Confirm Changes and dropdown pickers stay as they are.
 
-- Triggered from picker `choose()` for keys like `confirmSave`.
-- Horizontally centered in the device page (via `left:50% + translateX(-50%)`, reasonable vertical placement so it reads after the picker card closes).
-- Contains a bold title + bullet lines.
-- Auto-fades after ~6s. Can be dismissed by navigation actions (back, new pick, Escape).
-- Theme tokens: background `--secondary`, border `--highlight`.
-- Intended for reuse on other preference nuances. Keep copy short and actionable.
+- Lives in the **mini-display** (top slot: `.status` or `.preview`, `--top-slot-h`). A shroud covers that slot only; the list below stays tappable.
+- Cards stack like Notification Center: oldest on top, newest below. The stack stays centered as cards enter or leave.
+- New cards fade in; each auto-fades after ~6s (oldest first). Tap a card to dismiss that card; tap the shroud or Escape to dismiss the stack. Leaving the screen clears them.
+- **Info:** centered bold title (hard return) + left-aligned body. Multiple lines become a `•` list (soft return between items).
+- **Save:** inverted theme tokens (`--main` fill, `--secondary` type) via `kind: "save"`.
+- Theme tokens inherit the selected theme.
 
-Example usage (Confirm save?):
+Triggered from picker `choose()`:
 
-- "yes" → "Save confirmation enabled." + guidance to use back button.
-- "no" → "Save confirmation surpassed." + instant-save warning.
+| Choice | Title | Body |
+|--------|-------|------|
+| Confirm save? Yes / No | Save confirmation enabled. / surpassed. | Existing bullet guidance |
+| Family Portrait Yes | Family Portrait Enabled | Shows spread of all products as first frame presentation |
+| Presentation Style → Encore | Encore Enabled | Spread + zoom, own background, heavy filter |
 
-When adding new tooltips or similar post-choice explanations, prefer this component over new toast variants or inline notes.
+When adding new post-choice explanations, prefer this stack over new toast variants or inline notes.
 
 ---
 

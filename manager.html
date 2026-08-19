@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/motion.css?v=20260817m5" />
-  <link rel="stylesheet" href="css/manager.css?v=20260819c2" />
+  <link rel="stylesheet" href="css/manager.css?v=20260819tt1" />
 </head>
 <body>
   <div class="studio">
@@ -22,7 +22,10 @@
       <div class="picker" id="picker" hidden></div>
       <div class="dialog-root" id="dialog" hidden></div>
       <div class="toast" id="toast" hidden></div>
-      <div class="tooltip" id="tooltip" hidden></div>
+      <div class="tooltip-root" id="tooltip-root" hidden>
+        <div class="tooltip-shroud" data-act="tooltip-dismiss-all"></div>
+        <div class="tooltip-stack" id="tooltip-stack" aria-live="polite"></div>
+      </div>
     </div>
     </div>
   </div>
@@ -33,6 +36,6 @@
   <script src="js/surfaces.js?v=20260819tix1"></script>
   <script src="js/manager-data.js?v=20260818rt1"></script>
   <script src="js/manager-sheet.js?v=20260819api1"></script>
-  <script src="js/manager.js?v=20260819c2"></script>
+  <script src="js/manager.js?v=20260819tt1"></script>
 </body>
 </html>
