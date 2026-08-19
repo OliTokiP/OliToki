@@ -1832,6 +1832,15 @@
       if (styleOk) return "Style saved to " + src;
       return "Could not write to sheet — saved for this session";
     }
+    if (kind === "system") {
+      if (!needed) return "Saved for this session";
+      if (wrote && wrote.ok) {
+        return "System settings saved to " + src;
+      }
+      return fb
+        ? "System settings saved (fallback)"
+        : "System settings saved for this session";
+    }
     if (needed) {
       if (wrote && wrote.ok) {
         var bits = [];
@@ -3062,6 +3071,21 @@
         if (fresh) {
           state.boardDraft = clone(fresh);
           state.boardCommitted = clone(fresh);
+        }
+      }
+      // Re-apply the last board Yes (committed) after a sheet payload so that
+      // board names (and settings) updated without reload survive the D.boards
+      // assign (late initial load at boot, or explicit reload-sheet). This keeps
+      // the Menu Settings list (and future board entries) consistent like theme
+      // draft updates, without forcing a sheet re-read.
+      if (state.boardCommitted && state.boardCommitted.id) {
+        var kDirty =
+          state.screen === "board" &&
+          boardDirty() &&
+          state.boardDraft &&
+          state.boardDraft.id === state.boardCommitted.id;
+        if (!kDirty) {
+          applyBoardToCatalog(state.boardCommitted);
         }
       }
     }
