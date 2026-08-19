@@ -29,6 +29,8 @@ DEFAULT_TESTING_SITE = (
 ).strip()
 RESTAURANT_SITE = "https://olitokip.github.io/OliToki"
 RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app"
+# Rewritten after every ship. They always conflict on merge; take source, then rewrite.
+GENERATED_SHIP_FILES = ("js/live-stamp.js", "js/env.js")
 
 
 def run(args: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
@@ -148,8 +150,41 @@ def ship(opts: dict) -> dict:
             check=False,
         )
         if merge.returncode != 0:
-            run(["git", "merge", "--abort"], check=False)
-            raise SystemExit(f"merge {source} → {target} failed")
+            unmerged = [
+                p
+                for p in git_out(["diff", "--name-only", "--diff-filter=U"]).splitlines()
+                if p.strip()
+            ]
+            leftover = [p for p in unmerged if p not in GENERATED_SHIP_FILES]
+            if leftover or not unmerged:
+                run(["git", "merge", "--abort"], check=False)
+                raise SystemExit(
+                    "merge "
+                    + source
+                    + " → "
+                    + target
+                    + " failed"
+                    + (": " + ", ".join(leftover) if leftover else "")
+                )
+            for path in unmerged:
+                # ours = target, theirs = source. Stamps are rewritten after merge.
+                run(["git", "checkout", "--theirs", "--", path])
+                run(["git", "add", "--", path])
+            print(
+                "resolved generated conflict: "
+                + ", ".join(unmerged)
+                + " (rewritten after merge)",
+                flush=True,
+            )
+            run(
+                [
+                    "git",
+                    "commit",
+                    "--no-edit",
+                    "-m",
+                    f"deploy: merge {source} into {target}",
+                ]
+            )
     else:
         run(["git", "checkout", "-B", target, source])
 

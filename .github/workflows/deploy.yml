@@ -37,7 +37,7 @@ on:
         required: false
         default: ""
   issues:
-    types: [opened, labeled]
+    types: [labeled]
 
 permissions:
   contents: write
@@ -51,9 +51,7 @@ jobs:
   deploy:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event.label.name == 'toki-deploy') ||
-      contains(join(github.event.issue.labels.*.name, ','), 'toki-deploy') ||
-      contains(github.event.issue.body, '### toki-deploy')
+      (github.event_name == 'issues' && github.event.label.name == 'toki-deploy')
     runs-on: ubuntu-latest
     env:
       TOKI_TESTING_API: ${{ vars.TOKI_TESTING_API }}
