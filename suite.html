@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
   <title>Suite</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819ch1" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819dot1" />
   <style>
     .live {
       font-weight: 600;
@@ -84,9 +84,8 @@
   </table>
   <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
 
-  <script src="js/surfaces.js?v=20260819tix4"></script>
+  <script src="js/surfaces.js?v=20260819dot1"></script>
   <script>
-    const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
     const SUITE = window.TOKI_SUITE || {};
 
@@ -171,23 +170,47 @@
 
     async function refreshLive() {
       const el = document.getElementById("live");
+      const dot = window.tokiStatusDot || function () { return ""; };
       try {
-        const [git, stamp] = await Promise.all([
-          fetch("https://api.github.com/repos/" + REPO + "/commits/main", {
-            headers: { Accept: "application/vnd.github+json" },
-          }).then((r) => r.json()),
-          fetch(PAGES + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
-            r.ok ? r.text() : ""
-          ),
+        const [pageHash, restaurant, main] = await Promise.all([
+          window.tokiPagesStamp(),
+          window.tokiBranchStamp("restaurant"),
+          window.tokiBranchBuild("main"),
         ]);
-        const g = String(git.sha || "").slice(0, 7).toLowerCase();
-        const pm = String(stamp).match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
-        const p = (pm ? pm[1] : "").slice(0, 7).toLowerCase();
-        if (g && p && g === p) el.textContent = "Pages vs git: 🟢 " + g + " — safe to check live";
-        else if (g || p) el.textContent = "Pages vs git: 🔴 live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
-        else el.textContent = "Pages vs git: 🔴 could not read";
+        const ok = !!(pageHash && restaurant && pageHash === restaurant);
+        const lines = [];
+        if (ok) {
+          lines.push(
+            dot("ok") +
+              "Live `" +
+              pageHash +
+              "` matches restaurant — TVs are current"
+          );
+        } else if (pageHash && restaurant) {
+          lines.push(
+            dot("bad") +
+              "Live `" +
+              pageHash +
+              "` · restaurant `" +
+              restaurant +
+              "` — ship restaurant to update TVs"
+          );
+        } else {
+          lines.push(
+            dot("off") +
+              "Live `" +
+              (pageHash || "?") +
+              "` · restaurant `" +
+              (restaurant || "can't read") +
+              "`"
+          );
+        }
+        if (!onLive()) {
+          lines.push("This copy (main work): `" + (main || "?") + "`");
+        }
+        el.innerHTML = lines.map(function (l) { return "<p>" + l + "</p>"; }).join("");
       } catch (e) {
-        el.textContent = "Pages vs git: 🔴 could not read";
+        el.innerHTML = "<p>" + dot("off") + "Could not read live status</p>";
       }
     }
     refreshLive();

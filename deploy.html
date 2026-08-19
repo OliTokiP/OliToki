@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
   <title>Deployer</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819ch1" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819dot1" />
   <style>
     .live {
       font-weight: 600;
@@ -113,10 +113,9 @@
     <button type="submit" id="go">File deploy</button>
   </form>
 
-  <script src="js/surfaces.js?v=20260819tix4"></script>
+  <script src="js/surfaces.js?v=20260819dot1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
-    const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
     (function paintNav() {
       const html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Deployer");
@@ -177,61 +176,6 @@
     document.querySelector("[name=sourceRef]").addEventListener("input", updateSummary);
     updateSummary();
 
-    function short(sha) {
-      return String(sha || "").slice(0, 7).toLowerCase();
-    }
-
-    async function hashFromText(text) {
-      const m = String(text || "").match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
-      return short(m ? m[1] : "");
-    }
-
-    async function stampFrom(url) {
-      try {
-        const text = await fetch(url + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
-          r.ok ? r.text() : ""
-        );
-        return hashFromText(text);
-      } catch (e) {
-        return "";
-      }
-    }
-
-    /** Public raw file — no GitHub API token, no rate-limit 403 in the phone browser. */
-    async function branchStamp(branch) {
-      try {
-        const url =
-          "https://raw.githubusercontent.com/" +
-          REPO +
-          "/" +
-          encodeURIComponent(branch) +
-          "/js/live-stamp.js?t=" +
-          Date.now();
-        const res = await fetch(url);
-        if (!res.ok) return "";
-        return hashFromText(await res.text());
-      } catch (e) {
-        return "";
-      }
-    }
-
-    async function branchBuild(branch) {
-      try {
-        const url =
-          "https://raw.githubusercontent.com/" +
-          REPO +
-          "/" +
-          encodeURIComponent(branch) +
-          "/js/build-info.js?t=" +
-          Date.now();
-        const res = await fetch(url);
-        if (!res.ok) return "";
-        return hashFromText(await res.text());
-      } catch (e) {
-        return "";
-      }
-    }
-
     async function apiHealth(url) {
       try {
         const j = await fetch(url + "/api/health?t=" + Date.now()).then((r) =>
@@ -252,40 +196,42 @@
           (window.TOKI_TESTING_SITE || "").replace(/\/$/, "") || testingApi;
         const [main, testing, restaurant, pageHash, restHealth, testHealth] =
           await Promise.all([
-            branchBuild("main"),
-            branchStamp("testing"),
-            branchStamp("restaurant"),
-            stampFrom(PAGES),
+            window.tokiBranchBuild("main"),
+            window.tokiBranchStamp("testing"),
+            window.tokiBranchStamp("restaurant"),
+            window.tokiPagesStamp(),
             apiHealth(RESTAURANT_API),
             testingApi ? apiHealth(testingApi) : Promise.resolve(null),
           ]);
         // Compare Pages stamp to restaurant stamp (source SHA). Do not compare
         // to the restaurant branch tip — that is a merge commit and never matches.
         const pageOk = restaurant && pageHash && restaurant === pageHash;
+        const dot = window.tokiStatusDot || function () { return ""; };
         const lines = [];
         lines.push(
-          "Restaurant site: " + (pageOk ? "🟢 " : "🔴 ") +
-          "live `" + (pageHash || "?") + "` · restaurant `" +
-          (restaurant || "can't read GitHub") + "`" +
-          (pageOk ? "" : pageHash && restaurant ? " — Pages catching up" : "")
+          dot(pageOk ? "ok" : pageHash && restaurant ? "bad" : "off") +
+          "Restaurant site: live `" + (pageHash || "?") + "` · restaurant `" +
+          (restaurant || "can't read") + "`" +
+          (pageOk ? " — TVs are current" : pageHash && restaurant ? " — ship restaurant to update TVs" : "")
         );
         lines.push(
+          dot(restHealth && restHealth.ok ? "ok" : "bad") +
           "Restaurant API: " +
-          (restHealth && restHealth.ok ? "🟢 " : "🔴 ") +
           (restHealth && restHealth.dataSource ? restHealth.dataSource : "down") +
           (restHealth && restHealth.env ? " · env " + restHealth.env : "")
         );
-        lines.push("testing branch: `" + (testing || "missing") + "`");
+        lines.push("testing stamp: `" + (testing || "can't read") + "`");
         if (testHealth) {
           lines.push(
-            "Testing API: 🟢 " +
+            dot("ok") +
+            "Testing API: " +
             (testHealth.dataSource || "") +
             (testHealth.env ? " · env " + testHealth.env : "")
           );
         } else if (testingSite) {
-          lines.push("Testing site: 🔴 " + testingSite);
+          lines.push(dot("bad") + "Testing site: " + testingSite);
         } else {
-          lines.push("Testing site: not shipped yet — first Testing deploy creates it");
+          lines.push(dot("off") + "Testing site: not shipped yet — first Testing deploy creates it");
         }
         lines.push("main (work): `" + (main || "?") + "`");
         el.innerHTML = lines.map((l) => "<p>" + l + "</p>").join("");

@@ -60,6 +60,73 @@ function tokiListenerHomeUrl() {
 }
 window.tokiGetTicketsUrl = tokiListenerHomeUrl;
 
+window.TOKI_GITHUB_REPO = "OliTokiP/OliToki";
+window.TOKI_PAGES = "https://olitokip.github.io/OliToki";
+
+window.tokiStatusDot = function (kind) {
+  var fill = kind === "ok" ? "#16a34a" : kind === "bad" ? "#dc2626" : "#9ca3af";
+  return (
+    '<svg class="status-dot" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">' +
+    '<circle cx="4" cy="4" r="3.5" fill="' +
+    fill +
+    '"/>' +
+    "</svg>"
+  );
+};
+
+window.tokiShortHash = function (raw) {
+  return String(raw || "")
+    .replace(/^#/, "")
+    .slice(0, 7)
+    .toLowerCase();
+};
+
+window.tokiHashFromStampText = function (text) {
+  var m = String(text || "").match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
+  return window.tokiShortHash(m ? m[1] : "");
+};
+
+window.tokiFetchStampHash = async function (url) {
+  try {
+    var sep = String(url).indexOf("?") >= 0 ? "&" : "?";
+    var res = await fetch(url + sep + "t=" + Date.now());
+    if (!res.ok) return "";
+    return window.tokiHashFromStampText(await res.text());
+  } catch (e) {
+    return "";
+  }
+};
+
+window.tokiPagesStamp = function () {
+  var pages = String(window.TOKI_PAGES || "https://olitokip.github.io/OliToki").replace(
+    /\/$/,
+    ""
+  );
+  return window.tokiFetchStampHash(pages + "/js/live-stamp.js");
+};
+
+window.tokiBranchStamp = function (branch) {
+  var repo = window.TOKI_GITHUB_REPO || "OliTokiP/OliToki";
+  return window.tokiFetchStampHash(
+    "https://raw.githubusercontent.com/" +
+      repo +
+      "/" +
+      encodeURIComponent(branch) +
+      "/js/live-stamp.js"
+  );
+};
+
+window.tokiBranchBuild = function (branch) {
+  var repo = window.TOKI_GITHUB_REPO || "OliTokiP/OliToki";
+  return window.tokiFetchStampHash(
+    "https://raw.githubusercontent.com/" +
+      repo +
+      "/" +
+      encodeURIComponent(branch) +
+      "/js/build-info.js"
+  );
+};
+
 window.TOKI_SUITE = {
   "surfaces": [
     { "name": "Listener", "page": "", "label": "Listener" },

@@ -62,3 +62,10 @@ body.suite-page .tiny {
 body.suite-page a {
   color: inherit;
 }
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  vertical-align: 0.05em;
+  margin-right: 0.4em;
+}
