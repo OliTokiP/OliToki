@@ -15,6 +15,7 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 ### Docs updated
 - [DEPLOYER.md](./DEPLOYER.md)
+- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
 - [MENU_MANAGER.md](./MENU_MANAGER.md)
 
 ---
