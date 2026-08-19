@@ -317,6 +317,8 @@ def git_commit(message: str, full: bool = False) -> bool:
             "index.html", "index2.html", "index3.html", "index4.html",
             "preview-all.html", "glossary.html", "manager.html",
             "new-bug.html",
+            "deploy.html",
+            "suite.html",
             "push.html",
             ".github/",
             "docs/", "scripts/", "deprecated/",

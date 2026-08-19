@@ -4,7 +4,7 @@
 
 | Doc | Purpose |
 |-----|---------|
-| [HOW_TO_SHIP.md](./HOW_TO_SHIP.md) | **Operator guide** — Launcher / Deployer settings + how to update the TVs |
+| [HOW_TO_SHIP.md](./HOW_TO_SHIP.md) | **Operator guide** — Suite / Launcher / Deployer settings + how to update the TVs |
 | [MENU_MANAGER.md](./MENU_MANAGER.md) | **Mobile Menu Manager** layout prototype (`manager.html`) |
 | [SUPPORTED_DEVICES.md](./SUPPORTED_DEVICES.md) | **Fire Stick HD = 1080p max.** AbleSign `3840×2160 dpr2` lie + URL pin |
 | [WHATS_NEW.md](./WHATS_NEW.md) | **Major features & changes** (timestamped; newest first) |

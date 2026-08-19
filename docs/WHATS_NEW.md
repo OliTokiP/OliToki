@@ -1,9 +1,21 @@
 # What’s New
 
-**Last updated:** 2026-08-16 00:55  
+**Last updated:** 2026-08-18 21:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-18 21:30 — Suite phone hub + one-file surfaces
+
+**Boards / surface:** `suite.html` (operator hub — not the TV boards)  
+**Sheet:** none  
+**Summary:** Phone page in the Launcher / Deployer style that links Deployer, Tickets, Menu Manager, and the boards. New **Suite** ticketing surface. Adding a surface is one object in `js/surfaces.js` — Listener creates `QA/<name>` and `FEATURE REQUESTS/<name>` plus Queue pages.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
 
 ---
 

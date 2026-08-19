@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-08-18
 
+Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
+
 Phone form: [`deploy.html`](../deploy.html). Worker: GitHub Actions [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 
 Your laptop is staging. **main** is today’s work. **testing** is unmerged beta. **restaurant** is what the dining-room TVs run.

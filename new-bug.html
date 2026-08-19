@@ -55,6 +55,10 @@
       background: #1a1a1a; color: #fff;
     }
     a { color: inherit; }
+    .tiny { color: #666; font-size: .88rem; margin: 0 0 .75rem; }
+    @media (prefers-color-scheme: dark) {
+      .tiny { color: #aaa; }
+    }
 
     .new-ticket {
       font-weight: 500; margin: 0 0 .5rem; padding: .55rem .75rem; border: 1px solid #bbb; border-radius: 8px;
@@ -94,8 +98,9 @@
   </style>
 </head>
 <body>
+  <p class="tiny" id="nav"><a href="suite.html">← Suite</a> · <a href="deploy.html">Deployer</a> · Tickets · <a href="manager.html">Menu Manager</a></p>
   <div class="new-ticket" id="heading">New ticket</div>
-  <p class="sub">Works from your phone anywhere. Files a GitHub issue; the Mac writes the vault ticket when it is online. Ship code from <a href="deploy.html">Deployer</a>.</p>
+  <p class="sub">Works from your phone anywhere. Files a GitHub issue; the Mac writes the vault ticket when it is online. Hub: <a href="suite.html">Suite</a>. Ship: <a href="deploy.html">Deployer</a>.</p>
   <div class="live" id="live">Pages vs git: checking…</div>
 
   <form id="form">
@@ -110,13 +115,7 @@
 
     <div id="screens">
       <div class="lab">Which screen</div>
-      <div class="picks" id="screen-picks">
-        <label class="pick"><input type="checkbox" name="screen" value="index.html" data-label="1 · Bowls" /> 1 · Bowls</label>
-        <label class="pick"><input type="checkbox" name="screen" value="index2.html" data-label="2 · Handhelds" /> 2 · Handhelds</label>
-        <label class="pick"><input type="checkbox" name="screen" value="index3.html" data-label="3 · Munchies" /> 3 · Munchies</label>
-        <label class="pick"><input type="checkbox" name="screen" value="index4.html" data-label="4 · Drinks" /> 4 · Drinks</label>
-        <label class="pick"><input type="checkbox" name="screen" value="preview-all.html" data-label="Wall" /> Wall</label>
-      </div>
+      <div class="picks" id="screen-picks"></div>
     </div>
 
     <label>Title <input type="text" name="title" required placeholder="Short title" /></label>
@@ -163,15 +162,40 @@
     <button type="submit" id="go">Log ticket</button>
   </form>
 
+  <script src="js/surfaces.js?v=20260818suite1"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
-    const SURFACES = ["Listener", "Menu Manager", "Menu Screens", "Deployer"];
-    const SURFACE_PAGES = {
-      Listener: { page: "Listener.md", label: "Listener" },
-      "Menu Manager": { page: "manager.html", label: "Menu Manager" },
-      Deployer: { page: "deploy.html", label: "Deployer" },
-    };
+    const SUITE = window.TOKI_SUITE || {};
+    const SURFACES = (SUITE.surfaces || []).map((s) => s.name).filter(Boolean);
+    if (!SURFACES.length) {
+      SURFACES.push("Listener", "Menu Manager", "Menu Screens", "Deployer", "Suite");
+    }
+    const SURFACE_PAGES = {};
+    (SUITE.surfaces || []).forEach((s) => {
+      if (s && s.name && s.page) {
+        SURFACE_PAGES[s.name] = { page: s.page, label: s.label || s.name };
+      }
+    });
+    if (!SURFACE_PAGES["Menu Manager"]) {
+      SURFACE_PAGES["Menu Manager"] = { page: "manager.html", label: "Menu Manager" };
+    }
+    if (!SURFACE_PAGES.Deployer) {
+      SURFACE_PAGES.Deployer = { page: "deploy.html", label: "Deployer" };
+    }
+    if (!SURFACE_PAGES.Suite) {
+      SURFACE_PAGES.Suite = { page: "suite.html", label: "Suite" };
+    }
+    const SCREEN_LIST = SUITE.screens || [
+      { page: "index.html", label: "1 · Bowls" },
+      { page: "index2.html", label: "2 · Handhelds" },
+      { page: "index3.html", label: "3 · Munchies" },
+      { page: "index4.html", label: "4 · Drinks" },
+      { page: "preview-all.html", label: "Wall" },
+    ];
+    function surfaceRecord(name) {
+      return (SUITE.surfaces || []).find((s) => s && s.name === name) || null;
+    }
     const params = new URLSearchParams(location.search);
 
     function pickSurfaceMessage() {
@@ -204,7 +228,24 @@
       surfaceHost.appendChild(lab);
     });
     const surfaces = onlyOne("surface");
+    const screenHost = document.getElementById("screen-picks");
+    SCREEN_LIST.forEach((item) => {
+      const lab = document.createElement("label");
+      lab.className = "pick";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.name = "screen";
+      box.value = item.page;
+      box.setAttribute("data-label", item.label || item.page);
+      lab.appendChild(box);
+      lab.appendChild(document.createTextNode(" " + (item.label || item.page)));
+      screenHost.appendChild(lab);
+    });
     const screens = onlyOne("screen");
+    function surfaceWantsScreen() {
+      const rec = surfaceRecord(surface());
+      return !!(rec && rec.screens);
+    }
 
     // Preselect from ?type=feature for links from New request note (keep compatibility)
     if (params.get("type") === "feature") {
@@ -232,7 +273,7 @@
     const screenBox = document.getElementById("screens");
     surfaces.forEach((box) => {
       box.addEventListener("change", () => {
-        screenBox.classList.toggle("on", surface() === "Menu Screens");
+        screenBox.classList.toggle("on", surfaceWantsScreen());
       });
     });
 
@@ -336,7 +377,7 @@
       ev.preventDefault();
       const surf = surface();
       if (!surf) { alert(pickSurfaceMessage()); return; }
-      if (surf === "Menu Screens" && !screens.some((b) => b.checked)) {
+      if (surfaceWantsScreen() && !screens.some((b) => b.checked)) {
         alert("Pick which screen.");
         return;
       }
