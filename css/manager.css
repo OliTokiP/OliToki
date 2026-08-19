@@ -1613,30 +1613,20 @@ img {
   pointer-events: none;
 }
 
-/* Height of each slot animates 0fr ↔ 1fr so neighbors slide as the
-   centered stack grows/shrinks (Notification Center). */
+/* Slot height is driven in JS (WAAPI) so fade/slide is not killed by
+   prefers-reduced-motion or Safari 0fr interpolation. Neighbors slide
+   as the centered flex stack grows/shrinks. */
 .tooltip-slot {
-  display: grid;
-  grid-template-rows: 0fr;
   width: 100%;
   max-width: 300px;
-  margin-top: 0;
-  transition:
-    grid-template-rows 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    margin-top 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.tooltip-slot.is-open {
-  grid-template-rows: 1fr;
-}
-
-.tooltip-slot.is-open + .tooltip-slot.is-open {
-  margin-top: 10px;
+  height: 0;
+  overflow: hidden;
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .tooltip-slot-inner {
-  min-height: 0;
-  overflow: hidden;
+  padding-bottom: 10px;
 }
 
 .tooltip-card {
@@ -1654,10 +1644,6 @@ img {
   text-align: left;
   opacity: 0;
   transform: translateY(18px);
-  transition:
-    opacity 0.4s ease,
-    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 0.4s ease;
 }
 
 .tooltip-card.is-on {
@@ -1722,10 +1708,7 @@ img {
 @media (prefers-reduced-motion: reduce) {
   .preview-pattern-track,
   .preview-wp,
-  .preview-veil,
-  .tooltip-shroud,
-  .tooltip-slot,
-  .tooltip-card {
+  .preview-veil {
     transition: none !important;
   }
 }

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "f79df50",
-  "hashFull": "f79df5037200acbdb6e63f5e340e0e23f50efe41",
-  "subject": "QA: 2026-08-19 Better Attachment Management (pass 2)"
+  "hash": "9122d1e",
+  "hashFull": "9122d1efb350a49ecf224425c56bc2aafa1211a5",
+  "subject": "QA: 2026-08-19 Manager Back button wired to actual back button rather than previous view (pass 1)"
 };

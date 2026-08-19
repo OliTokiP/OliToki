@@ -107,9 +107,9 @@ The `#tooltip-root` stack (manager.html + manager.js + manager.css) is a reusabl
 
 - Lives in the **mini-display** (top slot: `.status` or `.preview`, `--top-slot-h`). A shroud covers that slot only; the list below stays tappable.
 - Cards stack like Notification Center: oldest on top, newest below. The stack stays centered as cards enter or leave.
-- New cards fade and slide in (~0.4s). Each auto-fades and slides out after ~6s (oldest first). Existing cards physically slide as the centered stack grows or shrinks (Notification Center). Tap a card to dismiss that card; tap the shroud or Escape to dismiss the stack. Leaving the screen clears them.
+- New cards fade and slide in (~0.4s) via the Web Animations API (not CSS transitions), so OS “Reduce Motion” does not skip them. Each auto-fades and slides out after ~6s (oldest first). Slot height animates so neighbors physically slide as the centered stack grows or shrinks (Notification Center). Tap a card to dismiss that card; tap the shroud or Escape to dismiss the stack. Leaving the screen clears them.
 - **Info:** centered bold title (hard return) + left-aligned body. Multiple lines become a `•` list (soft return between items).
-- **Save:** inverted theme tokens (`--main` fill, `--secondary` type) via `kind: "save"`. Sheet save/load notices use this style in the stack — not the footer toast.
+- **Save:** inverted theme tokens (`--main` fill, `--secondary` type) via `kind: "save"`. Sheet **save** notices use this style in the stack. Load / copy / Coming soon stay as footer toasts.
 - Theme tokens inherit the selected theme.
 
 Triggered from picker `choose()`:

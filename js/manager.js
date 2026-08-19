@@ -1581,31 +1581,40 @@
   var TOOLTIP_FADE_MS = 400;
   var TOOLTIP_HOLD_MS = 6200;
 
-  function reduceTooltipMotion() {
-    return !!(
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    );
-  }
-
-  function afterTooltipMotion(el, fn) {
-    var done = false;
-    function finish() {
-      if (done) return;
-      done = true;
-      if (el) el.removeEventListener("transitionend", onEnd);
-      fn();
+  function playTooltipAnim(el, frames, onDone) {
+    var finished = false;
+    function done() {
+      if (finished) return;
+      finished = true;
+      if (onDone) onDone();
     }
-    function onEnd(e) {
-      if (e.target !== el) return;
-      finish();
+    if (!el) {
+      done();
+      return null;
     }
-    if (!el || reduceTooltipMotion()) {
-      finish();
-      return;
+    if (el._tokiTipAnim && typeof el._tokiTipAnim.cancel === "function") {
+      try {
+        el._tokiTipAnim.cancel();
+      } catch (err) {}
     }
-    el.addEventListener("transitionend", onEnd);
-    setTimeout(finish, TOOLTIP_FADE_MS + 80);
+    if (typeof el.animate === "function") {
+      var anim = el.animate(frames, {
+        duration: TOOLTIP_FADE_MS,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
+        fill: "forwards"
+      });
+      el._tokiTipAnim = anim;
+      anim.addEventListener("finish", done);
+      anim.addEventListener("cancel", done);
+      setTimeout(done, TOOLTIP_FADE_MS + 100);
+      return anim;
+    }
+    var to = frames[frames.length - 1] || {};
+    if (to.opacity != null) el.style.opacity = String(to.opacity);
+    if (to.transform != null) el.style.transform = to.transform;
+    if (to.height != null) el.style.height = to.height;
+    setTimeout(done, TOOLTIP_FADE_MS);
+    return null;
   }
 
   function tooltipMarkup(opts) {
@@ -1648,15 +1657,32 @@
     return html;
   }
 
+  function fadeTooltipShroud(on) {
+    var root = els.tooltipRoot;
+    if (!root) return;
+    var shroud = root.querySelector(".tooltip-shroud");
+    root.classList.toggle("is-on", !!on);
+    if (!shroud) return;
+    playTooltipAnim(shroud, [
+      { opacity: on ? 0 : 1 },
+      { opacity: on ? 1 : 0 }
+    ]);
+  }
+
   function syncTooltipRoot() {
     var root = els.tooltipRoot;
     if (!root) return;
     if (state.tooltipItems.length) {
+      var wasHidden = root.hidden;
       root.hidden = false;
-      void root.offsetWidth;
-      root.classList.add("is-on");
+      if (wasHidden) {
+        void root.offsetWidth;
+        fadeTooltipShroud(true);
+      } else {
+        root.classList.add("is-on");
+      }
     } else {
-      root.classList.remove("is-on");
+      fadeTooltipShroud(false);
       clearTimeout(state.tooltipRootTimer);
       state.tooltipRootTimer = setTimeout(function () {
         if (!state.tooltipItems.length) root.hidden = true;
@@ -1687,7 +1713,7 @@
     }
     if (!item) return;
     clearTimeout(item.timer);
-    if (immediate || reduceTooltipMotion()) {
+    if (immediate) {
       removeTooltipItem(id);
       return;
     }
@@ -1696,24 +1722,37 @@
       item.el.classList.add("is-out");
       item.el.classList.remove("is-on");
     }
-    if (item.slot) item.slot.classList.remove("is-open");
-    afterTooltipMotion(item.slot || item.el, function () {
-      removeTooltipItem(id);
-    });
+    var slot = item.slot;
+    var h = slot ? slot.getBoundingClientRect().height : 0;
+    if (slot) {
+      slot.style.height = h + "px";
+      void slot.offsetHeight;
+      playTooltipAnim(slot, [{ height: h + "px" }, { height: "0px" }]);
+    }
+    if (item.el) {
+      playTooltipAnim(
+        item.el,
+        [
+          { opacity: 1, transform: "translateY(0px)" },
+          { opacity: 0, transform: "translateY(-14px)" }
+        ],
+        function () {
+          removeTooltipItem(id);
+        }
+      );
+    } else {
+      setTimeout(function () {
+        removeTooltipItem(id);
+      }, TOOLTIP_FADE_MS);
+    }
   }
 
   function dismissAllTooltips(immediate) {
     var ids = state.tooltipItems.map(function (item) {
       return item.id;
     });
-    if (immediate || reduceTooltipMotion()) {
-      ids.forEach(function (id) {
-        dismissTooltip(id, true);
-      });
-      return;
-    }
     ids.forEach(function (id) {
-      dismissTooltip(id, false);
+      dismissTooltip(id, immediate);
     });
   }
 
@@ -1738,18 +1777,17 @@
     var item = { id: id, el: el, slot: slot, timer: null };
     state.tooltipItems.push(item);
     syncTooltipRoot();
-    if (reduceTooltipMotion()) {
-      slot.classList.add("is-open");
-      el.classList.add("is-on");
-    } else {
-      void slot.offsetWidth;
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          slot.classList.add("is-open");
-          el.classList.add("is-on");
-        });
-      });
-    }
+    var h = inner.scrollHeight;
+    slot.style.height = "0px";
+    void slot.offsetHeight;
+    playTooltipAnim(slot, [{ height: "0px" }, { height: h + "px" }], function () {
+      slot.style.height = h + "px";
+    });
+    playTooltipAnim(el, [
+      { opacity: 0, transform: "translateY(18px)" },
+      { opacity: 1, transform: "translateY(0px)" }
+    ]);
+    el.classList.add("is-on");
     item.timer = setTimeout(function () {
       dismissTooltip(id, false);
     }, TOOLTIP_HOLD_MS);
@@ -1816,6 +1854,27 @@
     renderAll();
   }
 
+  function backTarget() {
+    if (state.screen === "style" || state.screen === "board") {
+      return { screen: "menu", boardId: null };
+    }
+    if (state.screen === "system" || state.screen === "menu") {
+      return { screen: "home", boardId: null };
+    }
+    return { screen: "home", boardId: null };
+  }
+
+  function performBackNav(screen, boardId) {
+    if (state.screen === "style") rememberStyleScroll();
+    state.picker = null;
+    state.dialog = null;
+    state.screen = screen;
+    state.boardId = boardId || null;
+    if (screen !== "style") state.styleScroll = 0;
+    writeHash(false);
+    renderAll();
+  }
+
   function styleDirty() {
     return !eq(state.draft, state.committed);
   }
@@ -1877,26 +1936,30 @@
       return;
     }
     dismissAllTooltips(true);
+    var target = backTarget();
+    if (state.screen === target.screen && String(state.boardId || "") === String(target.boardId || "")) {
+      return;
+    }
     if (state.screen === "style") {
       leaveStyle(function () {
-        history.back();
+        performBackNav(target.screen, target.boardId);
       });
       return;
     }
     if (state.screen === "board") {
       leaveBoard(function () {
-        history.back();
+        performBackNav(target.screen, target.boardId);
       });
       return;
     }
     if (state.screen === "system") {
       leaveSystem(function () {
-        history.back();
+        performBackNav(target.screen, target.boardId);
       });
       return;
     }
     if (state.screen === "menu") {
-      history.back();
+      performBackNav(target.screen, target.boardId);
       return;
     }
   }
@@ -3575,7 +3638,7 @@
         if (opts.force) state.sheetDirty = false;
         applySheetPayload(payload);
         if (payload && payload.sourceName) {
-          showSaveNotice("Loaded " + payload.sourceName + " from sheet");
+          toast("Loaded " + payload.sourceName + " from sheet");
         }
       })
       .catch(function (err) {
@@ -3590,7 +3653,7 @@
         return fb(state.draft && state.draft.dataSource).then(function (payload) {
           if (payload && payload.ok) {
             applySheetPayload(payload);
-            showSaveNotice("Loaded last saved fallback");
+            toast("Loaded last saved fallback");
             return;
           }
           state.sheetSource = "local";
