@@ -7,8 +7,8 @@
  * Encore spotlight/background (global Style K/L/M). Board Yes writes Menu Title,
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
- * System Settings (incl. new Confirm save? toggle) persist via writeSystem + fallback.
- * Inventory order stays local.
+ * System Settings persist via writeSystem + fallback. Confirm save? No skips the
+ * confirm dialog and writes System, Style, and Board (incl. menu order) immediately.
  */
 (function () {
   "use strict";
@@ -1889,7 +1889,36 @@
     return false;
   }
 
+  function confirmSaveOff() {
+    return state.draft.confirmSave === "no";
+  }
+
+  function styleWriteDirty() {
+    return !eq(styleSnap(state.draft), styleSnap(state.committed));
+  }
+
+  function anySaveDirty() {
+    return systemSettingsDirty() || styleWriteDirty() || boardDirty();
+  }
+
+  /* Confirm save? No: every option writes now (System, Style, Board).
+     The toggle itself is always-immediate via choose(). quiet skips a
+     remount when the caller already painted. */
+  function maybeAutoSave(quiet) {
+    if (!confirmSaveOff() || !anySaveDirty()) return false;
+    confirmChoice("yes", quiet);
+    return true;
+  }
+
   function leaveBoard(next) {
+    if (confirmSaveOff()) {
+      state.pendingLeave = next;
+      if (!maybeAutoSave()) {
+        state.pendingLeave = null;
+        next();
+      }
+      return;
+    }
     if (boardDirty() || styleDirty()) {
       state.pendingLeave = next;
       state.dialog = "confirm";
@@ -1900,6 +1929,14 @@
   }
 
   function leaveStyle(next) {
+    if (confirmSaveOff()) {
+      state.pendingLeave = next;
+      if (!maybeAutoSave()) {
+        state.pendingLeave = null;
+        next();
+      }
+      return;
+    }
     if (!eq(state.draft, state.committed)) {
       state.pendingLeave = next;
       state.dialog = "confirm";
@@ -1911,7 +1948,7 @@
 
   function leaveSystem(next) {
     if (systemSettingsDirty()) {
-      if (state.draft.confirmSave === "no") {
+      if (confirmSaveOff()) {
         state.pendingLeave = next;
         confirmChoice("yes");
         return;
@@ -1992,9 +2029,9 @@
     spec.set(next);
     rememberStyleScroll();
     renderAll();
-    if (state.draft.confirmSave === "no" && systemSettingsDirty()) {
+    if (confirmSaveOff()) {
       state.pendingLeave = null;
-      confirmChoice("yes");
+      maybeAutoSave(true);
     }
   }
 
@@ -2021,15 +2058,14 @@
     renderAll();
     if (pickKey === "confirmSave") {
       showConfirmSaveTooltip(id);
-      // Special per Feedback: the "Confirm save?" toggle itself ALWAYS writes
-      // immediately (sheet + behavior), whether the prior value was yes or no.
-      // All *other* system options follow the current value of this setting.
+      // Special: the "Confirm save?" toggle itself ALWAYS writes immediately
+      // (sheet + behavior), whether the prior value was yes or no.
+      // All other options — System, Style, Board — follow the current value.
       state.pendingLeave = null;
-      confirmChoice("yes");
-    } else if (state.draft.confirmSave === "no" && systemSettingsDirty()) {
-      // When "Confirm save?" is no, other System Settings options save instantly.
+      confirmChoice("yes", true);
+    } else if (confirmSaveOff()) {
       state.pendingLeave = null;
-      confirmChoice("yes");
+      maybeAutoSave(true);
     }
     if (pickKey === "boardFamily" && id === "yes") {
       showFamilyPortraitTooltip();
@@ -2118,12 +2154,17 @@
         );
       }
     }
-    if (key === "scrollSpeed") return;
+    if (key === "scrollSpeed") {
+      maybeAutoSave(true);
+      return;
+    }
     if (key === "presentationSpeed") {
       retargetMotion();
+      maybeAutoSave(true);
       return;
     }
     renderScreen();
+    maybeAutoSave(true);
   }
 
   function persistFallback() {
@@ -2370,7 +2411,7 @@
     });
   }
 
-  function confirmChoice(val) {
+  function confirmChoice(val, quiet) {
     if (val === "yes") {
       var onBoard = state.screen === "board" && state.boardDraft;
       var boardPrev = null;
@@ -2407,7 +2448,7 @@
       state.persistInFlight = true;
       renderDialog();
       if (next) next();
-      else renderAll();
+      else if (!quiet) renderAll();
       var persist = onBoard
         ? Promise.all([
             persistBoardWrite(boardPrev, boardNext),
@@ -3274,6 +3315,10 @@
         }
         if (next.length === items.length) state.boardDraft.items = next;
         list.innerHTML = itemListHtml(state.boardDraft.items);
+        if (confirmSaveOff()) {
+          state.pendingLeave = null;
+          maybeAutoSave(true);
+        }
       } else {
         row.classList.remove("is-dragging");
         row.style.position = "";
@@ -3421,8 +3466,15 @@
     if (leavingDirtyStyle) {
       // Browser back (or hash pop) from dirty style: bounce to keep URL + screen on style,
       // show the same Confirm dialog as internal back(). On confirm leave we history.back()
-      // to actually pop to the target.
+      // to actually pop to the target. Confirm save? No writes immediately then lets nav through.
       state.picker = null;
+      if (confirmSaveOff()) {
+        if (anySaveDirty()) confirmChoice("yes", true);
+        readHash();
+        dismissAllTooltips(true);
+        renderAll();
+        return;
+      }
       var styleHash = "#/menu/style";
       if (location.hash !== styleHash) {
         history.replaceState(null, "", styleHash);
@@ -3439,7 +3491,7 @@
       systemSettingsDirty() &&
       target.screen !== "system";
     if (leavingDirtySystem) {
-      if (state.draft.confirmSave !== "no") {
+      if (!confirmSaveOff()) {
         // Browser back (or hash pop) from dirty system: bounce + show Confirm
         // dialog (same as leaveSystem). Respect the Confirm save? toggle.
         state.picker = null;
@@ -3464,6 +3516,13 @@
         (target.boardId || null) !== (prevBoard || null));
     if (leavingDirtyBoard) {
       state.picker = null;
+      if (confirmSaveOff()) {
+        if (anySaveDirty()) confirmChoice("yes", true);
+        readHash();
+        dismissAllTooltips(true);
+        renderAll();
+        return;
+      }
       var boardHash = "#/menu/board/" + prevBoard;
       if (location.hash !== boardHash) {
         history.replaceState(null, "", boardHash);
@@ -3722,6 +3781,10 @@
       state.dialog = null;
       renderDialog();
       renderAll();
+      if (confirmSaveOff()) {
+        state.pendingLeave = null;
+        maybeAutoSave(true);
+      }
     } else if (act === "toast-add") {
       toast("Coming soon — add items from Toast.");
     } else if (act === "copy-hex") {
