@@ -145,4 +145,4 @@ When adding new post-choice explanations, prefer this stack over new toast varia
 - Writes for OliToki Menu Settings or Data Source
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 
-System Font applies to **this app** (`html[data-system-font]`). Board type still follows `css/system-font.css` on the TV pages.
+System Font (System Settings) applies to the Manager UI and the menu boards (`html[data-system-font]` + `css/system-font.css` + JS apply on the TV pages). The boards poll it live (watcher) regardless of Require restart. See also the board read path in `js/menu.js`.
