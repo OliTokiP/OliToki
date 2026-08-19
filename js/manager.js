@@ -45,6 +45,7 @@
     tooltipItems: [],
     tooltipSeq: 0,
     tooltipRootTimer: null,
+    tooltipShroudOn: false,
     pendingTip: null,
     tipQueryApplied: false,
     styleScroll: 0,
@@ -1600,6 +1601,11 @@
     }
     if (el._tokiTipAnim && typeof el._tokiTipAnim.cancel === "function") {
       try {
+        var cs = window.getComputedStyle(el);
+        var from = frames[0] || {};
+        if (from.opacity != null) el.style.opacity = cs.opacity;
+        if (from.transform != null) el.style.transform = cs.transform;
+        if (from.height != null) el.style.height = cs.height;
         el._tokiTipAnim.cancel();
       } catch (err) {}
     }
@@ -1663,16 +1669,40 @@
     return html;
   }
 
-  function fadeTooltipShroud(on) {
+  function fadeTooltipShroud(on, immediate) {
     var root = els.tooltipRoot;
     if (!root) return;
     var shroud = root.querySelector(".tooltip-shroud");
-    root.classList.toggle("is-on", !!on);
-    if (!shroud) return;
-    playTooltipAnim(shroud, [
-      { opacity: on ? 0 : 1 },
-      { opacity: on ? 1 : 0 }
-    ]);
+    var want = !!on;
+    if (!immediate && state.tooltipShroudOn === want) {
+      if (want) root.classList.add("is-on");
+      return;
+    }
+    state.tooltipShroudOn = want;
+    if (want) root.classList.add("is-on");
+    if (!shroud) {
+      if (!want) root.classList.remove("is-on");
+      return;
+    }
+    if (immediate) {
+      if (shroud._tokiTipAnim && typeof shroud._tokiTipAnim.cancel === "function") {
+        try {
+          shroud._tokiTipAnim.cancel();
+        } catch (err) {}
+      }
+      shroud.style.opacity = want ? "1" : "0";
+      if (!want) root.classList.remove("is-on");
+      return;
+    }
+    playTooltipAnim(
+      shroud,
+      [{ opacity: want ? 0 : 1 }, { opacity: want ? 1 : 0 }],
+      function () {
+        if (!want && state.tooltipShroudOn === false) {
+          root.classList.remove("is-on");
+        }
+      }
+    );
   }
 
   function syncTooltipRoot() {
@@ -1688,12 +1718,24 @@
         root.classList.add("is-on");
       }
     } else {
-      fadeTooltipShroud(false);
+      if (state.tooltipShroudOn) fadeTooltipShroud(false);
       clearTimeout(state.tooltipRootTimer);
       state.tooltipRootTimer = setTimeout(function () {
         if (!state.tooltipItems.length) root.hidden = true;
       }, TOOLTIP_FADE_MS);
     }
+  }
+
+  function tooltipStillVisible(exceptId) {
+    var n = 0;
+    var i;
+    for (i = 0; i < state.tooltipItems.length; i++) {
+      var it = state.tooltipItems[i];
+      if (exceptId != null && it.id === exceptId) continue;
+      if (it.el && it.el.classList.contains("is-out")) continue;
+      n++;
+    }
+    return n;
   }
 
   function removeTooltipItem(id) {
@@ -1724,6 +1766,9 @@
       return;
     }
     if (item.el && item.el.classList.contains("is-out")) return;
+    if (tooltipStillVisible(id) === 0) {
+      fadeTooltipShroud(false);
+    }
     if (item.el) {
       item.el.classList.add("is-out");
       item.el.classList.remove("is-on");
@@ -1754,6 +1799,8 @@
   }
 
   function dismissAllTooltips(immediate) {
+    if (immediate) fadeTooltipShroud(false, true);
+    else fadeTooltipShroud(false);
     var ids = state.tooltipItems.map(function (item) {
       return item.id;
     });
@@ -1768,17 +1815,21 @@
     var id = ++state.tooltipSeq;
     var slot = document.createElement("div");
     slot.className = "tooltip-slot";
+    var clip = document.createElement("div");
+    clip.className = "tooltip-slot-clip";
     var inner = document.createElement("div");
     inner.className = "tooltip-slot-inner";
-    var el = document.createElement("button");
-    el.type = "button";
+    var el = document.createElement("div");
     el.className =
       "tooltip-card" + (opts.kind === "save" ? " is-save" : " is-info");
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
     el.setAttribute("data-act", "tooltip-dismiss");
     el.setAttribute("data-tip-id", String(id));
     el.innerHTML = tooltipMarkup(opts);
     inner.appendChild(el);
-    slot.appendChild(inner);
+    clip.appendChild(inner);
+    slot.appendChild(clip);
     stack.appendChild(slot);
     var item = { id: id, el: el, slot: slot, timer: null };
     state.tooltipItems.push(item);
@@ -2221,7 +2272,7 @@
     if (pickKey === "limitHeavyFilters" && id === "yes") {
       showFilterCapTooltip();
     }
-    if (pickKey === "encoreStyle" && id === "hard") {
+    if (pickKey === "encoreStyle" && id === "hard_shadow") {
       showEncoreHardTooltip();
     }
     if (pickKey === "boardFamily" && id === "yes") {
@@ -3580,7 +3631,7 @@
         showRequireRestartTooltip("no");
       } else if (tip === "filter") {
         showFilterCapTooltip();
-      } else if (tip === "hard") {
+      } else if (tip === "hard" || tip === "hard-shadow") {
         showEncoreHardTooltip();
       } else if (tip === "confirm" || tip === "yes") {
         showConfirmSaveTooltip("yes");
@@ -3995,6 +4046,17 @@
         return;
       }
       back();
+      return;
+    }
+    if (
+      (e.key === "Enter" || e.key === " ") &&
+      e.target &&
+      e.target.getAttribute &&
+      e.target.getAttribute("data-act") === "tooltip-dismiss"
+    ) {
+      e.preventDefault();
+      var tipId = parseInt(e.target.getAttribute("data-tip-id"), 10);
+      if (!isNaN(tipId)) dismissTooltip(tipId, false);
     }
   }
 
@@ -4043,6 +4105,7 @@
     els.tooltipStack = document.getElementById("tooltip-stack");
     els.device.addEventListener("click", onClick);
     function blockHeroScroll(e) {
+      if (e.target.closest && e.target.closest(".tooltip-root")) return;
       if (e.target.closest && e.target.closest(".status, .preview, .header, .home-hero")) {
         e.preventDefault();
       }

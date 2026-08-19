@@ -1580,6 +1580,7 @@ img {
   height: var(--top-slot-h);
   z-index: 18;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .tooltip-root.is-on {
@@ -1591,38 +1592,52 @@ img {
   inset: 0;
   background: color-mix(in srgb, var(--main) 52%, transparent);
   opacity: 0;
-  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
-.tooltip-root.is-on .tooltip-shroud {
-  opacity: 1;
+.tooltip-scroll {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .tooltip-stack {
   position: relative;
-  z-index: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 100%;
+  min-height: 100%;
   width: 100%;
-  padding: 16px 18px;
+  padding: 20px 22px;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: visible;
   pointer-events: none;
 }
 
 /* Slot height is driven in JS (WAAPI) so fade/slide is not killed by
    prefers-reduced-motion or Safari 0fr interpolation. Neighbors slide
-   as the centered flex stack grows/shrinks. */
+   as the centered flex stack grows/shrinks.
+   Clip lives on .tooltip-slot-clip; drop-shadow is on the slot so the
+   shadow is not cropped by the height wind-up. */
 .tooltip-slot {
   width: 100%;
   max-width: 300px;
   height: 0;
-  overflow: hidden;
+  overflow: visible;
   flex: 0 0 auto;
   margin: 0;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.28));
+}
+
+.tooltip-slot-clip {
+  height: 100%;
+  overflow: hidden;
 }
 
 .tooltip-slot-inner {
@@ -1638,12 +1653,15 @@ img {
   background: var(--secondary);
   color: var(--main);
   border: 1.5px solid var(--main);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
   font-size: 0.8rem;
   line-height: 1.3;
   text-align: left;
   opacity: 0;
   transform: translateY(18px);
+  touch-action: pan-y;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .tooltip-card.is-on {
@@ -1654,7 +1672,6 @@ img {
 .tooltip-card.is-out {
   opacity: 0;
   transform: translateY(-14px);
-  box-shadow: none;
 }
 
 .tooltip-card.is-save {

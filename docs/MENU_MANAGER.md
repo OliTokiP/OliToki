@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-19 (clarification tooltips + bespoke save-stack cards) 
+**Last updated:** 2026-08-19 (tooltip veil / shadow / mobile scroll) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -107,9 +107,9 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 
 The `#tooltip-root` stack (manager.html + manager.js + manager.css) is a reusable overlay for post-choice explanations. Confirm Changes and dropdown pickers stay as they are.
 
-- Lives in the **mini-display** (top slot: `.status` or `.preview`, `--top-slot-h`). A shroud covers that slot only; the list below stays tappable.
-- Cards stack like Notification Center: oldest on top, newest below. The stack stays centered as cards enter or leave.
-- New cards fade and slide in (~0.4s) via the Web Animations API (not CSS transitions), so OS “Reduce Motion” does not skip them. Each auto-fades and slides out after ~6s (oldest first). Slot height animates so neighbors physically slide as the centered stack grows or shrinks (Notification Center). Tap a card to dismiss that card; tap the shroud or Escape to dismiss the stack. Leaving the screen clears them.
+- Lives in the **mini-display** (top slot: `.status` or `.preview`, `--top-slot-h`). A shroud covers that slot only; the list below stays tappable. Veil opacity is WAAPI-only (no CSS snap); it fades with the last card’s wind-down.
+- Cards stack like Notification Center: oldest on top, newest below. The stack stays centered as cards enter or leave. Drop-shadow sits on the slot (filter) with height clip on an inner wrapper so the shadow is not cropped. Overflow stack is on `.tooltip-scroll` so a tall stack pans on phone and desktop.
+- New cards fade and slide in (~0.4s) via the Web Animations API (not CSS transitions), so OS “Reduce Motion” does not skip them. Each auto-fades and slides out after ~6s (oldest first). Slot height animates so neighbors physically slide as the centered stack grows or shrinks (Notification Center). Tap a card to dismiss that card; tap empty stack / Escape to dismiss the stack. Leaving the screen clears them.
 - **Info:** centered bold title (hard return) + left-aligned body. Multiple lines become a `•` list (soft return between items).
 - **Save:** inverted theme tokens (`--main` fill, `--secondary` type) via `kind: "save"`. Sheet **save** notices use this style in the stack. Load / copy / Coming soon stay as footer toasts.
 - Theme tokens inherit the selected theme.
@@ -124,7 +124,7 @@ Triggered from picker `choose()`:
 | Limit Heavy Filters to 30FPS Yes | Filter Cap Enabled for Heavy Effects. | (title only) |
 | Family Portrait Yes | Family Portrait Enabled | Shows spread of all items in first slide of presentation. |
 | Presentation Style → Encore | Encore Enabled | Spread + zoom, own background, heavy filter |
-| Encore Spotlight Style → Hard | WARNING: | Performance issues with Fire Stick. Use with caution. |
+| Encore Spotlight Style → Hard (with shadow) | WARNING: | Performance issues with Fire Stick. Use with caution. |
 
 Bespoke **save** cards (stack order matches the board menu: Board Saved on top, Encore, then Menu Order):
 
