@@ -1482,10 +1482,10 @@
   }
 
   async function writeSystem(payload) {
-    // Persists Data Source / Require restart / System Font / Limit Heavy Filters
-    // into the OliToki Menu Settings workbook (top row values). Server maps to
-    // the correct cells under the matching header. This makes System Font (and
-    // peers) affect the menu boards on their next settings load.
+    // Persists Data Source / Require restart / System Font / Limit Heavy Filters /
+    // Confirm Save / Refresh Timer into the OliToki Menu Settings workbook (top row values).
+    // Server maps to the correct cells under the matching header. This makes e.g.
+    // Refresh Timer and System Font affect the menu boards on their next settings load.
     var out = await postManager("/api/manager/settings", payload || {});
     if (!out.ok) console.warn("manager-sheet: system settings write failed", out.error);
     return out;

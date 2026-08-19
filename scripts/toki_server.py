@@ -189,6 +189,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     require_restart = False
     system_font = "roboto"
     limit_heavy_filters = True
+    refresh_timer = ""
     catalog: list[dict] = []
 
     header_idx = None
@@ -217,6 +218,8 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
                 limit_heavy_filters = _parse_yes(
                     _cell(rows[header_idx + 1], c), True
                 )
+            if "refresh timer" in label:
+                refresh_timer = _cell(rows[header_idx + 1], c) or refresh_timer
 
     if catalog_idx is not None:
         for row in rows[catalog_idx + 1 :]:
@@ -252,6 +255,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         "requireRestart": require_restart,
         "systemFont": system_font,
         "limitHeavyFilters": bool(limit_heavy_filters),
+        "refreshTimer": refresh_timer or "",
         "sheetId": sheet_id,
         "sourceName": (match or {}).get("name") or "",
         "sourceUrl": (match or {}).get("url") or "",
@@ -1886,6 +1890,7 @@ def make_handler(
                             "limitHeavyFilters": live.get("limitHeavyFilters")
                             if "limitHeavyFilters" in live
                             else True,
+                            "refreshTimer": live.get("refreshTimer") or "",
                             "sheetId": backend.sheet_id,
                             "sourceName": live.get("sourceName"),
                             "sourceUrl": live.get("sourceUrl") or "",

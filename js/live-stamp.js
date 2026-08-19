@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "538d9f0",
-  "hashFull": "538d9f0aa79f1c5c8845017c725df05880c33a74",
-  "subject": "Local toki_server auto-restarts when the API file updates"
+  "hash": "c9e5df1",
+  "hashFull": "c9e5df1efc5e7ff1167c60b38fc07eff2199195b",
+  "subject": "QA: 2026-08-19 System Settings that drive boards are in scope (pass 1)"
 };

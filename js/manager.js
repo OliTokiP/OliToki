@@ -1588,7 +1588,7 @@
 
   function systemSettingsDirty() {
     if (!state.committed) return false;
-    var keys = ["dataSource", "requireRestart", "systemFont", "limitHeavyFilters", "confirmSave"];
+    var keys = ["dataSource", "requireRestart", "systemFont", "limitHeavyFilters", "confirmSave", "refreshTimer"];
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
       if (state.draft[k] !== state.committed[k]) return true;
@@ -2038,6 +2038,7 @@
       systemFont: state.draft.systemFont,
       limitHeavyFilters: state.draft.limitHeavyFilters,
       confirmSave: state.draft.confirmSave,
+      refreshTimer: state.draft.refreshTimer,
     };
     // Settings workbook id is known to server (different from catalog sheetId).
     // Writing here makes e.g. System Font affect the menu boards.
@@ -2064,6 +2065,7 @@
             systemFont: state.committed ? state.committed.systemFont : "",
             limitHeavyFilters: state.committed ? state.committed.limitHeavyFilters : "",
             confirmSave: state.committed ? state.committed.confirmSave : "",
+            refreshTimer: state.committed ? state.committed.refreshTimer : "",
           }
         : null;
       if (onBoard) {
@@ -3180,6 +3182,7 @@
     if (payload.draft) {
       var fromSheet = Object.assign({}, D.defaultDraft, payload.draft);
       fromSheet.confirmSave = fromSheet.confirmSave || "yes";
+      fromSheet.refreshTimer = fromSheet.refreshTimer || "30 seconds";
       // Keep draft numbers inside the live tile set (sheet conditionals).
       fromSheet.scrollSpeed = clampDraftSpeed(
         fromSheet.scrollSpeed,

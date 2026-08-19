@@ -5806,6 +5806,7 @@
     requireRestart: false,
     systemFont: "roboto",
     limitHeavyFilters: true,
+    refreshTimer: "",
     sheetId: "",
   };
 
@@ -5879,6 +5880,7 @@
     }
     let systemFont = "roboto";
     let limitHeavyFilters = true;
+    let refreshTimer = "";
     if (headerIdx >= 0 && headerIdx + 1 < rows.length) {
       dataSource = String((rows[headerIdx + 1] && rows[headerIdx + 1][0]) || "").trim();
       requireRestart = parseYesNo(
@@ -5896,6 +5898,9 @@
             rows[headerIdx + 1] && rows[headerIdx + 1][c],
             true
           );
+        }
+        if (h.indexOf("refresh timer") !== -1) {
+          refreshTimer = String((rows[headerIdx + 1] && rows[headerIdx + 1][c]) || "").trim() || refreshTimer;
         }
       }
     }
@@ -5926,6 +5931,7 @@
       requireRestart: requireRestart,
       systemFont: systemFont,
       limitHeavyFilters: limitHeavyFilters,
+      refreshTimer: refreshTimer || "",
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || "",
     };
@@ -5947,6 +5953,19 @@
     if (s.indexOf("poppin") !== -1) return "poppins";
     if (s.indexOf("roboto") !== -1) return "roboto";
     return "roboto";
+  }
+
+  function parseRefreshSeconds(raw) {
+    // e.g. "30 seconds", "1 minute", "5s", "1 second" → integer seconds. Fallback 30.
+    const s = String(raw || "").trim().toLowerCase();
+    if (!s) return 30;
+    const m = s.match(/^(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m)?$/);
+    if (!m) return 30;
+    let n = parseInt(m[1], 10);
+    if (!Number.isFinite(n) || n <= 0) return 30;
+    const unit = (m[2] || "s").toLowerCase();
+    if (unit && unit[0] === "m") n *= 60;
+    return n;
   }
 
   function ensureSystemFontStylesheet(font) {
@@ -6010,6 +6029,7 @@
       systemFont: parseSystemFontName(j.systemFont),
       limitHeavyFilters:
         j.limitHeavyFilters == null ? true : !!j.limitHeavyFilters,
+      refreshTimer: j.refreshTimer || "",
       sheetId: (pin && pin.sheetId) || j.sheetId || "",
     };
     if (liveSettings.sheetId) {
@@ -6022,6 +6042,7 @@
       "requireRestart=" + liveSettings.requireRestart,
       "systemFont=" + (liveSettings.systemFont || "roboto"),
       "limitHeavyFilters=" + liveSettings.limitHeavyFilters,
+      "refreshTimer=" + (liveSettings.refreshTimer || ""),
       "sheet=" + (liveSettings.sheetId || "?")
     );
   }
@@ -6057,8 +6078,8 @@
           if (res.ok) {
             const j = await res.json();
             applyLiveSettingsPayload(j);
-            // Older toki_server omits systemFont / the FPS cap — fill from public Settings.
-            if (!j.systemFont || j.limitHeavyFilters == null) {
+            // Older toki_server omits systemFont / the FPS cap / refreshTimer — fill from public Settings.
+            if (!j.systemFont || j.limitHeavyFilters == null || !j.refreshTimer) {
               try {
                 const pub = await fetchLiveSettingsFromPublicExport();
                 if (pub && pub.systemFont && !j.systemFont) {
@@ -6067,6 +6088,9 @@
                 }
                 if (pub && pub.limitHeavyFilters != null && j.limitHeavyFilters == null) {
                   liveSettings.limitHeavyFilters = !!pub.limitHeavyFilters;
+                }
+                if (pub && pub.refreshTimer && !j.refreshTimer) {
+                  liveSettings.refreshTimer = pub.refreshTimer;
                 }
               } catch (fontErr) {
                 tokiWarn(
@@ -15088,10 +15112,20 @@
         setFeatureActive("softRefresh", false, "require restart");
         return;
       }
+      // Clear current interval so we can re-arm with the live Refresh Timer value
+      // (supports changing the System Setting while boards run with Require restart off).
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
       // Soft: re-fetch CSVs only. No embedded/xlsx fallback if offline.
       // Unchanged fingerprint → skip re-render. Network error → keep last UI.
       const source = await loadMenu({ soft: true });
-      if (source === "unchanged") return;
+      if (source === "unchanged") {
+        // Still re-arm in case Refresh Timer interval itself changed in Settings.
+        armRefreshTimer(getRefreshIntervalSeconds());
+        return;
+      }
       tokiInfo("refreshed from", source);
       const pause =
         new URLSearchParams(window.location.search).get("pause") === "1";
@@ -15113,6 +15147,9 @@
         startSlideshow();
         if (isDrinks) startAnnouncementSlideshow();
       }
+      // Re-arm at the (possibly new) interval from live Refresh Timer setting.
+      // Use plain arm (no re-stagger) so wall preview boards keep their offset intervals.
+      armRefreshTimer(getRefreshIntervalSeconds());
     } catch (err) {
       // Offline / incomplete fetch: leave slideshow + items as-is
       tokiWarn("refresh: keeping last good menu —", err && err.message ? err.message : err);
@@ -15120,6 +15157,24 @@
       refreshInProgress = false;
       setFeatureActive('softRefresh', false, 'refresh work done');
     }
+  }
+
+  function getRefreshIntervalSeconds() {
+    if (liveSettings && liveSettings.requireRestart) return 0;
+    if (liveSettings && liveSettings.refreshTimer) {
+      const s = parseRefreshSeconds(liveSettings.refreshTimer);
+      if (s > 0) return s;
+    }
+    return Number(cfg.refreshSeconds) || 30;
+  }
+
+  function armRefreshTimer(sec) {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    if (!sec || sec <= 0) return;
+    refreshTimer = setInterval(softReload, sec * 1000);
   }
 
   /** 0–3 board index in the 4-up wall (from ?wall=); 0 if solo. */
@@ -15147,7 +15202,7 @@
       setFeatureActive("softRefresh", false, "require restart");
       return;
     }
-    const sec = Number(cfg.refreshSeconds) || 0;
+    const sec = getRefreshIntervalSeconds();
     if (sec <= 0) return;
     // Refresh for google + local xlsx; skip only pure embedded offline
     if (
@@ -15157,11 +15212,8 @@
     ) {
       return;
     }
-    const arm = function () {
-      refreshTimer = setInterval(softReload, sec * 1000);
-    };
     // Wall: stagger first tick so all four boards don't refetch in the same
-    // frame every 30s (Fix 2). Interval stays refreshSeconds after that.
+    // frame every 30s (Fix 2). Interval stays at the live rate after that.
     if (isPreviewWall()) {
       const delayMs = wallBoardIndex() * 7000;
       tokiInfo(
@@ -15174,11 +15226,11 @@
       );
       window.setTimeout(function () {
         softReload();
-        arm();
+        armRefreshTimer(sec);
       }, delayMs);
       return;
     }
-    arm();
+    armRefreshTimer(sec);
   }
 
   // ---------- Debug console flag registry (PERFORMANCE.md §7 + sheet gating) ----------
@@ -15533,7 +15585,7 @@
           case "softRefresh":
             if (liveSettings && liveSettings.requireRestart) return "settings";
             if (refreshInProgress) return "fetching";
-            if (refreshTimer) return "timer " + (Number(cfg.refreshSeconds) || 30) + "s";
+            if (refreshTimer) return "timer " + getRefreshIntervalSeconds() + "s";
             return "off";
           default:
             return "";
