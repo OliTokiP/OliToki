@@ -52,7 +52,7 @@
   </style>
 </head>
 <body class="suite-page">
-  <p class="suite-nav" id="nav"><a href="suite.html">Suite</a> · <span class="is-current">Deployer</span> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+  <p class="suite-nav" id="nav"><a href="suite.html">Suite</a> · <span class="is-current">Deployer</span> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html" target="_blank" rel="noopener">Menu Manager</a></p>
   <h1>Deployer</h1>
   <p class="sub">Phone is enough. This files a GitHub issue; Actions ships the website and API. Your laptop is not the live server.</p>
   <div class="advice">
@@ -113,7 +113,7 @@
     <button type="submit" id="go">File deploy</button>
   </form>
 
-  <script src="js/surfaces.js?v=20260819tix3"></script>
+  <script src="js/surfaces.js?v=20260819tix4"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
@@ -181,14 +181,9 @@
       return String(sha || "").slice(0, 7).toLowerCase();
     }
 
-    async function branchHead(branch) {
-      const res = await fetch(
-        "https://api.github.com/repos/" + REPO + "/commits/" + encodeURIComponent(branch),
-        { headers: { Accept: "application/vnd.github+json" } }
-      );
-      if (!res.ok) return "";
-      const j = await res.json();
-      return short(j.sha);
+    async function hashFromText(text) {
+      const m = String(text || "").match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
+      return short(m ? m[1] : "");
     }
 
     async function stampFrom(url) {
@@ -196,8 +191,42 @@
         const text = await fetch(url + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
           r.ok ? r.text() : ""
         );
-        const m = String(text).match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
-        return short(m ? m[1] : "");
+        return hashFromText(text);
+      } catch (e) {
+        return "";
+      }
+    }
+
+    /** Public raw file — no GitHub API token, no rate-limit 403 in the phone browser. */
+    async function branchStamp(branch) {
+      try {
+        const url =
+          "https://raw.githubusercontent.com/" +
+          REPO +
+          "/" +
+          encodeURIComponent(branch) +
+          "/js/live-stamp.js?t=" +
+          Date.now();
+        const res = await fetch(url);
+        if (!res.ok) return "";
+        return hashFromText(await res.text());
+      } catch (e) {
+        return "";
+      }
+    }
+
+    async function branchBuild(branch) {
+      try {
+        const url =
+          "https://raw.githubusercontent.com/" +
+          REPO +
+          "/" +
+          encodeURIComponent(branch) +
+          "/js/build-info.js?t=" +
+          Date.now();
+        const res = await fetch(url);
+        if (!res.ok) return "";
+        return hashFromText(await res.text());
       } catch (e) {
         return "";
       }
@@ -223,18 +252,22 @@
           (window.TOKI_TESTING_SITE || "").replace(/\/$/, "") || testingApi;
         const [main, testing, restaurant, pageHash, restHealth, testHealth] =
           await Promise.all([
-            branchHead("main"),
-            branchHead("testing"),
-            branchHead("restaurant"),
+            branchBuild("main"),
+            branchStamp("testing"),
+            branchStamp("restaurant"),
             stampFrom(PAGES),
             apiHealth(RESTAURANT_API),
             testingApi ? apiHealth(testingApi) : Promise.resolve(null),
           ]);
+        // Compare Pages stamp to restaurant stamp (source SHA). Do not compare
+        // to the restaurant branch tip — that is a merge commit and never matches.
         const pageOk = restaurant && pageHash && restaurant === pageHash;
         const lines = [];
         lines.push(
           "Restaurant site: " + (pageOk ? "🟢 " : "🔴 ") +
-          "live `" + (pageHash || "?") + "` · branch `" + (restaurant || "missing") + "`"
+          "live `" + (pageHash || "?") + "` · restaurant `" +
+          (restaurant || "can't read GitHub") + "`" +
+          (pageOk ? "" : pageHash && restaurant ? " — Pages catching up" : "")
         );
         lines.push(
           "Restaurant API: " +
