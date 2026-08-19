@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-19 (Confirm save? No writes Style + Board immediately) 
+**Last updated:** 2026-08-19 (clarification tooltips + bespoke save-stack cards) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -34,7 +34,7 @@ It should feel like a polished iPhone Settings app. Desktop is a centered phone 
 
 Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm leaves immediately (then writes in the background). Writes go same-origin first (`POST /api/manager/style`). It sends the Theme dropdown and the **Background** conglomerate on the **selected catalog**. The UI sends field names; the server adapter maps Theme Selector (**A3**), BG Color (**B3**), BG Pattern (**C3**), BG Wallpaper (**D3**). Pattern wins on the live board, so a color or wallpaper choice writes `none` into the unused of C/D. **BG Scroll Speed** (**H3**) and **Presentation Speed** (**I3**) write when those pills change. Encore children — Spotlight Type (**K3**), Spotlight Color (**L3**), Background Color (**M3**) — are **global** even when edited on a board. Board Yes also persists dirty Style fields. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
 
-**Confirm save?** (System Settings, Settings tab column) applies to **every** option, not only System Settings: Style and Theme (theme, background, speeds, Encore extras) and Board editors (title, family portrait, presentation mode, descriptions, menu-item order). **Yes** (default) = Confirm-on-back before any sheet write. **No** = skip the dialog; each change writes immediately (`POST /api/manager/style`, `/api/manager/board`, `/api/manager/settings` as needed) so the catalog and TVs update on the next board refresh. The Confirm save? toggle itself always writes the moment it is changed, whether it was on or off.
+**Confirm save?** (System Settings, Settings tab column) applies to **every** option, not only System Settings: Style and Theme (theme, background, speeds, Encore extras) and Board editors (title, family portrait, presentation mode, descriptions, menu-item order). **Yes** (default) = Confirm-on-back before any sheet write. **No** = skip the dialog; each change writes immediately (`POST /api/manager/style`, `/api/manager/board`, `/api/manager/settings` as needed) so the catalog and TVs update on the next board refresh — except menu-item reorder, which waits 3 seconds of idle so a drag session is one write. The Confirm save? toggle itself always writes the moment it is changed, whether it was on or off.
 
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
@@ -55,7 +55,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 
-QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`.
+QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=hard`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`.
 
 ---
 
@@ -74,7 +74,7 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Board editor (1–3):** hamburger handles drag-reorder Menu Items. Confirm-on-back Yes (or an immediate write when **Confirm save?** is No) writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), **Include Descriptions?** (0/1), and — if the list moved — the **Inventory** block as whole rows in the new order (`POST /api/manager/board`). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
+**Board editor (1–3):** hamburger handles drag-reorder Menu Items. Confirm-on-back Yes writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), **Include Descriptions?** (0/1), and — if the list moved — the **Inventory** block as whole rows in the new order (`POST /api/manager/board`). When **Confirm save?** is No, those fields write on change; item reorder waits **3 seconds of idle** before the Inventory write (so a drag session is one API call). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
 
 **Number pills (BG Scroll Speed / Presentation Speed):** read a validator in the Settings **header label** (same public CSV as themes). House style is the cute form already on Restaurant Copy:
 
@@ -119,8 +119,22 @@ Triggered from picker `choose()`:
 | Choice | Title | Body |
 |--------|-------|------|
 | Confirm save? Yes / No | Save confirmation enabled. / surpassed. | Existing bullet guidance |
-| Family Portrait Yes | Family Portrait Enabled | Shows spread of all products as first frame presentation |
+| Require restart to update? Yes | Soft refresh disabled. | TVs must be restarted for changes to take effect. |
+| Require restart to update? No | Soft refresh enabled. | Menus will check for updates on a fixed timer — you don't have to do a thing. |
+| Limit Heavy Filters to 30FPS Yes | Filter Cap Enabled for Heavy Effects. | (title only) |
+| Family Portrait Yes | Family Portrait Enabled | Shows spread of all items in first slide of presentation. |
 | Presentation Style → Encore | Encore Enabled | Spread + zoom, own background, heavy filter |
+| Encore Spotlight Style → Hard | WARNING: | Performance issues with Fire Stick. Use with caution. |
+
+Bespoke **save** cards (stack order matches the board menu: Board Saved on top, Encore, then Menu Order):
+
+| When | Card |
+|------|------|
+| Board Confirm-on-back Yes (or an auto-save that wrote board fields) | Board Saved to Restaurant Settings |
+| Encore Spotlight / Color / Background wrote | Global Encore Style Settings updated |
+| Menu-item order wrote | Menu Items Order Saved. |
+
+Confirm save? No shows the Encore / Order cards immediately (Order after the 3s idle). Confirm save? Yes waits for Confirm-on-back, then stacks them under Board Saved.
 
 When adding new post-choice explanations, prefer this stack over new toast variants or inline notes.
 

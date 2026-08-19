@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "d6afd4f",
-  "hashFull": "d6afd4f53a6c6b3b6ce7076f46283d3ead7d5c61",
-  "subject": "QA: 2026-08-19 Expand confirm save toggle in preferences (pass 3)"
+  "hash": "cbddf3b",
+  "hashFull": "cbddf3b8dd9f0eb4a6cf71ad9a6951da7d10c720",
+  "subject": "QA: 2026-08-19 Drafts and piggyback tickets should show filled but greyed out type and surface options at the top (pass 2)"
 };

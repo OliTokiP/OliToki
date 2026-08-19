@@ -1935,6 +1935,9 @@
   function yesToastSkippingEncore(needed, wrote, fb, kind) {
     if (!wrote || styleWroteOnlyEncore(wrote)) return "";
     if (kind === "board" || kind === "both") return "";
+    if (!wrote.wroteTheme && !wrote.wroteBackground && !wrote.wroteSpeeds) {
+      return "";
+    }
     var cloneWrote = Object.assign({}, wrote, { wroteEncore: false });
     return yesToast(needed, cloneWrote, fb, kind);
   }
@@ -2043,7 +2046,8 @@
     return systemSettingsDirty() || styleWriteDirty() || boardDirty();
   }
 
-  /* Confirm save? No: every option writes now (System, Style, Board).
+  /* Confirm save? No: every option writes now (System, Style, Board),
+     except menu-item reorder which waits ITEM_ORDER_IDLE_MS of idle.
      The toggle itself is always-immediate via choose(). quiet skips a
      remount when the caller already painted. */
   function maybeAutoSave(quiet) {
