@@ -131,7 +131,7 @@ window.TOKI_SUITE = {
   "surfaces": [
     { "name": "Listener", "page": "", "label": "Listener" },
     { "name": "Menu Manager", "page": "manager.html", "label": "Menu Manager" },
-    { "name": "Menu Screens", "page": "", "label": "Menu Screens", "screens": true },
+    { "name": "Menu Screens", "page": "", "label": "Menu Screens", "screens": true, "preview": "preview-all.html" },
     { "name": "Deployer", "page": "deploy.html", "label": "Deployer" },
     { "name": "Suite", "page": "suite.html", "label": "Suite" }
   ],
