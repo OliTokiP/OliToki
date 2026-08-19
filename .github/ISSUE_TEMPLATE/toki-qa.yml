@@ -8,15 +8,17 @@ body:
     attributes:
       label: Feature
       options:
+        - Listener
         - Menu Manager
         - Menu Screens
+        - Deployer
     validations:
       required: true
   - type: dropdown
     id: page
     attributes:
       label: Which screen (Menu Screens only)
-      description: Ignored when Feature is Menu Manager.
+      description: Ignored unless Feature is Menu Screens.
       options:
         - 1 · Bowls
         - 2 · Handhelds

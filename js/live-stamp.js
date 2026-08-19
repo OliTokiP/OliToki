@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "7343225",
-  "hashFull": "7343225028014a2c72e5a112ee8da7801f54d1f2",
-  "subject": "Deploy testing site from a slim 61MB context, not the whole Dropbox tree"
+  "hash": "58209b9",
+  "hashFull": "58209b930a54ff4db0f99225c64cd9a422763aef",
+  "subject": "QA: 2026-08-18 Add deployer as surface to Listener (and all that entails) (pass 1)"
 };

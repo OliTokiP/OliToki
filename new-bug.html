@@ -106,11 +106,7 @@
     </div>
 
     <div class="lab">Surface</div>
-    <div class="picks">
-      <label class="pick"><input type="checkbox" name="surface" value="Listener" /> Listener</label>
-      <label class="pick"><input type="checkbox" name="surface" value="Menu Manager" /> Menu Manager</label>
-      <label class="pick"><input type="checkbox" name="surface" value="Menu Screens" /> Menu Screens</label>
-    </div>
+    <div class="picks" id="surface-picks"></div>
 
     <div id="screens">
       <div class="lab">Which screen</div>
@@ -170,7 +166,19 @@
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
+    const SURFACES = ["Listener", "Menu Manager", "Menu Screens", "Deployer"];
+    const SURFACE_PAGES = {
+      Listener: { page: "Listener.md", label: "Listener" },
+      "Menu Manager": { page: "manager.html", label: "Menu Manager" },
+      Deployer: { page: "deploy.html", label: "Deployer" },
+    };
     const params = new URLSearchParams(location.search);
+
+    function pickSurfaceMessage() {
+      if (SURFACES.length <= 1) return "Pick " + (SURFACES[0] || "a surface") + ".";
+      if (SURFACES.length === 2) return "Pick " + SURFACES[0] + " or " + SURFACES[1] + ".";
+      return "Pick " + SURFACES.slice(0, -1).join(", ") + ", or " + SURFACES[SURFACES.length - 1] + ".";
+    }
 
     function onlyOne(name) {
       const boxes = [...document.querySelectorAll('input[name="' + name + '"]')];
@@ -183,6 +191,18 @@
     }
 
     const kinds = onlyOne("kind");
+    const surfaceHost = document.getElementById("surface-picks");
+    SURFACES.forEach((name) => {
+      const lab = document.createElement("label");
+      lab.className = "pick";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.name = "surface";
+      box.value = name;
+      lab.appendChild(box);
+      lab.appendChild(document.createTextNode(" " + name));
+      surfaceHost.appendChild(lab);
+    });
     const surfaces = onlyOne("surface");
     const screens = onlyOne("screen");
 
@@ -281,12 +301,8 @@
     });
 
     function pageInfo() {
-      if (surface() === "Listener") {
-        return { page: "Listener.md", label: "Listener" };
-      }
-      if (surface() === "Menu Manager") {
-        return { page: "manager.html", label: "Menu Manager" };
-      }
+      const mapped = SURFACE_PAGES[surface()];
+      if (mapped) return mapped;
       const on = screens.find((b) => b.checked);
       if (on) return { page: on.value, label: on.getAttribute("data-label") };
       return { page: "preview-all.html", label: "Wall" };
@@ -319,7 +335,7 @@
     document.getElementById("form").addEventListener("submit", (ev) => {
       ev.preventDefault();
       const surf = surface();
-      if (!surf) { alert("Pick Listener, Menu Manager, or Menu Screens."); return; }
+      if (!surf) { alert(pickSurfaceMessage()); return; }
       if (surf === "Menu Screens" && !screens.some((b) => b.checked)) {
         alert("Pick which screen.");
         return;
