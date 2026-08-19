@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2c47af5",
-  "hashFull": "2c47af50270a2e1e7c4c2f63b9a0aab22ddf8a45",
-  "subject": "QA: 2026-08-19 Testing again (pass 1)"
+  "hash": "21ccf36",
+  "hashFull": "21ccf36e7d60eef55eeb474fef9644a75fac68f0",
+  "subject": "QA: 2026-08-19 Give Paste function to Ticket Reporting (pass 2)"
 };
