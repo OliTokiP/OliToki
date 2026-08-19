@@ -12,6 +12,7 @@ if [[ ! -f "$ICON_SRC" ]]; then
 fi
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+rm -rf "$APP/Contents/Resources/__pycache__"
 cp -f "$ICON_SRC" "$ICON_DST"
 printf '%s\n' "$ROOT" > "$APP/Contents/Resources/project-path.txt"
 chmod +x "$APP/Contents/MacOS/suite"
@@ -25,8 +26,8 @@ xattr -cr "$APP" >/dev/null 2>&1 || true
 DEST="$HOME/Applications/Suite.app"
 mkdir -p "$HOME/Applications"
 rm -rf "$DEST"
-cp -R "$APP" "$DEST"
-xattr -cr "$DEST" >/dev/null 2>&1 || true
+# Alias, not a second copy — same bundle ID must exist once or `open` launches two.
+ln -s "$APP" "$DEST"
 echo "Suite.app ready"
 echo "  $APP"
-echo "  $DEST"
+echo "  $DEST -> $APP"

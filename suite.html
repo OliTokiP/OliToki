@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
-  <title>Suite — OliToki</title>
+  <title>Suite</title>
   <style>
     :root { color-scheme: light dark; }
     html { -webkit-text-size-adjust: 100%; height: 100%; }
@@ -65,7 +65,7 @@
   </style>
 </head>
 <body>
-  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · Tickets · <a href="manager.html">Menu Manager</a></p>
   <h1>Suite</h1>
   <p class="sub">Phone hub for the development tools. Same idea as Launcher: this copy, plus Live. Ship from Deployer. File tickets from Tickets.</p>
   <div class="live" id="live">Pages vs git: checking…</div>
@@ -100,7 +100,7 @@
   </table>
   <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
 
-  <script src="js/surfaces.js?v=20260819tix1"></script>
+  <script src="js/surfaces.js?v=20260819tix2"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
@@ -136,7 +136,7 @@
 
     const tools = SUITE.tools || [
       { name: "Deployer", page: "deploy.html", blurb: "Ship testing or restaurant." },
-      { name: "Tickets", page: "new-bug.html", blurb: "Log a bug or a feature request." },
+      { name: "Tickets", page: "tickets.html", blurb: "Queues and new tickets on this Mac." },
       { name: "Menu Manager", page: "manager.html", blurb: "Edit the menu on your phone." },
     ];
     document.getElementById("tools").innerHTML = tools

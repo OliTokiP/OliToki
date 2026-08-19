@@ -2,8 +2,8 @@
  *
  * Add a surface: one object in "surfaces" (name + page).
  * Listener reads this file and creates QA/<name> + FEATURE REQUESTS/<name>
- * plus Queue pages. Tickets nav leads to Listener home (local panel); new-bug.html
- * and the Listener /new form are the creation paths. "surfaces" for form.
+ * plus Queue pages. Tickets nav is Listener home (local panel). Creation is
+ * Listener /new only — there is no GitHub ticketer. "surfaces" for form.
  * suite.html lists "tools". Launcher.md rows come from "launcher".
  * Screens under Menu Screens come from "screens".
  *
@@ -18,6 +18,7 @@ window.tokiSuiteNavHtml = function (currentName) {
   var label;
   var href;
   currentName = currentName || "";
+  if (currentName === "Listener") currentName = "Tickets";
   for (i = 0; i < nav.length; i++) {
     item = nav[i] || {};
     label = item.name || "";
@@ -42,7 +43,7 @@ function isLiveHost() {
 }
 function tokiListenerHomeUrl() {
   if (isLiveHost()) {
-    return "new-bug.html";
+    return "tickets.html";
   }
   try {
     var u = new URL(location.href);
@@ -84,13 +85,13 @@ window.TOKI_SUITE = {
   "tools": [
     { "name": "Suite", "page": "suite.html", "blurb": "This page — all the operator tools." },
     { "name": "Deployer", "page": "deploy.html", "blurb": "Ship testing or restaurant." },
-    { "name": "Tickets", "page": "new-bug.html", "blurb": "Log a bug or a feature request." },
+    { "name": "Tickets", "page": "tickets.html", "blurb": "Queues and new tickets on this Mac." },
     { "name": "Menu Manager", "page": "manager.html", "blurb": "Edit the menu on your phone." }
   ],
   "nav": [
     { "name": "Suite", "page": "suite.html" },
     { "name": "Deployer", "page": "deploy.html" },
-    { "name": "Tickets", "page": "new-bug.html" },
+    { "name": "Tickets", "page": "tickets.html" },
     { "name": "Menu Manager", "page": "manager.html" }
   ]
 };
