@@ -1574,6 +1574,45 @@ img {
   transition-duration: 0.35s;
 }
 
+/* —— Confirm-save tooltip (nuance callout after yes/no choice) —— */
+
+.tooltip {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  z-index: 35;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--secondary);
+  color: var(--main);
+  border: 1.5px solid var(--highlight);
+  font-size: 0.78rem;
+  line-height: 1.28;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.tooltip.is-on {
+  opacity: 1;
+}
+
+.tooltip.is-out {
+  opacity: 0;
+  transition-duration: 0.3s;
+}
+
+.tooltip-title {
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.tooltip-line {
+  margin: 1px 0;
+  opacity: 0.95;
+}
+
 /* —— Motion —— */
 
 @media (prefers-reduced-motion: reduce) {

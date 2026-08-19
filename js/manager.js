@@ -40,6 +40,7 @@
     holdGrid: false,
     previewTimer: null,
     toastTimer: null,
+    tooltipTimer: null,
     styleScroll: 0,
     pillScroll: {},
     pendingLeave: null,
@@ -1587,12 +1588,71 @@
     }, 4000);
   }
 
+  function hideConfirmTooltip() {
+    var el = els.tooltip;
+    if (!el) return;
+    clearTimeout(state.tooltipTimer);
+    if (el.hidden) return;
+    el.classList.remove("is-on");
+    el.classList.add("is-out");
+    state.tooltipTimer = setTimeout(function () {
+      el.hidden = true;
+      el.classList.remove("is-out");
+      el.innerHTML = "";
+    }, 280);
+  }
+
+  function showConfirmSaveTooltip(choice) {
+    var el = els.tooltip;
+    if (!el) return;
+    hideConfirmTooltip();
+    var isYes = String(choice) === "yes";
+    var title = isYes
+      ? "Save confirmation enabled."
+      : "Save confirmation surpassed.";
+    var bullets = isYes
+      ? [
+          "• Press < to save page.",
+          "• Changes go live after save confirmation"
+        ]
+      : [
+          "• Options save on a per-change basis",
+          "• Database and menu are updated instantly",
+          "• Use with caution"
+        ];
+    var html =
+      '<div class="tooltip-title">' +
+      escapeHtml(title) +
+      "</div>" +
+      bullets
+        .map(function (b) {
+          return '<div class="tooltip-line">' + escapeHtml(b) + "</div>";
+        })
+        .join("");
+    el.innerHTML = html;
+    el.hidden = false;
+    el.classList.remove("is-out");
+    void el.offsetWidth;
+    el.classList.add("is-on");
+    clearTimeout(state.tooltipTimer);
+    state.tooltipTimer = setTimeout(function () {
+      el.classList.remove("is-on");
+      el.classList.add("is-out");
+      state.tooltipTimer = setTimeout(function () {
+        el.hidden = true;
+        el.classList.remove("is-out");
+        el.innerHTML = "";
+      }, 280);
+    }, 6200);
+  }
+
   function rememberStyleScroll() {
     var sc = document.getElementById("style-scroll");
     if (sc) state.styleScroll = sc.scrollTop;
   }
 
   function go(screen, boardId) {
+    hideConfirmTooltip();
     if (state.screen === "style") rememberStyleScroll();
     state.picker = null;
     state.dialog = null;
@@ -1653,6 +1713,7 @@
   }
 
   function back() {
+    hideConfirmTooltip();
     if (state.picker) {
       state.picker = null;
       renderPicker();
@@ -1688,6 +1749,7 @@
   }
 
   function openPicker(key) {
+    hideConfirmTooltip();
     var spec = pickerSpec(key);
     if (!spec) return;
     if (key === "boardTitle") {
@@ -1715,9 +1777,14 @@
     spec.set(next);
     rememberStyleScroll();
     renderAll();
+    if (state.draft.confirmSave === "no" && systemSettingsDirty()) {
+      state.pendingLeave = null;
+      confirmChoice("yes");
+    }
   }
 
   function choose(id) {
+    hideConfirmTooltip();
     var spec = pickerSpec(state.picker);
     if (!spec) return;
     if (state.picker === "wallpaper" && id === "upload") {
@@ -1738,6 +1805,14 @@
     }
     applyTheme();
     renderAll();
+    if (pickKey === "confirmSave") {
+      showConfirmSaveTooltip(id);
+    }
+    if (state.draft.confirmSave === "no" && systemSettingsDirty()) {
+      // "no" means per-change instant save for System Settings options (incl. this toggle).
+      state.pendingLeave = null;
+      confirmChoice("yes");
+    }
     if (pickKey === "boardPresentation") {
       previewCtl.encoreFirst = true;
       if (id === "encore") fillPortraitGrid();
@@ -3328,6 +3403,7 @@
       state.dialog = null;
       renderDialog();
     } else if (act === "picker-dismiss") {
+      hideConfirmTooltip();
       state.picker = null;
       renderPicker();
     } else if (act === "open-sheet") {
@@ -3359,7 +3435,10 @@
   }
 
   function onKey(e) {
-    if (e.key === "Escape") back();
+    if (e.key === "Escape") {
+      hideConfirmTooltip();
+      back();
+    }
   }
 
   function fitDevice() {
@@ -3401,6 +3480,7 @@
     els.picker = document.getElementById("picker");
     els.dialog = document.getElementById("dialog");
     els.toast = document.getElementById("toast");
+    els.tooltip = document.getElementById("tooltip");
     els.device.addEventListener("click", onClick);
     function blockHeroScroll(e) {
       if (e.target.closest && e.target.closest(".status, .preview, .header, .home-hero")) {
