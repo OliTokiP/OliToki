@@ -48,6 +48,11 @@
     button.danger { background: #8b1e1e; }
     .tiny { color: #666; font-size: .88rem; }
     a { color: inherit; }
+    .advice {
+      border: 1px solid #bbb; border-radius: 10px;
+      padding: .7rem .85rem; margin: 0 0 1rem; font-size: .95rem;
+    }
+    .advice p { margin: 0; font-weight: 500; }
     .warn {
       border: 1px dashed #bbb; border-radius: 8px; padding: .65rem .8rem;
       margin-top: 1rem; font-size: .92rem;
@@ -62,6 +67,9 @@
   <p class="tiny"><a href="suite.html">← Suite</a> · <a href="https://github.com/OliTokiP/OliToki/issues?q=is%3Aopen+label%3Atoki-qa">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Deployer</h1>
   <p class="sub">Phone is enough. This files a GitHub issue; Actions ships the website and API. Your laptop is not the live server.</p>
+  <div class="advice">
+    <p><strong>Set and forget.</strong> Leave <strong>Website + API</strong> on. One restaurant ship updates the TVs and the sheet brain together. You do not redeploy because someone edited the menu. You do not need this Mac after that. Only ship again when the app itself changes.</p>
+  </div>
   <div class="live" id="live">Checking restaurant vs testing…</div>
 
   <form id="form">

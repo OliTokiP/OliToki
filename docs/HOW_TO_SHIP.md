@@ -18,6 +18,10 @@ There are three copies of the app:
 
 Pushing a ticket or committing on the Mac updates **main** only. The TVs do not change until you use Deployer and pick **Restaurant**.
 
+### Set and forget
+
+Leave **Ship** on **Website + API**. One restaurant ship updates the TV website and the sheet brain together. You do **not** redeploy because someone edited the menu. You do **not** need this Mac after that. Only ship again when the **app itself** changes (new buttons, new write routes, that kind of thing).
+
 Testing site (safe to poke): https://toki-api-testing-3rx5m3qpzq-uc.a.run.app/
 
 Restaurant site (the TVs): https://olitokip.github.io/OliToki/

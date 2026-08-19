@@ -368,6 +368,132 @@ class SheetsBackend:
             _settings_cache["data"] = data
         return dict(data)
 
+    def write_settings(self, body: dict) -> dict:
+        """Write System Settings into the OliToki Menu Settings workbook."""
+        sid = (self.settings_sheet_id or "").strip()
+        if not sid:
+            raise ValueError("Settings workbook not configured")
+        rows = self._settings_rows()
+        header_idx = None
+        for i, row in enumerate(rows or []):
+            if _cell(row, 0).lower() == "data source":
+                header_idx = i
+                break
+        if header_idx is None:
+            raise KeyError("Settings header row not found")
+        data_idx = header_idx + 1
+        header = (rows[header_idx] if header_idx < len(rows) else []) or []
+        cols: dict[str, int] = {}
+        for c, raw in enumerate(header):
+            fold = self._header_fold(str(raw or ""))
+            if fold:
+                cols[fold] = c
+            low = str(raw or "").strip().lower()
+            if "system font" in low:
+                cols["systemfont"] = c
+            if _is_heavy_filter_header(low):
+                cols["limitheavyfilters"] = c
+            if "confirm" in low and "save" in low:
+                cols["confirmsave"] = c
+            if "refresh timer" in low:
+                cols["refreshtimer"] = c
+
+        def a1(*folds: str, default_col: int) -> str:
+            for fold in folds:
+                if fold in cols:
+                    return f"{self._col_letters(cols[fold])}{data_idx + 1}"
+            return f"{self._col_letters(default_col)}{data_idx + 1}"
+
+        def yn(raw, fallback: bool = False) -> str:
+            s = str(raw if raw is not None else "").strip().lower()
+            if s in ("1", "yes", "y", "true", "on"):
+                return "TRUE"
+            if s in ("0", "no", "n", "false", "off"):
+                return "FALSE"
+            return "TRUE" if fallback else "FALSE"
+
+        values: dict[str, tuple[str, str]] = {}
+        force = (os.environ.get("TOKI_FORCE_SOURCE") or "").strip().lower()
+        if not force:
+            env = (os.environ.get("TOKI_ENV") or "").strip().lower()
+            if env == "restaurant":
+                force = "restaurant"
+            elif env == "testing":
+                force = "alpha"
+
+        if "dataSource" in body and body.get("dataSource") not in (None, ""):
+            if force:
+                _log("settings write: skip dataSource (env pin)")
+            else:
+                raw = str(body.get("dataSource") or "").strip()
+                live = parse_settings_rows(rows, self.fallback_sheet_id)
+                name = raw
+                for c in live.get("catalog") or []:
+                    n = str(c.get("name") or "").strip()
+                    cid = re.sub(r"[^a-z0-9]+", "", n.lower())
+                    if raw.lower() in (n.lower(), cid) or cid.startswith(raw.lower()):
+                        name = n
+                        break
+                values["datasource"] = (a1("datasource", default_col=0), name)
+
+        if "requireRestart" in body and body.get("requireRestart") not in (None, ""):
+            values["requirerestart"] = (
+                a1("requirerestarttoupdate", "requirerestart", default_col=1),
+                yn(body.get("requireRestart"), False),
+            )
+        if "systemFont" in body and body.get("systemFont") not in (None, ""):
+            font = str(body.get("systemFont") or "").strip().lower()
+            label = "Poppins" if "poppin" in font else "Roboto"
+            values["systemfont"] = (a1("systemfont", default_col=2), label)
+        if "limitHeavyFilters" in body and body.get("limitHeavyFilters") not in (
+            None,
+            "",
+        ):
+            values["limitheavyfilters"] = (
+                a1("limitheavyfilters", default_col=3),
+                yn(body.get("limitHeavyFilters"), True),
+            )
+        if "confirmSave" in body and body.get("confirmSave") not in (None, ""):
+            values["confirmsave"] = (
+                a1("confirmsave", default_col=4),
+                yn(body.get("confirmSave"), True),
+            )
+        if "refreshTimer" in body and body.get("refreshTimer") not in (None, ""):
+            values["refreshtimer"] = (
+                a1("refreshtimer", default_col=5),
+                str(body.get("refreshTimer")).strip(),
+            )
+        if not values:
+            raise ValueError("nothing to write")
+        data = [
+            {"range": "Settings!" + cell, "values": [[val]]}
+            for _k, (cell, val) in values.items()
+        ]
+        t0 = time.time()
+        with self._api_lock:
+            updated = (
+                self.sheets.spreadsheets()
+                .values()
+                .batchUpdate(
+                    spreadsheetId=sid,
+                    body={"valueInputOption": "USER_ENTERED", "data": data},
+                    )
+                .execute()
+            )
+        with _settings_lock:
+            _settings_cache["at"] = 0
+            _settings_cache["data"] = None
+        _log(
+            f"settings write {sid} { {k: v[1] for k, v in values.items()} } "
+            f"cells={updated.get('totalUpdatedCells')} ({time.time() - t0:.2f}s)"
+        )
+        return {
+            "ok": True,
+            "settingsSheetId": sid,
+            "wrote": {k: v[1] for k, v in values.items()},
+            "skippedDataSource": bool(force and "dataSource" in body),
+        }
+
     def apply_live_sheet(self, force_settings: bool = False) -> dict:
         """Point CSV/meta at the workbook chosen in Settings → Data Source."""
         live = self.refresh_settings(force=force_settings)
@@ -1555,6 +1681,33 @@ def make_handler(
                     self._json(404, {"error": str(e)})
                 except Exception as e:
                     _log(f"style write error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
+                return
+            if parsed.path in ("/api/manager/settings", "/api/manager/system"):
+                backend = self._backend()
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                body, err = self._read_json_body(16_384)
+                if err:
+                    self._json(400, err)
+                    return
+                try:
+                    result = backend.write_settings(body)
+                    self._json(200, result)
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except KeyError as e:
+                    self._json(404, {"error": str(e)})
+                except Exception as e:
+                    _log(f"settings write error: {e}")
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return

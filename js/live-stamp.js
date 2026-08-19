@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9ece139",
-  "hashFull": "9ece139ff3a014bb8d6a7f30e8f8e42fd7e91399",
-  "subject": "QA: 2026-08-18 Add confirm save toggle to preferences (pass 1)"
+  "hash": "22b883c",
+  "hashFull": "22b883cb630ed043b39f1d736a45a6a88a570e49",
+  "subject": "Settings sheet writes via /api/manager/settings; Deployer set-and-forget copy"
 };

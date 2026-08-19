@@ -8,6 +8,8 @@ Phone form: [`deploy.html`](../deploy.html). Worker: GitHub Actions [`.github/wo
 
 Your laptop is staging. **main** is today’s work. **testing** is unmerged beta. **restaurant** is what the dining-room TVs run.
 
+**Set and forget:** leave Ship on **Website + API**. One restaurant ship updates Pages and Cloud Run together. Menu edits do not need a redeploy. The laptop is not the live server. Only ship again when app code changes.
+
 ## Two branches
 
 | Branch | Site | Sheet (forced) | API |
