@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-19 (Tooltip + system settings docs) 
+**Last updated:** 2026-08-19 (Encore preview scale: `--device-w`, not `100cqi`) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -44,7 +44,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 | Route | Screen |
 |-------|--------|
-| `#/` | Splash — OliToki Menu Manager. Tiny **← Suite** bar (same as Suite / Deployer / Tickets / Listener home). |
+| `#/` | Splash — OliToki Menu Manager. Same Suite bar as Suite / Deployer / Tickets (current page is text). |
 | `#/system` | System Settings (Data Source, Require Restart, System Font, Sheet link) |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
@@ -68,7 +68,7 @@ Context-driven children (same idea as the mockup):
 | Background = Wallpaper | Wallpaper Type, BG Scroll Speed |
 | Presentation Style = Encore | Spotlight Style, Spotlight Color, Encore Background |
 
-Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
+Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Encore calls `TOKI_MOTION.encorePunchIn` / `encorePunchOut` on `#family-portrait-stage`. The 848.1×1080 lattice is cover-scaled into the photo box using `--device-w` (not `100cqi` — Fire Stick Silk has no container query units). Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 

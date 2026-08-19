@@ -554,9 +554,10 @@
       return window.tokiSuiteNavHtml("Menu Manager");
     }
     return (
-      '<a href="suite.html">← Suite</a> · ' +
+      '<a href="suite.html">Suite</a> · ' +
       '<a href="deploy.html">Deployer</a> · ' +
-      '<a href="http://127.0.0.1:18765/">Tickets</a> · Menu Manager'
+      '<a href="http://127.0.0.1:18765/">Tickets</a> · ' +
+      '<span class="is-current">Menu Manager</span>'
     );
   }
 
@@ -2563,6 +2564,23 @@
     return els.app.querySelector("#family-portrait-stage");
   }
 
+  /** Fire Stick Silk cannot resolve 100cqi. Measure the preview box in px. */
+  function syncEncoreLayout(preview) {
+    preview = preview || (els.app && els.app.querySelector(".preview"));
+    if (!preview) return;
+    var h = preview.clientHeight || 0;
+    var w = preview.clientWidth || 0;
+    if (h < 2 || w < 2) return;
+    var gutter = 103.332 * (h / 300);
+    var boxW = Math.max(1, w - gutter);
+    var scale = Math.max(boxW / 848.1, h / 1080);
+    preview.style.setProperty("--encore-gutter", gutter + "px");
+    preview.style.setProperty("--encore-box-w", boxW + "px");
+    preview.style.setProperty("--encore-scale", String(scale));
+    preview.style.setProperty("--plate-w", Math.min(boxW, h * 1.5) + "px");
+    preview.style.setProperty("--plate-h", Math.min(boxW, h * 1.5) * (2 / 3) + "px");
+  }
+
   function fillPortraitGrid() {
     var TM = window.TOKI_MOTION;
     var stage = encoreStageEl();
@@ -2897,6 +2915,7 @@
      theme changes, and picker applies (see MOTION_GLOSSARY 3/4 and ticket). */
   function syncPreviewFromDraft(preview) {
     if (!preview) return;
+    syncEncoreLayout(preview);
     var d = state.draft;
     var encore = previewPresentation() === "encore";
     preview.classList.toggle("is-encore", encore);
@@ -2966,6 +2985,7 @@
     stopPreviewCycle();
     previewCtl.encoreFirst = true;
     previewCtl.lattice = null;
+    syncEncoreLayout();
     if (previewPresentation() === "encore") {
       fillPortraitGrid();
     }
@@ -3676,6 +3696,7 @@
         slot.style.width = "";
         slot.style.height = "";
       }
+      syncEncoreLayout();
       return;
     }
     var pad = 32;
@@ -3688,6 +3709,7 @@
       slot.style.width = 390 * s + "px";
       slot.style.height = 844 * s + "px";
     }
+    syncEncoreLayout();
   }
 
   function escapeHtml(s) {
