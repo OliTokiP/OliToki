@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "aca6ced",
-  "hashFull": "aca6ced90ffaa3f092b1a9b3d586061138f94a9c",
-  "subject": "QA: 2026-08-19 Ticket View Title should copy ticket link to clipboard (pass 1)"
+  "hash": "0934a59",
+  "hashFull": "0934a592c50e0e3e4c2127e17371ede1cf5afd5e",
+  "subject": "QA: 2026-08-19 Ticketer doesn't have have attachment management (pass 3)"
 };
