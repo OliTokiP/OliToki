@@ -82,6 +82,14 @@ input {
   color: inherit;
 }
 
+/* Form controls use >=16px so iOS Safari does not auto-zoom on focus (mobile app feel). */
+input:not([type="file"]),
+textarea,
+select,
+.dialog-input {
+  font-size: 16px;
+}
+
 button {
   appearance: none;
   border: 0;

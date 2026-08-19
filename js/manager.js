@@ -3194,6 +3194,8 @@
     }
     els.device.addEventListener("touchmove", blockHeroScroll, { passive: false });
     els.device.addEventListener("wheel", blockHeroScroll, { passive: false });
+    // Suppress pinch/double-tap page zoom so mobile Menu Manager feels like an app (iOS Settings style).
+    document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", fitDevice);
     window.addEventListener("hashchange", handleLocationChange);
