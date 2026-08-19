@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "ffad483",
-  "hashFull": "ffad483098f758733fb5651d2dba6089e63d6196",
-  "subject": "QA: 2026-08-18 Create page that unifies development suite (pass 1)"
+  "hash": "8c44a8b",
+  "hashFull": "8c44a8b4e3ba63e815439efb8ada0e9c58f957dd",
+  "subject": "Deployer: run from issue body even if GitHub drops the label"
 };
