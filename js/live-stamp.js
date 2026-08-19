@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "21ccf36",
-  "hashFull": "21ccf36e7d60eef55eeb474fef9644a75fac68f0",
-  "subject": "QA: 2026-08-19 Give Paste function to Ticket Reporting (pass 2)"
+  "hash": "bce5bcb",
+  "hashFull": "bce5bcbbfc67028b1b9e9caf027d3a9cec813d04",
+  "subject": "QA: 2026-08-19 Ticket should should inherit links to surfaces in scope in Ticket view (pass 2)"
 };
