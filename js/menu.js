@@ -5888,6 +5888,7 @@
         false
       );
       const header = rows[headerIdx] || [];
+      const dataRow = rows[headerIdx + 1] || [];
       for (let c = 0; c < header.length; c++) {
         const h = String(header[c] || "").trim().toLowerCase();
         if (h.indexOf("system font") !== -1) {
@@ -5900,7 +5901,25 @@
           );
         }
         if (h.indexOf("refresh timer") !== -1) {
-          refreshTimer = String((rows[headerIdx + 1] && rows[headerIdx + 1][c]) || "").trim() || refreshTimer;
+          const cand = String(dataRow[c] || "").trim();
+          // Only accept if it matches timer syntax (number + optional unit); this
+          // excludes "TRUE", "FALSE" etc. even though parse may return 30 for them.
+          if (/^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i.test(cand)) {
+            refreshTimer = cand;
+          }
+        }
+      }
+      // Scan whole data row for a timer string. This connects the board soft refresh
+      // clock (getRefreshIntervalSeconds + armRefreshTimer) to the Refresh Timer
+      // value from the OliToki Menu Settings gsheet cell, even if the header cell
+      // text contains validation rules / ref instead of the selected increment.
+      if (!refreshTimer) {
+        for (let c = 0; c < dataRow.length; c++) {
+          const cand = String(dataRow[c] || "").trim();
+          if (/^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i.test(cand)) {
+            refreshTimer = cand;
+            break;
+          }
         }
       }
     }
@@ -6079,7 +6098,11 @@
             const j = await res.json();
             applyLiveSettingsPayload(j);
             // Older toki_server omits systemFont / the FPS cap / refreshTimer — fill from public Settings.
-            if (!j.systemFont || j.limitHeavyFilters == null || !j.refreshTimer) {
+            // Also patch refreshTimer if proxy gave a non-timer value (column layout in
+            // Settings may put the child "Refresh Timer" value outside the matched header col).
+            const timerRe = /^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i;
+            const jHasGoodRefresh = !!(j && j.refreshTimer && timerRe.test(j.refreshTimer));
+            if (!j.systemFont || j.limitHeavyFilters == null || !jHasGoodRefresh) {
               try {
                 const pub = await fetchLiveSettingsFromPublicExport();
                 if (pub && pub.systemFont && !j.systemFont) {
@@ -6089,7 +6112,7 @@
                 if (pub && pub.limitHeavyFilters != null && j.limitHeavyFilters == null) {
                   liveSettings.limitHeavyFilters = !!pub.limitHeavyFilters;
                 }
-                if (pub && pub.refreshTimer && !j.refreshTimer) {
+                if (pub && pub.refreshTimer && timerRe.test(pub.refreshTimer) && !jHasGoodRefresh) {
                   liveSettings.refreshTimer = pub.refreshTimer;
                 }
               } catch (fontErr) {
