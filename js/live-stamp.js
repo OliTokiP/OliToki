@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2f26a48",
-  "hashFull": "2f26a48ad7d02a0ea4198bafbae74911fdc875b5",
-  "subject": "QA: restore Film/Galaxy sm webps dropped in deployer-surface commit"
+  "hash": "b9551b5",
+  "hashFull": "b9551b5e48eecd27af447bce4b4c2341fcb346e1",
+  "subject": "QA: 2026-08-18 Tickets link leads to new bug rather than listener homepage (pass 1)"
 };
