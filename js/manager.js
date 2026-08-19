@@ -1628,7 +1628,13 @@
       });
       return;
     }
-    if (state.screen === "system" || state.screen === "menu") {
+    if (state.screen === "system") {
+      leaveSystem(function () {
+        history.back();
+      });
+      return;
+    }
+    if (state.screen === "menu") {
       history.back();
       return;
     }
@@ -1983,6 +1989,27 @@
     });
   }
 
+  function persistSystemWrite(prevSys) {
+    var sheet = window.TOKI_MANAGER_SHEET;
+    if (!sheet || !sheet.writeSystem) {
+      return Promise.resolve({
+        needed: true,
+        wrote: { ok: false, error: "System write not available" },
+      });
+    }
+    var payload = {
+      dataSource: state.draft.dataSource,
+      requireRestart: state.draft.requireRestart,
+      systemFont: state.draft.systemFont,
+      limitHeavyFilters: state.draft.limitHeavyFilters,
+    };
+    // Settings workbook id is known to server (different from catalog sheetId).
+    // Writing here makes e.g. System Font affect the menu boards.
+    return sheet.writeSystem(payload).then(function (wrote) {
+      return { needed: true, wrote: wrote };
+    });
+  }
+
   function confirmChoice(val) {
     if (val === "yes") {
       var onBoard = state.screen === "board" && state.boardDraft;
@@ -1993,6 +2020,15 @@
       if (state.lastSheet && state.lastSheet.style) {
         stylePrev = Object.assign({}, stylePrev, state.lastSheet.style);
       }
+      var wasSystemDirty = systemSettingsDirty();
+      var systemPrev = wasSystemDirty
+        ? {
+            dataSource: state.committed ? state.committed.dataSource : "",
+            requireRestart: state.committed ? state.committed.requireRestart : "",
+            systemFont: state.committed ? state.committed.systemFont : "",
+            limitHeavyFilters: state.committed ? state.committed.limitHeavyFilters : "",
+          }
+        : null;
       if (onBoard) {
         boardPrev =
           state.lastBoardSnap[state.boardDraft.id] ||
@@ -2025,6 +2061,17 @@
               kind: "both",
             };
           })
+        : wasSystemDirty
+        ? persistSystemWrite(systemPrev).then(function (sys) {
+            return persistFallback().then(function (fb) {
+              return {
+                needed: !!(sys && sys.needed),
+                wrote: sys && sys.wrote,
+                fb: fb,
+                kind: "system",
+              };
+            });
+          })
         : persistStyleWrite(stylePrev, styleNext);
       persist
         .then(function (result) {
@@ -2035,6 +2082,10 @@
               fb: false,
               kind: "both",
             };
+          }
+          if (wasSystemDirty) {
+            // system already attached fb/kind in the branch above
+            return result;
           }
           return persistFallback().then(function (fb) {
             return {
@@ -2056,6 +2107,8 @@
           toast(
             onBoard
               ? "Could not write board to sheet — saved for this session"
+              : wasSystemDirty
+              ? "Could not write system settings to sheet — saved for this session"
               : "Could not write style to sheet — saved for this session"
           );
         });
