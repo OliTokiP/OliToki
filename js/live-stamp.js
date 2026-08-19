@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "1af5c8f",
-  "hashFull": "1af5c8f43e11e688646767b87f5243db97bf4880",
-  "subject": "QA: 2026-08-19 Drafts and piggyback tickets should show filled but greyed out type and surface options at the top (pass 1)"
+  "hash": "3dd9afb",
+  "hashFull": "3dd9afb2e12c58e2e6dc9c487eaed7787e59c89d",
+  "subject": "QA: 2026-08-19 Soft refresh clock not hooked up to settings (pass 2)"
 };

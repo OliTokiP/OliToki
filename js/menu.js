@@ -1513,6 +1513,9 @@
    */
   let _skipNextCollageWindDown = false;
   let refreshTimer = null;
+  /** Separate short poll so Refresh Timer setting changes re-arm the data clock
+   * promptly (without waiting the old data interval to tick). */
+  let settingsWatchTimer = null;
   let dataSource = "";
 
   /** Parsed from Debug Menu sheet (when debugMenuGid configured) */
@@ -15131,6 +15134,7 @@
           clearInterval(refreshTimer);
           refreshTimer = null;
         }
+        stopSettingsWatcher();
         tokiInfo("refresh: Require restart enabled — auto-refresh stopped");
         setFeatureActive("softRefresh", false, "require restart");
         return;
@@ -15200,6 +15204,39 @@
     refreshTimer = setInterval(softReload, sec * 1000);
   }
 
+  function stopSettingsWatcher() {
+    if (settingsWatchTimer) {
+      clearInterval(settingsWatchTimer);
+      settingsWatchTimer = null;
+    }
+  }
+
+  function startSettingsWatcher() {
+    stopSettingsWatcher();
+    // 10s fixed settings watch: cheap (just System Settings), allows Refresh Timer
+    // (and require restart) changes from the gsheet to immediately affect the
+    // armed soft refresh data clock and debug display. This completes the hookup.
+    settingsWatchTimer = setInterval(function () {
+      fetchLiveSettings().then(function () {
+        try {
+          if (liveSettings.requireRestart) {
+            if (refreshTimer) {
+              clearInterval(refreshTimer);
+              refreshTimer = null;
+            }
+            setFeatureActive("softRefresh", false, "require restart");
+            return;
+          }
+          const sec = getRefreshIntervalSeconds();
+          if (sec > 0) {
+            // Re-arm data poll to the (possibly new) live rate right now.
+            armRefreshTimer(sec);
+          }
+        } catch (e) {}
+      }).catch(function () {});
+    }, 10000);
+  }
+
   /** 0–3 board index in the 4-up wall (from ?wall=); 0 if solo. */
   function wallBoardIndex() {
     try {
@@ -15217,6 +15254,7 @@
       clearInterval(refreshTimer);
       refreshTimer = null;
     }
+    stopSettingsWatcher();
     if (liveSettings.requireRestart) {
       tokiInfo(
         "auto-refresh OFF (Require restart to update) —",
@@ -15235,6 +15273,8 @@
     ) {
       return;
     }
+    // Start short settings watcher so timer setting changes re-arm promptly.
+    startSettingsWatcher();
     // Wall: stagger first tick so all four boards don't refetch in the same
     // frame every 30s (Fix 2). Interval stays at the live rate after that.
     if (isPreviewWall()) {
@@ -15748,6 +15788,7 @@
               clearInterval(refreshTimer);
               refreshTimer = null;
             }
+            stopSettingsWatcher();
           }
         } catch (e) { /* non-fatal */ }
 
