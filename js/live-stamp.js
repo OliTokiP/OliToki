@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "ef8a516",
-  "hashFull": "ef8a516fa6e3d1a9446410490800f6d78dfde0d1",
+  "hash": "2c0d0ec",
+  "hashFull": "2c0d0ec7f7de9415b74629e650494767d1395325",
   "subject": "QA: 2026-08-18 System Font does not update menu boards (pass 1)"
 };
