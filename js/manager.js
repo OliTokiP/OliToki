@@ -560,11 +560,7 @@
   }
 
   function screenSystem() {
-    return (
-      '<section class="screen">' +
-      header("System Settings") +
-      statusBlock() +
-      '<div class="rows"><div class="bounce-inner">' +
+    var sysRows =
       row({
         key: "dataSource",
         label: "Data Source",
@@ -574,7 +570,19 @@
         key: "requireRestart",
         label: "Require restart to update?",
         value: labelOf(D.yesNo, state.draft.requireRestart),
-      }) +
+      });
+    if (state.draft.requireRestart === "no") {
+      var timerList = (D && D.refreshTimers) || [];
+      var timerVal = labelOf(timerList, state.draft.refreshTimer);
+      sysRows +=
+        row({
+          key: "refreshTimer",
+          label: "Refresh Timer",
+          value: timerVal || state.draft.refreshTimer || "",
+          child: true,
+        });
+    }
+    sysRows +=
       row({
         key: "systemFont",
         label: "System Font",
@@ -584,7 +592,13 @@
         key: "limitHeavyFilters",
         label: "Limit Heavy Filters to 30FPS",
         value: labelOf(D.yesNo, state.draft.limitHeavyFilters),
-      }) +
+      });
+    return (
+      '<section class="screen">' +
+      header("System Settings") +
+      statusBlock() +
+      '<div class="rows"><div class="bounce-inner">' +
+      sysRows +
       linksBlock() +
       "</div></div></section>"
     );
@@ -1325,6 +1339,18 @@
         },
       };
     }
+    if (key === "refreshTimer") {
+      return {
+        title: "Refresh Timer",
+        options: (D && D.refreshTimers) || [],
+        get: function () {
+          return state.draft.refreshTimer;
+        },
+        set: function (id) {
+          state.draft.refreshTimer = id;
+        },
+      };
+    }
     if (key === "systemFont") {
       return {
         title: "System Font",
@@ -1539,6 +1565,16 @@
     return !eq(state.draft, state.committed);
   }
 
+  function systemSettingsDirty() {
+    if (!state.committed) return false;
+    var keys = ["dataSource", "requireRestart", "systemFont", "limitHeavyFilters"];
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (state.draft[k] !== state.committed[k]) return true;
+    }
+    return false;
+  }
+
   function leaveBoard(next) {
     if (boardDirty() || styleDirty()) {
       state.pendingLeave = next;
@@ -1551,6 +1587,16 @@
 
   function leaveStyle(next) {
     if (!eq(state.draft, state.committed)) {
+      state.pendingLeave = next;
+      state.dialog = "confirm";
+      renderDialog();
+      return;
+    }
+    next();
+  }
+
+  function leaveSystem(next) {
+    if (systemSettingsDirty()) {
       state.pendingLeave = next;
       state.dialog = "confirm";
       renderDialog();

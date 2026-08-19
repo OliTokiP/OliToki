@@ -102,6 +102,13 @@
     { id: "no", label: "No" },
   ];
 
+  var REFRESH_TIMERS = [
+    { id: "1 second", label: "1 second" },
+    { id: "5 seconds", label: "5 seconds" },
+    { id: "30 seconds", label: "30 seconds" },
+    { id: "1 minute", label: "1 minute" },
+  ];
+
   var ZERO_ONE = [
     { id: "1", label: "On" },
     { id: "0", label: "Off" },
@@ -190,6 +197,7 @@
     presentationSpeed: 3,
     dataSource: global.TOKI_DEFAULT_SOURCE || "restaurant",
     requireRestart: "yes",
+    refreshTimer: "30 seconds",
     systemFont: "poppins",
     limitHeavyFilters: "yes",
   };
@@ -210,6 +218,7 @@
     encoreSpotColors: ENCORE_SPOT_COLORS,
     fonts: FONTS,
     yesNo: YES_NO,
+    refreshTimers: REFRESH_TIMERS,
     zeroOne: ZERO_ONE,
     boards: BOARDS,
     comingSoonFeatures: COMING_SOON_FEATURES,

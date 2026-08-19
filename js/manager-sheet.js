@@ -662,6 +662,7 @@
     var requireRestart = "no";
     var systemFont = "roboto";
     var limitHeavyFilters = "yes";
+    var refreshTimer = "";
     var catalog = [];
     var headerIdx = -1;
     var catalogIdx = -1;
@@ -689,6 +690,9 @@
         }
         if (isHeavyFilterHeader(h)) {
           limitHeavyFilters = parseYesNo(cell(rows[headerIdx + 1], c), true);
+        }
+        if (h.indexOf("refresh timer") !== -1) {
+          refreshTimer = cell(rows[headerIdx + 1], c) || refreshTimer;
         }
       }
     }
@@ -719,6 +723,7 @@
       requireRestart: requireRestart,
       systemFont: systemFont,
       limitHeavyFilters: limitHeavyFilters,
+      refreshTimer: refreshTimer || "",
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || dataSource || "",
       catalog: catalog,
@@ -813,6 +818,7 @@
             requireRestart: parseYesNo(j.requireRestart, false),
             systemFont: parseSystemFont(j.systemFont),
             limitHeavyFilters: parseYesNo(j.limitHeavyFilters, true),
+            refreshTimer: j.refreshTimer || "",
             sheetId: j.sheetId || "",
             sourceName: j.sourceName || j.dataSource || "",
             catalog: catalog,
@@ -1142,6 +1148,7 @@
       presentationSpeed: style.presentationSpeed,
       dataSource: dsId,
       requireRestart: settings.requireRestart,
+      refreshTimer: settings.refreshTimer || "30 seconds",
       systemFont: settings.systemFont,
       limitHeavyFilters: settings.limitHeavyFilters || "yes",
     };
@@ -1466,6 +1473,16 @@
     return out;
   }
 
+  async function writeSystem(payload) {
+    // Persists Data Source / Require restart / System Font / Limit Heavy Filters
+    // into the OliToki Menu Settings workbook (top row values). Server maps to
+    // the correct cells under the matching header. This makes System Font (and
+    // peers) affect the menu boards on their next settings load.
+    var out = await postManager("/api/manager/settings", payload || {});
+    if (!out.ok) console.warn("manager-sheet: system settings write failed", out.error);
+    return out;
+  }
+
   global.TOKI_MANAGER_SHEET = {
     load: load,
     loadFallback: loadFallback,
@@ -1473,6 +1490,7 @@
     writeStyle: writeStyle,
     writeTheme: writeTheme,
     writeBoard: writeBoard,
+    writeSystem: writeSystem,
     styleGid: STYLE_GID,
   };
 })(window);

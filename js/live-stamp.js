@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "bd37898",
-  "hashFull": "bd378981a4357d88567c3fbc409fc4922003295d",
-  "subject": "QA: 2026-08-18 Suppress zoom on mobile (pass 1)"
+  "hash": "8fff6e4",
+  "hashFull": "8fff6e45e25c6e88e4be426a62408c4e9f702467",
+  "subject": "QA: 2026-08-18 Data Source dropdown extra labels and sort (pass 1)"
 };
