@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "7123272",
-  "hashFull": "71232720c796cc81f0663289d23fda9f5f4273d3",
-  "subject": "QA: 2026-08-19 Tooltips should appear as stack, centered in mini-display, and get a shroud (pass 3)"
+  "hash": "f79df50",
+  "hashFull": "f79df5037200acbdb6e63f5e340e0e23f50efe41",
+  "subject": "QA: 2026-08-19 Better Attachment Management (pass 2)"
 };

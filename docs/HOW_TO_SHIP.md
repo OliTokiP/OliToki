@@ -2,7 +2,7 @@
 
 This is the operator guide. You do **not** need to understand git, Cloud Run, or APIs to get a version onto the restaurant TVs.
 
-Open the ship form from [[Launcher]] → **Suite** or **Deployer** → **Live**, or here: [Suite](https://olitokip.github.io/OliToki/suite.html) · [Deployer](https://olitokip.github.io/OliToki/deploy.html). Suite, Deployer, Tickets, Menu Manager splash, and Listener home share the same top bar. The current page is plain text in that same slot.
+Open the ship form from [[Launcher]] → **Suite** or **Deployer** → **Live**, or here: [Suite](https://olitokip.github.io/OliToki/suite.html) · [Deployer](https://olitokip.github.io/OliToki/deploy.html). Suite, Deployer, and Tickets share the same top bar. The current page is plain text in that same slot. Menu Manager opens the local Manager in a new window.
 
 ---
 

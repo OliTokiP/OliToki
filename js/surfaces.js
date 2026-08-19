@@ -29,6 +29,10 @@ window.tokiSuiteNavHtml = function (currentName) {
     if (!label) continue;
     if (label === currentName) {
       parts.push('<span class="is-current">' + label + "</span>");
+    } else if (label === "Menu Manager") {
+      parts.push(
+        '<a href="' + href + '" target="_blank" rel="noopener">Menu Manager</a>'
+      );
     } else {
       parts.push('<a href="' + href + '">' + label + "</a>");
     }
