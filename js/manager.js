@@ -2565,7 +2565,26 @@
     previewCtl.lattice = TM.fillEncorePlates(stage, items, {
       sticker: PREVIEW_STICKER,
     });
+    fitPreviewPlates(stage, previewCtl.lattice);
     return previewCtl.lattice;
+  }
+
+  /** Silk clips a 1500×1000 layout box inside the 848 stage. Size the img
+      to the lattice scale so the border box is the visible plate. */
+  function fitPreviewPlates(stage, layout) {
+    if (!stage) return;
+    var s = layout && Number(layout.scale);
+    if (!(s > 0)) s = 0.4;
+    var w = Math.round(1500 * s);
+    var h = Math.round(1000 * s);
+    var imgs = stage.querySelectorAll(".family-portrait-item");
+    var i;
+    for (i = 0; i < imgs.length; i++) {
+      imgs[i].style.width = w + "px";
+      imgs[i].style.height = h + "px";
+      imgs[i].style.maxWidth = "none";
+      imgs[i].style.transform = "translate(-50%, -50%)";
+    }
   }
 
   function applyEncoreChrome(item) {
