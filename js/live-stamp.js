@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9122d1e",
-  "hashFull": "9122d1efb350a49ecf224425c56bc2aafa1211a5",
-  "subject": "QA: 2026-08-19 Manager Back button wired to actual back button rather than previous view (pass 1)"
+  "hash": "2060419",
+  "hashFull": "206041942f0567f9483549757d6d02573d53ede5",
+  "subject": "QA: 2026-08-19 Tooltips should appear as stack, centered in mini-display, and get a shroud (pass 4)"
 };
