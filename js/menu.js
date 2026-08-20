@@ -6103,6 +6103,8 @@
     if (!Number.isFinite(n) || n <= 0) return 30;
     const unit = (m[2] || "s").toLowerCase();
     if (unit && unit[0] === "m") n *= 60;
+    // Shared Sheets quota (~60 reads/min). Sub-30s locks the restaurant workbook.
+    if (n < 30) return 30;
     return n;
   }
 
@@ -6376,6 +6378,23 @@
 
   /** Last successful soft/cold load fingerprint (null until first good load). */
   let _lastDataFingerprint = null;
+  /** Last /api/sheets/rev stamp — skip CSV download when the workbook is unchanged. */
+  let _lastWorkbookRev = "";
+
+  async function fetchWorkbookRev() {
+    try {
+      const useProxy = await detectSheetsApiProxy();
+      if (!useProxy) return "";
+      const res = await fetch(tokiApiUrl("/api/sheets/rev") + "?t=" + Date.now(), {
+        cache: "no-store",
+      });
+      if (!res.ok) return "";
+      const j = await res.json();
+      return String((j && j.rev) || "");
+    } catch (e) {
+      return "";
+    }
+  }
 
   /**
    * Fetch one sheet as rows.
@@ -8173,6 +8192,18 @@
     const t0 =
       typeof performance !== "undefined" ? performance.now() : Date.now();
 
+    let pollRev = "";
+    if (opts.soft) {
+      pollRev = await fetchWorkbookRev();
+      if (pollRev && _lastWorkbookRev && pollRev === _lastWorkbookRev) {
+        tokiInfo("refresh: workbook unchanged — skip fetch");
+        return {
+          __tokiUnchanged: true,
+          _fingerprint: _lastDataFingerprint,
+        };
+      }
+    }
+
     const csvJobs = {
       main: fetchSheetRows(cfg.googleSheetGid || "0"),
     };
@@ -8260,6 +8291,7 @@
       dataFingerprint === _lastDataFingerprint
     ) {
       tokiInfo("refresh: sheet unchanged — skip re-render");
+      if (pollRev) _lastWorkbookRev = pollRev;
       const unchanged = { __tokiUnchanged: true, _fingerprint: dataFingerprint };
       return unchanged;
     }
@@ -8351,6 +8383,10 @@
       "fp=" + dataFingerprint
     );
     parsed._fingerprint = dataFingerprint;
+    if (!pollRev) {
+      pollRev = await fetchWorkbookRev();
+    }
+    if (pollRev) _lastWorkbookRev = pollRev;
     return parsed;
   }
 

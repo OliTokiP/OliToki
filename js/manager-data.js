@@ -103,8 +103,6 @@
   ];
 
   var REFRESH_TIMERS = [
-    { id: "1 second", label: "1 second" },
-    { id: "5 seconds", label: "5 seconds" },
     { id: "30 seconds", label: "30 seconds" },
     { id: "1 minute", label: "1 minute" },
   ];

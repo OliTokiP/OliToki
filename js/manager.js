@@ -1420,7 +1420,11 @@
           return state.draft.refreshTimer;
         },
         set: function (id) {
-          state.draft.refreshTimer = id;
+          var s = String(id || "").trim();
+          var m = s.toLowerCase().match(/^(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m)?$/);
+          var n = m ? parseInt(m[1], 10) : 0;
+          if (m && (m[2] || "s")[0] === "m") n *= 60;
+          state.draft.refreshTimer = !n || n < 30 ? "30 seconds" : s;
         },
       };
     }
@@ -4084,6 +4088,18 @@
       var fromSheet = Object.assign({}, D.defaultDraft, payload.draft);
       fromSheet.confirmSave = fromSheet.confirmSave || "yes";
       fromSheet.refreshTimer = fromSheet.refreshTimer || "30 seconds";
+      (function clampRefresh(d) {
+        var s = String(d.refreshTimer || "").trim().toLowerCase();
+        var m = s.match(/^(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m)?$/);
+        if (!m) {
+          d.refreshTimer = "30 seconds";
+          return;
+        }
+        var n = parseInt(m[1], 10);
+        var unit = (m[2] || "s").toLowerCase();
+        if (unit.charAt(0) === "m") n *= 60;
+        if (!n || n < 30) d.refreshTimer = "30 seconds";
+      })(fromSheet);
       fromSheet.debugMode = fromSheet.debugMode || "no";
       // Keep draft numbers inside the live tile set (sheet conditionals).
       fromSheet.scrollSpeed = clampDraftSpeed(

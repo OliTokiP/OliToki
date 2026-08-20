@@ -48,6 +48,9 @@ DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
 DEFAULT_SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
+    # Cheap "did the workbook change?" check. Sheets values.get every second
+    # is the 60/min quota; Drive metadata is a different, larger pool.
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
 ]
 STYLE_THEME_GID = "183083022"
 # OliToki Menu Settings → Debugger tab (master Debug Mode in A2).
@@ -64,14 +67,22 @@ _meta_cache = {"at": 0, "title_by_gid": {}, "gid_by_title": {}}
 _csv_lock = threading.Lock()
 # gid -> {"at": float, "text": str}
 _csv_cache: dict[str, dict] = {}
+# Drive modifiedTime/version of the catalog workbook the CSV cache was built from.
+_csv_book_rev: str = ""
+_csv_book_sid: str = ""
 # Single-flight for full-workbook batchGet (all tabs in one Google round-trip)
 _csv_batch_event: threading.Event | None = None
 _csv_batch_error: BaseException | None = None
+_rev_lock = threading.Lock()
+_rev_cache: dict = {"at": 0.0, "sid": "", "rev": None, "drive_ok": True}
+# Do not ask Drive more than once a second (all boards share this).
+REV_MIN_INTERVAL_S = 1.0
 META_TTL = 120.0
 # Opportunistic cache only (non-force). Menu loads pass force=1 for live sheet edits.
 CSV_TTL = 90.0
-# Concurrent boards all force-refresh in the same second → one batchGet, not four.
-CSV_FORCE_COALESCE_S = 2.5
+# Fallback only when Drive metadata is unavailable. With Drive, we skip
+# Google entirely until modifiedTime changes — this window is unused.
+CSV_FORCE_COALESCE_S = 8.0
 _settings_lock = threading.Lock()
 _settings_cache: dict = {"at": 0.0, "data": None}
 # Keep this above board-poll cadence. force=1 CSV must not re-read Settings
@@ -176,10 +187,37 @@ _TIMER_VALUE_RE = re.compile(
     r"^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$",
     re.I,
 )
+_REFRESH_SECS_RE = re.compile(
+    r"^\s*(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$",
+    re.I,
+)
+# Four boards + Cloud Run + Manager share one service account (~60 reads/min).
+# 1s / 5s blow that quota and lock the restaurant workbook.
+REFRESH_TIMER_MIN_SECONDS = 30
 
 
 def _is_timer_value(raw: str) -> bool:
     return bool(_TIMER_VALUE_RE.match(str(raw or "").strip()))
+
+
+def parse_refresh_seconds(raw: str) -> int:
+    m = _REFRESH_SECS_RE.match(str(raw or "").strip())
+    if not m:
+        return REFRESH_TIMER_MIN_SECONDS
+    n = int(m.group(1))
+    if n <= 0:
+        return REFRESH_TIMER_MIN_SECONDS
+    unit = (m.group(2) or "s").lower()
+    if unit.startswith("m"):
+        n *= 60
+    return n
+
+
+def clamp_refresh_timer(raw: str) -> str:
+    label = str(raw or "").strip()
+    if parse_refresh_seconds(label) < REFRESH_TIMER_MIN_SECONDS:
+        return "30 seconds"
+    return label or "30 seconds"
 
 
 def _cell(row: list, idx: int) -> str:
@@ -343,7 +381,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         "systemFont": system_font,
         "limitHeavyFilters": bool(limit_heavy_filters),
         "confirmSave": bool(confirm_save),
-        "refreshTimer": refresh_timer or "",
+        "refreshTimer": clamp_refresh_timer(refresh_timer),
         "sheetId": sheet_id,
         "sourceName": (match or {}).get("name") or "",
         "sourceUrl": (match or {}).get("url") or "",
@@ -385,15 +423,21 @@ def apply_force_source(data: dict) -> dict:
 
 
 def _flush_data_caches() -> None:
-    global _csv_batch_event, _csv_batch_error
+    global _csv_batch_event, _csv_batch_error, _csv_book_rev, _csv_book_sid
     with _csv_lock:
         _csv_cache.clear()
         _csv_batch_event = None
         _csv_batch_error = None
+        _csv_book_rev = ""
+        _csv_book_sid = ""
     with _meta_lock:
         _meta_cache["at"] = 0
         _meta_cache["title_by_gid"] = {}
         _meta_cache["gid_by_title"] = {}
+    with _rev_lock:
+        _rev_cache["at"] = 0.0
+        _rev_cache["sid"] = ""
+        _rev_cache["rev"] = None
 
 
 def _load_creds(key_path: Path):
@@ -428,7 +472,12 @@ def _load_creds(key_path: Path):
         )
     _patch_sheets_retry()
     sheets = build("sheets", "v4", credentials=creds, cache_discovery=False)
-    return creds, sheets
+    drive = None
+    try:
+        drive = build("drive", "v3", credentials=creds, cache_discovery=False)
+    except Exception as e:
+        _log(f"Drive metadata client not built ({e})")
+    return creds, sheets, drive
 
 
 class SheetsBackend:
@@ -442,9 +491,10 @@ class SheetsBackend:
         self.sheet_id = sheet_id
         self.settings_sheet_id = (settings_sheet_id or "").strip()
         self.key_path = key_path
-        self.creds, self.sheets = _load_creds(key_path)
+        self.creds, self.sheets, self.drive = _load_creds(key_path)
         # googleapiclient is not reliably thread-safe — serialize API calls
         self._api_lock = threading.Lock()
+        self._drive_lock = threading.Lock()
         self._debugger_title = ""
         _log(f"API ready as {self.creds.service_account_email}")
         _log(f"fallback spreadsheet={sheet_id}")
@@ -667,7 +717,7 @@ class SheetsBackend:
         if "refreshTimer" in body and body.get("refreshTimer") not in (None, ""):
             values["refreshtimer"] = (
                 a1("refreshtimer", default_col=5),
-                str(body.get("refreshTimer")).strip(),
+                clamp_refresh_timer(str(body.get("refreshTimer")).strip()),
             )
         if "debugMode" in body and body.get("debugMode") not in (None, ""):
             tab = self._debugger_tab_title()
@@ -780,24 +830,99 @@ class SheetsBackend:
             writer.writerow(row)
         return buf.getvalue()
 
+    def workbook_rev(self, spreadsheet_id: str) -> str | None:
+        """Drive modifiedTime+version. None if Drive is off / unauthorized.
+
+        Rate-limited to REV_MIN_INTERVAL_S so 4 boards polling every second
+        share one metadata call, not four Sheets batchGets.
+        """
+        sid = (spreadsheet_id or "").strip()
+        if not sid:
+            return None
+        now = time.time()
+        with _rev_lock:
+            if (
+                _rev_cache["sid"] == sid
+                and now - float(_rev_cache.get("at") or 0) < REV_MIN_INTERVAL_S
+            ):
+                return _rev_cache.get("rev")
+            drive_ok = _rev_cache.get("drive_ok", True)
+        if not self.drive or not drive_ok:
+            return None
+        rev = None
+        try:
+            with self._drive_lock:
+                meta = (
+                    self.drive.files()
+                    .get(
+                        fileId=sid,
+                        fields="modifiedTime,version",
+                        supportsAllDrives=True,
+                    )
+                    .execute()
+                )
+            rev = (
+                str(meta.get("modifiedTime") or "")
+                + ":"
+                + str(meta.get("version") or "")
+            )
+        except Exception as e:
+            _log(f"Drive metadata failed ({e}); falling back to time coalesce")
+            with _rev_lock:
+                _rev_cache["drive_ok"] = False
+                _rev_cache["at"] = now
+                _rev_cache["sid"] = sid
+                _rev_cache["rev"] = None
+            return None
+        with _rev_lock:
+            _rev_cache["at"] = now
+            _rev_cache["sid"] = sid
+            _rev_cache["rev"] = rev
+            _rev_cache["drive_ok"] = True
+        return rev
+
+    def public_rev(self) -> str:
+        """Opaque stamp for board pollers. Stable while the workbook is unchanged."""
+        sid = self.sheet_id
+        rev = self.workbook_rev(sid)
+        if rev:
+            return rev
+        global _csv_book_rev, _csv_book_sid
+        with _csv_lock:
+            if _csv_book_sid == sid and _csv_book_rev:
+                return _csv_book_rev
+            if _csv_cache:
+                stamp = max(float(v.get("at") or 0) for v in _csv_cache.values())
+                return "t:" + str(int(stamp * 1000))
+        return ""
+
     def warm_csv_cache(self, force: bool = False) -> None:
         """
         Load *all* spreadsheet tabs into the CSV cache with one values.batchGet.
 
-        force=True: always re-fetch from Google unless a force-fill completed in the
-        last CSV_FORCE_COALESCE_S seconds (multi-board open / parallel requests).
+        force=True: re-fetch from Google only if the workbook revision changed
+        (Drive modifiedTime). If Drive is unavailable, coalesce within
+        CSV_FORCE_COALESCE_S like before.
         force=False: only fill missing/stale entries (TTL).
         """
-        global _csv_batch_event, _csv_batch_error
+        global _csv_batch_event, _csv_batch_error, _csv_book_rev, _csv_book_sid
         now = time.time()
         meta = self.refresh_meta(force=False)
         title_by_gid = meta["title_by_gid"]
+        book_rev = self.workbook_rev(self.sheet_id) if force else None
 
         with _csv_lock:
             if force and _csv_cache and _csv_batch_event is None:
+                if (
+                    book_rev
+                    and _csv_book_sid == self.sheet_id
+                    and _csv_book_rev == book_rev
+                ):
+                    _log("csv batch: skip Google (workbook rev unchanged)")
+                    return
                 ages = [now - v["at"] for v in _csv_cache.values()]
                 # Concurrent boards all pass force=1 in the same wave → share one batch
-                if ages and max(ages) < CSV_FORCE_COALESCE_S:
+                if not book_rev and ages and max(ages) < CSV_FORCE_COALESCE_S:
                     _log(
                         f"csv batch: coalesce force "
                         f"(cache max age {max(ages):.2f}s < {CSV_FORCE_COALESCE_S}s)"
@@ -860,6 +985,7 @@ class SheetsBackend:
             value_ranges = result.get("valueRanges") or []
             filled = 0
             now = time.time()
+            stamp = book_rev if force and book_rev else self.workbook_rev(self.sheet_id)
             with _csv_lock:
                 for i, (g, title) in enumerate(need):
                     vr = value_ranges[i] if i < len(value_ranges) else {}
@@ -867,9 +993,12 @@ class SheetsBackend:
                     text = self._values_to_csv(values)
                     _csv_cache[g] = {"at": now, "text": text}
                     filled += 1
+                if stamp:
+                    _csv_book_rev = stamp
+                    _csv_book_sid = self.sheet_id
             _log(
                 f"csv batchGet force={force} tabs={filled}/{len(need)} "
-                f"fetch={time.time() - t0:.2f}s"
+                f"fetch={time.time() - t0:.2f}s rev={stamp or '-'}"
             )
         except Exception as e:
             _csv_batch_error = e
@@ -1993,6 +2122,12 @@ def make_handler(
                 "[toki_server] %s - %s\n" % (self.address_string(), fmt % args)
             )
 
+        def end_headers(self):
+            # Local operator pages (Deployer/Suite) must not stick in Chrome
+            # app-mode cache. TVs are GitHub Pages, not this server.
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
         def _send(self, code: int, body: bytes, content_type: str):
             self.close_connection = True
             self.send_response(code)
@@ -2198,6 +2333,13 @@ def make_handler(
             path = parsed.path
             backend = self._backend()
 
+            if path in ("/portal", "/portal/", "/local", "/local/"):
+                self.send_response(302)
+                self.send_header("Location", "/suite.html")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return
+
             if path == "/api/health":
                 # Cache only — never wait on Google. Boards and Deployer treat a
                 # hung health check as "API down"; a blocked handler leaves the
@@ -2396,6 +2538,32 @@ def make_handler(
                 except Exception as e:
                     info["error"] = str(e)
                 self._json(200, info)
+                return
+
+            if path == "/api/sheets/rev":
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                try:
+                    backend.apply_live_sheet(force_settings=False)
+                    rev = backend.public_rev()
+                    self._json(
+                        200,
+                        {
+                            "ok": True,
+                            "sheetId": backend.sheet_id,
+                            "rev": rev or "",
+                        },
+                    )
+                except Exception as e:
+                    _log(f"rev error: {e}")
+                    self._json(500, {"error": str(e)})
                 return
 
             if path == "/api/sheets/csv":
