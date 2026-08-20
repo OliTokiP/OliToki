@@ -365,7 +365,7 @@
       } catch (e) {}
       canFileLocally = false;
       try {
-        const hash = await window.tokiBranchBuild("main");
+        const hash = await window.tokiMainHead();
         paintCommit(hash ? { hash: hash } : null);
       } catch (e) {
         paintCommit(null);

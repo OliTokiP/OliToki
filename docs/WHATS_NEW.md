@@ -1,9 +1,21 @@
 # What’s New
 
-**Last updated:** 2026-08-20 01:35  
+**Last updated:** 2026-08-20 11:18  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 11:18 — Deployer says TVs current only vs main
+
+**Boards / surface:** `deploy.html`, `suite.html` (operator hub — not the TV boards)  
+**Sheet:** none  
+**Summary:** Deployer no longer calls TVs current when GitHub Pages merely matches the last restaurant ship. Green only when the Pages stamp equals **main** (today’s work). A Testing-only ship, or any later commit on main, shows red: live hash, last restaurant ship, and main, plus “file a Restaurant ship.” Suite Health uses the same verdict. Matching live to restaurant-ship is called out as not a green light if main cannot be read.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
 
 ---
 

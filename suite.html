@@ -27,6 +27,8 @@
       align-items: center;
       gap: 0.35em;
     }
+    .live.ok { background: #d8f3d8; }
+    .live.bad { background: #f8d4d4; }
     .live p { margin: .2rem 0; font-weight: 500; }
     .status-dot {
       flex-shrink: 0;
@@ -92,6 +94,8 @@
     a { color: inherit; }
     @media (prefers-color-scheme: dark) {
       .live, .tile { background: #2a2a2a; }
+      .live.ok { background: #16351c; }
+      .live.bad { background: #3a1616; }
       .sub, .tiny, a.card .blurb, th, .tile .k, .tile .s { color: #aaa; }
       tr { border-bottom-color: #333; }
       .ok { color: #5ee08a; }
@@ -107,7 +111,7 @@
 
   <div class="health">
     <div class="lab">Health</div>
-    <div class="live" id="live">Pages vs git: checking…</div>
+    <div class="live" id="live">TVs vs today’s work: checking…</div>
     <div class="grid" id="sys"></div>
     <p class="tiny" id="sys-foot"></p>
   </div>
@@ -123,9 +127,8 @@
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/surfaces.js?v=20260820brightness"></script>
+  <script src="js/surfaces.js?v=20260820tv"></script>
   <script>
-    const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
     const SUITE = window.TOKI_SUITE || {};
@@ -261,30 +264,17 @@
     async function refreshLive() {
       const el = document.getElementById("live");
       try {
-        const [git, stamp] = await Promise.all([
-          fetch("https://api.github.com/repos/" + REPO + "/commits/main", {
-            headers: { Accept: "application/vnd.github+json" },
-          }).then((r) => r.json()),
-          fetch(PAGES + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
-            r.ok ? r.text() : ""
-          ),
+        const [main, restaurant, pageHash] = await Promise.all([
+          window.tokiMainHead(),
+          window.tokiBranchStamp("restaurant"),
+          window.tokiPagesStamp(),
         ]);
-        const g = String(git.sha || "").slice(0, 7).toLowerCase();
-        const pm = String(stamp).match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
-        const p = (pm ? pm[1] : "").slice(0, 7).toLowerCase();
-        if (g && p && g === p) {
-          el.className = "live ok";
-          el.innerHTML = window.tokiStatusDot("ok") + " Pages vs git: " + g + " — safe to check live";
-        } else if (g || p) {
-          el.className = "live bad";
-          el.innerHTML = window.tokiStatusDot("bad") + " Pages vs git: live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
-        } else {
-          el.className = "live bad";
-          el.innerHTML = window.tokiStatusDot("bad") + " Pages vs git: could not read";
-        }
+        const tv = window.tokiTvVerdict(pageHash, restaurant, main);
+        el.className = "live" + (tv.kind === "ok" ? " ok" : tv.kind === "bad" ? " bad" : "");
+        el.innerHTML = window.tokiStatusDot(tv.kind) + " " + tv.text;
       } catch (e) {
         el.className = "live bad";
-        el.innerHTML = window.tokiStatusDot("bad") + " Pages vs git: could not read";
+        el.innerHTML = window.tokiStatusDot("bad") + " Could not read TVs vs today’s work";
       }
     }
 

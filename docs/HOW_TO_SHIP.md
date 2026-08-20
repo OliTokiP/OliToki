@@ -38,10 +38,11 @@ The table is three ways to open the **same page**:
 | **Tailscale** | This Mac from anywhere (phone, another network). Same server as Local. The laptop must be awake. |
 | **Live** | The real internet copy on GitHub Pages. This is what the restaurant screens load. **Does not need your laptop.** |
 
-The green / red dot next to **Live** is “is the TV website on the latest *restaurant* ship?”
+The green / red on **Deployer** and Suite Health is “do the TVs have **today’s work on main**?” Matching GitHub Pages to the last restaurant ship is **not** a green light — that stays true after a Testing-only ship, and after any later commit on main.
 
-- 🟢 live matches the restaurant copy — safe to check a TV
-- 🔴 live is still catching up, or you shipped to main/testing only
+- 🟢 live hash = main — TVs have today’s work
+- 🔴 live hash ≠ main — TVs do not have today’s work; file a **Restaurant** ship
+- Gray — could not read main, so Deployer will not say the TVs are current
 
 ### The three switches
 
@@ -192,7 +193,7 @@ On Local (this Mac), Data Source still follows the Settings sheet, so you can st
 
 1. Are the TVs wrong, or is only your laptop wrong? TVs = restaurant. Laptop Local = this Mac.
 2. Did you file a **Restaurant** deploy, or only Testing?
-3. Is [[Launcher]] Live 🟢?
+3. Does Deployer say **TVs have today’s work** (live hash = main)? Live 🟢 on [[Launcher]] is not enough if you only shipped Testing.
 4. Did you refresh the TV?
 
 Tech background (optional): [[Docs/DEPLOYER]]

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "665fdeb",
-  "hashFull": "665fdeba9467cfde3f9c30a6f6759da364b04a2f",
-  "subject": "QA: 2026-08-20 Encore Ticket Inquiry (pass 6)"
+  "hash": "dfdffea",
+  "hashFull": "dfdffea44a62a5431ff22c22f881c4ba4e57f8e7",
+  "subject": "QA: 2026-08-20 tapping readout opens the terminal with that grok instance running and user can talk (pass 3)"
 };
