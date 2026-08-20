@@ -915,31 +915,23 @@
         "scroll"
       );
     }
+    // Encore settings (global K/L/M) are always listed here. Presentation
+    // Style choice lives only in per-board editors (see MENU_MANAGER).
     html += row({
-      key: "presentation",
-      label: "Presentation Style",
-      value: labelOf(D.presentationStyles, d.presentation),
+      key: "encoreStyle",
+      label: "Encore Spotlight Style",
+      value: labelOf(D.encoreStyles, d.encoreStyle),
     });
-    if (d.presentation === "encore") {
-      html += row({
-        key: "encoreStyle",
-        label: "Encore Spotlight Style",
-        value: labelOf(D.encoreStyles, d.encoreStyle),
-        child: true,
-      });
-      html += row({
-        key: "encoreSpot",
-        label: "Encore Spotlight Color",
-        value: labelOf(D.encoreSpotColors, d.encoreSpot),
-        child: true,
-      });
-      html += row({
-        key: "encoreBg",
-        label: "Encore Background",
-        value: labelOf(D.colorRoles, d.encoreBg),
-        child: true,
-      });
-    }
+    html += row({
+      key: "encoreSpot",
+      label: "Encore Spotlight Color",
+      value: labelOf(D.encoreSpotColors, d.encoreSpot),
+    });
+    html += row({
+      key: "encoreBg",
+      label: "Encore Background",
+      value: labelOf(D.colorRoles, d.encoreBg),
+    });
     html += speedRow(
       "Presentation Speed",
       "presentationSpeed",
