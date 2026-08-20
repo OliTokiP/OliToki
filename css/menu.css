@@ -702,6 +702,8 @@ html.encore-veil-detached #family-portrait-stage,
   overflow: visible;
   clip-path: none;
   -webkit-clip-path: none;
+  /* Behind #frame (2) so OOB veil / hole hang under the menu, not over it. */
+  z-index: 1;
 }
 
 html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
