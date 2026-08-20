@@ -30,7 +30,10 @@ DEFAULT_TESTING_SITE = (
 RESTAURANT_SITE = "https://olitokip.github.io/OliToki"
 RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app"
 # Rewritten after every ship. They always conflict on merge; take source, then rewrite.
-GENERATED_SHIP_FILES = ("js/live-stamp.js", "js/env.js")
+GENERATED_SHIP_FILES = ("js/live-stamp.js", "js/env.js", "js/build-info.js")
+VERSION_SCRIPT_RE = re.compile(
+    r"(js/(?:live-stamp|build-info|version)\.js)\?v=[^\"']+"
+)
 
 
 def run(args: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
@@ -85,21 +88,59 @@ def resolve_pin(target: str, pin: str) -> str:
     return "restaurant" if target == "restaurant" else "alpha"
 
 
-def write_stamp(sha: str, subject: str) -> None:
-    dest = ROOT / "js" / "live-stamp.js"
-    dest.write_text(
-        "window.TOKI_LIVE_STAMP = "
-        + json.dumps(
-            {
-                "hash": sha[:7],
-                "hashFull": sha,
-                "subject": subject,
-            },
-            indent=2,
-        )
-        + ";\n",
+def write_stamp(sha: str, subject: str, date: str = "") -> None:
+    """Write the same version code to live-stamp and build-info.
+
+    Manager + boards read TOKI_BUILD. Suite/Deployer read TOKI_LIVE_STAMP.
+    One hash, both files, so they cannot disagree after a ship.
+    """
+    short = sha[:7]
+    stamp = {"hash": short, "hashFull": sha, "subject": subject}
+    (ROOT / "js" / "live-stamp.js").write_text(
+        "window.TOKI_LIVE_STAMP = " + json.dumps(stamp, indent=2) + ";\n",
         encoding="utf-8",
     )
+    build = {
+        "hash": short,
+        "hashFull": sha,
+        "date": date or "",
+        "subject": subject,
+        "source": "git",
+    }
+    (ROOT / "js" / "build-info.js").write_text(
+        "/* Auto-generated — same hash as live-stamp */\n"
+        "window.TOKI_BUILD = " + json.dumps(build, indent=2) + ";\n",
+        encoding="utf-8",
+    )
+    pin_version_script_tags(short)
+
+
+def pin_version_script_tags(short: str) -> None:
+    """Bust Pages/browser cache. Frozen ?v=20260808ver1 kept serving 2c31f9b."""
+    live_tag = f'<script src="js/live-stamp.js?v={short}"></script>'
+    build_tag = f'<script src="js/build-info.js?v={short}"></script>'
+    ver_tag = f'<script src="js/version.js?v={short}"></script>'
+    for path in sorted(ROOT.glob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        orig = text
+        if "js/build-info.js" in text and "js/live-stamp.js" not in text:
+            text = re.sub(
+                r'<script src="js/build-info\.js\?v=[^"]+"></script>',
+                live_tag + "\n  " + build_tag,
+                text,
+                count=1,
+            )
+        if "js/build-info.js" in text and "js/version.js" not in text:
+            text = re.sub(
+                r'(<script src="js/build-info\.js\?v=[^"]+"></script>)',
+                r"\1\n  " + ver_tag,
+                text,
+                count=1,
+            )
+        text = VERSION_SCRIPT_RE.sub(rf"\1?v={short}", text)
+        if text != orig:
+            path.write_text(text, encoding="utf-8")
+            print(f"version tags {path.name} v={short}", flush=True)
 
 
 def plan_text(opts: dict) -> str:
@@ -197,8 +238,10 @@ def ship(opts: dict) -> dict:
         testing_api=testing_api,
         default_source=pin,
     )
-    write_stamp(src_sha, src_subject)
-    run(["git", "add", "js/env.js", "js/live-stamp.js"])
+    src_date = git_out(["log", "-1", "--format=%ci", source])
+    write_stamp(src_sha, src_subject, src_date)
+    run(["git", "add", "js/env.js", "js/live-stamp.js", "js/build-info.js", "js/version.js"])
+    run(["git", "add", "--", *sorted(str(p) for p in ROOT.glob("*.html"))])
     dirty = run(["git", "diff", "--cached", "--quiet"], check=False)
     if dirty.returncode != 0:
         run(

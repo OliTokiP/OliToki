@@ -3372,14 +3372,20 @@
       } catch (e) {
         /* remote Pages or offline */
       }
+      if (typeof window.tokiPageVersion === "function") {
+        const v = window.tokiPageVersion();
+        if (v && v.hash) return v;
+      }
+      const live = window.TOKI_LIVE_STAMP || null;
       const b = window.TOKI_BUILD || null;
-      if (b && (b.hash || b.hashFull)) {
+      const src = live && (live.hash || live.hashFull) ? live : b;
+      if (src && (src.hash || src.hashFull)) {
         return {
-          hash: b.hash || String(b.hashFull || "").slice(0, 7),
-          hashFull: b.hashFull || "",
-          date: b.date || "",
-          subject: b.subject || "",
-          source: b.source || "static",
+          hash: src.hash || String(src.hashFull || "").slice(0, 7),
+          hashFull: src.hashFull || "",
+          date: src.date || "",
+          subject: src.subject || "",
+          source: src.source || (live ? "live" : "static"),
         };
       }
       return {

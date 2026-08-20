@@ -238,10 +238,18 @@
     if (meta) meta.setAttribute("content", t.highlight);
   }
 
-  function buildVersionLabel() {
+  function pageVersion() {
+    if (typeof window.tokiPageVersion === "function") return window.tokiPageVersion();
+    var live = window.TOKI_LIVE_STAMP;
     var b = window.TOKI_BUILD;
-    var hash = b && (b.hash || (b.hashFull && String(b.hashFull).slice(0, 7)));
-    return hash ? "Version " + hash : "Version " + D.version;
+    var src = live && (live.hash || live.hashFull) ? live : b || {};
+    var hash = String(src.hash || src.hashFull || "").slice(0, 7);
+    return { hash: hash, subject: src.subject || "" };
+  }
+
+  function buildVersionLabel() {
+    var v = pageVersion();
+    return v.hash ? "Version " + v.hash : "Version " + D.version;
   }
 
   function backBtn() {
@@ -263,13 +271,9 @@
   }
 
   function statusVersion() {
-    var b = window.TOKI_BUILD;
-    var hash = b && (b.hash || (b.hashFull && String(b.hashFull).slice(0, 7)));
-    var h = hash || D.version;
-    var subj = b && b.subject;
-    if (subj) {
-      return h + " — " + subj;
-    }
+    var v = pageVersion();
+    var h = v.hash || D.version;
+    if (v.subject) return h + " — " + v.subject;
     return h;
   }
 
