@@ -111,7 +111,7 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
   transform: scale(var(--encore-zoom, 1));
   transition:
-    opacity var(--motion-veil, 1.7s) var(--ease-fade),
+    opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade),
     transform var(--motion-punch-in, var(--dur-encore-zoom)) var(--ease-out);
 }
 

@@ -59,6 +59,11 @@
     crowdN0: 5,
     crowdN1: 15,
     crowdBoost: 1.25,
+    /** Sticker size vs rows: 2-row (Handhelds) +50%, 4-row (Munchies) +75%. */
+    stickerRowLo: 2,
+    stickerBoostLo: 1.5,
+    stickerRowHi: 4,
+    stickerBoostHi: 1.75,
     shadow: { x: 18, y: 22, blur: 2, opacity: 0.5 },
   };
 
@@ -688,9 +693,25 @@
     return Math.max(ENCORE.holeMin, r);
   }
 
-  function encoreStickerScale(photoScale, n) {
+  function encoreStickerRowBoost(rows) {
+    var r = Number(rows) || 0;
+    var lo = ENCORE.stickerRowLo;
+    var hi = ENCORE.stickerRowHi;
+    var b0 = ENCORE.stickerBoostLo;
+    var b1 = ENCORE.stickerBoostHi;
+    if (r <= lo) return b0;
+    if (r >= hi) return b1;
+    return b0 + (b1 - b0) * ((r - lo) / (hi - lo));
+  }
+
+  function encoreStickerScale(photoScale, n, rows) {
     var s = Number(photoScale) || 1;
-    return Math.max(0.16, Math.min(0.55, s * 0.9 * encoreCrowdBoost(n)));
+    var r = Number(rows) || 0;
+    if (!(r > 0)) r = Math.ceil(Math.sqrt(Math.max(1, Number(n) || 1)));
+    return Math.max(
+      0.16,
+      Math.min(0.75, s * 0.9 * encoreCrowdBoost(n) * encoreStickerRowBoost(r))
+    );
   }
 
   function encoreCameraRigs(stage) {
@@ -703,10 +724,24 @@
     return out;
   }
 
+  function stickerFadeTransition() {
+    return "opacity var(--motion-veil, 1.7s) var(--ease-fade, ease)";
+  }
+
   function setEncoreCameraTransition(stage, value) {
-    var rigs = encoreCameraRigs(stage);
-    var i;
-    for (i = 0; i < rigs.length; i++) rigs[i].style.transition = value;
+    if (!stage) return;
+    var photo = stage.querySelector(".family-portrait-rig");
+    var stick = stage.querySelector(".family-portrait-sticker-rig");
+    if (photo) photo.style.transition = value;
+    if (!stick) return;
+    var fade = stickerFadeTransition();
+    if (!value || value === "none") {
+      stick.style.transition = fade;
+    } else if (value === "") {
+      stick.style.transition = "";
+    } else {
+      stick.style.transition = value + ", " + fade;
+    }
   }
 
   function encoreFpsCap(spotlightType, limitOn) {
@@ -741,12 +776,11 @@
   function snapPortraitZoom(stage, scale) {
     cancelEncoreZoomStepper();
     if (!stage) return;
-    var rigs = encoreCameraRigs(stage);
-    var i;
-    for (i = 0; i < rigs.length; i++) rigs[i].style.transition = "none";
+    var photo = stage.querySelector(".family-portrait-rig");
+    setEncoreCameraTransition(stage, "none");
     stage.style.setProperty("--encore-zoom", String(scale));
-    if (rigs[0]) void rigs[0].offsetWidth;
-    for (i = 0; i < rigs.length; i++) rigs[i].style.transition = "";
+    if (photo) void photo.offsetWidth;
+    setEncoreCameraTransition(stage, "");
     syncEncoreDetachedHole(stage);
   }
 
@@ -1085,7 +1119,7 @@
     return stage;
   }
 
-  function appendEncoreSticker(slotEl, photoScale, sticker, n) {
+  function appendEncoreSticker(slotEl, photoScale, sticker, n, layout) {
     if (!slotEl || !sticker) return;
     var el = document.createElement("div");
     el.className = "family-portrait-sticker";
@@ -1100,11 +1134,31 @@
       '">' +
       '<span class="new-sticker-tint"></span></div>' +
       '<span class="new-sticker-label">New!</span>';
+    var rows = layout && layout.rows;
+    var stickScale = encoreStickerScale(photoScale, n, rows);
     var ox = 280 * photoScale;
     var oy = 160 * photoScale;
+    var slotX = parseFloat(slotEl.style.left) || 0;
+    var slotY = parseFloat(slotEl.style.top) || 0;
+    var stageW = (layout && layout.stageW) || PORTRAIT_STAGE_W;
+    var stageH = (layout && layout.stageH) || PORTRAIT_STAGE_H;
+    var half = 280 * stickScale;
+    var zoom = ENCORE.zoomTo;
+    var pad = 12;
+    if (slotX + (ox + half) * zoom > stageW - pad) {
+      var holeR = encoreHoleRadius(1500 * photoScale, n);
+      var k = holeR * 0.707;
+      ox = -k;
+      oy = -k;
+      if (slotX + (ox - half) * zoom < pad) {
+        ox = -(slotX - pad) / zoom + half;
+      }
+      if (slotY + (oy - half) * zoom < pad) {
+        oy = -(slotY - pad) / zoom + half;
+      }
+    }
     el.style.left = "calc(50% + " + ox + "px)";
     el.style.top = "calc(50% + " + oy + "px)";
-    var stickScale = encoreStickerScale(photoScale, n);
     el.style.transform = "translate(-50%, -50%) scale(" + stickScale + ")";
     slotEl.appendChild(el);
     if (typeof sticker.onCreated === "function") sticker.onCreated(el, photoScale);
@@ -1216,7 +1270,7 @@
       wrap.appendChild(img);
       if (typeof opts.onImage === "function") opts.onImage(img, it, layout);
       if (it.isNew && stickerOnPlate) {
-        appendEncoreSticker(wrap, layout.scale, stickerOnPlate, n);
+        appendEncoreSticker(wrap, layout.scale, stickerOnPlate, n, layout);
       }
       plates.appendChild(wrap);
       if (stickerRig) {
@@ -1230,7 +1284,7 @@
         sWrap.style.top = slot.y + "px";
         sWrap.style.zIndex = String(slot.zIndex);
         if (it.isNew) {
-          appendEncoreSticker(sWrap, layout.scale, overlay, n);
+          appendEncoreSticker(sWrap, layout.scale, overlay, n, layout);
         }
         stickerRig.appendChild(sWrap);
       }
