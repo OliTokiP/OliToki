@@ -30,6 +30,7 @@ DEFAULT_TESTING_SITE = (
 RESTAURANT_SITE = "https://olitokip.github.io/OliToki"
 RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app"
 # Rewritten after every ship. They always conflict on merge; take source, then rewrite.
+# HTML ?v= pins conflict the same way (manager.html aborted three restaurant ships).
 GENERATED_SHIP_FILES = ("js/live-stamp.js", "js/env.js", "js/build-info.js")
 VERSION_SCRIPT_RE = re.compile(
     r"(js/(?:live-stamp|build-info|version)\.js)\?v=[^\"']+"
@@ -451,25 +452,23 @@ def ship(opts: dict) -> dict:
                 for p in git_out(["diff", "--name-only", "--diff-filter=U"]).splitlines()
                 if p.strip()
             ]
-            leftover = [p for p in unmerged if p not in GENERATED_SHIP_FILES]
-            if leftover or not unmerged:
+            if not unmerged:
                 run(["git", "merge", "--abort"], check=False)
                 raise SystemExit(
-                    "merge "
-                    + source
-                    + " → "
-                    + target
-                    + " failed"
-                    + (": " + ", ".join(leftover) if leftover else "")
+                    "merge " + source + " → " + target + " failed with no unmerged paths"
                 )
+            # ours = target pin, theirs = the ship. Cache-bust ?v= on HTML plus
+            # live-stamp/build-info always conflict. Take the source; write_stamp
+            # rewrites pins after this commit. Aborting here is how restaurant
+            # ships die after the operator checks every box.
             for path in unmerged:
-                # ours = target, theirs = source. Stamps are rewritten after merge.
                 run(["git", "checkout", "--theirs", "--", path])
                 run(["git", "add", "--", path])
             print(
-                "resolved generated conflict: "
-                + ", ".join(unmerged)
-                + " (rewritten after merge)",
+                "resolved merge conflict (took "
+                + source
+                + "): "
+                + ", ".join(unmerged),
                 flush=True,
             )
             run(
