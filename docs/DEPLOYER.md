@@ -24,10 +24,13 @@ GitHub Pages **must** publish from `restaurant`, not `main`. Otherwise every Lis
 
 ## How to ship
 
-1. Open [`deploy.html`](https://olitokip.github.io/OliToki/deploy.html) (or local `/deploy.html`).
+1. Open [`deploy.html`](https://olitokip.github.io/OliToki/deploy.html) (or local `/deploy.html` from Suite App).
 2. Pick **Testing** (default) or **Restaurant**.
-3. File the issue. You must be signed into GitHub as someone with repo write access.
-4. Actions merges the source onto that branch, writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
+3. Tap **File … deploy**. Suite App stays on Deployer. The Mac files the GitHub issue (signed in as `OliTokiP` via `gh`). Dining-room checkbox still required for Restaurant.
+4. **Latest GitHub commit** (below the form) opens the current commit in a **new window**. It updates after you file. Do not navigate the Suite App window to GitHub — there is no back button.
+5. Actions merges the source onto that branch, writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
+
+On Live (GitHub Pages) without the Mac, GitHub’s new-issue form opens in a **new window** instead. Submit there; Deployer stays put.
 
 Restaurant requires the dining-room checkbox. Dry run comments the plan only.
 
@@ -61,3 +64,4 @@ TOKI_GCP_SERVICE=toki-api-testing TOKI_DEPLOY_MODE=web ./scripts/cloud-run/deplo
 - Force-push
 - Point Pages back at `main`
 - Put the service account in `js/`
+- Navigate the Suite App window to GitHub (no back button). File from Deployer; **Latest GitHub commit** opens a new window.

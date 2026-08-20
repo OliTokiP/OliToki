@@ -57,7 +57,7 @@ Check a box, then **save** the note. The Mac does the work.
 
 ## What each Deployer setting means
 
-Open [Deployer](https://olitokip.github.io/OliToki/deploy.html). You must be signed into GitHub as someone who can write to the `OliToki` repo (your `OliTokiP` account).
+Open [Deployer](https://olitokip.github.io/OliToki/deploy.html). From **Suite App** the Mac files the GitHub issue itself (stay on Deployer). From Live without the Mac, GitHub opens in a **new window** — you must be signed in as `OliTokiP`. The dining-room checkbox on the form is the confirmation; GitHub does not need a second “are you sure?”
 
 ### Target — where should this go?
 
@@ -119,9 +119,9 @@ Preview on testing, then promote to the TVs.
 5. Leave **Data source pin** on **Auto**.
 6. Do **not** check dining room or promote.
 7. Optional: type a note.
-8. Tap **File testing deploy**.
-9. GitHub opens. Confirm you’re `OliTokiP`. Tap **Submit new issue**.
-10. Wait until the issue gets a comment from Actions (usually 1–3 minutes; first testing ship can be longer).
+8. Tap **File testing deploy**. Suite App stays on this page. (On Live without the Mac, GitHub opens in a new window — submit the issue there.)
+9. Optional: **Latest GitHub commit** opens that commit on GitHub in a new window. The label updates after you file.
+10. Wait until Actions comments on the issue (usually 1–3 minutes; first testing ship can be longer). Use **This ship · #…** if it appeared, still in a new window.
 11. Open https://toki-api-testing-3rx5m3qpzq-uc.a.run.app/ and click through the boards + Menu Manager. This is Alpha data. TVs are untouched.
 
 ### 2. If testing looks right, ship to the restaurant
@@ -132,7 +132,7 @@ Preview on testing, then promote to the TVs.
 4. Check **Promote testing → restaurant**.
 5. Check **I am shipping to the dining room. TVs will update.**
 6. Leave pin on **Auto**.
-7. Tap **File restaurant deploy** → Submit the GitHub issue.
+7. Tap **File restaurant deploy**. Stay on Deployer (or submit in the new GitHub window on Live).
 8. Wait for the Actions comment.
 9. On [[Launcher]], wait until **Live** is 🟢.
 10. On a TV / Fire Stick, force-refresh the page (or wait ~30 seconds if Require Restart is off). Open https://olitokip.github.io/OliToki/index.html to confirm.
@@ -150,14 +150,14 @@ Only if you need today’s `main` on the TVs right now.
 3. Source **main (today’s work)**.
 4. Pin **Auto**.
 5. Check **I am shipping to the dining room**.
-6. File and submit.
+6. Tap **File restaurant deploy**. Stay on Deployer.
 7. Wait for 🟢 on [[Launcher]], then refresh the TVs.
 
 ---
 
 ## How you know it worked
 
-- The GitHub issue shows a **Deployer plan** comment and no red X on the Actions tab.
+- The GitHub issue (new window, or **This ship · #…**) shows a **Deployer plan** comment and no red X on the Actions tab.
 - [[Launcher]] **Live** is 🟢 and the short code matches what you just shipped.
 - The TV shows the new behavior. Theme / menu edits still write to the **Restaurant** Google Sheet.
 
@@ -181,6 +181,7 @@ On Local (this Mac), Data Source still follows the Settings sheet, so you can st
 ## Do not
 
 - Expect a Listener ticket / git commit to update the TVs. That only updates **main**.
+- Let Suite App navigate to GitHub. There is no back button. File stays on Deployer; **Latest GitHub commit** opens a new window.
 - Ship Restaurant with pin **Force Alpha Copy**.
 - Uncheck **Enable local server** thinking that turns the restaurant off. It only stops this Mac.
 - Point GitHub Pages back at `main`. TVs must stay on the `restaurant` branch.

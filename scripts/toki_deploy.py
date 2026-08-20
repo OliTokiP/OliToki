@@ -88,6 +88,261 @@ def resolve_pin(target: str, pin: str) -> str:
     return "restaurant" if target == "restaurant" else "alpha"
 
 
+GITHUB_REPO = "OliTokiP/OliToki"
+GITHUB_USER = "OliTokiP"
+_GH_BIN_CANDIDATES = ("/usr/local/bin/gh", "/opt/homebrew/bin/gh")
+_gh_token_cache: str | None = None
+_gh_bin_cache: str | None = None
+
+
+def _gh_bin() -> str:
+    """Suite App's toki_server PATH often lacks Homebrew. Do not rely on which() alone."""
+    global _gh_bin_cache
+    if _gh_bin_cache:
+        return _gh_bin_cache
+    import shutil
+
+    for p in _GH_BIN_CANDIDATES:
+        if Path(p).is_file() and os.access(p, os.X_OK):
+            _gh_bin_cache = p
+            return p
+    found = shutil.which("gh")
+    if found:
+        _gh_bin_cache = found
+        return found
+    raise RuntimeError(
+        "GitHub CLI (gh) is not installed. On this Mac: brew install gh"
+    )
+
+
+def _git_quiet(args: list[str]) -> str:
+    r = subprocess.run(
+        ["git"] + args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if r.returncode != 0:
+        return ""
+    return (r.stdout or "").strip()
+
+
+def _gh_env() -> dict:
+    """Pin GitHub CLI to OliTokiP. Never print the token."""
+    global _gh_token_cache
+    env = os.environ.copy()
+    env["GH_PROMPT_DISABLED"] = "1"
+    extra = "/usr/local/bin:/opt/homebrew/bin"
+    env["PATH"] = extra + ":" + (env.get("PATH") or "")
+    if not _gh_token_cache:
+        try:
+            r = subprocess.run(
+                [_gh_bin(), "auth", "token", "--user", GITHUB_USER],
+                capture_output=True,
+                text=True,
+                timeout=8,
+                env=env,
+            )
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                "GitHub CLI (gh) is not installed. On this Mac: brew install gh"
+            ) from e
+        token = (r.stdout or "").strip()
+        if r.returncode != 0 or not token:
+            raise RuntimeError(
+                "GitHub CLI is not signed in as OliTokiP. On this Mac: gh auth login"
+            )
+        _gh_token_cache = token
+    env["GH_TOKEN"] = _gh_token_cache
+    return env
+
+
+def _gh_api(
+    path: str,
+    *,
+    method: str = "GET",
+    payload: dict | None = None,
+    timeout: int = 30,
+):
+    args = [_gh_bin(), "api", path]
+    if method != "GET":
+        args.extend(["-X", method])
+    kwargs: dict = {
+        "capture_output": True,
+        "text": True,
+        "timeout": timeout,
+        "env": _gh_env(),
+    }
+    if payload is not None:
+        args.extend(["--input", "-"])
+        kwargs["input"] = json.dumps(payload)
+    try:
+        r = subprocess.run(args, **kwargs)
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "GitHub CLI (gh) is not installed. On this Mac: brew install gh"
+        ) from e
+    if r.returncode != 0:
+        err = (r.stderr or r.stdout or "gh api failed").strip()
+        raise RuntimeError(err[:500])
+    raw = (r.stdout or "").strip()
+    if not raw:
+        return {}
+    return json.loads(raw)
+
+
+def github_commit_page(sha: str = "") -> str:
+    sha = (sha or "").strip()
+    if not sha:
+        return f"https://github.com/{GITHUB_REPO}/commits/main"
+    return f"https://github.com/{GITHUB_REPO}/commit/{sha}"
+
+
+def latest_commit_info(ref: str = "main") -> dict:
+    ref = (ref or "main").strip() or "main"
+    sha = _git_quiet(["rev-parse", "--verify", ref])
+    if not sha:
+        sha = _git_quiet(["rev-parse", "--verify", f"origin/{ref}"])
+        ref = f"origin/{ref}" if sha else ref
+    subject = _git_quiet(["log", "-1", "--format=%s", ref]) if sha else ""
+    return {
+        "hash": sha[:7] if sha else "",
+        "hashFull": sha,
+        "subject": subject,
+        "url": github_commit_page(sha),
+    }
+
+
+def commit_info_for_source(source: str) -> dict:
+    source = (source or "main").strip() or "main"
+    info = latest_commit_info(source)
+    if info.get("hashFull"):
+        return info
+    if re.fullmatch(r"[0-9a-fA-F]{7,40}", source):
+        return {
+            "hash": source[:7],
+            "hashFull": source,
+            "subject": "",
+            "url": github_commit_page(source),
+        }
+    return latest_commit_info("main")
+
+
+def github_status() -> dict:
+    """Local Deployer probe: latest main commit + whether we can file issues."""
+    commit = latest_commit_info("main")
+    latest_issue = None
+    user = ""
+    error = ""
+    gh_ok = False
+    try:
+        me = _gh_api("user")
+        user = str((me or {}).get("login") or "")
+        gh_ok = user.lower() == GITHUB_USER.lower()
+        if not gh_ok:
+            error = (
+                "GitHub CLI is signed in as "
+                + (user or "someone else")
+                + ", not OliTokiP"
+            )
+        rows = _gh_api(
+            f"repos/{GITHUB_REPO}/issues?labels=toki-deploy&state=all&per_page=1"
+        )
+        if isinstance(rows, list) and rows:
+            it = rows[0] or {}
+            latest_issue = {
+                "number": it.get("number"),
+                "title": it.get("title") or "",
+                "url": it.get("html_url") or "",
+            }
+    except Exception as e:
+        error = str(e)
+        gh_ok = False
+    return {
+        "ok": gh_ok,
+        "local": True,
+        "user": user,
+        "commit": commit,
+        "latestIssue": latest_issue,
+        "error": error,
+    }
+
+
+def issue_payload(fields: dict) -> dict:
+    target = str(fields.get("target") or "").strip().lower()
+    ship = str(fields.get("ship") or "both").strip().lower()
+    source = str(fields.get("source") or "main").strip()
+    pin = str(fields.get("pin") or "auto").strip().lower()
+    promote = yes(fields.get("promote"))
+    dry = yes(fields.get("dry") or fields.get("dry-run"))
+    confirm = yes(fields.get("confirm") or fields.get("confirm-restaurant"))
+    notes = str(fields.get("notes") or "").strip()
+    if promote:
+        source = "testing"
+    if target not in ("testing", "restaurant"):
+        raise ValueError("target must be testing or restaurant")
+    if ship not in ("both", "website", "api"):
+        raise ValueError("ship must be both, website, or api")
+    if pin not in ("auto", "alpha", "restaurant"):
+        raise ValueError("pin must be auto, alpha, or restaurant")
+    if not source:
+        raise ValueError("missing source")
+    if target == "restaurant" and not confirm:
+        raise ValueError(
+            "Check “I am shipping to the dining room” for a restaurant deploy."
+        )
+    title = ("Dry run: " if dry else "Deploy: ") + source + " → " + target
+    body = "\n".join(
+        [
+            "### toki-deploy",
+            "- target: " + target,
+            "- ship: " + ship,
+            "- source: " + source,
+            "- pin: " + pin,
+            "- promote: " + ("yes" if promote else "no"),
+            "- dry-run: " + ("yes" if dry else "no"),
+            "- confirm-restaurant: " + ("yes" if confirm else "no"),
+            "- notes: " + (notes or "(none)"),
+        ]
+    )
+    return {
+        "title": title,
+        "body": body,
+        "target": target,
+        "source": source,
+        "ship": ship,
+        "pin": pin,
+        "promote": promote,
+        "dry": dry,
+        "confirm": confirm,
+        "notes": notes,
+    }
+
+
+def file_deploy_issue(fields: dict) -> dict:
+    """Create the toki-deploy GitHub issue. Does not ship; Actions does."""
+    built = issue_payload(fields)
+    created = _gh_api(
+        f"repos/{GITHUB_REPO}/issues",
+        method="POST",
+        payload={
+            "title": built["title"],
+            "body": built["body"],
+            "labels": ["toki-deploy"],
+        },
+    )
+    if not isinstance(created, dict) or not created.get("html_url"):
+        raise RuntimeError("GitHub did not return an issue URL")
+    return {
+        "ok": True,
+        "issueNumber": created.get("number"),
+        "issueUrl": created.get("html_url"),
+        "title": built["title"],
+        "commit": commit_info_for_source(built["source"]),
+    }
+
+
 def write_stamp(sha: str, subject: str, date: str = "") -> None:
     """Write the same version code to live-stamp and build-info.
 

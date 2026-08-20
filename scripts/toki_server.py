@@ -1857,6 +1857,27 @@ def make_handler(
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return
+            if parsed.path == "/api/deploy":
+                # Suite App / local Mac only. Cloud Run must not file ships.
+                # gh lives in Homebrew; toki_deploy resolves the binary.
+                if api_only or _hosted():
+                    self._json(404, {"error": "not found"})
+                    return
+                body, err = self._read_json_body(16_384)
+                if err:
+                    self._json(400, err)
+                    return
+                try:
+                    import toki_deploy
+
+                    result = toki_deploy.file_deploy_issue(body or {})
+                    self._json(200, result)
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except Exception as e:
+                    _log(f"deploy file error: {e}")
+                    self._json(503, {"error": str(e)})
+                return
             if parsed.path != "/api/manager/fallback":
                 self.send_error(404, "Not found")
                 return
@@ -1985,6 +2006,19 @@ def make_handler(
                     _log(f"settings error: {e}")
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
+                return
+
+            if path == "/api/deploy":
+                if api_only or _hosted():
+                    self._json(404, {"error": "not found"})
+                    return
+                try:
+                    import toki_deploy
+
+                    self._json(200, toki_deploy.github_status())
+                except Exception as e:
+                    _log(f"deploy status error: {e}")
+                    self._json(503, {"ok": False, "local": True, "error": str(e)})
                 return
 
             if path == "/api/build":

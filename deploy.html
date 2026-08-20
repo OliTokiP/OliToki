@@ -37,6 +37,24 @@
       background: #1a1a1a; color: #fff;
     }
     button.danger { background: #8b1e1e; }
+    button[disabled] { opacity: .6; }
+    a.github-btn {
+      display: block;
+      margin-top: .75rem;
+      padding: .85rem;
+      border: 1px solid #bbb;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: 700;
+      text-decoration: none;
+      min-height: 44px;
+      box-sizing: border-box;
+      color: inherit;
+    }
+    a.github-btn:hover { background: #f4f4f4; text-decoration: none; }
+    #filed { margin-top: 1rem; }
+    #filed[hidden] { display: none; }
+    #filed p + p { margin-top: .45rem; }
     .advice {
       border: 1px solid #bbb; border-radius: 10px;
       padding: .7rem .85rem; margin: 0 0 1rem; font-size: .95rem;
@@ -48,13 +66,14 @@
     }
     @media (prefers-color-scheme: dark) {
       .live { background: #2a2a2a; }
+      a.github-btn:hover { background: #2a2a2a; }
     }
   </style>
 </head>
 <body class="suite-page">
   <p class="suite-nav" id="nav"><a href="suite.html">Suite</a> · <span class="is-current">Deployer</span> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html" target="_blank" rel="noopener">Menu Manager</a></p>
   <h1>Deployer</h1>
-  <p class="sub">Phone is enough. This files a GitHub issue; Actions ships the website and API. Your laptop is not the live server.</p>
+  <p class="sub">Phone is enough. Suite App stays on this page when you file — GitHub is not required. Actions ships the website and API. Your laptop is not the live server.</p>
   <div class="advice">
     <p><strong>Set and forget.</strong> Leave <strong>Website + API</strong> on. One restaurant ship updates the TVs and the sheet brain together. You do not redeploy because someone edited the menu. You do not need this Mac after that. Only ship again when the app itself changes.</p>
   </div>
@@ -112,6 +131,8 @@
     <div class="warn" id="summary">Shipping <strong>main</strong> → <strong>testing</strong> (website + API), Alpha sheet.</div>
     <button type="submit" id="go">File deploy</button>
   </form>
+  <div class="advice" id="filed" hidden></div>
+  <a class="github-btn" id="latest-commit" href="https://github.com/OliTokiP/OliToki/commits/main" target="_blank" rel="noopener">Latest GitHub commit</a>
 
   <script src="js/surfaces.js?v=20260819dot1"></script>
   <script>
@@ -242,41 +263,190 @@
     refreshLive();
     setInterval(refreshLive, 30000);
 
-    document.getElementById("form").addEventListener("submit", (ev) => {
-      ev.preventDefault();
+    let canFileLocally = false;
+
+    function esc(s) {
+      return String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function githubFormUrl(title, body) {
+      return (
+        "https://github.com/" + REPO + "/issues/new?labels=toki-deploy&title=" +
+        encodeURIComponent(title) +
+        "&body=" + encodeURIComponent(body)
+      );
+    }
+    function githubHref(url) {
+      const u = String(url || "");
+      return /^https:\/\/github\.com\/OliTokiP\/OliToki\//i.test(u) ? u : "";
+    }
+
+    function paintCommit(commit) {
+      const a = document.getElementById("latest-commit");
+      if (!a) return;
+      const hash = String((commit && commit.hash) || "").replace(/^#/, "").slice(0, 7);
+      const url =
+        (commit && commit.url) ||
+        (hash
+          ? "https://github.com/" + REPO + "/commit/" + hash
+          : "https://github.com/" + REPO + "/commits/main");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = hash
+        ? "Latest GitHub commit · " + hash
+        : "Latest GitHub commit";
+    }
+
+    function showFiled(html) {
+      const el = document.getElementById("filed");
+      if (!el) return;
+      el.hidden = false;
+      el.innerHTML = html;
+    }
+
+    function planFromForm() {
       const t = target();
       if (t === "restaurant" && !document.getElementById("confirm").checked) {
-        alert("Check “I am shipping to the dining room” for a restaurant deploy.");
-        return;
+        return { error: "Check “I am shipping to the dining room” for a restaurant deploy." };
       }
       let src = source();
       if (document.getElementById("promote").checked) src = "testing";
       if (src === "other") {
         src = (document.querySelector("[name=sourceRef]").value || "").trim();
-        if (!src) {
-          alert("Type a SHA or branch for Other.");
-          return;
-        }
+        if (!src) return { error: "Type a SHA or branch for Other." };
       }
       const notes = (document.querySelector("[name=notes]").value || "").trim();
-      const title =
-        (document.getElementById("dry").checked ? "Dry run: " : "Deploy: ") +
-        src + " → " + t;
+      const dry = document.getElementById("dry").checked;
+      const promote = document.getElementById("promote").checked;
+      const confirm = document.getElementById("confirm").checked;
+      const title = (dry ? "Dry run: " : "Deploy: ") + src + " → " + t;
       const body = [
         "### toki-deploy",
         "- target: " + t,
         "- ship: " + ship(),
         "- source: " + src,
         "- pin: " + pin(),
-        "- promote: " + (document.getElementById("promote").checked ? "yes" : "no"),
-        "- dry-run: " + (document.getElementById("dry").checked ? "yes" : "no"),
-        "- confirm-restaurant: " + (document.getElementById("confirm").checked ? "yes" : "no"),
+        "- promote: " + (promote ? "yes" : "no"),
+        "- dry-run: " + (dry ? "yes" : "no"),
+        "- confirm-restaurant: " + (confirm ? "yes" : "no"),
         "- notes: " + (notes || "(none)"),
       ].join("\n");
-      location.href =
-        "https://github.com/" + REPO + "/issues/new?labels=toki-deploy&title=" +
-        encodeURIComponent(title) +
-        "&body=" + encodeURIComponent(body);
+      return {
+        title: title,
+        body: body,
+        fields: {
+          target: t,
+          ship: ship(),
+          source: src,
+          pin: pin(),
+          promote: promote,
+          dry: dry,
+          confirm: confirm,
+          notes: notes,
+        },
+      };
+    }
+
+    async function probeLocal() {
+      try {
+        const j = await fetch("/api/deploy?t=" + Date.now()).then((r) =>
+          r.ok ? r.json() : null
+        );
+        if (j && j.local) {
+          canFileLocally = !!j.ok;
+          if (j.commit) paintCommit(j.commit);
+          return;
+        }
+      } catch (e) {}
+      canFileLocally = false;
+      try {
+        const hash = await window.tokiBranchBuild("main");
+        paintCommit(hash ? { hash: hash } : null);
+      } catch (e) {
+        paintCommit(null);
+      }
+    }
+    probeLocal();
+
+    document.getElementById("form").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const plan = planFromForm();
+      if (plan.error) {
+        alert(plan.error);
+        return;
+      }
+      const go = document.getElementById("go");
+
+      if (!canFileLocally) {
+        const w = window.open(githubFormUrl(plan.title, plan.body), "_blank", "noopener");
+        if (w) {
+          try { w.opener = null; } catch (e) {}
+          showFiled(
+            "<p><strong>GitHub opened in a new window.</strong> Submit the issue there. This page stays here.</p>"
+          );
+        } else {
+          const url = githubFormUrl(plan.title, plan.body);
+          showFiled(
+            "<p>Could not open a new window. <a href=\"" +
+              url +
+              "\" target=\"_blank\" rel=\"noopener\">Open the GitHub issue form</a> — it must not replace this page.</p>"
+          );
+        }
+        return;
+      }
+
+      go.disabled = true;
+      const prev = go.textContent;
+      go.textContent = "Filing…";
+      fetch("/api/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(plan.fields),
+      })
+        .then((r) =>
+          r.text().then((t) => {
+            let j = null;
+            try { j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
+            return { ok: r.ok, j: j };
+          })
+        )
+        .then((res) => {
+          if (!res.ok || !res.j || !res.j.ok) {
+            throw new Error((res.j && res.j.error) || "Could not file on this Mac");
+          }
+          if (res.j.commit) paintCommit(res.j.commit);
+          const n = res.j.issueNumber ? "#" + res.j.issueNumber : "the GitHub issue";
+          const href = githubHref(res.j.issueUrl);
+          showFiled(
+            "<p><strong>Filed.</strong> Actions is shipping. Stay here — Suite App does not need GitHub.</p>" +
+              (href
+                ? "<p><a href=\"" +
+                  href +
+                  "\" target=\"_blank\" rel=\"noopener\">This ship · " +
+                  esc(n) +
+                  "</a></p>"
+                : "")
+          );
+        })
+        .catch((err) => {
+          const url = githubFormUrl(plan.title, plan.body);
+          showFiled(
+            "<p><strong>Could not file from this Mac.</strong> " +
+              esc(err.message || err) +
+              "</p><p><a href=\"" +
+              url +
+              "\" target=\"_blank\" rel=\"noopener\">Open the GitHub issue form</a> in a new window.</p>"
+          );
+        })
+        .finally(() => {
+          go.disabled = false;
+          go.textContent = prev;
+          updateSummary();
+        });
     });
   </script>
   <script src="js/env.js?v=20260818dep1"></script>
