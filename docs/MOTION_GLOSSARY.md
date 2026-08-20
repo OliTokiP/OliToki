@@ -173,7 +173,7 @@ Encore is **not** Ken Burns with a hole. It is a **stage + rig + veil** over tha
 
 Preview must have the same three layers (stage / rig / veil), even if the “cast” is one hero.
 
-**Default:** veil is a **child of the rig**, so the hole inherits camera scale (aperture grows with Punch-In after pinch settles). **QA `?encore=new`:** veil is a **sibling of the rig** (stage child). Hole x/y still use `--encore-hole-x/y` (the camera origin), so the lattice point stays under the aperture without stacking `scale(--encore-zoom)` on the veil layer. Hole **radius** is painted as `(holeR − pinch) × zoom` (`--encore-hole-paint-r`) so start and end match the old nested-scale sizes. The veil layer itself does not transform. Live default is unchanged unless the query is present.
+**Default:** veil is a **sibling of the rig** (stage child). Hole x/y still use `--encore-hole-x/y` (the camera origin), so the lattice point stays under the aperture without stacking `scale(--encore-zoom)` on the veil layer. Hole **radius** is painted as `(holeR − pinch) × zoom` (`--encore-hole-paint-r`). The veil layer itself does not transform. **`?encore=old`:** veil is a **child of the rig**, so the hole inherits camera scale (aperture grows with Punch-In after pinch settles).
 
 ### 5.2 Spotlight chrome (`applyEncoreSpotlightChrome`)
 
@@ -185,10 +185,10 @@ Preview must have the same three layers (stage / rig / veil), even if the “cas
 | Spotlight Type | Treatment |
 |----------------|-----------|
 | **Hard** | Crisp circle, `mix-blend-mode: normal`, dim opacity `1` |
-| **Hard (with shadow)** | Hard + `filter: var(--veil-shadow-filter)` = `drop-shadow(18px 22px 6px rgba(0,0,0,0.5))` on the **veil** (blur 6 = a smidge of edge softness; old 2px + 0-blur spread copies was fully hard) |
+| **Hard (with shadow)** | Hard + `filter: var(--veil-shadow-filter)` = `drop-shadow(18px 22px 2px rgba(0,0,0,0.5))` on the **veil** (blur 2 — 6px lip was too costly on Fire Stick) |
 | **Soft** | Wide falloff gradient, multiply (unless Highlight color → normal), dim opacity `0.88` / `0.9` |
 
-Veil box: `inset: calc(-1 * var(--veil-extend, 20px))`. Hole paint is offset by the same extend so stage-space hole x/y do not move. Default `20px`. **QA `?encore=new`:** `--veil-extend` grows to hole overhang + Hard Shadow pad (`max(18,22)+6`) so a near-edge circle still has opaque surface; clip-path moves to the rig so the veil can hang past the wedge; `#family-portrait-stage` drops to `z-index: 1` so that hang tucks **behind** `#frame`. A CSS stroke/border cannot do this (rectangle around the box; the hole is a radial-gradient).
+Veil box: `inset: calc(-1 * var(--veil-extend, 20px))`. Hole paint is offset by the same extend so stage-space hole x/y do not move. Default `20px`. **Detached default:** `--veil-extend` grows to hole overhang + Hard Shadow pad (`max(18,22)+2`) so a near-edge circle still has opaque surface; clip-path moves to the rig so the veil can hang past the wedge; `#family-portrait-stage` drops to `z-index: 1` so that hang tucks **behind** `#frame`. A CSS stroke/border cannot do this (rectangle around the box; the hole is a radial-gradient).
 
 Hard hole (live CSS — do not rewrite):
 
@@ -208,7 +208,7 @@ radial-gradient(
 |-------|------|--------|
 | `--encore-zoom` | `1` rest, `1.24` punch (`--encore-zoom-to`) | Relative — keep |
 | `--encore-hole-pinch` | `0` → `40px` on Punch-In | Same `--ease-out` as zoom, duration `punchIn × 0.5` (`1.7s`). Hole settles; zoom finishes in the tight aperture. `ENCORE.pinchInMult = 1` locks pinch to the full camera clock (Pass 1). Scale px: `40 * (holeR / 160)` |
-| `--encore-hole-r` | `max(70, plateW × 0.42 × crowdBoost)` | `plateW = 1500 × layout.scale`. `crowdBoost` is 1 at n≤5 (Handhelds), 1.25 at n≥15 (Munchies), lerp between. 160 is only a CSS fallback. Preview uses this same formula. New stickers live on a **second lattice** (`.family-portrait-sticker-rig`) above the veil, same slot offsets, camera `scale(--encore-zoom)`; only the active New item fades in with the veil. |
+| `--encore-hole-r` | `max(70, plateW × 0.42 × crowdBoost)` | `plateW = 1500 × layout.scale`. `crowdBoost` is 1 at n≤5 (Handhelds), 1.25 at n≥15 (Munchies), lerp between. 160 is only a CSS fallback. Preview uses this same formula. New stickers live on a **second lattice** (`.family-portrait-sticker-rig`) above the veil, same slot offsets, camera `scale(--encore-zoom)`; the active New slot fades in (`opacity`, veil clock) instead of popping. |
 | `ENCORE_HOLE_PINCH_OUT` | `false` | Punch-Out **keeps** pinch |
 | Veil fade-in | `punchIn * 0.5` = **1.7s** | `--motion-veil` |
 | Veil fade-out | full Punch-Out **0.45s** | multiplier is **in only** |

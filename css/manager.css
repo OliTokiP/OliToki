@@ -689,7 +689,7 @@ img {
   --encore-hole-pinch: 0px;
   --encore-veil-color: #000000;
   --motion-veil: 1.7s;
-  --veil-shadow-filter: drop-shadow(18px 22px 6px rgba(0, 0, 0, 0.5));
+  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
   /* Frame leftover is a trapezoid (top 103.332, bottom 120.793). Treat it as
      a left rectangle of the SHORTER top width. Photo (Encore / KB / Slideshow)
      uses total − that rectangle.

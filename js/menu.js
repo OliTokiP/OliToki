@@ -11920,10 +11920,9 @@
     stage.classList.toggle("photo-left", isHeroPhotoLeft());
     setEncoreScaffoldBgActive(false);
 
-    // Rig holds optional BG + plates. Default Encore also parks the veil
-    // here so Ken Burns keeps hole glued via nested scale. ?encore=new
-    // attaches the veil on the stage instead (sibling — no camera scale).
-    // Stack: bg (z=0) · plates (z=1) · veil (z=2).
+    // Rig holds optional BG + plates. Default Encore attaches the veil on
+    // the stage (sibling — no camera scale). ?encore=old parks it on the
+    // rig so the hole inherits nested scale. Stack: bg · plates · veil.
     const rig = document.createElement("div");
     rig.className = "family-portrait-rig";
     stage.appendChild(rig);

@@ -59,7 +59,7 @@
     crowdN0: 5,
     crowdN1: 15,
     crowdBoost: 1.25,
-    shadow: { x: 18, y: 22, blur: 6, opacity: 0.5 },
+    shadow: { x: 18, y: 22, blur: 2, opacity: 0.5 },
   };
 
   var OPACITY_DUR = 0.45;
@@ -457,33 +457,33 @@
   var _encoreZoomGen = 0;
 
   /**
-   * ?encore=new — Spotlight Veil is a sibling of the camera rig, not a child.
-   * Hole x/y still use --encore-hole-x/y (same as transform-origin), so the
-   * lattice point stays under the aperture without stacking camera scale on
-   * the veil (radial-gradient + mix-blend + drop-shadow).
-   * Hole radius bakes (holeR − pinch) × zoom so start/end match the old
-   * nested-scale look without transforming the veil layer.
+   * Default Encore: Spotlight Veil is a sibling of the camera rig, not a child.
+   * ?encore=old parks the veil on the rig (nested scale). ?encore=new is kept
+   * as an alias for the default.
    */
-  function readEncoreVeilDetachedFlag() {
-    function fromParams(raw) {
-      try {
-        var v = String(new URLSearchParams(raw || "").get("encore") || "")
-          .trim()
-          .toLowerCase();
-        return v === "new";
-      } catch (e) {
-        return false;
-      }
-    }
-    if (fromParams(typeof location !== "undefined" ? location.search : "")) {
-      return true;
-    }
+  function readEncoreParam(raw) {
     try {
-      var hash = typeof location !== "undefined" ? location.hash : "";
-      var qi = hash.indexOf("?");
-      if (qi >= 0 && fromParams(hash.slice(qi + 1))) return true;
-    } catch (e) {}
-    return false;
+      return String(new URLSearchParams(raw || "").get("encore") || "")
+        .trim()
+        .toLowerCase();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function readEncoreVeilDetachedFlag() {
+    var v = readEncoreParam(
+      typeof location !== "undefined" ? location.search : ""
+    );
+    if (!v) {
+      try {
+        var hash = typeof location !== "undefined" ? location.hash : "";
+        var qi = hash.indexOf("?");
+        if (qi >= 0) v = readEncoreParam(hash.slice(qi + 1));
+      } catch (e) {}
+    }
+    if (v === "old" || v === "legacy" || v === "0") return false;
+    return true;
   }
 
   var _encoreVeilDetached = readEncoreVeilDetachedFlag();
@@ -506,7 +506,11 @@
 
   if (_encoreVeilDetached) {
     console.info(
-      "[TokiMenu] encore=new — Spotlight Veil detached from camera rig (hole tracks zoom)"
+      "[TokiMenu] Encore Spotlight Veil detached from camera rig (default). ?encore=old for nested-scale veil."
+    );
+  } else {
+    console.info(
+      "[TokiMenu] encore=old — Spotlight Veil on camera rig (nested scale)"
     );
   }
   if (typeof document !== "undefined") {
@@ -516,7 +520,7 @@
     }
   }
 
-  /** Park the veil on the stage (new) or on the rig (default). */
+  /** Park the veil on the stage (default) or on the rig (?encore=old). */
   function attachEncoreVeil(stage, rig) {
     if (!stage) return null;
     var veil = stage.querySelector(".family-portrait-veil");

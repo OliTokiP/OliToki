@@ -78,7 +78,7 @@ body {
   /* Veil box hangs past the stage so a near-edge Hard hole stays a circle. */
   --veil-extend: 20px;
   /* Hard_Shadow only; set from Beta Veil Shadow Settings (defaults 18/22/3/2/0.5). */
-  --veil-shadow-filter: drop-shadow(18px 22px 6px rgba(0, 0, 0, 0.5));
+  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
   /* Peak scale for Encore bows / FP intro (higher = closer push-in) */
   --encore-zoom-to: 1.24;
   /* Slideshow hero Ken Burns: max = current size; min ≈ 7% smaller */
@@ -674,11 +674,9 @@ body.preview-wall #hero-plate {
 
 /*
   Ken Burns rig: plates (+ optional BG) scale together.
-  Default Encore also parks the Spotlight Veil on this node so the hole
-  inherits camera scale (glued to the lattice point). ?encore=new moves
-  the veil to a stage sibling — hole x/y still use --encore-hole-x/y
-  (same as transform-origin) without stacking scale on the veil layer.
-  Detached hole radius is (holeR − pinch) × zoom so sizes match the old look.
+  Default Encore parks the Spotlight Veil as a stage sibling of this
+  camera. ?encore=old parks the veil on this node so the hole inherits
+  camera scale. Detached hole radius is (holeR − pinch) × zoom.
   Origin = --encore-hole-x/y (per bow). Stage clips; rig zooms inside.
   Push-in: long ease-out. Pull-out (.is-zoom-out): same duration/easing as
   the veil fade so origin can retarget under the blackout (no snap).
@@ -694,7 +692,7 @@ body.preview-wall #hero-plate {
   will-change: transform;
 }
 
-/* ?encore=new: veil is a stage sibling of the camera, not a rig child.
+/* Default Encore: veil is a stage sibling of the camera, not a rig child.
    Clip the photos on the rig so the veil can hang past the trapezoid
    (Hard Shadow drop-shadow needs opaque surface OOB of the wedge). */
 html.encore-veil-detached #family-portrait-stage,
@@ -741,8 +739,15 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   opacity: 1;
 }
 
-#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot:not(.is-active) {
-  visibility: hidden;
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot {
+  opacity: 0;
+  transition: opacity var(--motion-veil, 1.7s) var(--ease-fade);
+}
+#family-portrait-stage.is-zoom-out .family-portrait-sticker-rig .family-portrait-slot {
+  transition: opacity var(--motion-punch-out, 0.45s) var(--ease-fade);
+}
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot.is-active {
+  opacity: 1;
 }
 
 html.encore-veil-detached body.board-drinks #family-portrait-stage .family-portrait-rig,
@@ -904,7 +909,7 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
 #family-portrait-stage .family-portrait-veil {
   position: absolute;
   /* Veil extend hangs past the stage so a near-edge hole stays a circle.
-     ?encore=new grows --veil-extend by hole overhang + Hard Shadow pad.
+     Detached Encore grows --veil-extend by hole overhang + Hard Shadow pad.
      Hole paint is offset by the same px so stage-space x/y do not move. */
   inset: calc(-1 * var(--veil-extend, 20px));
   z-index: 2;
