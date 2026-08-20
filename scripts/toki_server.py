@@ -49,6 +49,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 STYLE_THEME_GID = "183083022"
+# OliToki Menu Settings → Debugger tab (master Debug Mode in A2).
+DEBUGGER_GID = "195166367"
+DEBUGGER_TAB = "Debugger"
 _SHEET_ID_IN_URL = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 _BARE_SHEET_ID = re.compile(r"^[a-zA-Z0-9-_]{30,}$")
 
@@ -218,6 +221,34 @@ def extract_spreadsheet_id(raw: str) -> str | None:
     if _BARE_SHEET_ID.match(s) and " " not in s:
         return s
     return None
+
+
+def parse_debug_menu_rows(rows: list) -> dict:
+    """
+    Settings workbook → Debugger (gid 195166367):
+      A1 Debug Mode
+      A2 TRUE/FALSE
+      then Debug Features header + values row
+    """
+    debug_mode = False
+    features: dict[str, bool] = {}
+    rows = rows or []
+    for i, row in enumerate(rows):
+        label = _cell(row, 0).strip().lower()
+        if label == "debug mode" and i + 1 < len(rows):
+            debug_mode = _parse_yes(_cell(rows[i + 1], 0), False)
+            break
+    for i, row in enumerate(rows):
+        label = _cell(row, 0).strip().lower()
+        if label == "debug features" and i + 2 < len(rows):
+            headers = rows[i + 1] or []
+            values = rows[i + 2] or []
+            for c, raw in enumerate(headers):
+                name = str(raw or "").strip()
+                if name:
+                    features[name] = _parse_yes(_cell(values, c), False)
+            break
+    return {"debugMode": bool(debug_mode), "debugFeatures": features}
 
 
 def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
@@ -446,6 +477,51 @@ class SheetsBackend:
             )
         return result.get("values") or []
 
+    def _debugger_tab_title(self) -> str:
+        sid = self.settings_sheet_id
+        if not sid:
+            return DEBUGGER_TAB
+        try:
+            with self._api_lock:
+                meta = (
+                    self.sheets.spreadsheets()
+                    .get(
+                        spreadsheetId=sid,
+                        fields="sheets.properties(sheetId,title)",
+                    )
+                    .execute()
+                )
+            want = str(DEBUGGER_GID)
+            for sh in meta.get("sheets") or []:
+                p = sh.get("properties") or {}
+                if str(p.get("sheetId")) == want:
+                    title = str(p.get("title") or "").strip()
+                    if title:
+                        return title
+        except Exception as e:
+            _log(f"Debugger tab title lookup failed ({e}); using {DEBUGGER_TAB}")
+        return DEBUGGER_TAB
+
+    def _debugger_rows(self) -> list:
+        sid = self.settings_sheet_id
+        if not sid:
+            return []
+        title = self._debugger_tab_title()
+        quoted = "'" + title.replace("'", "''") + "'"
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=sid,
+                    range=quoted,
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        return result.get("values") or []
+
     def refresh_settings(self, force: bool = False) -> dict:
         now = time.time()
         with _settings_lock:
@@ -463,6 +539,12 @@ class SheetsBackend:
         rows = self._settings_rows()
         data = parse_settings_rows(rows, self.fallback_sheet_id)
         data["settingsSheetId"] = self.settings_sheet_id
+        try:
+            data.update(parse_debug_menu_rows(self._debugger_rows()))
+        except Exception as e:
+            _log(f"Debugger tab read failed ({e})")
+            data.setdefault("debugMode", False)
+            data.setdefault("debugFeatures", {})
         with _settings_lock:
             _settings_cache["at"] = time.time()
             _settings_cache["data"] = data
@@ -501,8 +583,9 @@ class SheetsBackend:
         # === System Settings contract (Menu Manager) ===
         # All user-accessible settings toggles/options shown in Menu Manager
         # (dataSource, requireRestart, systemFont, limitHeavyFilters, confirmSave,
-        # refreshTimer, and future ones) live in the "OliToki Menu Settings" workbook
-        # on the Settings tab (first data row after the header row).
+        # refreshTimer, debugMode, and future ones) live in the "OliToki Menu Settings"
+        # workbook. Most map to the Settings tab (first data row after the header).
+        # Debug Mode is Debugger!A2 (gid 195166367) — not a Settings-tab column.
         #
         # - Client (manager-sheet.js) and server discover columns by fuzzy header match
         #   on the Settings row, with documented default_col fallbacks for writes.
@@ -579,12 +662,19 @@ class SheetsBackend:
                 a1("refreshtimer", default_col=5),
                 str(body.get("refreshTimer")).strip(),
             )
+        if "debugMode" in body and body.get("debugMode") not in (None, ""):
+            tab = self._debugger_tab_title()
+            quoted = "'" + tab.replace("'", "''") + "'!A2"
+            values["debugmode"] = (
+                quoted,
+                yn(body.get("debugMode"), False),
+            )
         if not values:
             raise ValueError("nothing to write")
-        data = [
-            {"range": "Settings!" + cell, "values": [[val]]}
-            for _k, (cell, val) in values.items()
-        ]
+        data = []
+        for _k, (cell, val) in values.items():
+            rng = cell if "!" in cell else ("Settings!" + cell)
+            data.append({"range": rng, "values": [[val]]})
         t0 = time.time()
         with self._api_lock:
             updated = (
@@ -1990,6 +2080,8 @@ def make_handler(
                             if "confirmSave" in live
                             else True,
                             "refreshTimer": live.get("refreshTimer") or "",
+                            "debugMode": bool(live.get("debugMode")),
+                            "debugFeatures": live.get("debugFeatures") or {},
                             "sheetId": backend.sheet_id,
                             "sourceName": live.get("sourceName"),
                             "sourceUrl": live.get("sourceUrl") or "",
