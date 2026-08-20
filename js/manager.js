@@ -49,6 +49,7 @@
     pendingTip: null,
     tipQueryApplied: false,
     styleScroll: 0,
+    boardScroll: 0,
     pillScroll: {},
     pendingLeave: null,
     sheetDirty: false,
@@ -1130,7 +1131,10 @@
       var sc = document.getElementById(
         state.screen === "board" ? "board-scroll" : "style-scroll"
       );
-      if (sc && state.screen === "style") sc.scrollTop = state.styleScroll;
+      if (sc) {
+        if (state.screen === "style") sc.scrollTop = state.styleScroll;
+        else if (state.screen === "board") sc.scrollTop = state.boardScroll;
+      }
       restorePillScroll();
       bindWpFallback();
       if (state.screen === "board") bindItemReorder();
@@ -2067,6 +2071,8 @@
   function rememberStyleScroll() {
     var sc = document.getElementById("style-scroll");
     if (sc) state.styleScroll = sc.scrollTop;
+    var bc = document.getElementById("board-scroll");
+    if (bc) state.boardScroll = bc.scrollTop;
   }
 
   function go(screen, boardId) {
@@ -2077,6 +2083,7 @@
     state.screen = screen;
     state.boardId = boardId || null;
     if (screen !== "style") state.styleScroll = 0;
+    if (screen !== "board") state.boardScroll = 0;
     writeHash(true);
     renderAll();
   }
