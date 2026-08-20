@@ -188,7 +188,7 @@ Preview must have the same three layers (stage / rig / veil), even if the “cas
 | **Hard (with shadow)** | Hard + `filter: var(--veil-shadow-filter)` = `drop-shadow(18px 22px 2px rgba(0,0,0,0.5))` on the **veil** |
 | **Soft** | Wide falloff gradient, multiply (unless Highlight color → normal), dim opacity `0.88` / `0.9` |
 
-Veil box: `inset: calc(-1 * var(--veil-extend, 20px))`. Hole paint is offset by the same `20px` so stage-space hole x/y do not move.
+Veil box: `inset: calc(-1 * var(--veil-extend, 20px))`. Hole paint is offset by the same extend so stage-space hole x/y do not move. Default `20px`. **QA `?encore=new`:** `--veil-extend` grows to hole overhang + Hard Shadow pad (`max(18,22)+2`) so a near-edge circle still has opaque surface; clip-path moves to the rig so the veil can hang past the wedge. A CSS stroke/border cannot do this (rectangle around the box; the hole is a radial-gradient).
 
 Hard hole (live CSS — do not rewrite):
 

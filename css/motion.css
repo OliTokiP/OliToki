@@ -90,6 +90,11 @@
     var(--ease-fade);
 }
 
+html.encore-veil-detached #family-portrait-stage,
+#family-portrait-stage.encore-veil-detached {
+  overflow: visible;
+}
+
 html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
 #family-portrait-stage.encore-veil-detached .family-portrait-rig {
   z-index: 1;

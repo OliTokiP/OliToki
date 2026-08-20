@@ -575,9 +575,23 @@
     return n > 0 ? n : 160;
   }
 
+  function readEncoreHoleXY(stage) {
+    if (!stage) return { x: PORTRAIT_STAGE_W * 0.5, y: PORTRAIT_STAGE_H * 0.5 };
+    var x = parseFloat(stage.style.getPropertyValue("--encore-hole-x"));
+    var y = parseFloat(stage.style.getPropertyValue("--encore-hole-y"));
+    return {
+      x: isFinite(x) ? x : PORTRAIT_STAGE_W * 0.5,
+      y: isFinite(y) ? y : PORTRAIT_STAGE_H * 0.5,
+    };
+  }
+
   /**
    * Detached veil does not inherit camera scale. Paint the hole at the same
    * screen radius the old nested transform produced: (holeR − pinch) × zoom.
+   * Expand the veil box so a near-edge circle + Hard Shadow drop-shadow
+   * still have opaque surface (old scale pushed the box out from the hole).
+   * CSS stroke/border cannot do this: it is a rectangle around the box,
+   * and the hole is a radial-gradient in the background.
    */
   function syncEncoreDetachedHole(stage) {
     if (!stage || !encoreVeilDetached()) return;
@@ -586,8 +600,29 @@
     var holeR = readEncoreHoleR(stage);
     var hardR = Math.max(40, (holeR - pinch) * zoom);
     var softR = holeR * 1.85 * zoom;
+    var xy = readEncoreHoleXY(stage);
+    var over = Math.max(
+      0,
+      hardR - xy.x,
+      hardR - (PORTRAIT_STAGE_W - xy.x),
+      hardR - xy.y,
+      hardR - (PORTRAIT_STAGE_H - xy.y)
+    );
+    var sh = ENCORE.shadow;
+    var pad = 0;
+    var hardShadow = stage.classList.contains("encore-spot-hard-shadow");
+    try {
+      hardShadow =
+        hardShadow ||
+        document.documentElement.classList.contains("encore-hard-shadow");
+    } catch (e) {}
+    if (hardShadow) {
+      pad = Math.max(sh.x, sh.y) + sh.blur;
+    }
+    var extend = Math.max(20, Math.ceil(over + pad));
     stage.style.setProperty("--encore-hole-paint-r", hardR + "px");
     stage.style.setProperty("--encore-hole-soft-r", softR + "px");
+    stage.style.setProperty("--veil-extend", extend + "px");
   }
 
   function setEncoreHolePinch(stage, px) {

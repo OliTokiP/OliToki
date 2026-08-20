@@ -75,7 +75,7 @@ body {
   --dur-fp-windup: 0.7s;
   --encore-zoom: 1;
   --encore-hole-pinch: 0px;
-  /* Hardcoded: veil box hangs past the stage so a near-edge Hard hole stays a circle. */
+  /* Veil box hangs past the stage so a near-edge Hard hole stays a circle. */
   --veil-extend: 20px;
   /* Hard_Shadow only; set from Beta Veil Shadow Settings (defaults 18/22/3/2/0.5). */
   --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
@@ -694,10 +694,30 @@ body.preview-wall #hero-plate {
   will-change: transform;
 }
 
-/* ?encore=new: veil is a stage sibling of the camera, not a rig child. */
+/* ?encore=new: veil is a stage sibling of the camera, not a rig child.
+   Clip the photos on the rig so the veil can hang past the trapezoid
+   (Hard Shadow drop-shadow needs opaque surface OOB of the wedge). */
+html.encore-veil-detached #family-portrait-stage,
+#family-portrait-stage.encore-veil-detached {
+  overflow: visible;
+  clip-path: none;
+  -webkit-clip-path: none;
+}
+
 html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
 #family-portrait-stage.encore-veil-detached .family-portrait-rig {
   z-index: 1;
+  overflow: hidden;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
+  -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
+}
+
+html.encore-veil-detached body.board-drinks #family-portrait-stage .family-portrait-rig,
+html.encore-veil-detached #family-portrait-stage.photo-left .family-portrait-rig,
+body.board-drinks #family-portrait-stage.encore-veil-detached .family-portrait-rig,
+#family-portrait-stage.encore-veil-detached.photo-left .family-portrait-rig {
+  clip-path: polygon(0 0, 100% 0, 90.02% 100%, 0 100%);
+  -webkit-clip-path: polygon(0 0, 100% 0, 90.02% 100%, 0 100%);
 }
 
 #family-portrait-stage.is-zoom-out .family-portrait-rig {
@@ -850,8 +870,9 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
 
 #family-portrait-stage .family-portrait-veil {
   position: absolute;
-  /* Veil extend is hardcoded (--veil-extend). Hole paint is offset by the
-     same px so stage-space --encore-hole-x/y (camera + shadow) do not move. */
+  /* Veil extend hangs past the stage so a near-edge hole stays a circle.
+     ?encore=new grows --veil-extend by hole overhang + Hard Shadow pad.
+     Hole paint is offset by the same px so stage-space x/y do not move. */
   inset: calc(-1 * var(--veil-extend, 20px));
   z-index: 2;
   pointer-events: none;
