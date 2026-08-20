@@ -50,6 +50,7 @@
     tipQueryApplied: false,
     styleScroll: 0,
     boardScroll: 0,
+    systemScroll: 0,
     pillScroll: {},
     pendingLeave: null,
     sheetDirty: false,
@@ -634,7 +635,7 @@
       '<section class="screen">' +
       header("System Settings") +
       statusBlock() +
-      '<div class="rows"><div class="bounce-inner">' +
+      '<div class="rows"><div class="bounce-inner" id="system-scroll">' +
       sysRows +
       linksBlock() +
       "</div></div></section>"
@@ -1127,13 +1128,18 @@
     els.app.innerHTML = html;
     applyTheme();
     if (state.screen === "home") attachPeak();
-    if (state.screen === "style" || state.screen === "board") {
-      var sc = document.getElementById(
-        state.screen === "board" ? "board-scroll" : "style-scroll"
-      );
+    if (state.screen === "style" || state.screen === "board" || state.screen === "system") {
+      var id =
+        state.screen === "board"
+          ? "board-scroll"
+          : state.screen === "style"
+          ? "style-scroll"
+          : "system-scroll";
+      var sc = document.getElementById(id);
       if (sc) {
         if (state.screen === "style") sc.scrollTop = state.styleScroll;
         else if (state.screen === "board") sc.scrollTop = state.boardScroll;
+        else if (state.screen === "system") sc.scrollTop = state.systemScroll;
       }
       restorePillScroll();
       bindWpFallback();
@@ -2073,6 +2079,8 @@
     if (sc) state.styleScroll = sc.scrollTop;
     var bc = document.getElementById("board-scroll");
     if (bc) state.boardScroll = bc.scrollTop;
+    var sysc = document.getElementById("system-scroll");
+    if (sysc) state.systemScroll = sysc.scrollTop;
   }
 
   function go(screen, boardId) {
@@ -2084,6 +2092,7 @@
     state.boardId = boardId || null;
     if (screen !== "style") state.styleScroll = 0;
     if (screen !== "board") state.boardScroll = 0;
+    if (screen !== "system") state.systemScroll = 0;
     writeHash(true);
     renderAll();
   }
@@ -2105,6 +2114,7 @@
     state.screen = screen;
     state.boardId = boardId || null;
     if (screen !== "style") state.styleScroll = 0;
+    if (screen !== "system") state.systemScroll = 0;
     writeHash(false);
     renderAll();
   }

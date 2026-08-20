@@ -1833,9 +1833,11 @@ def make_handler(
             )
 
         def _send(self, code: int, body: bytes, content_type: str):
+            self.close_connection = True
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
@@ -2036,12 +2038,15 @@ def make_handler(
             backend = self._backend()
 
             if path == "/api/health":
+                # Cache only — never wait on Google. Boards and Deployer treat a
+                # hung health check as "API down"; a blocked handler leaves the
+                # socket in CLOSE_WAIT until Sheets returns.
                 live = None
                 if backend:
-                    try:
-                        live = backend.refresh_settings(force=False)
-                    except Exception:
-                        live = None
+                    with _settings_lock:
+                        hit = _settings_cache.get("data")
+                        if isinstance(hit, dict):
+                            live = dict(hit)
                 self._json(
                     200,
                     {
