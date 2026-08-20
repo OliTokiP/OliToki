@@ -409,6 +409,7 @@ def plan_text(opts: dict) -> str:
             f"- pin: `{opts['pin']}` → `{opts['resolved_pin']}`",
             f"- dry-run: `{opts['dry']}`",
             f"- notes: {opts['notes'] or '(none)'}",
+            "- method: publish source onto target (no merge)",
         ]
     )
 
@@ -430,58 +431,20 @@ def ship(opts: dict) -> dict:
             raise SystemExit(f"unknown source: {opts['source']}")
     src_sha = git_out(["rev-parse", source])
     src_subject = git_out(["log", "-1", "--format=%s", source])
-    has_target = (
-        run(["git", "rev-parse", "--verify", f"origin/{target}"], check=False).returncode
-        == 0
-    )
 
     if opts["dry"]:
-        print(plan_text(opts), flush=True)
-        print(f"would merge {source} ({src_sha[:7]}) into {target}", flush=True)
+        print(
+            f"would publish {source} ({src_sha[:7]}) onto {target} "
+            "(force-with-lease that branch only; never main)",
+            flush=True,
+        )
         return {"ok": True, "dry": True, "sha": src_sha, "subject": src_subject}
 
-    if has_target:
-        run(["git", "checkout", "-B", target, f"origin/{target}"])
-        merge = run(
-            ["git", "merge", "--no-ff", source, "-m", f"deploy: merge {source} into {target}"],
-            check=False,
-        )
-        if merge.returncode != 0:
-            unmerged = [
-                p
-                for p in git_out(["diff", "--name-only", "--diff-filter=U"]).splitlines()
-                if p.strip()
-            ]
-            if not unmerged:
-                run(["git", "merge", "--abort"], check=False)
-                raise SystemExit(
-                    "merge " + source + " → " + target + " failed with no unmerged paths"
-                )
-            # ours = target pin, theirs = the ship. Cache-bust ?v= on HTML plus
-            # live-stamp/build-info always conflict. Take the source; write_stamp
-            # rewrites pins after this commit. Aborting here is how restaurant
-            # ships die after the operator checks every box.
-            for path in unmerged:
-                run(["git", "checkout", "--theirs", "--", path])
-                run(["git", "add", "--", path])
-            print(
-                "resolved merge conflict (took "
-                + source
-                + "): "
-                + ", ".join(unmerged),
-                flush=True,
-            )
-            run(
-                [
-                    "git",
-                    "commit",
-                    "--no-edit",
-                    "-m",
-                    f"deploy: merge {source} into {target}",
-                ]
-            )
-    else:
-        run(["git", "checkout", "-B", target, source])
+    # restaurant/testing are publish branches: the ship IS the source tree, then
+    # env/stamp pins. Merging two pin-rewritten trees is what aborted restaurant
+    # after confirm-restaurant: yes (manager.html ?v=). Do not merge.
+    run(["git", "checkout", "-B", target, src_sha])
+    print(f"publish {src_sha[:7]} onto {target}", flush=True)
 
     pin = opts["resolved_pin"]
     testing_api = opts.get("testing_api") or DEFAULT_TESTING_API
@@ -492,7 +455,7 @@ def ship(opts: dict) -> dict:
         testing_api=testing_api,
         default_source=pin,
     )
-    src_date = git_out(["log", "-1", "--format=%ci", source])
+    src_date = git_out(["log", "-1", "--format=%ci", src_sha])
     write_stamp(src_sha, src_subject, src_date)
     run(["git", "add", "js/env.js", "js/live-stamp.js", "js/build-info.js", "js/version.js"])
     run(["git", "add", "--", *sorted(str(p) for p in ROOT.glob("*.html"))])
@@ -506,7 +469,17 @@ def ship(opts: dict) -> dict:
                 f"deploy: pin {target} env ({pin}) from {src_sha[:7]}",
             ]
         )
-    run(["git", "push", "-u", "origin", target])
+    # Publish branch only. Never --force main. Lease fails if another ship won.
+    push = run(
+        ["git", "push", "--force-with-lease", "-u", "origin", target],
+        check=False,
+    )
+    if push.returncode != 0:
+        raise SystemExit(
+            "push "
+            + target
+            + " failed (force-with-lease). Another ship may have landed; retry."
+        )
     out_sha = git_out(["rev-parse", "HEAD"])
     return {"ok": True, "dry": False, "sha": out_sha, "subject": src_subject, "target": target}
 

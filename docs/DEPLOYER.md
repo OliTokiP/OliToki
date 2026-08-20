@@ -1,6 +1,6 @@
 # Deployer
 
-**Last updated:** 2026-08-20 11:18
+**Last updated:** 2026-08-20 12:45
 
 Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
 
@@ -10,7 +10,9 @@ Green only when the GitHub Pages stamp equals **main HEAD**. Matching Pages to t
 
 Phone form: [`deploy.html`](../deploy.html). Worker: GitHub Actions [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 
-Your laptop is staging. **main** is today’s work. **testing** is unmerged beta. **restaurant** is what the dining-room TVs run.
+Deployer cache-busts itself: opening the page adds `_toki=` so Chrome / Suite App cannot keep a stale `deploy.html`. Local `toki_server` also sends `Cache-Control: no-store` for static files. If `/api/build` (or `js/build-info.js` on Live) moves while the tab is open, Deployer reloads. You do not need Launcher **Hard refresh** for this page.
+
+Your laptop is staging. **main** is today’s work. **testing** is unmerged beta. **restaurant** is what the dining-room TVs run. The local portal is `/portal` on this Mac’s `.local` name — not a Wi-Fi IP.
 
 **Set and forget:** leave Ship on **Website + API**. One restaurant ship updates Pages and Cloud Run together. Menu edits do not need a redeploy. The laptop is not the live server. Only ship again when app code changes.
 
@@ -29,7 +31,7 @@ GitHub Pages **must** publish from `restaurant`, not `main`. Otherwise every Lis
 1. Open [`deploy.html`](https://olitokip.github.io/OliToki/deploy.html) (or local `/deploy.html`).
 2. Pick **Testing** (default) or **Restaurant**.
 3. File the issue. You must be signed into GitHub as someone with repo write access.
-4. Actions merges the source onto that branch, writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
+4. Actions **publishes** the source onto that branch (no merge), writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
 
 Restaurant requires the dining-room checkbox. Dry run comments the plan only.
 
@@ -60,6 +62,7 @@ TOKI_GCP_SERVICE=toki-api-testing TOKI_DEPLOY_MODE=web ./scripts/cloud-run/deplo
 
 ## Do not
 
-- Force-push
+- Force-push **main**. `restaurant` / `testing` are publish branches — Deployer force-with-leases only those.
 - Point Pages back at `main`
 - Put the service account in `js/`
+- Commit unique work on `restaurant` or `testing`. Those tips are replaced on the next ship.

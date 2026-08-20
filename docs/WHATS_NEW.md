@@ -1,9 +1,42 @@
 # What’s New
 
-**Last updated:** 2026-08-20 11:18  
+**Last updated:** 2026-08-20 12:45  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 12:45 — Deployer publishes restaurant/testing (no merge)
+
+**Boards / surface:** Deployer (operator — not the TV boards)  
+**Sheet:** none  
+**Summary:** A restaurant/testing ship now **publishes** the source commit onto that branch and pins env/stamps. It does not merge. Merging two pin-rewritten trees is what aborted three `confirm-restaurant: yes` ships on `manager.html` `?v=` conflicts. `git push --force-with-lease` applies only to `restaurant` and `testing`. Never `main`. Unique work must not live on those branches — the next ship replaces the tip.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+
+---
+
+## 2026-08-20 12:12 — Local portal instead of Wi-Fi IPs
+
+**Boards / surface:** Suite / Listener / tickets (operator hub — not the TV boards)  
+**Sheet:** none  
+**Summary:** Ticket **Check local** links and Launcher’s Local column now use this Mac’s Bonjour name (`http://Peters-Mac.local:8765/…`) and a parked portal at `/portal` → Suite. DHCP Wi-Fi IPs (`10.0.0.106`) no longer get written into tickets, so Listener stops rewriting every note when the laptop gets a new address. The numeric IP stays on Launcher as a fallback only. Tailscale and Live URLs were already stable.
+
+### Docs updated
+- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
+
+---
+
+## 2026-08-20 11:28 — Deployer hard-refreshes itself
+
+**Boards / surface:** `deploy.html` (operator hub — not the TV boards)  
+**Sheet:** none  
+**Summary:** Opening Deployer adds a `_toki=` cache-buster so Suite App / Chrome cannot keep yesterday’s `deploy.html`. Status fetches use `cache: no-store`. Local `toki_server` sends `Cache-Control: no-store` on static files. If the Mac’s build hash moves while the tab is open, Deployer reloads. Launcher Hard refresh is not required for this page.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
 
 ---
 
