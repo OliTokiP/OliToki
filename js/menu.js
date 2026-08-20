@@ -1750,6 +1750,42 @@
     return cMain >= cSec ? main : secondary;
   }
 
+  // last-paint: {themeName, main, secondary, highlight, special} in localStorage (per-origin).
+  // Overlay immediately at boot for no Toki Default flash; update only on successful live apply.
+  // Boards and Manager use separate storage (different origins); do not use manager-fallback.json.
+  const LAST_PAINT_KEY = "tokiLastPaint";
+  function readLastPaint() {
+    try {
+      const raw = localStorage.getItem(LAST_PAINT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function writeLastPaint(p) {
+    if (!p || !p.main) return;
+    try { localStorage.setItem(LAST_PAINT_KEY, JSON.stringify(p)); } catch (e) {}
+  }
+  function applyLastPaintOverlay() {
+    const lp = readLastPaint();
+    if (!lp || !lp.main) return false;
+    const root = document.documentElement;
+    root.style.setProperty("--main-color", lp.main);
+    root.style.setProperty("--secondary-color", lp.secondary);
+    root.style.setProperty("--highlight", lp.highlight);
+    root.style.setProperty("--highlight-special", lp.special || lp.highlight);
+    root.style.setProperty("--highlight-new", lp.special || lp.highlight);
+    return true;
+  }
+  function captureLastPaintFromConfig(themeNameHint) {
+    const p = {
+      themeName: themeNameHint || "Current",
+      main: config.mainColor || "#000000",
+      secondary: config.secondaryColor || "#ffffff",
+      highlight: config.highlight || "#26bbcb",
+      special: config.highlightSpecial || "#fff900"
+    };
+    writeLastPaint(p);
+  }
+
   function colLetterToIndex(letters) {
     let n = 0;
     const s = String(letters || "").toUpperCase();
@@ -8741,6 +8777,7 @@
         if (stale()) return "stale";
         applyParsedMenu(parsed);
         _lastDataFingerprint = fp;
+        captureLastPaintFromConfig();
         dataSource = "xlsx-local";
         return dataSource;
       }
@@ -8769,6 +8806,7 @@
           betaErr && betaErr.message ? betaErr.message : betaErr
         );
       }
+      captureLastPaintFromConfig(); // live sheet re-paint
       if (fp) _lastDataFingerprint = fp;
       dataSource = "google-sheet";
       tokiInfo("refresh: applied sheet changes", "fp=" + (fp || "?"));
@@ -8786,6 +8824,7 @@
         if (stale()) return "stale";
         applyParsedMenu(parsed);
         _lastDataFingerprint = fingerprintSheetPayload(parsed);
+        captureLastPaintFromConfig();
         dataSource = "xlsx-local";
         tokiInfo("TokiMenu data source: LOCAL (" + localXlsxPath() + ")");
         // Apply Beta override on top (main board data from xlsx; Beta + Veggies/Drinks fetch live)
@@ -8827,6 +8866,7 @@
           );
         }
 
+        captureLastPaintFromConfig(parsed && parsed.themeName); // successful live (google) paint → remember for next boot
         dataSource = "google-sheet";
         tokiInfo("TokiMenu data source: GOOGLE SHEET");
         return dataSource;
@@ -8852,6 +8892,7 @@
               betaErr && betaErr.message ? betaErr.message : betaErr
             );
           }
+          captureLastPaintFromConfig();
           dataSource = "xlsx";
           return dataSource;
         }
@@ -16760,6 +16801,8 @@
       fitFooterBoxes();
       if (isDrinks) fitDrinksBoxes();
     });
+
+    applyLastPaintOverlay(); // CSS defaults + immediate last-paint overlay so no Toki flash before sheet arrives; never write on boot
 
     _bootAt = Date.now();
     try {

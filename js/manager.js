@@ -97,6 +97,49 @@
     return JSON.stringify(a) === JSON.stringify(b);
   }
 
+  // last-paint: colors + themeName persisted to localStorage (different origin from boards).
+  // Boot: CSS defaults + immediate overlay (no write). Live sheet or user theme change → paint + write.
+  // Never from boot defaultDraft. Used only for instant visual; state always starts default until sheet.
+  var LAST_PAINT_KEY = "tokiLastPaint";
+  function readLastPaint() {
+    try {
+      var raw = localStorage.getItem(LAST_PAINT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function writeLastPaint(p) {
+    if (!p || !p.main) return;
+    try {
+      localStorage.setItem(LAST_PAINT_KEY, JSON.stringify(p));
+    } catch (e) {}
+  }
+  function applyLastPaintOverlay() {
+    var lp = readLastPaint();
+    if (!lp || !lp.main) return false;
+    var root = document.documentElement;
+    root.style.setProperty("--main", lp.main);
+    root.style.setProperty("--secondary", lp.secondary);
+    root.style.setProperty("--highlight", lp.highlight);
+    root.style.setProperty("--special", lp.special);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && lp.highlight) meta.setAttribute("content", lp.highlight);
+    return true;
+  }
+  function captureLastPaint() {
+    var t = currentTheme();
+    var name = state.draft && state.draft.themeName ? state.draft.themeName : (t.name || "");
+    var p = {
+      themeName: name,
+      main: t.main,
+      secondary: t.secondary,
+      highlight: t.highlight,
+      special: t.special
+    };
+    writeLastPaint(p);
+  }
+
   function find(list, id) {
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === id || list[i].name === id) return list[i];
@@ -2454,6 +2497,9 @@
       state.sheetDirty = true;
     }
     applyTheme();
+    if (pickKey === "theme") {
+      captureLastPaint(); // user changed theme in preview → update last-paint so next boot shows it immediately
+    }
     renderAll();
     if (pickKey === "confirmSave") {
       showConfirmSaveTooltip(id);
@@ -2583,9 +2629,18 @@
   function persistFallback() {
     var sheet = window.TOKI_MANAGER_SHEET;
     if (!sheet || !sheet.saveFallback) return Promise.resolve(false);
+    if (!hadLiveSheetData) {
+      // never snapshot pre-sheet boot defaultDraft or before live data committed this session
+      return Promise.resolve(false);
+    }
+    var ds = state.draft && state.draft.dataSource;
+    if (!ds) {
+      // do not create a "source" bucket
+      return Promise.resolve(false);
+    }
     var meta = state.lastSheet || {};
-    return sheet.saveFallback({
-      sourceId: state.draft.dataSource || "source",
+    var entry = {
+      sourceId: ds,
       sourceName: meta.sourceName || "",
       sheetId: meta.sheetId || "",
       draft: clone(state.draft),
@@ -2596,6 +2651,15 @@
       fieldValidations: meta.fieldValidations || null,
       dataSources: D.dataSources,
       motionStyles: D.motionStyles || {},
+    };
+    // skip write if identical to last we wrote (equals what is on disk from prior)
+    var sig = JSON.stringify(entry);
+    if (lastFallbackSnapshot === sig) {
+      return Promise.resolve(true);
+    }
+    return sheet.saveFallback(entry).then(function (ok) {
+      if (ok) lastFallbackSnapshot = sig;
+      return ok;
     });
   }
 
@@ -4154,6 +4218,10 @@
     }
     state.sheetSource = "sheet";
     applyTheme();
+    if (payload && !payload.fromFallback) {
+      hadLiveSheetData = true;
+      captureLastPaint(); // successful live apply (painted real theme) → remember for next boot no-flash
+    }
     renderAll();
     if (state.screen === "style" || state.screen === "board") {
       // Boot refresh lands on the board hash before the sheet arrives, so the
@@ -4191,6 +4259,8 @@
   var sheetHangTimer = 0;
   var sheetLiveOk = false;
   var sheetLoadInFlight = false;
+  var hadLiveSheetData = false; // for manager-fallback.json: only write recovery snapshot after seeing real live data this session (avoid pre-sheet defaultDraft)
+  var lastFallbackSnapshot = null; // memory of last sent to avoid re-POST identical to disk (skip if equals)
 
   function clearSheetHangRetry() {
     if (sheetHangTimer) {
@@ -4431,6 +4501,7 @@
     readHash();
     writeHash(false);
     applyTheme();
+    applyLastPaintOverlay(); // overlay last real paint immediately (CSS default is always Toki); do not write here
     watchFonts();
     fitDevice();
     renderAll();
