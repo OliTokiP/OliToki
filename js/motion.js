@@ -54,6 +54,11 @@
     pinchInMult: 0.5,
     holePinchLive: 40,
     holeRefLive: 160,
+    holeFrac: 0.42,
+    holeMin: 70,
+    crowdN0: 5,
+    crowdN1: 15,
+    crowdBoost: 1.25,
     shadow: { x: 18, y: 22, blur: 2, opacity: 0.5 },
   };
 
@@ -662,6 +667,44 @@
     return 40;
   }
 
+  /** 1 at Handhelds density (n≤5), 1.25 at Munchies (n≥15), lerp between. */
+  function encoreCrowdBoost(n) {
+    var count = Number(n) || 0;
+    var n0 = ENCORE.crowdN0;
+    var n1 = ENCORE.crowdN1;
+    var b = ENCORE.crowdBoost;
+    if (count <= n0) return 1;
+    if (count >= n1) return b;
+    return 1 + (b - 1) * ((count - n0) / (n1 - n0));
+  }
+
+  function encoreHoleRadius(plateW, n) {
+    var w = Number(plateW) || 0;
+    var r = w * ENCORE.holeFrac * encoreCrowdBoost(n);
+    return Math.max(ENCORE.holeMin, r);
+  }
+
+  function encoreStickerScale(photoScale, n) {
+    var s = Number(photoScale) || 1;
+    return Math.max(0.16, Math.min(0.55, s * 0.9 * encoreCrowdBoost(n)));
+  }
+
+  function encoreCameraRigs(stage) {
+    var out = [];
+    if (!stage) return out;
+    var photo = stage.querySelector(".family-portrait-rig");
+    var stick = stage.querySelector(".family-portrait-sticker-rig");
+    if (photo) out.push(photo);
+    if (stick) out.push(stick);
+    return out;
+  }
+
+  function setEncoreCameraTransition(stage, value) {
+    var rigs = encoreCameraRigs(stage);
+    var i;
+    for (i = 0; i < rigs.length; i++) rigs[i].style.transition = value;
+  }
+
   function encoreFpsCap(spotlightType, limitOn) {
     if (limitOn === false) return 0;
     return String(spotlightType || "") === "hard_shadow" ? 30 : 0;
@@ -694,15 +737,12 @@
   function snapPortraitZoom(stage, scale) {
     cancelEncoreZoomStepper();
     if (!stage) return;
-    var rig = stage.querySelector(".family-portrait-rig");
-    if (rig) {
-      rig.style.transition = "none";
-      stage.style.setProperty("--encore-zoom", String(scale));
-      void rig.offsetWidth;
-      rig.style.transition = "";
-    } else {
-      stage.style.setProperty("--encore-zoom", String(scale));
-    }
+    var rigs = encoreCameraRigs(stage);
+    var i;
+    for (i = 0; i < rigs.length; i++) rigs[i].style.transition = "none";
+    stage.style.setProperty("--encore-zoom", String(scale));
+    if (rigs[0]) void rigs[0].offsetWidth;
+    for (i = 0; i < rigs.length; i++) rigs[i].style.transition = "";
     syncEncoreDetachedHole(stage);
   }
 
@@ -760,8 +800,7 @@
     if (!stage || !(durationSec > 0)) return false;
     if (!cap && !wantPinch && !bakeHole) return false;
     cancelEncoreZoomStepper();
-    var rig = stage.querySelector(".family-portrait-rig");
-    if (rig) rig.style.transition = "none";
+    setEncoreCameraTransition(stage, "none");
     parkEncorePinchCss(stage);
     var from = readEncoreZoomNow(stage);
     var pinchFrom = readEncorePinchNow(stage);
@@ -854,9 +893,15 @@
     var pinchPx = Number(opts.pinchPx) || 0;
     var fpsCap = Number(opts.fpsCap) || 0;
     var punchOut = opts.punchOut != null ? opts.punchOut : 0.45;
-    var rig = stage.querySelector(".family-portrait-rig");
     var opSec = Math.min(0.45, entranceSec > 0 ? entranceSec : 0.45);
     var doPinch = pinchPx > 0;
+    var camEase = encoreRigTransition(
+      entranceSec,
+      "--ease-out",
+      "ease-out",
+      doPinch,
+      fpsCap
+    );
 
     stage.style.setProperty("--motion-veil", String(encoreVeilIn(entranceSec)) + "s");
     applyCssDurations(entranceSec, punchOut);
@@ -865,7 +910,7 @@
 
     if (first) {
       setPlaneCenterOrigin(stage);
-      if (rig) rig.style.transition = "none";
+      setEncoreCameraTransition(stage, "none");
       stage.style.transition = "none";
       snapPortraitZoom(stage, 1);
       snapEncoreHolePinch(stage, 0);
@@ -874,15 +919,7 @@
       stage.classList.add("visible");
       void stage.offsetWidth;
 
-      if (rig) {
-        rig.style.transition = encoreRigTransition(
-          entranceSec,
-          "--ease-out",
-          "ease-out",
-          doPinch,
-          fpsCap
-        );
-      }
+      setEncoreCameraTransition(stage, camEase);
       stage.style.transition = "opacity " + opSec + "s var(--ease-fade, ease)";
       stage.classList.remove("is-zoom-out");
       if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
@@ -903,25 +940,18 @@
       }
       setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
+      if (opts.itemIndex != null) setEncoreActiveSticker(stage, opts.itemIndex);
       return;
     }
 
     stage.style.opacity = "1";
     stage.classList.add("visible");
     stage.classList.remove("is-dimmed", "is-zoom-out");
-    if (rig) rig.style.transition = "none";
+    setEncoreCameraTransition(stage, "none");
     snapEncoreHolePinch(stage, 0);
     if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
     void stage.offsetWidth;
-    if (rig) {
-      rig.style.transition = encoreRigTransition(
-        entranceSec,
-        "--ease-out",
-        "ease-out",
-        doPinch,
-        fpsCap
-      );
-    }
+    setEncoreCameraTransition(stage, camEase);
     parkEncorePinchCss(stage);
     if (
       !tryEncoreFpsZoom(
@@ -938,6 +968,7 @@
       else syncEncoreDetachedHole(stage);
     }
     setEncoreVeilDimmed(stage, true);
+    if (opts.itemIndex != null) setEncoreActiveSticker(stage, opts.itemIndex);
   }
 
   /**
@@ -960,15 +991,10 @@
 
     setEncoreVeilDimmed(stage, false);
     stage.classList.add("is-zoom-out");
-    if (rig) {
-      rig.style.transition = encoreRigTransition(
-        exitSec,
-        "--ease-fade",
-        "ease",
-        pinchOut,
-        fpsCap
-      );
-    }
+    setEncoreCameraTransition(
+      stage,
+      encoreRigTransition(exitSec, "--ease-fade", "ease", pinchOut, fpsCap)
+    );
     if (
       !tryEncoreFpsZoom(stage, 1, exitSec, "--ease-fade", pinchOut ? 0 : null, fpsCap)
     ) {
@@ -994,11 +1020,12 @@
     var opacity = opts.opacity != null ? opts.opacity : 1;
     cancelEncoreZoomStepper();
     var rig = stage.querySelector(".family-portrait-rig");
-    if (rig) rig.style.transition = "none";
+    setEncoreCameraTransition(stage, "none");
     stage.style.transition = "none";
     stage.hidden = false;
     stage.setAttribute("aria-hidden", "false");
     stage.classList.add("visible");
+    if (opts.itemIndex != null) setEncoreActiveSticker(stage, opts.itemIndex);
     stage.style.setProperty("--encore-zoom", String(zoom));
     snapEncoreHolePinch(stage, pinch);
     syncEncoreDetachedHole(stage);
@@ -1006,14 +1033,13 @@
     stage.style.opacity = String(opacity);
     void (rig && rig.offsetWidth);
     void stage.offsetWidth;
-    if (rig) rig.style.transition = "";
+    setEncoreCameraTransition(stage, "");
     stage.style.transition = "";
   }
 
   function encoreFinishExit(stage, last) {
     if (!stage) return;
-    var rig = stage.querySelector(".family-portrait-rig");
-    if (rig) rig.style.transition = "";
+    setEncoreCameraTransition(stage, "");
     stage.style.transition = "";
     stage.classList.remove("is-zoom-out");
     if (last) {
@@ -1025,7 +1051,9 @@
   function encoreSlotOrigin(stage, itemIndex) {
     if (!stage || itemIndex == null || itemIndex < 0) return null;
     var slot = stage.querySelector(
-      '.family-portrait-slot[data-item-index="' + itemIndex + '"]'
+      '.family-portrait-plates .family-portrait-slot[data-item-index="' +
+        itemIndex +
+        '"]'
     );
     if (!slot) return null;
     return {
@@ -1049,10 +1077,11 @@
       rig.appendChild(plates);
     }
     attachEncoreVeil(stage, rig);
+    ensureEncoreStickerRig(stage);
     return stage;
   }
 
-  function appendEncoreSticker(slotEl, photoScale, sticker) {
+  function appendEncoreSticker(slotEl, photoScale, sticker, n) {
     if (!slotEl || !sticker) return;
     var el = document.createElement("div");
     el.className = "family-portrait-sticker";
@@ -1071,10 +1100,57 @@
     var oy = 160 * photoScale;
     el.style.left = "calc(50% + " + ox + "px)";
     el.style.top = "calc(50% + " + oy + "px)";
-    var stickScale = Math.max(0.16, Math.min(0.4, photoScale * 0.9));
+    var stickScale = encoreStickerScale(photoScale, n);
     el.style.transform = "translate(-50%, -50%) scale(" + stickScale + ")";
     slotEl.appendChild(el);
     if (typeof sticker.onCreated === "function") sticker.onCreated(el, photoScale);
+  }
+
+  function setEncoreActiveSticker(stage, itemIndex) {
+    if (!stage) return;
+    var slots = stage.querySelectorAll(
+      ".family-portrait-sticker-rig .family-portrait-slot"
+    );
+    var i;
+    var idx;
+    var any = false;
+    var want = itemIndex == null || itemIndex === "" ? NaN : Number(itemIndex);
+    for (i = 0; i < slots.length; i++) {
+      idx = parseInt(slots[i].getAttribute("data-item-index"), 10);
+      var on = isFinite(want) && idx === want;
+      slots[i].classList.toggle("is-active", on);
+      if (on) any = true;
+    }
+    if (any || !slots.length) return;
+    var hx = parseFloat(stage.style.getPropertyValue("--encore-hole-x")) || 0;
+    var hy = parseFloat(stage.style.getPropertyValue("--encore-hole-y")) || 0;
+    var best = 0;
+    var bestD = 1e15;
+    var d;
+    var x;
+    var y;
+    for (i = 0; i < slots.length; i++) {
+      x = parseFloat(slots[i].style.left) || 0;
+      y = parseFloat(slots[i].style.top) || 0;
+      d = (x - hx) * (x - hx) + (y - hy) * (y - hy);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    slots[best].classList.add("is-active");
+  }
+
+  function ensureEncoreStickerRig(stage) {
+    if (!stage) return null;
+    var rig = stage.querySelector(".family-portrait-sticker-rig");
+    if (!rig) {
+      rig = document.createElement("div");
+      rig.className = "family-portrait-sticker-rig";
+      rig.setAttribute("aria-hidden", "true");
+      stage.appendChild(rig);
+    }
+    return rig;
   }
 
   /**
@@ -1102,6 +1178,16 @@
       ? L.buildPortraitLayout(n, PORTRAIT_STAGE_W, PORTRAIT_STAGE_H)
       : { slots: [], scale: 1 };
     plates.innerHTML = "";
+    var overlay = opts.stickerOverlay || null;
+    var stickerOnPlate = overlay ? null : opts.sticker;
+    var stickerRig = null;
+    if (overlay && stage) {
+      stickerRig = ensureEncoreStickerRig(stage);
+      stickerRig.innerHTML = "";
+    } else if (stage) {
+      var leftover = stage.querySelector(".family-portrait-sticker-rig");
+      if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
+    }
     var i;
     for (i = 0; i < n; i++) {
       var slot = layout.slots[i];
@@ -1125,15 +1211,36 @@
         "translate(-50%, -50%) scale(" + layout.scale + ")";
       wrap.appendChild(img);
       if (typeof opts.onImage === "function") opts.onImage(img, it, layout);
-      if (it.isNew && opts.sticker) {
-        appendEncoreSticker(wrap, layout.scale, opts.sticker);
+      if (it.isNew && stickerOnPlate) {
+        appendEncoreSticker(wrap, layout.scale, stickerOnPlate, n);
       }
       plates.appendChild(wrap);
+      if (stickerRig) {
+        var sWrap = document.createElement("div");
+        sWrap.className = "family-portrait-slot";
+        sWrap.setAttribute(
+          "data-item-index",
+          String(it.itemIndex != null ? it.itemIndex : i)
+        );
+        sWrap.style.left = slot.x + "px";
+        sWrap.style.top = slot.y + "px";
+        sWrap.style.zIndex = String(slot.zIndex);
+        if (it.isNew) {
+          appendEncoreSticker(sWrap, layout.scale, overlay, n);
+        }
+        stickerRig.appendChild(sWrap);
+      }
     }
     var plateW = 1500 * (layout.scale || 1);
-    var holeR = Math.max(70, plateW * 0.42);
+    var holeR = encoreHoleRadius(plateW, n);
     if (stage) {
       attachEncoreVeil(stage, stage.querySelector(".family-portrait-rig"));
+      if (stickerRig) {
+        var veil = stage.querySelector(".family-portrait-veil");
+        if (veil && veil.nextSibling !== stickerRig) {
+          stage.appendChild(stickerRig);
+        }
+      }
       stage.style.setProperty("--encore-hole-r", holeR + "px");
       syncEncoreDetachedHole(stage);
     }
@@ -1217,10 +1324,10 @@
       pinchPx: opts.pinchPx,
       punchOut: exitSec,
       fpsCap: opts.fpsCap,
+      itemIndex: opts.itemIndex,
     });
     afterMs(entranceSec * 1000, function () {
-      var rig = stage && stage.querySelector && stage.querySelector(".family-portrait-rig");
-      if (rig) rig.style.transition = "";
+      setEncoreCameraTransition(stage, "");
       if (stage) stage.style.transition = "";
       if (hooks.onHold) hooks.onHold();
       afterMs(holdSec * 1000, function () {
@@ -1290,6 +1397,11 @@
     encoreFpsCap: encoreFpsCap,
     encoreVeilDetached: encoreVeilDetached,
     syncEncoreDetachedHole: syncEncoreDetachedHole,
+    encoreCrowdBoost: encoreCrowdBoost,
+    encoreHoleRadius: encoreHoleRadius,
+    encoreStickerScale: encoreStickerScale,
+    setEncoreActiveSticker: setEncoreActiveSticker,
+    setEncoreCameraTransition: setEncoreCameraTransition,
     attachEncoreVeil: attachEncoreVeil,
     applyEncoreChrome: applyEncoreChrome,
     fillEncorePlates: fillEncorePlates,

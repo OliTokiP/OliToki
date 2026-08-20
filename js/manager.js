@@ -3086,7 +3086,7 @@
       return { src: it.src, isNew: !!it.isNew, itemIndex: i };
     });
     previewCtl.lattice = TM.fillEncorePlates(stage, items, {
-      sticker: PREVIEW_STICKER,
+      stickerOverlay: PREVIEW_STICKER,
     });
     fitPreviewPlates(stage, previewCtl.lattice);
     return previewCtl.lattice;
@@ -3259,13 +3259,20 @@
         if (originPark) TM.setEncoreZoomOrigin(stagePark, originPark.x, originPark.y);
         else TM.setPlaneCenterOrigin(stagePark);
         if (state.holdGrid) {
-          TM.encoreSnap(stagePark, { zoom: 1, pinch: 0, dimmed: false, opacity: 1 });
+          TM.encoreSnap(stagePark, {
+            zoom: 1,
+            pinch: 0,
+            dimmed: false,
+            opacity: 1,
+            itemIndex: state.previewIndex || 0,
+          });
         } else {
           TM.encoreSnap(stagePark, {
             zoom: zoomTo,
             pinch: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
             dimmed: true,
             opacity: 1,
+            itemIndex: state.previewIndex || 0,
           });
         }
       } else {
@@ -3323,6 +3330,7 @@
           pinch: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
           dimmed: !state.holdGrid,
           opacity: 1,
+          itemIndex: i,
         });
         syncPreviewNums(i, false);
         return;
@@ -3336,6 +3344,7 @@
           first: first,
           last: false,
           origin: TM.encoreSlotOrigin(stage, i),
+          itemIndex: i,
           pinchPx: TOKI_MOTION.encoreHolePinchPx(state.draft.encoreStyle),
           zoomTo: TM.ENCORE.zoomTo,
           fpsCap: TOKI_MOTION.encoreFpsCap(
@@ -3415,6 +3424,7 @@
           pinch: 0,
           dimmed: false,
           opacity: 1,
+          itemIndex: state.previewIndex || 0,
         });
       }
       return;

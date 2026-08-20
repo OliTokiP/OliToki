@@ -11816,15 +11816,18 @@
         _baked: baked,
       });
     }
+    const stickerSpec = wantStickers
+      ? {
+          onCreated: function (el, scale) {
+            const stickNeed = stickerPortraitNeedPx(scale);
+            applyStickerRasters(el, stickNeed.w, stickNeed.h);
+          },
+        }
+      : null;
+    const overlay = !!opts.stickerOverlay && !!stickerSpec;
     const layout = TOKI_MOTION.fillEncorePlates(platesEl, mapped, {
-      sticker: wantStickers
-        ? {
-            onCreated: function (el, scale) {
-              const stickNeed = stickerPortraitNeedPx(scale);
-              applyStickerRasters(el, stickNeed.w, stickNeed.h);
-            },
-          }
-        : null,
+      sticker: overlay ? null : stickerSpec,
+      stickerOverlay: overlay ? stickerSpec : null,
       onImage: function (img, it) {
         attachWebpFallback(img);
         img.dataset.tokiGridN = String(n);
@@ -11905,7 +11908,9 @@
       rig.appendChild(veil);
     }
 
-    const layout = fillPortraitPlates(plates, portraitItems || []);
+    const layout = fillPortraitPlates(plates, portraitItems || [], {
+      stickerOverlay: isEncoreSegmentNow(),
+    });
     if (!layout) return;
 
     // Debug outline via ?portraitDebug=1
@@ -11922,7 +11927,11 @@
     // Spotlight hole tracks scaled plate size (slightly tighter than half-width)
     // CSS extends soft rim to ~1.85× this radius.
     const plateW = PORTRAIT_IMG_W * layout.scale;
-    const holeR = Math.max(70, plateW * 0.42);
+    const nCast = (portraitItems && portraitItems.length) || 0;
+    const holeR =
+      window.TOKI_MOTION && typeof TOKI_MOTION.encoreHoleRadius === "function"
+        ? TOKI_MOTION.encoreHoleRadius(plateW, nCast)
+        : Math.max(70, plateW * 0.42);
     stage.style.setProperty("--encore-hole-r", holeR + "px");
     if (
       window.TOKI_MOTION &&
@@ -12867,11 +12876,16 @@
       pinchPx: encoreHolePinchPx(),
       punchOut: style.punchOut,
       fpsCap: encoreHardShadowFpsCap(),
+      itemIndex: itemIndex,
     });
     encoreArmHighlight(slide, style.punchOut);
     afterMs(entranceSec * 1000, gen, function () {
-      const rig = stage.querySelector(".family-portrait-rig");
-      if (rig) rig.style.transition = "";
+      if (TOKI_MOTION.setEncoreCameraTransition) {
+        TOKI_MOTION.setEncoreCameraTransition(stage, "");
+      } else {
+        const rig = stage.querySelector(".family-portrait-rig");
+        if (rig) rig.style.transition = "";
+      }
       stage.style.transition = "";
       done();
     });

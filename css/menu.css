@@ -714,6 +714,42 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 9.98% 100%);
 }
 
+/* Sticker lattice: same slot offsets as the photo grid, own camera
+   (same --encore-zoom), above the veil. Fades with house lights. */
+#family-portrait-stage .family-portrait-sticker-rig {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
+  transform: scale(var(--encore-zoom, 1));
+  transition:
+    opacity var(--motion-veil, 1.7s) var(--ease-fade),
+    transform var(--motion-punch-in, var(--dur-encore-zoom)) var(--ease-out);
+}
+
+#family-portrait-stage.is-zoom-out .family-portrait-sticker-rig {
+  transition:
+    opacity var(--motion-veil, var(--dur-slow)) var(--ease-fade),
+    transform var(--motion-punch-out, var(--dur-slow)) var(--ease-fade);
+}
+
+#family-portrait-stage.is-dimmed .family-portrait-sticker-rig {
+  opacity: 1;
+}
+
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-sticker {
+  opacity: 0;
+}
+
+#family-portrait-stage
+  .family-portrait-sticker-rig
+  .family-portrait-slot.is-active
+  .family-portrait-sticker {
+  opacity: 1;
+}
+
 html.encore-veil-detached body.board-drinks #family-portrait-stage .family-portrait-rig,
 html.encore-veil-detached #family-portrait-stage.photo-left .family-portrait-rig,
 body.board-drinks #family-portrait-stage.encore-veil-detached .family-portrait-rig,

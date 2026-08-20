@@ -100,6 +100,40 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   z-index: 1;
 }
 
+#family-portrait-stage .family-portrait-sticker-rig {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
+  transform: scale(var(--encore-zoom, 1));
+  transition:
+    opacity var(--motion-veil, 1.7s) var(--ease-fade),
+    transform var(--motion-punch-in, var(--dur-encore-zoom)) var(--ease-out);
+}
+
+#family-portrait-stage.is-zoom-out .family-portrait-sticker-rig {
+  transition:
+    opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade),
+    transform var(--motion-punch-out, var(--dur-slow, 1.05s)) var(--ease-fade);
+}
+
+#family-portrait-stage.is-dimmed .family-portrait-sticker-rig {
+  opacity: 1;
+}
+
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-sticker {
+  opacity: 0;
+}
+
+#family-portrait-stage
+  .family-portrait-sticker-rig
+  .family-portrait-slot.is-active
+  .family-portrait-sticker {
+  opacity: 1;
+}
+
 #family-portrait-stage .family-portrait-veil {
   position: absolute;
   inset: calc(-1 * var(--veil-extend, 20px));
