@@ -167,6 +167,39 @@
       cursor: default;
     }
     .copy-col-you { background: rgba(27, 127, 55, 0.04); }
+    @media (max-width: 520px) {
+      .copy-head { display: none; }
+      .copy-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .35rem;
+        padding: .6rem .7rem .55rem;
+        align-items: stretch;
+      }
+      .copy-name {
+        flex: 1 1 100%;
+        padding: 0 0 .15rem;
+        font-size: .95rem;
+      }
+      .copy-cell {
+        flex: 1 1 30%;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        flex-direction: column;
+        gap: .08rem;
+        min-height: 48px;
+        font-size: .88rem;
+      }
+      .copy-cell::before {
+        content: attr(data-env);
+        font-size: .62rem;
+        font-weight: 650;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: #666;
+      }
+      .copy-cell.is-here { border-color: #b7e0c0; }
+    }
     @media (prefers-color-scheme: dark) {
       .live, .tile { background: #2a2a2a; }
       .live.ok { background: #16351c; }
@@ -187,6 +220,11 @@
       .copy-cell.is-here { background: #16351c; color: #5ee08a; }
       .copy-cell.is-na { color: #666; }
       .copy-col-you { background: rgba(94, 224, 138, 0.06); }
+      @media (max-width: 520px) {
+        .copy-cell { border-color: #333; }
+        .copy-cell::before { color: #aaa; }
+        .copy-cell.is-here { border-color: #2a5a36; }
+      }
     }
   </style>
 </head>
@@ -326,23 +364,26 @@
       return href;
     }
 
+    const envLabel = { local: "Local", testing: "Test", restaurant: "TVs" };
     function cellHtml(row, env) {
       const href = hrefFor(row, env);
       const youCol = env === you ? " copy-col-you" : "";
+      const envAttr = ' data-env="' + envLabel[env] + '"';
       if (!href) {
-        return '<span class="copy-cell is-na' + youCol + '">—</span>';
+        return '<span class="copy-cell is-na' + youCol + '"' + envAttr + ">—</span>";
       }
       if (samePage(href)) {
-        return '<span class="copy-cell is-here' + youCol + '">Here</span>';
+        return '<span class="copy-cell is-here' + youCol + '"' + envAttr + ">Here</span>";
       }
       const extra =
-        row.name === "Menu Manager" ? ' target="_blank" rel="noopener"' : "";
+        row.label === "Menu Manager" ? ' target="_blank" rel="noopener"' : "";
       return (
         '<a class="copy-cell' +
         youCol +
         '" href="' +
         href +
         '"' +
+        envAttr +
         extra +
         ">Open</a>"
       );
