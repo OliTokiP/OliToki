@@ -173,7 +173,7 @@ Encore is **not** Ken Burns with a hole. It is a **stage + rig + veil** over tha
 
 Preview must have the same three layers (stage / rig / veil), even if the “cast” is one hero.
 
-**Default:** veil is a **child of the rig**, so the hole inherits camera scale (aperture grows with Punch-In after pinch settles). **QA `?encore=new`:** veil is a **sibling of the rig** (stage child). Hole x/y still use `--encore-hole-x/y` (the camera origin), so the lattice point stays under the aperture without stacking `scale(--encore-zoom)` on the veil layer. Pinch still shrinks the hole; hole radius does **not** inherit the remaining zoom. Live default is unchanged unless the query is present.
+**Default:** veil is a **child of the rig**, so the hole inherits camera scale (aperture grows with Punch-In after pinch settles). **QA `?encore=new`:** veil is a **sibling of the rig** (stage child). Hole x/y still use `--encore-hole-x/y` (the camera origin), so the lattice point stays under the aperture without stacking `scale(--encore-zoom)` on the veil layer. Hole **radius** is painted as `(holeR − pinch) × zoom` (`--encore-hole-paint-r`) so start and end match the old nested-scale sizes. The veil layer itself does not transform. Live default is unchanged unless the query is present.
 
 ### 5.2 Spotlight chrome (`applyEncoreSpotlightChrome`)
 

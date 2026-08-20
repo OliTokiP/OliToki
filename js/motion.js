@@ -456,6 +456,8 @@
    * Hole x/y still use --encore-hole-x/y (same as transform-origin), so the
    * lattice point stays under the aperture without stacking camera scale on
    * the veil (radial-gradient + mix-blend + drop-shadow).
+   * Hole radius bakes (holeR − pinch) × zoom so start/end match the old
+   * nested-scale look without transforming the veil layer.
    */
   function readEncoreVeilDetachedFlag() {
     function fromParams(raw) {
@@ -499,7 +501,7 @@
 
   if (_encoreVeilDetached) {
     console.info(
-      "[TokiMenu] encore=new — Spotlight Veil detached from camera rig"
+      "[TokiMenu] encore=new — Spotlight Veil detached from camera rig (hole tracks zoom)"
     );
   }
   if (typeof document !== "undefined") {
@@ -560,6 +562,34 @@
     return out;
   }
 
+  function readEncoreHoleR(stage) {
+    if (!stage) return 160;
+    var n = parseFloat(stage.style.getPropertyValue("--encore-hole-r"));
+    if (!(n > 0)) {
+      try {
+        n = parseFloat(getComputedStyle(stage).getPropertyValue("--encore-hole-r"));
+      } catch (e) {
+        n = 0;
+      }
+    }
+    return n > 0 ? n : 160;
+  }
+
+  /**
+   * Detached veil does not inherit camera scale. Paint the hole at the same
+   * screen radius the old nested transform produced: (holeR − pinch) × zoom.
+   */
+  function syncEncoreDetachedHole(stage) {
+    if (!stage || !encoreVeilDetached()) return;
+    var zoom = readEncoreZoomNow(stage);
+    var pinch = readEncorePinchNow(stage);
+    var holeR = readEncoreHoleR(stage);
+    var hardR = Math.max(40, (holeR - pinch) * zoom);
+    var softR = holeR * 1.85 * zoom;
+    stage.style.setProperty("--encore-hole-paint-r", hardR + "px");
+    stage.style.setProperty("--encore-hole-soft-r", softR + "px");
+  }
+
   function setEncoreHolePinch(stage, px) {
     var v = Math.max(0, px) + "px";
     var nodes = pinchTargets(stage);
@@ -567,6 +597,7 @@
     for (i = 0; i < nodes.length; i++) {
       nodes[i].style.setProperty("--encore-hole-pinch", v);
     }
+    syncEncoreDetachedHole(stage);
   }
 
   function snapEncoreHolePinch(stage, px) {
@@ -637,6 +668,7 @@
     } else {
       stage.style.setProperty("--encore-zoom", String(scale));
     }
+    syncEncoreDetachedHole(stage);
   }
 
   function readEncoreZoomNow(stage) {
@@ -683,12 +715,15 @@
    * keeps the aperture (CSS @property cannot ease radial-gradient circle size).
    * pinchSec defaults to punch-in × ENCORE.pinchInMult (hole settles
    * halfway through the zoom). Pass pinchSec === durationSec to lock them.
+   * ?encore=new also uses this stepper so --encore-zoom eases (hole paint
+   * tracks it) instead of snapping the custom property while transform CSS-eases.
    */
   function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo, fpsCap, pinchSec) {
     var cap = Number(fpsCap) || 0;
     var wantPinch = pinchTo != null && isFinite(Number(pinchTo));
+    var bakeHole = encoreVeilDetached();
     if (!stage || !(durationSec > 0)) return false;
-    if (!cap && !wantPinch) return false;
+    if (!cap && !wantPinch && !bakeHole) return false;
     cancelEncoreZoomStepper();
     var rig = stage.querySelector(".family-portrait-rig");
     if (rig) rig.style.transition = "none";
@@ -719,6 +754,7 @@
         var eP = easeUnit(easeVar, uP);
         setEncoreHolePinch(stage, pinchFrom + (Number(pinchTo) - pinchFrom) * eP);
       }
+      if (bakeHole) syncEncoreDetachedHole(stage);
       return u >= 1;
     }
     function frame(now) {
@@ -828,6 +864,7 @@
       ) {
         stage.style.setProperty("--encore-zoom", String(zoomTo));
         if (doPinch) setEncoreHolePinch(stage, pinchPx);
+        else syncEncoreDetachedHole(stage);
       }
       setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
@@ -863,6 +900,7 @@
     ) {
       stage.style.setProperty("--encore-zoom", String(zoomTo));
       if (doPinch) setEncoreHolePinch(stage, pinchPx);
+      else syncEncoreDetachedHole(stage);
     }
     setEncoreVeilDimmed(stage, true);
   }
@@ -901,6 +939,7 @@
     ) {
       stage.style.setProperty("--encore-zoom", "1");
       if (pinchOut) setEncoreHolePinch(stage, 0);
+      else syncEncoreDetachedHole(stage);
     }
 
     if (last) {
@@ -927,6 +966,7 @@
     stage.classList.add("visible");
     stage.style.setProperty("--encore-zoom", String(zoom));
     snapEncoreHolePinch(stage, pinch);
+    syncEncoreDetachedHole(stage);
     setEncoreVeilDimmed(stage, dimmed);
     stage.style.opacity = String(opacity);
     void (rig && rig.offsetWidth);
@@ -1060,6 +1100,7 @@
     if (stage) {
       attachEncoreVeil(stage, stage.querySelector(".family-portrait-rig"));
       stage.style.setProperty("--encore-hole-r", holeR + "px");
+      syncEncoreDetachedHole(stage);
     }
     return layout;
   }
@@ -1213,6 +1254,7 @@
     encoreHolePinchPx: encoreHolePinchPx,
     encoreFpsCap: encoreFpsCap,
     encoreVeilDetached: encoreVeilDetached,
+    syncEncoreDetachedHole: syncEncoreDetachedHole,
     attachEncoreVeil: attachEncoreVeil,
     applyEncoreChrome: applyEncoreChrome,
     fillEncorePlates: fillEncorePlates,

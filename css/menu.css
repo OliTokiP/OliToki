@@ -678,6 +678,7 @@ body.preview-wall #hero-plate {
   inherits camera scale (glued to the lattice point). ?encore=new moves
   the veil to a stage sibling — hole x/y still use --encore-hole-x/y
   (same as transform-origin) without stacking scale on the veil layer.
+  Detached hole radius is (holeR − pinch) × zoom so sizes match the old look.
   Origin = --encore-hole-x/y (per bow). Stage clips; rig zooms inside.
   Push-in: long ease-out. Pull-out (.is-zoom-out): same duration/easing as
   the veil fade so origin can retarget under the blackout (no snap).
@@ -927,11 +928,53 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
   opacity: 0.9;
 }
 
-/* Detached veil: same hole paint, no inherited camera scale. After pinch
-   the aperture holds while the lattice continues Punch-In to 1.24. */
+/* Detached veil: no inherited camera scale. Hole radius is
+   (holeR − pinch) × zoom so start/end match the old nested-scale look. */
 html.encore-veil-detached #family-portrait-stage .family-portrait-veil,
 #family-portrait-stage.encore-veil-detached .family-portrait-veil {
   z-index: 2;
+}
+
+html.encore-veil-detached #family-portrait-stage.encore-spot-hard .family-portrait-veil,
+#family-portrait-stage.encore-veil-detached.encore-spot-hard .family-portrait-veil {
+  background: radial-gradient(
+    circle
+      max(
+        40px,
+        var(
+          --encore-hole-paint-r,
+          calc(
+            var(--encore-zoom, 1) *
+              (var(--encore-hole-r, 160px) - var(--encore-hole-pinch, 0px))
+          )
+        )
+      )
+      at var(--veil-hole-x) var(--veil-hole-y),
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 99%,
+    var(--encore-veil-color, #000) 100%
+  );
+}
+
+html.encore-veil-detached #family-portrait-stage.encore-spot-soft .family-portrait-veil,
+#family-portrait-stage.encore-veil-detached.encore-spot-soft .family-portrait-veil {
+  background: radial-gradient(
+    circle
+      var(
+        --encore-hole-soft-r,
+        calc(var(--encore-zoom, 1) * var(--encore-hole-r, 160px) * 1.85)
+      )
+      at var(--veil-hole-x) var(--veil-hole-y),
+    transparent 0%,
+    transparent 8%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 12%, transparent) 18%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 28%, transparent) 30%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 48%, transparent) 42%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 68%, transparent) 55%,
+    color-mix(in srgb, var(--encore-veil-color, #000) 85%, transparent) 70%,
+    var(--encore-veil-color, #000) 88%,
+    var(--encore-veil-color, #000) 100%
+  );
 }
 
 /* Encore: fade wallpaper + Style #bg-pattern out. Frame #stripes stay

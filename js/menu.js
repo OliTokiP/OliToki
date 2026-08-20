@@ -11924,6 +11924,12 @@
     const plateW = PORTRAIT_IMG_W * layout.scale;
     const holeR = Math.max(70, plateW * 0.42);
     stage.style.setProperty("--encore-hole-r", holeR + "px");
+    if (
+      window.TOKI_MOTION &&
+      typeof TOKI_MOTION.syncEncoreDetachedHole === "function"
+    ) {
+      TOKI_MOTION.syncEncoreDetachedHole(stage);
+    }
 
     // Tint any portrait stickers with current Special Highlight
     applyStickerTint();

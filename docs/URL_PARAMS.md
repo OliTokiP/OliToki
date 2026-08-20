@@ -28,7 +28,7 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`debug=1`** or **`tokiDebug=1`** | Dump the debug feature table to the console once. |
 | **`portraitDebug=1`** | Draw the Family Portrait lattice outlines. |
 | **`imgScale=0.25`** | Debug only: smash images down (looks terrible on purpose). Bare `?imgScale` = 1/100. |
-| **`encore=new`** | Encore only: park the Spotlight Veil as a **stage sibling** of the camera rig (not a child). Hole x/y still track the lattice point; the veil does not inherit `scale(--encore-zoom)`. Default (omit) keeps the live veil-on-rig path. |
+| **`encore=new`** | Encore only: park the Spotlight Veil as a **stage sibling** of the camera rig (not a child). Hole x/y still track the lattice point; the veil does not inherit `scale(--encore-zoom)`. Hole radius is painted `(holeR − pinch) × zoom` so the aperture matches the old nested-scale size. Default (omit) keeps the live veil-on-rig path. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 
@@ -48,7 +48,7 @@ These can sit on the query string or after the hash (`#/menu/style?pick=theme`).
 | **`confirm=1`** | Show the Yes/No save dialog. |
 | **`newtheme=1`** | Show create-theme. |
 | **`holdGrid=1`** | Encore grid held (speed 0). |
-| **`encore=new`** | Same as the board flag: Spotlight Veil lives on `#family-portrait-stage`, not on `.family-portrait-rig`. Use with `pres=encore`. |
+| **`encore=new`** | Same as the board flag: Spotlight Veil lives on `#family-portrait-stage`, not on `.family-portrait-rig`. Hole radius still tracks camera zoom. Use with `pres=encore`. |
 
 ## Combine
 
