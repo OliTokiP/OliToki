@@ -3037,11 +3037,22 @@
         galaxy.classList.remove("is-solid");
         galaxy.classList.toggle("has-image", !!config.bgImage);
       } else {
-        const plate =
+        let plate =
           normalizeHex(config.bgColor) ||
           normalizeHex(config.bgSolid) ||
           config.mainColor ||
           "#000000";
+        // Re-apply wallpaper avg plate override (if 100%+Normal) so crossfade
+        // seamless behavior is restored after Encore wind-down.
+        const wall = isPreviewWall();
+        let imgP = config.bgImage || null;
+        if (imgP) imgP = wallFriendlyBgPath(imgP);
+        const op = parseUnit01(config.bgOpacity, 1);
+        const bl = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
+        if (imgP && op >= 0.999 && bl === "normal") {
+          const k = bgImageAvgKey(imgP);
+          if (_imageAvgPlateCache[k]) plate = _imageAvgPlateCache[k];
+        }
         galaxy.style.backgroundColor = plate;
       }
     }
@@ -3132,6 +3143,13 @@
   let _disclaimerSampleGen = 0;
   const _bgImageCache = {};
   const _imageAvgPlateCache = Object.create(null);
+
+  function bgImageAvgKey(p) {
+    if (!p) return p;
+    // size variant (-sm) does not affect mean color; normalize so cache + revalidate
+    // are robust to pre/post-freeze display budget and wall vs board choices
+    return String(p).replace(/-sm(?=\.webp$)/i, "");
+  }
 
   function setDisclaimerColor(color) {
     if (!els.disclaimer) return;
@@ -3311,12 +3329,13 @@
     if (opacity01 < 0.999 || effBlend !== "normal") {
       return;
     }
-    if (_imageAvgPlateCache[displayPath]) {
+    const key = bgImageAvgKey(displayPath);
+    if (_imageAvgPlateCache[key]) {
       // Ensure the plate is using the averaged color for this image
       // (setting is cheap and avoids rgb vs hex comparison gotchas).
       const galaxy = document.getElementById("galaxy");
       if (galaxy) {
-        galaxy.style.backgroundColor = _imageAvgPlateCache[displayPath];
+        galaxy.style.backgroundColor = _imageAvgPlateCache[key];
       }
       return;
     }
@@ -3325,7 +3344,7 @@
       // Revalidate conditions + that this image is still the active one
       if (!config.bgImage) return;
       const currentDisplay = wallFriendlyBgPath(config.bgImage);
-      if (currentDisplay !== displayPath) return;
+      if (bgImageAvgKey(currentDisplay) !== key) return;
       const curOpacity = bgImageOpacityPeak();
       let curBlend = parseBgBlendMode(config.bgBlendMode);
       if (isPreviewWall()) curBlend = "normal";
@@ -3334,7 +3353,7 @@
       const avg = computeAverageOfImage(img);
       if (!avg) return;
 
-      _imageAvgPlateCache[displayPath] = avg;
+      _imageAvgPlateCache[key] = avg;
 
       const galaxy = document.getElementById("galaxy");
       if (galaxy) {
@@ -3680,6 +3699,69 @@
     el.style.setProperty("--bg-image-blend", blend || "normal");
   }
 
+  // Wallpaper pan home-pose. Soft reload with Require restart off can land
+  // BG Scroll Speed 0 in the middle of the 1.2s dual-layer crossfade; hiding
+  // #galaxy-b then leaves #galaxy-a mid-fade (blank / sheared wallpaper).
+  let galaxySnapHome = false;
+  let galaxyParkedAtHome = false;
+
+  function galaxyLayerWidth(el) {
+    if (el && el.offsetWidth && el.offsetWidth > 0) return el.offsetWidth;
+    const nh = (el && el.naturalHeight) || 2400;
+    const nw = (el && el.naturalWidth) || 3600;
+    const renderedH = STAGE_H * 1.2;
+    return (nw / nh) * renderedH;
+  }
+
+  function galaxyInitialX(el) {
+    const w = galaxyLayerWidth(el);
+    if (isDrinks) {
+      const coverRight = CUTOUT_RIGHT_BOARD + 60;
+      const edgePad = 80;
+      return Math.min(-edgePad, coverRight - w);
+    }
+    const spare = Math.max(80, w - STAGE_W);
+    return -spare * 0.15;
+  }
+
+  function setGalaxyLayerX(el, x) {
+    if (!el) return;
+    el.style.transform = "translate3d(" + x + "px, -50%, 0)";
+  }
+
+  /**
+   * Abort wallpaper crossfade and park the visible layer at the start pose.
+   * Style BG Scroll Speed 0 (soft refresh) must not freeze mid-blend.
+   */
+  function snapGalaxyToHome() {
+    const a = els.galaxyA;
+    const b = els.galaxyB;
+    if (!a) return;
+    if (a.dataset.tokiParked === "1" || _encoreSolidBg) return;
+    const peak = bgImageOpacityPeak();
+    [a, b].forEach(function (el) {
+      if (!el) return;
+      el.classList.remove("fading-in", "fading-out");
+      el.style.transition = "none";
+    });
+    setGalaxyLayerX(a, galaxyInitialX(a));
+    a.classList.add("active");
+    a.style.opacity = String(peak);
+    a.hidden = false;
+    void a.offsetWidth;
+    a.style.transition = "";
+    if (b) {
+      b.classList.remove("active");
+      setGalaxyLayerX(b, galaxyInitialX(b));
+      b.style.opacity = "0";
+      void b.offsetWidth;
+      b.style.transition = "";
+    }
+    galaxySnapHome = true;
+    galaxyParkedAtHome = true;
+    tokiInfo("galaxy: BG Scroll Speed 0 — wallpaper reset to start pose");
+  }
+
   function applyStageBackground() {
     const galaxy = document.getElementById("galaxy");
     if (!galaxy) return;
@@ -3716,7 +3798,7 @@
     // first paint of the galaxy also uses the matching tone. The async compute
     // (kicked off below) will fill the cache for subsequent applies / reloads.
     if (imagePath && opacity01 >= 0.999 && blend === "normal") {
-      const cachedAvg = _imageAvgPlateCache[imagePath];
+      const cachedAvg = _imageAvgPlateCache[bgImageAvgKey(imagePath)];
       if (cachedAvg) {
         plate = cachedAvg;
       }
@@ -3747,8 +3829,15 @@
     );
 
     // One layer when not scrolling (or wall). Dual only for seamless pan.
-    const scrollOn =
-      !wall && parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0;
+    const scrollMult = parseBgScrollSpeed(config.bgScrollSpeed, 1);
+    const scrollOn = !wall && scrollMult > 0;
+    // Speed 0: snap home *before* dropping layer B so a live soft-reload
+    // cannot hide the incoming fade copy while A is still fading out.
+    if (scrollMult <= 0 && imagePath && !_encoreSolidBg) {
+      if (!galaxyParkedAtHome) snapGalaxyToHome();
+    } else if (scrollMult > 0) {
+      galaxyParkedAtHome = false;
+    }
     const layerEls = scrollOn
       ? [els.galaxyA, els.galaxyB]
       : [els.galaxyA];
@@ -11064,7 +11153,7 @@
     // Mirror the special 100%+Normal plate override for the scaffold copy
     // (uses cached avg if the main galaxy path has already computed it).
     if (imagePath && opacity01 >= 0.999 && blend === "normal") {
-      const cachedAvg = _imageAvgPlateCache[imagePath];
+      const cachedAvg = _imageAvgPlateCache[bgImageAvgKey(imagePath)];
       if (cachedAvg) plate = cachedAvg;
     }
 
@@ -14918,14 +15007,7 @@
     }
 
     function layerWidth(layer) {
-      const el = layer.el;
-      // Prefer laid-out width (includes min-width: 120% etc.) in design px
-      if (el.offsetWidth && el.offsetWidth > 0) return el.offsetWidth;
-      const nh = el.naturalHeight || 2400;
-      const nw = el.naturalWidth || 3600;
-      // Use design-space height (stage), not transformed viewport metrics
-      const renderedH = STAGE_H * 1.2;
-      return (nw / nh) * renderedH;
+      return galaxyLayerWidth(layer.el);
     }
 
     /**
@@ -14934,18 +15016,7 @@
      * - drinks: left of the right-frame cutout (left edge is fully exposed — must stay off-screen)
      */
     function initialX(layer) {
-      const w = layerWidth(layer);
-      if (isDrinks) {
-        // Start with the image shifted left so its right edge still covers the
-        // panel cutout, leaving maximum room to pan right without ever
-        // bringing the photo's left edge into the open galaxy area.
-        const coverRight = CUTOUT_RIGHT_BOARD + 60;
-        const edgePad = 80; // keep left edge this many px past stage left (≤ -edgePad)
-        return Math.min(-edgePad, coverRight - w);
-      }
-      // Start fully covering the stage with spare off the left
-      const spare = Math.max(80, w - STAGE_W);
-      return -spare * 0.15;
+      return galaxyInitialX(layer.el);
     }
 
     // When the image's left edge nears the frame cutout, loop
@@ -15089,11 +15160,31 @@
       lastTs = ts;
       if (dt === 0) return;
 
-      // Encore or scaffold-owned BG: freeze free galaxy pan
+      const scrollMult = parseBgScrollSpeed(config.bgScrollSpeed, 1);
+      // Style speed 0 (not Encore freeze): abort crossfade and park at start pose.
+      if (galaxySnapHome || (scrollMult <= 0 && !galaxyParkedAtHome)) {
+        fading = false;
+        fadeUntil = 0;
+        active = 0;
+        if (scrollMult <= 0 && !galaxyParkedAtHome) snapGalaxyToHome();
+        galaxySnapHome = false;
+        prepareLayer(layers[0], initialX(layers[0]), true);
+        layers[0].el.classList.add("active");
+        if (layers[1]) prepareLayer(layers[1], initialX(layers[1]), false);
+        galaxyParkedAtHome = scrollMult <= 0;
+        lastTs = ts;
+        if (scrollMult <= 0) return;
+      } else if (scrollMult <= 0) {
+        return;
+      } else {
+        galaxyParkedAtHome = false;
+      }
+
+      // Encore or scaffold-owned BG: freeze free galaxy pan (keep current pose)
       const speed = bgScrollFrozen()
         ? 0
-        : BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
-      // 0 = don't scroll (Style speed, Encore, or collage scaffold pin)
+        : BASE_SCROLL_PX_PER_SEC * scrollMult;
+      // 0 = don't scroll (Encore / collage scaffold pin)
       if (speed <= 0) {
         // Still finish an in-flight crossfade so opacity doesn't stick mid-blend
         if (fading && !singleLayer && layers.length > 1 && ts >= fadeUntil) {

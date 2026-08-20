@@ -205,7 +205,7 @@ radial-gradient(
 | Token | Live | Notes |
 |-------|------|--------|
 | `--encore-zoom` | `1` rest, `1.24` punch (`--encore-zoom-to`) | Relative — keep |
-| `--encore-hole-pinch` | `0` → `40px` on Punch-In | Scale px: `40 * (holeR / 160)` |
+| `--encore-hole-pinch` | `0` → `40px` on Punch-In | Same `--ease-out` as zoom, duration `punchIn × 0.5` (`1.7s`). Hole settles; zoom finishes in the tight aperture. `ENCORE_HOLE_PINCH_IN_MULT = 1` locks pinch to the full camera clock (Pass 1). Scale px: `40 * (holeR / 160)` |
 | `--encore-hole-r` | `max(70, plateW × 0.42)` (`renderFamilyPortrait`) | `plateW = 1500 × layout.scale`. 160 is only a CSS fallback. Preview uses this same formula in the 848×1080 world (scales with the world). |
 | `ENCORE_HOLE_PINCH_OUT` | `false` | Punch-Out **keeps** pinch |
 | Veil fade-in | `punchIn * 0.5` = **1.7s** | `--motion-veil` |
@@ -216,7 +216,7 @@ radial-gradient(
 
 1. Snap zoom `1`, pinch `0`, veil undimmed, stage opacity `0`.  
 2. Set hole origin. Apply spotlight chrome.  
-3. Transition: stage opacity `0.45s` ease-fade; rig zoom `1 → 1.24` in `entranceSec` (`3.4s`) ease-out; pinch `0 → pinchPx` on the **same** `3.4s` clock; veil dim in `1.7s`.  
+3. Transition: stage opacity `0.45s` ease-fade; rig zoom `1 → 1.24` in `entranceSec` (`3.4s`) ease-out; pinch `0 → pinchPx` in `entranceSec × 0.5` (`1.7s`) ease-out (same bezier, half the clock); veil dim in `1.7s`.  
 4. Arm highlight on Punch-Out clock.  
 5. Wait `3.4s`.
 
@@ -226,7 +226,7 @@ Grid already visible (opacity 1). Previous Punch-Out left zoom ≈ 1, veil undim
 
 1. **Snap pinch to 0 while veil is undimmed** (invisible reset).  
 2. Retarget hole origin at ~1×.  
-3. Punch: zoom `1 → 1.24` + pinch `0 → pinchPx` in `3.4s` ease-out; veil dim in `1.7s`. **No** grid opacity fade.  
+3. Punch: zoom `1 → 1.24` in `3.4s` ease-out; pinch `0 → pinchPx` in `1.7s` ease-out (half clock); veil dim in `1.7s`. **No** grid opacity fade.  
 4. Arm highlight. Wait `3.4s`.
 
 ### 5.6 Punch-Out (not last)
@@ -246,7 +246,7 @@ Punch-Out **plus** stage opacity `1 → 0` in `0.45s`. Then hide.
 |-------|-------------------|
 | Custom 2-stop gradient instead of live `0% / 99% / 100%` Hard | Soft edge, wrong size |
 | Veil behind the food | Hole does not crop the plate |
-| Pinch timed to veil-in (`1.7s`) not punch-in (`3.4s`) | Aperture finishes early |
+| Pinch locked to the full Punch-In zoom clock (`3.4s`) | Hole still shrinking while the food should be settling into a tight aperture |
 | Unpinching on Punch-Out | Hole breathes on the way out |
 | Resetting pinch while veil is dimmed | Visible snap |
 | Special veil color when Spotlight = Black | Yellow house lights on a Black bow |

@@ -444,6 +444,8 @@
   }
 
   var ENCORE_HOLE_PINCH_OUT = false;
+  /** Punch-In pinch duration ÷ camera punch-in. 1 = lock to zoom (Pass 1). */
+  var ENCORE_HOLE_PINCH_IN_MULT = 0.5;
   var PORTRAIT_STAGE_W = 848.1;
   var PORTRAIT_STAGE_H = 1080;
   var _encoreZoomRaf = 0;
@@ -602,8 +604,10 @@
    * Camera + Hard hole pinch share this stepper (same easeUnit).
    * fpsCap > 0 = Hard_Shadow 30fps. Pinch still runs when fpsCap is 0 so Hard
    * keeps the aperture (CSS @property cannot ease radial-gradient circle size).
+   * pinchSec defaults to punch-in × ENCORE_HOLE_PINCH_IN_MULT (hole settles
+   * halfway through the zoom). Pass pinchSec === durationSec to lock them.
    */
-  function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo, fpsCap) {
+  function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo, fpsCap, pinchSec) {
     var cap = Number(fpsCap) || 0;
     var wantPinch = pinchTo != null && isFinite(Number(pinchTo));
     if (!stage || !(durationSec > 0)) return false;
@@ -617,15 +621,26 @@
     var gen = ++_encoreZoomGen;
     var t0 = performance.now();
     var dur = durationSec * 1000;
+    var pSec = Number(pinchSec);
+    if (!(pSec > 0)) pSec = durationSec * ENCORE_HOLE_PINCH_IN_MULT;
+    var pinchDur = wantPinch ? pSec * 1000 : dur;
+    var pinchDone = !wantPinch;
     var minDt = cap > 0 ? 1000 / cap : 0;
     var lastPaint = -1e9;
     function paint(now) {
-      var u = (now - t0) / dur;
+      var elapsed = now - t0;
+      var u = elapsed / dur;
       if (u >= 1) u = 1;
       var e = easeUnit(easeVar, u);
       stage.style.setProperty("--encore-zoom", String(from + (toScale - from) * e));
-      if (wantPinch) {
-        setEncoreHolePinch(stage, pinchFrom + (Number(pinchTo) - pinchFrom) * e);
+      if (wantPinch && !pinchDone) {
+        var uP = pinchDur > 0 ? elapsed / pinchDur : 1;
+        if (uP >= 1) {
+          uP = 1;
+          pinchDone = true;
+        }
+        var eP = easeUnit(easeVar, uP);
+        setEncoreHolePinch(stage, pinchFrom + (Number(pinchTo) - pinchFrom) * eP);
       }
       return u >= 1;
     }
@@ -1084,6 +1099,7 @@
     PORTRAIT_STAGE_W: PORTRAIT_STAGE_W,
     PORTRAIT_STAGE_H: PORTRAIT_STAGE_H,
     ENCORE_HOLE_PINCH_OUT: ENCORE_HOLE_PINCH_OUT,
+    ENCORE_HOLE_PINCH_IN_MULT: ENCORE_HOLE_PINCH_IN_MULT,
     styleByMode: styleByMode,
     parseMotionSeconds: parseMotionSeconds,
     parseMotionStylesTable: parseMotionStylesTable,

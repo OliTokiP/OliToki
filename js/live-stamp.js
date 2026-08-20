@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "6eca8e7",
-  "hashFull": "6eca8e702a92c4f9a383f7452f5e9e05e6c1ebf5",
-  "subject": "QA: 2026-08-19 Encore Hard (Shadow) presentation style has incorrect shrink timing (pass 1)"
+  "hash": "fa5c673",
+  "hashFull": "fa5c67347af53b766e67277189ab55c5e2c2aabe",
+  "subject": "QA: 2026-08-19 Wallpaper Background Color Behavior Broken - Should override with average of Wallpaper (pass 1)"
 };
