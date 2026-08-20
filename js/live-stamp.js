@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "b55d576",
-  "hashFull": "b55d576ee465f488620e3590189f5c2989c85dbd",
-  "subject": "QA: 2026-08-20 Ticket Ready For Review badge should navigate to ticket page when clicked (pass 1)"
+  "hash": "8c1749d",
+  "hashFull": "8c1749d9ced05665e0604bb5a2c46f55430210f6",
+  "subject": "QA: 2026-08-20 Markdown Support for Announcements Panel (pass 1)"
 };

@@ -26,6 +26,7 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 - [URL_PARAMS.md](./URL_PARAMS.md)
 - [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
 - [PERFORMANCE.md](./PERFORMANCE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 
