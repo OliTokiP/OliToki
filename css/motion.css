@@ -65,7 +65,7 @@
   --encore-veil-color: #000000;
   --motion-veil: 1.7s;
   --veil-extend: 20px;
-  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
+  --veil-shadow-filter: drop-shadow(18px 22px 6px rgba(0, 0, 0, 0.5));
 }
 
 #family-portrait-stage {
@@ -103,9 +103,11 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
 #family-portrait-stage .family-portrait-sticker-rig {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 6;
+  isolation: isolate;
   pointer-events: none;
   opacity: 0;
+  overflow: visible;
   transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
   transform: scale(var(--encore-zoom, 1));
   transition:
@@ -123,15 +125,8 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   opacity: 1;
 }
 
-#family-portrait-stage .family-portrait-sticker-rig .family-portrait-sticker {
-  opacity: 0;
-}
-
-#family-portrait-stage
-  .family-portrait-sticker-rig
-  .family-portrait-slot.is-active
-  .family-portrait-sticker {
-  opacity: 1;
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot:not(.is-active) {
+  visibility: hidden;
 }
 
 #family-portrait-stage .family-portrait-veil {

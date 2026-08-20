@@ -15,6 +15,8 @@
       margin: 0 0 .75rem;
       font-size: .92rem;
     }
+    .live.ok { background: #d8f3d8; }
+    .live.bad { background: #f8d4d4; }
     .live p { margin: .2rem 0; font-weight: 500; }
     label, .lab { display: block; font-weight: 600; margin: 1rem 0 .35rem; }
     input[type=text], textarea {
@@ -66,6 +68,8 @@
     }
     @media (prefers-color-scheme: dark) {
       .live { background: #2a2a2a; }
+      .live.ok { background: #16351c; }
+      .live.bad { background: #3a1616; }
       a.github-btn:hover { background: #2a2a2a; }
     }
   </style>
@@ -134,7 +138,7 @@
   <div class="advice" id="filed" hidden></div>
   <a class="github-btn" id="latest-commit" href="https://github.com/OliTokiP/OliToki/commits/main" target="_blank" rel="noopener">Latest GitHub commit</a>
 
-  <script src="js/surfaces.js?v=20260819dot1"></script>
+  <script src="js/surfaces.js?v=20260820tv"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -217,31 +221,29 @@
           (window.TOKI_TESTING_SITE || "").replace(/\/$/, "") || testingApi;
         const [main, testing, restaurant, pageHash, restHealth, testHealth] =
           await Promise.all([
-            window.tokiBranchBuild("main"),
+            window.tokiMainHead(),
             window.tokiBranchStamp("testing"),
             window.tokiBranchStamp("restaurant"),
             window.tokiPagesStamp(),
             apiHealth(RESTAURANT_API),
             testingApi ? apiHealth(testingApi) : Promise.resolve(null),
           ]);
-        // Compare Pages stamp to restaurant stamp (source SHA). Do not compare
-        // to the restaurant branch tip — that is a merge commit and never matches.
-        const pageOk = restaurant && pageHash && restaurant === pageHash;
+        // Green only when Pages stamp === main HEAD. Matching live to the
+        // last restaurant ship is not “TVs are current” — that is how a
+        // testing-only ship (or any later main commit) looked done.
+        const tv = window.tokiTvVerdict(pageHash, restaurant, main);
+        const test = window.tokiTestingVerdict(testing, main);
         const dot = window.tokiStatusDot || function () { return ""; };
+        el.className = "live" + (tv.kind === "ok" ? " ok" : tv.kind === "bad" ? " bad" : "");
         const lines = [];
-        lines.push(
-          dot(pageOk ? "ok" : pageHash && restaurant ? "bad" : "off") +
-          "Restaurant site: live `" + (pageHash || "?") + "` · restaurant `" +
-          (restaurant || "can't read") + "`" +
-          (pageOk ? " — TVs are current" : pageHash && restaurant ? " — ship restaurant to update TVs" : "")
-        );
+        lines.push(dot(tv.kind) + tv.text);
         lines.push(
           dot(restHealth && restHealth.ok ? "ok" : "bad") +
           "Restaurant API: " +
           (restHealth && restHealth.dataSource ? restHealth.dataSource : "down") +
           (restHealth && restHealth.env ? " · env " + restHealth.env : "")
         );
-        lines.push("testing stamp: `" + (testing || "can't read") + "`");
+        lines.push(dot(test.kind) + test.text);
         if (testHealth) {
           lines.push(
             dot("ok") +
@@ -254,7 +256,6 @@
         } else {
           lines.push(dot("off") + "Testing site: not shipped yet — first Testing deploy creates it");
         }
-        lines.push("main (work): `" + (main || "?") + "`");
         el.innerHTML = lines.map((l) => "<p>" + l + "</p>").join("");
       } catch (e) {
         el.textContent = "Could not read GitHub / API status.";

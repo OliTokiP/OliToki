@@ -3128,6 +3128,14 @@
     if (sticker) sticker.hidden = !item.isNew;
     if (previewPresentation() === "encore") {
       applyEncoreChrome(item);
+      var stageAct = encoreStageEl();
+      if (
+        window.TOKI_MOTION &&
+        typeof TOKI_MOTION.setEncoreActiveSticker === "function" &&
+        stageAct
+      ) {
+        TOKI_MOTION.setEncoreActiveSticker(stageAct, state.previewIndex || 0);
+      }
     }
     armHighlightClock(motionPhases().punchOut);
     syncPreviewNums(state.previewIndex || 0, false);

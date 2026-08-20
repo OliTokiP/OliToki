@@ -78,7 +78,7 @@ body {
   /* Veil box hangs past the stage so a near-edge Hard hole stays a circle. */
   --veil-extend: 20px;
   /* Hard_Shadow only; set from Beta Veil Shadow Settings (defaults 18/22/3/2/0.5). */
-  --veil-shadow-filter: drop-shadow(18px 22px 2px rgba(0, 0, 0, 0.5));
+  --veil-shadow-filter: drop-shadow(18px 22px 6px rgba(0, 0, 0, 0.5));
   /* Peak scale for Encore bows / FP intro (higher = closer push-in) */
   --encore-zoom-to: 1.24;
   /* Slideshow hero Ken Burns: max = current size; min ≈ 7% smaller */
@@ -715,13 +715,15 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
 }
 
 /* Sticker lattice: same slot offsets as the photo grid, own camera
-   (same --encore-zoom), above the veil. Fades with house lights. */
+   (same --encore-zoom), ABOVE the veil / Encore BG. Fades with house lights. */
 #family-portrait-stage .family-portrait-sticker-rig {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 6;
+  isolation: isolate;
   pointer-events: none;
   opacity: 0;
+  overflow: visible;
   transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
   transform: scale(var(--encore-zoom, 1));
   transition:
@@ -739,15 +741,8 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   opacity: 1;
 }
 
-#family-portrait-stage .family-portrait-sticker-rig .family-portrait-sticker {
-  opacity: 0;
-}
-
-#family-portrait-stage
-  .family-portrait-sticker-rig
-  .family-portrait-slot.is-active
-  .family-portrait-sticker {
-  opacity: 1;
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot:not(.is-active) {
+  visibility: hidden;
 }
 
 html.encore-veil-detached body.board-drinks #family-portrait-stage .family-portrait-rig,

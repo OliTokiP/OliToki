@@ -2069,7 +2069,7 @@
     shiftRight: 18,
     shiftDown: 22,
     spread: 3,
-    blur: 2,
+    blur: 6,
     opacity: 0.5,
   };
 
@@ -2208,6 +2208,9 @@
     const root = document.documentElement;
     // Filter numbers always live on :root. Style type Hard_Shadow is what
     // paints them — Hard is the same hole with no drop-shadow (Fire Stick).
+    // Old Hard_Shadow used 2px blur (spread copies at 0 blur) when we thought
+    // blur was the Fire Stick cost. A smidge of softness is 6px.
+    if (veilShadowSettings.blur <= 2) veilShadowSettings.blur = 6;
     if (root && root.style) {
       root.style.setProperty(
         "--veil-shadow-filter",
@@ -12753,6 +12756,12 @@
     stage.setAttribute("aria-hidden", "false");
     // Veil chrome (hard/soft) — isEncoreActiveNow true on encore bow slides
     applyEncoreSpotlightChrome(null);
+    if (
+      window.TOKI_MOTION &&
+      typeof TOKI_MOTION.setEncoreActiveSticker === "function"
+    ) {
+      TOKI_MOTION.setEncoreActiveSticker(stage, slide.itemIndex);
+    }
     return stage;
   }
 

@@ -127,6 +127,135 @@ window.tokiBranchBuild = function (branch) {
   );
 };
 
+window.tokiSameHash = function (a, b) {
+  a = window.tokiShortHash(a);
+  b = window.tokiShortHash(b);
+  return !!(a && b && a === b);
+};
+
+window.tokiMainHead = async function () {
+  var now = Date.now();
+  var mem = window._tokiMainHeadCache;
+  if (mem && mem.hash && now - mem.at < 45000) return mem.hash;
+  try {
+    var stored = sessionStorage.getItem("tokiMainHead");
+    var parsed = stored ? JSON.parse(stored) : null;
+    if (parsed && parsed.hash && now - parsed.at < 45000) {
+      window._tokiMainHeadCache = parsed;
+      return parsed.hash;
+    }
+  } catch (e) {}
+
+  var hash = "";
+  try {
+    var local = await fetch("/api/build?t=" + now);
+    if (local.ok) {
+      var info = await local.json();
+      hash = window.tokiShortHash(info && (info.hashFull || info.hash));
+    }
+  } catch (e) {}
+
+  var blockedUntil = Number(window._tokiGhHeadUntil || 0);
+  if (!hash && now >= blockedUntil) {
+    try {
+      var repo = window.TOKI_GITHUB_REPO || "OliTokiP/OliToki";
+      var res = await fetch(
+        "https://api.github.com/repos/" + repo + "/commits/main",
+        { headers: { Accept: "application/vnd.github+json" } }
+      );
+      if (res.status === 403) {
+        var reset = Number(res.headers.get("x-ratelimit-reset") || 0) * 1000;
+        window._tokiGhHeadUntil = reset > now ? reset : now + 300000;
+      } else if (res.ok) {
+        var body = await res.json();
+        hash = window.tokiShortHash(body && body.sha);
+      }
+    } catch (e) {}
+  }
+
+  if (hash) {
+    var next = { hash: hash, at: now };
+    window._tokiMainHeadCache = next;
+    try {
+      sessionStorage.setItem("tokiMainHead", JSON.stringify(next));
+    } catch (e) {}
+    return hash;
+  }
+  if (mem && mem.hash) return mem.hash;
+  return "";
+};
+
+window.tokiTvVerdict = function (pageHash, restaurantHash, mainHash) {
+  var p = window.tokiShortHash(pageHash);
+  var r = window.tokiShortHash(restaurantHash);
+  var m = window.tokiShortHash(mainHash);
+  var hashes =
+    "live `" +
+    (p || "?") +
+    "` · last restaurant ship `" +
+    (r || "?") +
+    "` · main `" +
+    (m || "?") +
+    "`";
+  if (m && p && p === m) {
+    return {
+      kind: "ok",
+      text: "TVs have today’s work · " + hashes,
+    };
+  }
+  if (m && p && p !== m) {
+    var why =
+      r && p === r
+        ? " Last restaurant ship is behind main — file a Restaurant ship."
+        : r && p !== r
+          ? " Pages is still publishing, and last restaurant ship is behind main."
+          : " File a Restaurant ship.";
+    return {
+      kind: "bad",
+      text: "TVs do not have today’s work · " + hashes + "." + why,
+    };
+  }
+  if (!m) {
+    return {
+      kind: "off",
+      text:
+        "Cannot confirm today’s work · " +
+        hashes +
+        ". Matching live to last restaurant ship is not a green light.",
+    };
+  }
+  return {
+    kind: "off",
+    text: "Could not read the restaurant site · " + hashes,
+  };
+};
+
+window.tokiTestingVerdict = function (testingHash, mainHash) {
+  var t = window.tokiShortHash(testingHash);
+  var m = window.tokiShortHash(mainHash);
+  if (m && t && t === m) {
+    return {
+      kind: "ok",
+      text: "Testing has today’s work · `" + t + "`",
+    };
+  }
+  if (m && t && t !== m) {
+    return {
+      kind: "bad",
+      text:
+        "Testing does not have today’s work · testing `" +
+        t +
+        "` · main `" +
+        m +
+        "`",
+    };
+  }
+  if (t) {
+    return { kind: "off", text: "testing stamp: `" + t + "`" };
+  }
+  return { kind: "off", text: "testing stamp: can't read" };
+};
+
 window.TOKI_SUITE = {
   "surfaces": [
     { "name": "Listener", "page": "", "label": "Listener" },

@@ -59,7 +59,7 @@
     crowdN0: 5,
     crowdN1: 15,
     crowdBoost: 1.25,
-    shadow: { x: 18, y: 22, blur: 2, opacity: 0.5 },
+    shadow: { x: 18, y: 22, blur: 6, opacity: 0.5 },
   };
 
   var OPACITY_DUR = 0.45;
@@ -940,7 +940,7 @@
       }
       setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
-      if (opts.itemIndex != null) setEncoreActiveSticker(stage, opts.itemIndex);
+      setEncoreActiveSticker(stage, opts.itemIndex);
       return;
     }
 
@@ -968,7 +968,7 @@
       else syncEncoreDetachedHole(stage);
     }
     setEncoreVeilDimmed(stage, true);
-    if (opts.itemIndex != null) setEncoreActiveSticker(stage, opts.itemIndex);
+    setEncoreActiveSticker(stage, opts.itemIndex);
   }
 
   /**
