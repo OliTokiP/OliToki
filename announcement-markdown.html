@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toki Menu — Announcement markdown</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&amp;family=Roboto+Condensed:wght@300;700&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/system-font.css?v=20260820md2" />
+  <style>
+    :root {
+      --main-color: #0b1c2c;
+      --secondary-color: #f4f7fb;
+      --highlight: #26bbcb;
+      --announcement-body-text: #f4f7fb;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: #071018;
+      color: #f4f7fb;
+      font-family: var(--toki-font);
+      line-height: 1.45;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    h1 { font-size: 2rem; letter-spacing: -0.03em; margin: 0 0 8px; }
+    .lede { color: rgba(244, 247, 251, 0.72); margin: 0 0 28px; max-width: 46rem; }
+    h2 { font-size: 1.25rem; margin: 36px 0 12px; }
+    a { color: var(--highlight); }
+    table.syntax {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    table.syntax th,
+    table.syntax td {
+      text-align: left;
+      vertical-align: top;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(244, 247, 251, 0.12);
+    }
+    table.syntax th { color: rgba(244, 247, 251, 0.55); font-weight: 700; }
+    table.syntax code,
+    pre.source {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.86em;
+    }
+    .links { display: flex; flex-wrap: wrap; gap: 12px 18px; margin: 16px 0 8px; }
+    .example {
+      margin: 22px 0 40px;
+      border: 1px solid rgba(244, 247, 251, 0.14);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .example-head {
+      padding: 12px 16px 8px;
+      background: rgba(244, 247, 251, 0.04);
+    }
+    .example-head h3 { margin: 0 0 4px; font-size: 1.05rem; }
+    .example-head p { margin: 0; color: rgba(244, 247, 251, 0.55); font-size: 0.9rem; }
+    .example-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+    @media (max-width: 800px) {
+      .example-grid { grid-template-columns: 1fr; }
+    }
+    pre.source {
+      margin: 0;
+      padding: 14px 16px;
+      background: #050b11;
+      color: #d7e3ee;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .preview {
+      --box-scale: 1;
+      padding: 18px 22px 20px;
+      background: var(--main-color);
+      color: var(--announcement-body-text);
+      font-size: 22px;
+      line-height: 1.22;
+      letter-spacing: -0.02em;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      min-height: 220px;
+    }
+    .preview > * { max-width: 100%; min-width: 0; margin: 0; }
+    .preview .announcement-md-h1 { font-size: 1.42em; font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; }
+    .preview .announcement-md-h2 { font-size: 1.22em; font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; }
+    .preview .announcement-md-h3 { font-size: 1.08em; font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; }
+    .preview .announcement-md-blockquote {
+      padding: 0.08em 0 0.08em 0.55em;
+      border-left: 0.16em solid currentColor;
+      font-style: italic;
+    }
+    .preview .announcement-md-ul,
+    .preview .announcement-md-ol { padding: 0 0 0 1.15em; }
+    .preview .announcement-md-task { list-style: none; margin-left: -0.85em; }
+    .preview .announcement-md-check { display: inline-block; width: 0.85em; margin-right: 0.28em; }
+    .preview .announcement-md-check::before { content: "☐"; }
+    .preview .announcement-md-check.is-checked::before { content: "☑"; }
+    .preview .announcement-md-hr {
+      width: 100%; border: 0; border-top: 2px solid currentColor; opacity: 0.4; margin: 0.12em 0;
+    }
+    .preview .announcement-md-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; }
+    .preview .announcement-md-pre { white-space: pre-wrap; font-size: 0.82em; }
+    .preview .announcement-md-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.9em; }
+    .preview .announcement-md-th,
+    .preview .announcement-md-td { padding: 0.12em 0.28em; vertical-align: top; }
+    .preview .announcement-md-th { font-weight: 700; border-bottom: 2px solid currentColor; }
+    .preview .announcement-md-td { border-bottom: 1px solid rgba(255, 255, 255, 0.22); }
+    .preview .announcement-md-link { color: inherit; text-decoration: underline; text-underline-offset: 0.12em; }
+    .preview .announcement-md-mark { color: var(--highlight); font-weight: 700; background: transparent; }
+    .preview .announcement-md-strike { text-decoration: line-through; opacity: 0.78; }
+    .preview .is-bold { font-weight: 700; }
+    .preview .is-italic { font-style: italic; }
+    .note { color: rgba(244, 247, 251, 0.6); font-size: 0.92rem; }
+    html.shot-examples .lede,
+    html.shot-examples .links,
+    html.shot-examples table.syntax,
+    html.shot-examples h1,
+    html.shot-examples h2:first-of-type,
+    html.shot-examples .note:first-of-type {
+      display: none;
+    }
+    html.shot-examples main { padding-top: 16px; }
+    html.shot-one .example { display: none; }
+    html.shot-one .example.is-shot { display: block; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Announcement markdown</h1>
+    <p class="lede">
+      Style Board 4 from the Google Sheet <strong>Announcements → Text</strong> cell.
+      Alt+Enter makes a new line. The board hyphenates and shrinks so type stays inside the box.
+      Google in-cell rich text stays off.
+    </p>
+    <p class="links">
+      <a href="index4.html?annMdDemo=1&amp;pause=1&amp;ann=0">Board demo</a>
+      <a href="docs/ANNOUNCEMENT_MARKDOWN.md">Markdown file</a>
+      <a href="https://www.markdownguide.org/cheat-sheet/">Markdown Guide cheat sheet</a>
+    </p>
+
+    <h2>Cheat sheet</h2>
+    <table class="syntax">
+      <thead>
+        <tr><th>You type</th><th>It paints</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code># ## ###</code></td><td>Headings (####+ draw as H3)</td></tr>
+        <tr><td><code>**bold** *italic*</code></td><td>Bold / italic</td></tr>
+        <tr><td><code>~~strike~~ ==highlight==</code></td><td>Strike / Highlight color</td></tr>
+        <tr><td><code>&gt; quote</code></td><td>Blockquote</td></tr>
+        <tr><td><code>- item</code> · <code>1. item</code></td><td>Bullets / numbers</td></tr>
+        <tr><td><code>- [x]</code> · <code>- [ ]</code></td><td>Task list</td></tr>
+        <tr><td><code>---</code></td><td>Horizontal rule</td></tr>
+        <tr><td><code>`code`</code> and fenced blocks</td><td>Literal code</td></tr>
+        <tr><td><code>| Item | Price |</code></td><td>Table</td></tr>
+        <tr><td><code>[label](url)</code></td><td>Underlined type (does not navigate)</td></tr>
+        <tr><td><code>H~2~O</code> · <code>2^4^</code></td><td>Sub / superscript</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Not painted: footnotes, heading IDs, definition lists, emoji shortcodes, remote images (alt text only). HTML is not executed. Don’t start a cell with <code>=</code>.</p>
+
+    <h2>Examples</h2>
+    <p class="note">Same four samples as <code>?annMdDemo=1</code>. Left = paste into the Text cell. Right = live renderer.</p>
+    <div id="examples"></div>
+  </main>
+  <script src="js/announcement-md.js?v=20260820md2"></script>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search || "");
+      var shot = params.get("shot") || "";
+      if (shot === "examples" || /^ex\d+$/.test(shot)) {
+        document.documentElement.classList.add("shot-examples");
+      }
+      if (/^ex\d+$/.test(shot)) {
+        document.documentElement.classList.add("shot-one");
+      }
+      var host = document.getElementById("examples");
+      var api = window.TOKI_ANNOUNCEMENT_MD;
+      if (!api || !host) {
+        host.textContent = "Could not load js/announcement-md.js";
+        return;
+      }
+      var demos = api.demoMessages() || [];
+      demos.forEach(function (d, i) {
+        var ex = document.createElement("section");
+        ex.className = "example";
+        ex.id = "ex-" + i;
+        var head = document.createElement("div");
+        head.className = "example-head";
+        var h = document.createElement("h3");
+        h.textContent = "Example " + (i + 1) + " — " + (d.title || "Slide") + "  (?ann=" + i + ")";
+        var p = document.createElement("p");
+        p.textContent = "Title: " + (d.title || "") + " · Subtitle: " + (d.subtitle || "");
+        head.appendChild(h);
+        head.appendChild(p);
+        var grid = document.createElement("div");
+        grid.className = "example-grid";
+        var pre = document.createElement("pre");
+        pre.className = "source";
+        pre.textContent = d.text || "";
+        var preview = document.createElement("div");
+        preview.className = "preview";
+        preview.setAttribute("lang", "en");
+        api.render(d.text || "", preview);
+        grid.appendChild(pre);
+        grid.appendChild(preview);
+        if (shot === "ex" + i) ex.classList.add("is-shot");
+        ex.appendChild(head);
+        ex.appendChild(grid);
+        host.appendChild(ex);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,9 +1,22 @@
 # What’s New
 
-**Last updated:** 2026-08-20 18:48  
+**Last updated:** 2026-08-20 19:04  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 19:04 — Announcement markdown cheat sheet
+
+**Boards / surface:** Menu Screens — Board 4 authoring (`index4.html`)  
+**Sheet:** Announcements tab · **Text**  
+**Summary:** Authoring cheat sheet with the four demo examples (Happy Hour, Deals table, packed fit, basics). Paste from [ANNOUNCEMENT_MARKDOWN.md](./ANNOUNCEMENT_MARKDOWN.md) or open [announcement-markdown.html](../announcement-markdown.html) (source + live paint). Board preview remains `?annMdDemo=1&pause=1&ann=0`.
+
+### Docs updated
+- [ANNOUNCEMENT_MARKDOWN.md](./ANNOUNCEMENT_MARKDOWN.md)
+- [SHEET_MIGRATION.md](./SHEET_MIGRATION.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
 
 ---
 

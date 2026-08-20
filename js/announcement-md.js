@@ -9,6 +9,9 @@
  * Subset: cheat-sheet basic + tables, fenced code, strikethrough, task lists,
  * highlight == ==, sub ~ ~, sup ^ ^. Images: alt only (no remote fetch).
  * Links: painted, not navigated (Fire Stick).
+ *
+ * Authoring cheat sheet + demo examples: docs/ANNOUNCEMENT_MARKDOWN.md
+ * and announcement-markdown.html (demoMessages()).
  */
 (function (root) {
   "use strict";

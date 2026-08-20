@@ -1,9 +1,10 @@
 # TokiMenu documentation
 
-**Last updated:** 2026-08-14 16:40  
+**Last updated:** 2026-08-20 19:04  
 
 | Doc | Purpose |
 |-----|---------|
+| [ANNOUNCEMENT_MARKDOWN.md](./ANNOUNCEMENT_MARKDOWN.md) | **Board 4 Text cell** — markdown cheat sheet + paste-ready examples |
 | [URL_PARAMS.md](./URL_PARAMS.md) | **URL codes** — `dpr`, `w=1920`, `pause`, Manager QA params |
 | [HOW_TO_SHIP.md](./HOW_TO_SHIP.md) | **Operator guide** — Suite / Launcher / Deployer settings + how to update the TVs |
 | [MENU_MANAGER.md](./MENU_MANAGER.md) | **Mobile Menu Manager** layout prototype (`manager.html`) |
