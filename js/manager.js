@@ -4154,21 +4154,60 @@
     return n;
   }
 
+  var HANG_RECOVERY_MS = 10000;
+  var sheetHangTimer = 0;
+  var sheetLiveOk = false;
+  var sheetLoadInFlight = false;
+
+  function clearSheetHangRetry() {
+    if (sheetHangTimer) {
+      clearTimeout(sheetHangTimer);
+      sheetHangTimer = 0;
+    }
+  }
+
+  function armSheetHangRetry(reason) {
+    if (sheetLiveOk || sheetHangTimer) return;
+    console.warn(
+      "Menu Manager hang recovery in " + HANG_RECOVERY_MS + "ms —",
+      reason || "sheet load failed"
+    );
+    sheetHangTimer = setTimeout(function () {
+      sheetHangTimer = 0;
+      if (state.sheetDirty) {
+        armSheetHangRetry("waiting for unsaved edits");
+        return;
+      }
+      loadSheet({ force: true, hangRetry: true });
+    }, HANG_RECOVERY_MS);
+  }
+
   function loadSheet(opts) {
     opts = opts || {};
     var loader = window.TOKI_MANAGER_SHEET;
     if (!loader || !loader.load) {
       state.sheetSource = "local";
+      armSheetHangRetry("no sheet loader");
       return;
     }
-    if (opts.force) toast("Reloading sheet…");
+    if (sheetLoadInFlight) {
+      if (opts.hangRetry) armSheetHangRetry("load already in progress");
+      return;
+    }
+    if (opts.force && !opts.hangRetry) toast("Reloading sheet…");
+    sheetLoadInFlight = true;
     loader
       .load(opts)
       .then(function (payload) {
         if (opts.force) state.sheetDirty = false;
         applySheetPayload(payload);
-        if (payload && payload.sourceName) {
+        sheetLiveOk = !(payload && payload.fromFallback);
+        if (sheetLiveOk) clearSheetHangRetry();
+        else armSheetHangRetry("loaded fallback snapshot");
+        if (payload && payload.sourceName && !opts.hangRetry) {
           toast("Loaded " + payload.sourceName + " from sheet");
+        } else if (opts.hangRetry && sheetLiveOk) {
+          toast("Sheet reconnected");
         }
       })
       .catch(function (err) {
@@ -4177,19 +4216,28 @@
         if (!fb) {
           state.sheetSource = "local";
           renderAll();
-          toast("Could not load sheet — using local defaults");
+          if (!opts.hangRetry) toast("Could not load sheet — using local defaults");
+          armSheetHangRetry(err && err.message ? err.message : err);
           return;
         }
         return fb(state.draft && state.draft.dataSource).then(function (payload) {
           if (payload && payload.ok) {
             applySheetPayload(payload);
-            toast("Loaded last saved fallback");
+            sheetLiveOk = false;
+            if (!opts.hangRetry) toast("Loaded last saved fallback");
+            armSheetHangRetry("using fallback after API fail");
             return;
           }
           state.sheetSource = "local";
           renderAll();
-          toast("Could not load sheet — using local defaults");
+          if (!opts.hangRetry) toast("Could not load sheet — using local defaults");
+          armSheetHangRetry("fallback missing");
         });
+      })
+      .then(function () {
+        sheetLoadInFlight = false;
+      }, function () {
+        sheetLoadInFlight = false;
       });
   }
 

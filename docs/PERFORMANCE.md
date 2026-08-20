@@ -6,7 +6,7 @@
 2. Design **console kill-switches** that truly disable work (not just hide UI)  
 3. Decide when **tearing a feature down and rebuilding** costs more than **leaving it idle**
 
-**Last updated:** 2026-08-09 (plates as containers, debug Full View, version in HUD header)  
+**Last updated:** 2026-08-20 17:43 (textbox wireframes debug overlay)  
 **Primary runtime:** `js/menu.js`, `css/menu.css`  
 **Target display:** 1920×1080; stress cases = Amazon Fire Stick, `preview-all.html` wall (4 boards)
 
@@ -107,6 +107,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | **Shout / future Motion Styles** | **Low–High** | Depends on effect | Treat each named style separately when implementing; default to Low until measured. |
 | **Stripes** (Board 4 scroll) | **Medium** | Extra scrolling layer | Kill = hide + stop stripe animation. |
 | **Disclaimer / Version Stamp** | **Very Low** | Text paint | Disclaimer always shows allergy text. Version Stamp (when enabled) is appended only to the floating Toki Debug header. |
+| **Textbox wireframes** (Debug Features **Show Textbox Wireframes** or `?textBoxDebug=1`) | **Very Low** | CSS outlines | QA spacing overlay. Off by default. No layout shift. |
 
 ### 3.4 Data pipeline
 
@@ -323,3 +324,4 @@ Update the Debug Menu sheet with more columns under "Debug Features" as you want
 |------|--------|
 | 2026-08-09 | Initial feature impact matrix, kill-vs-hang guidance, cheaper-model console-flag prompt |
 | 2026-08-09 | Executed §7 prompt: added TokiMenuDebug API + sheet-driven gating via Debug Menu (Debug Mode + Performance Console). Added docs/DEBUG_CONSOLE.md. |
+| 2026-08-20 | Debug Features **Show Textbox Wireframes** (+ `?textBoxDebug=1`) outlines Menu List / Footer Boxes / Board 4 text for spacing QA. |

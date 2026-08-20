@@ -597,6 +597,64 @@
     });
   }
 
+  var FETCH_TIMEOUT_MS = 10000;
+  var WRITE_TIMEOUT_MS = 20000;
+
+  function timeoutError(ms) {
+    return new Error("Request timed out after " + ms + "ms");
+  }
+
+  function fetchWithTimeout(url, init, ms) {
+    init = init || {};
+    if (ms == null) ms = FETCH_TIMEOUT_MS;
+    if (!(ms > 0)) return fetch(url, init);
+    if (typeof AbortController === "undefined") {
+      return new Promise(function (resolve, reject) {
+        var settled = false;
+        var timer = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          reject(timeoutError(ms));
+        }, ms);
+        fetch(url, init).then(
+          function (res) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(res);
+          },
+          function (err) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(err);
+          }
+        );
+      });
+    }
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () {
+      try {
+        ctrl.abort();
+      } catch (e) {}
+    }, ms);
+    var opts = Object.assign({}, init, { signal: ctrl.signal });
+    return fetch(url, opts).then(
+      function (res) {
+        clearTimeout(timer);
+        return res;
+      },
+      function (err) {
+        clearTimeout(timer);
+        var name = err && err.name;
+        if (name === "AbortError" || name === "TimeoutError") {
+          throw timeoutError(ms);
+        }
+        throw err;
+      }
+    );
+  }
+
   async function detectProxy() {
     // A true hit is sticky. A miss is not — Cloud Run cold-start reports
     // sheetsApi:false for a moment; locking that would drop Menu Settings.
@@ -606,12 +664,20 @@
     var candidates = ["/api/health"];
     if (configured) candidates.push(configured + "/api/health");
     var attempt;
+    var deadline = Date.now() + FETCH_TIMEOUT_MS;
     for (attempt = 0; attempt < 8; attempt++) {
+      if (Date.now() >= deadline) break;
       var i;
       var waking = false;
       for (i = 0; i < candidates.length; i++) {
+        var remain = deadline - Date.now();
+        if (remain < 200) break;
         try {
-          var res = await fetch(candidates[i], { cache: "no-store" });
+          var res = await fetchWithTimeout(
+            candidates[i],
+            { cache: "no-store" },
+            remain
+          );
           if (!res.ok) continue;
           var j = await res.json();
           if (j && j.sheetsApi) {
@@ -626,6 +692,7 @@
         } catch (e) {}
       }
       if (!waking && attempt >= 1) break;
+      if (Date.now() + 400 >= deadline) break;
       await sleep(400);
     }
     _proxy = false;
@@ -645,7 +712,7 @@
   }
 
   async function fetchText(url) {
-    var res = await fetch(url, { cache: "no-store", mode: "cors" });
+    var res = await fetchWithTimeout(url, { cache: "no-store", mode: "cors" });
     if (!res.ok) throw new Error("HTTP " + res.status + " " + url);
     var text = await res.text();
     if (/^\s*</.test(text)) {
@@ -866,7 +933,7 @@
     var useProxy = await detectProxy();
     if (useProxy) {
       try {
-        var res = await fetch(
+        var res = await fetchWithTimeout(
           apiUrl("/api/settings") + "?" + (force ? "force=1&" : "") + "t=" + Date.now(),
           { cache: "no-store" }
         );
@@ -1150,7 +1217,7 @@
     var useProxy = await detectProxy();
     if (!useProxy) return null;
     try {
-      var res = await fetch(
+      var res = await fetchWithTimeout(
         apiUrl("/api/sheets/validations") + "?gid=" +
           encodeURIComponent(String(gid)) +
           (force ? "&force=1" : "") +
@@ -1370,6 +1437,7 @@
   async function load(opts) {
     opts = opts || {};
     var force = !!opts.force;
+    if (opts.hangRetry) _proxy = null;
     var t0 =
       typeof performance !== "undefined" && performance.now
         ? performance.now()
@@ -1489,11 +1557,15 @@
 
   async function saveFallback(entry) {
     try {
-      var res = await fetch(apiUrl("/api/manager/fallback"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry || {}),
-      });
+      var res = await fetchWithTimeout(
+        apiUrl("/api/manager/fallback"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry || {}),
+        },
+        WRITE_TIMEOUT_MS
+      );
       if (!res.ok) throw new Error("HTTP " + res.status);
       var j = await res.json();
       return !!(j && j.ok);
@@ -1522,11 +1594,15 @@
     var i;
     for (i = 0; i < urls.length; i++) {
       try {
-        var res = await fetch(urls[i], {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload || {}),
-        });
+        var res = await fetchWithTimeout(
+          urls[i],
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload || {}),
+          },
+          WRITE_TIMEOUT_MS
+        );
         var j = {};
         try {
           j = await res.json();

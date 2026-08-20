@@ -2765,3 +2765,62 @@ body.preview-wall #stripes-track {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+/* ---------- Textbox wireframes (QA spacing)
+   Debug Features → Show Textbox Wireframes (needs Debug Mode)
+   or URL ?textBoxDebug=1 / ?textboxWireframes=1 / ?drawTextBoxes=1
+   Outline only — must not shift layout. HUD is outside #stage.
+   lime dashed = layout shells · orange dashed = rows/chips
+   cyan = titles · magenta = names · yellow = prices
+   white = subtitles, descriptions, disclaimer, announcement lines
+*/
+body.textbox-wireframes #stage #menu-list,
+body.textbox-wireframes #stage #footer-boxes,
+body.textbox-wireframes #stage .info-box:not([hidden]),
+body.textbox-wireframes #stage .drinks-box:not([hidden]) {
+  outline: 2px dashed rgba(0, 255, 120, 0.9);
+  outline-offset: -2px;
+}
+
+body.textbox-wireframes #stage .menu-item,
+body.textbox-wireframes #stage .item-line,
+body.textbox-wireframes #stage .box-col-item,
+body.textbox-wireframes #stage .wrap-item,
+body.textbox-wireframes #stage .drink-item,
+body.textbox-wireframes #stage .info-box-header,
+body.textbox-wireframes #stage .info-box-body,
+body.textbox-wireframes #stage .drinks-box-header,
+body.textbox-wireframes #stage .drinks-box-body {
+  outline: 1px dashed rgba(255, 159, 28, 0.95);
+  outline-offset: -1px;
+}
+
+body.textbox-wireframes #stage #menu-title,
+body.textbox-wireframes #stage .info-box-title,
+body.textbox-wireframes #stage .drinks-box-title {
+  outline: 1px solid rgba(0, 229, 255, 0.95);
+}
+
+body.textbox-wireframes #stage .item-name,
+body.textbox-wireframes #stage .box-item-name,
+body.textbox-wireframes #stage .drink-item-name {
+  outline: 1px solid rgba(255, 43, 214, 0.95);
+}
+
+body.textbox-wireframes #stage .item-prices,
+body.textbox-wireframes #stage .box-item-price,
+body.textbox-wireframes #stage .drink-item-price {
+  outline: 1px solid rgba(255, 242, 0, 0.95);
+}
+
+body.textbox-wireframes #stage #disclaimer,
+body.textbox-wireframes #stage .item-paren-sub,
+body.textbox-wireframes #stage .item-desc,
+body.textbox-wireframes #stage .box-item-sub,
+body.textbox-wireframes #stage .drink-item-sub,
+body.textbox-wireframes #stage .info-box-subtitle,
+body.textbox-wireframes #stage .drinks-box-subtitle,
+body.textbox-wireframes #stage .announcement-line,
+body.textbox-wireframes #stage .new-sticker-label {
+  outline: 1px solid rgba(255, 255, 255, 0.9);
+}

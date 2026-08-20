@@ -1,9 +1,22 @@
 # What’s New
 
-**Last updated:** 2026-08-20 12:45  
+**Last updated:** 2026-08-20 17:43  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 17:43 — Draw text boxes (debug wireframes)
+
+**Boards / surface:** Menu Screens (`index.html`–`index4.html`)  
+**Sheet:** OliToki Menu Settings → Debugger → Debug Features **Show Textbox Wireframes** (already in the tab; default FALSE)  
+**Summary:** QA can outline every text container on the TV boards without shifting layout. Turn on **Debug Mode** and check **Show Textbox Wireframes**, or append `?textBoxDebug=1` to a board URL. Lime dashed = list / footer / drinks shells; orange dashed = rows; cyan titles; magenta names; yellow prices; white subtitles and descriptions.
+
+### Docs updated
+- [DEBUG_CONSOLE.md](./DEBUG_CONSOLE.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
 
 ---
 

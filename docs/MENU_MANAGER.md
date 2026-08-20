@@ -123,7 +123,7 @@ Triggered from picker `choose()`:
 | Choice | Title | Body |
 |--------|-------|------|
 | Confirm save? Yes / No | Save confirmation enabled. / surpassed. | Existing bullet guidance |
-| Require restart to update? Yes | Soft refresh disabled. | TVs must be restarted for changes to take effect. |
+| Require restart to update? Yes | Soft refresh disabled. | TVs must be restarted for changes to take effect. **Hang override:** if a live sheet never lands (API timeout / fail), boards retry every 10s even when this is Yes — automated TVs must not sit on “Menu unavailable.” Once live data has painted, Require restart is honored again. |
 | Require restart to update? No | Soft refresh enabled. | Menus will check for updates on a fixed timer — you don't have to do a thing. |
 | Limit Heavy Filters to 30FPS Yes | Filter Cap Enabled for Heavy Effects. | (title only) |
 | Debug Mode Yes | Debug Mode Enabled | Debugger Console now showing on Menu Screens. |

@@ -2,7 +2,7 @@
 
 This document explains how the performance feature flag output works and how to read it.
 
-**Last updated:** 2026-08-09 (Full View mode, Version Stamp location)
+**Last updated:** 2026-08-20 17:43 (Show Textbox Wireframes)
 
 **Primary reference:** [PERFORMANCE.md](./PERFORMANCE.md)  
 **Control source:** OliToki Menu Settings → **Debugger** tab (gid `195166367`, cell **A2**). Menu Manager **System Settings → Debug Mode** writes that cell. The catalog **Debug Menu** tab (gid `1793812854`) is leftover and is no longer read.
@@ -31,21 +31,22 @@ In Menu Manager **System Settings**, set **Debug Mode** to Yes (writes Debugger 
 1. Open **OliToki Menu Settings** → **Debugger** tab (`gid=195166367`).
 2. Set **A2** under **Debug Mode** to `TRUE`.
 3. Under **Debug Features**, keep **Performance Console** `TRUE` (already on in the current sheet).
-4. (Optional) Set other columns (e.g. Version History, Full View) as needed.
+4. (Optional) Set other columns (e.g. Version History, Full View, Show Textbox Wireframes) as needed.
 5. Save. Boards pick it up on the next settings load / soft refresh. Turning Debug Mode **off** closes the HUD on that same refresh.
 
-Example current shape (as of 2026-08-09):
+Example current shape (as of 2026-08-20):
 
 ```
 Debug Mode
 TRUE
 
 Debug Features
-Performance Console   Version History   Full View   ...
-TRUE                  FALSE             FALSE       ...
+Performance Console   Version History   Full View   Hide Inactive Features?   Show Textbox Wireframes
+TRUE                  FALSE             FALSE       FALSE                     FALSE
 ```
 
 - **Full View** = TRUE (with Debug Mode) expands the floating HUD to natural content height with no body scroll — useful on Fire Stick / devices without mouse. The HUD sizes to fit the entire list instead of scrolling.
+- **Show Textbox Wireframes** = TRUE (with Debug Mode) outlines Menu Title, Menu List / Menu Item (name, prices, subtitle, description), Disclaimer, Footer Boxes, and Board 4 announcement / drink boxes. CSS `outline` only — layout does not shift. Lime dashed = shells, orange dashed = rows, cyan = titles, magenta = names, yellow = prices, white = subtitles/descriptions. Does **not** require Performance Console. Same overlay: `?textBoxDebug=1` (no Debug Mode needed). Console: `TokiMenuDebug.set('drawTextBoxes', true)`.
 
 ---
 
@@ -119,6 +120,9 @@ After a `set()`, if Performance Console is enabled the table will reprint automa
 
 - `?tokiDebug=1` (or `?debug=1`)  
   Forces one `list()` dump shortly after load, regardless of sheet. Useful for one-off inspection without touching the sheet.
+
+- `?textBoxDebug=1` (aliases `textboxWireframes=1`, `drawTextBoxes=1`)  
+  Draws text-box wireframes on this tab only. Does not require Debug Mode.
 
 - `?tokiFlags=bgBlur:0,softRefresh:0,encore:0` (future extension — not fully wired yet)
 

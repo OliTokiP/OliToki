@@ -1518,9 +1518,34 @@
   let settingsWatchTimer = null;
   let dataSource = "";
 
+  /**
+   * Hung / failed API load (Fire Stick auto on, Wi-Fi not up, Cloud Run stall).
+   * Require restart still skips the 30s menu poll once live data has painted.
+   * Until then, retry every 10s so a kiosk is not stuck on "Menu unavailable".
+   */
+  const HANG_RECOVERY_MS = 10000;
+  const FETCH_TIMEOUT_MS = 10000;
+  let _bootAt = 0;
+  let _menuPainted = false;
+  let _menuLiveOk = false;
+  let _hangWatchTimer = 0;
+  let _hangAttempt = 0;
+  let _hangRecovering = false;
+  let _loadSeq = 0;
+
   /** Parsed from OliToki Menu Settings → Debugger (gid 195166367). */
   let debugConfig = { debugMode: false, features: {} };
   const SETTINGS_DEBUGGER_GID = "195166367";
+  /** Console override for textbox wireframes: null = follow sheet/URL. */
+  let _drawTextBoxesForced = null;
+  const TEXTBOX_WIREFRAME_FEATURE_NAMES = [
+    "Show Textbox Wireframes",
+    "Draw Text Boxes",
+    "Draw text boxes",
+    "draw text boxes",
+    "Text Boxes",
+    "Textboxes",
+  ];
 
   // Transient debug activity flags for accurate "doing work right now" detection
   let kbZoomActive = false;
@@ -3375,7 +3400,7 @@
     if (window.__tokiBuildInfoPromise) return window.__tokiBuildInfoPromise;
     window.__tokiBuildInfoPromise = (async function () {
       try {
-        const res = await fetch("/api/build?t=" + Date.now(), {
+        const res = await fetchWithTimeout("/api/build?t=" + Date.now(), {
           cache: "no-store",
         });
         if (res && res.ok) {
@@ -5904,6 +5929,66 @@
     ).replace(/\/$/, "");
     return base ? base + p : p;
   }
+
+  function timeoutError(ms) {
+    return new Error("Request timed out after " + ms + "ms");
+  }
+
+  /**
+   * fetch() with a hard deadline. A hung Cloud Run / Wi-Fi connect otherwise
+   * never settles, so init never reaches fallbacks or hang recovery.
+   */
+  function fetchWithTimeout(url, init, ms) {
+    init = init || {};
+    if (ms == null) ms = FETCH_TIMEOUT_MS;
+    if (!(ms > 0)) return fetch(url, init);
+    if (typeof AbortController === "undefined") {
+      return new Promise(function (resolve, reject) {
+        var settled = false;
+        var timer = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          reject(timeoutError(ms));
+        }, ms);
+        fetch(url, init).then(
+          function (res) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(res);
+          },
+          function (err) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(err);
+          }
+        );
+      });
+    }
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () {
+      try {
+        ctrl.abort();
+      } catch (e) {}
+    }, ms);
+    var opts = Object.assign({}, init, { signal: ctrl.signal });
+    return fetch(url, opts).then(
+      function (res) {
+        clearTimeout(timer);
+        return res;
+      },
+      function (err) {
+        clearTimeout(timer);
+        var name = err && err.name;
+        if (name === "AbortError" || name === "TimeoutError") {
+          throw timeoutError(ms);
+        }
+        throw err;
+      }
+    );
+  }
+
   /** From OliToki Menu Settings (via /api/settings). */
   let liveSettings = {
     dataSource: "",
@@ -5927,11 +6012,19 @@
     const candidates = ["/api/health"];
     if (configured) candidates.push(configured + "/api/health");
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const deadline = Date.now() + FETCH_TIMEOUT_MS;
     for (let attempt = 0; attempt < 8; attempt++) {
+      if (Date.now() >= deadline) break;
       let waking = false;
       for (let i = 0; i < candidates.length; i++) {
+        const remain = deadline - Date.now();
+        if (remain < 200) break;
         try {
-          const res = await fetch(candidates[i], { cache: "no-store" });
+          const res = await fetchWithTimeout(
+            candidates[i],
+            { cache: "no-store" },
+            remain
+          );
           if (!res.ok) continue;
           const j = await res.json();
           if (j && j.sheetsApi) {
@@ -5952,6 +6045,7 @@
         } catch (e) {}
       }
       if (!waking && attempt >= 1) break;
+      if (Date.now() + 400 >= deadline) break;
       await sleep(400);
     }
     _sheetsApiProxy = false;
@@ -6176,6 +6270,7 @@
     liveSettings.debugMode = debugConfig.debugMode;
     liveSettings.debugFeatures = debugConfig.features;
     try {
+      applyTextBoxDebug();
       updateDebugVisuals();
     } catch (e) {}
     if (wasOn && !debugConfig.debugMode) {
@@ -6227,7 +6322,7 @@
       encodeURIComponent(SETTINGS_DEBUGGER_GID) +
       "&cachebust=" +
       Date.now();
-    const res = await fetch(url, { cache: "no-store", mode: "cors" });
+    const res = await fetchWithTimeout(url, { cache: "no-store", mode: "cors" });
     if (!res.ok) {
       throw new Error("Debugger export HTTP " + res.status);
     }
@@ -6245,7 +6340,7 @@
       encodeURIComponent(sid) +
       "/export?format=csv&gid=0&cachebust=" +
       Date.now();
-    const res = await fetch(url, { cache: "no-store", mode: "cors" });
+    const res = await fetchWithTimeout(url, { cache: "no-store", mode: "cors" });
     if (!res.ok) {
       throw new Error("Settings export HTTP " + res.status);
     }
@@ -6274,9 +6369,10 @@
       const useProxy = await detectSheetsApiProxy();
       if (useProxy) {
         try {
-          const res = await fetch(tokiApiUrl("/api/settings") + "?t=" + Date.now(), {
-            cache: "no-store",
-          });
+          const res = await fetchWithTimeout(
+            tokiApiUrl("/api/settings") + "?t=" + Date.now(),
+            { cache: "no-store" }
+          );
           if (res.ok) {
             const j = await res.json();
             applyLiveSettingsPayload(j);
@@ -6404,9 +6500,9 @@
     }
     let res;
     try {
-      res = await fetch(url, { cache: "no-store", mode: "cors" });
+      res = await fetchWithTimeout(url, { cache: "no-store", mode: "cors" });
     } catch (netErr) {
-      // Offline / DNS / CORS network failure — do not treat as empty sheet
+      // Offline / DNS / CORS / timeout — do not treat as empty sheet
       throw new Error(
         "Sheet network error (keeping last menu): " +
           (netErr && netErr.message ? netErr.message : String(netErr))
@@ -6888,7 +6984,7 @@
    *   A1: "Debug Mode"   A2: TRUE/FALSE
    *   Then "Debug Features"
    *   Next row: column headers (Performance Console, Full View,
-   *   Hide Inactive Features?, ...)
+   *   Hide Inactive Features?, Show Textbox Wireframes, ...)
    *   Next row: values (TRUE/FALSE or 1/0 or checkboxes)
    *
    * Only when debugMode && features["Performance Console"] are both true
@@ -6957,6 +7053,58 @@
       }
     }
     return false;
+  }
+
+  function textBoxDebugUrlOn() {
+    try {
+      const q = new URLSearchParams(location.search || "");
+      const keys = ["textBoxDebug", "textboxWireframes", "drawTextBoxes"];
+      for (let i = 0; i < keys.length; i++) {
+        const v = q.get(keys[i]);
+        if (v === "1" || v === "true" || v === "yes") return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function debugFeatureOn(names) {
+    if (!debugConfig || !debugConfig.debugMode || !debugConfig.features) {
+      return false;
+    }
+    const list = names || [];
+    for (let i = 0; i < list.length; i++) {
+      if (
+        Object.prototype.hasOwnProperty.call(debugConfig.features, list[i])
+      ) {
+        return !!debugConfig.features[list[i]];
+      }
+    }
+    return false;
+  }
+
+  /** Debug Mode + Show Textbox Wireframes, URL ?textBoxDebug=1, or console set(). */
+  function isDrawTextBoxesEnabled() {
+    if (_drawTextBoxesForced != null) return !!_drawTextBoxesForced;
+    if (textBoxDebugUrlOn()) return true;
+    return debugFeatureOn(TEXTBOX_WIREFRAME_FEATURE_NAMES);
+  }
+
+  function applyTextBoxDebug() {
+    const on = isDrawTextBoxesEnabled();
+    const body = document.body;
+    const was = !!(body && body.classList.contains("textbox-wireframes"));
+    if (body) body.classList.toggle("textbox-wireframes", on);
+    const stage = document.getElementById("stage");
+    if (stage) stage.classList.toggle("textbox-wireframes", on);
+    if (was !== on) {
+      const src =
+        _drawTextBoxesForced != null
+          ? "console"
+          : textBoxDebugUrlOn()
+            ? "url"
+            : "debug";
+      tokiInfo("textbox wireframes", on ? "on" : "off", src);
+    }
   }
 
   /** True only when both the master Debug Mode and "Performance Console" are enabled in the sheet. */
@@ -8402,7 +8550,9 @@
 
   async function fetchLocalXlsxBuffer() {
     const path = localXlsxPath();
-    const res = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });
+    const res = await fetchWithTimeout(path + "?t=" + Date.now(), {
+      cache: "no-store",
+    });
     if (!res.ok) {
       throw new Error("Failed to load " + path + " (" + res.status + ")");
     }
@@ -8569,10 +8719,15 @@
    */
   async function loadMenu(opts) {
     opts = opts || {};
+    const seq = ++_loadSeq;
+    function stale() {
+      return seq !== _loadSeq;
+    }
     const errors = [];
     const mode = resolvedDataSource();
     const soft = !!opts.soft;
     await fetchLiveSettings();
+    if (stale()) return "stale";
 
     // —— Soft refresh: only live sources; throw on failure (caller keeps UI) ——
     if (soft) {
@@ -8583,6 +8738,7 @@
           tokiInfo("refresh: local xlsx unchanged");
           return "unchanged";
         }
+        if (stale()) return "stale";
         applyParsedMenu(parsed);
         _lastDataFingerprint = fp;
         dataSource = "xlsx-local";
@@ -8599,6 +8755,7 @@
       }
       const fp = parsed._fingerprint || null;
       if (parsed._fingerprint) delete parsed._fingerprint;
+      if (stale()) return "stale";
       applyParsedMenu(parsed);
       if (isEncoreSegmentNow() && _encoreSolidBg) {
         const g = document.getElementById("galaxy") || els.galaxy;
@@ -8626,6 +8783,7 @@
     if (mode === "local") {
       try {
         const parsed = await loadMenuFromXlsx();
+        if (stale()) return "stale";
         applyParsedMenu(parsed);
         _lastDataFingerprint = fingerprintSheetPayload(parsed);
         dataSource = "xlsx-local";
@@ -8657,6 +8815,7 @@
           _lastDataFingerprint = parsed._fingerprint;
           delete parsed._fingerprint;
         }
+        if (stale()) return "stale";
         applyParsedMenu(parsed);
         try {
           await applyBetaFooterBoxesOverride(parsed);
@@ -8683,6 +8842,7 @@
       try {
         if (fb === "xlsx") {
           const p = await loadMenuFromXlsx();
+          if (stale()) return "stale";
           applyParsedMenu(p);
           try {
             await applyBetaFooterBoxesOverride(p);
@@ -8696,6 +8856,7 @@
           return dataSource;
         }
         if (fb === "embedded") {
+          if (stale()) return "stale";
           applyParsedMenu(loadMenuFromEmbedded());
           dataSource = "embedded";
           return dataSource;
@@ -15341,6 +15502,125 @@
     });
   }
 
+  function isLiveMenuSource(source) {
+    if (source === "google-sheet") return true;
+    if (source === "xlsx-local") return resolvedDataSource() === "local";
+    return false;
+  }
+
+  function markLiveSource(source) {
+    if (source === "unchanged" || isLiveMenuSource(source)) {
+      _menuLiveOk = true;
+      clearHangRecovery();
+      return true;
+    }
+    _menuLiveOk = false;
+    return false;
+  }
+
+  function clearHangRecovery() {
+    if (_hangWatchTimer) {
+      clearTimeout(_hangWatchTimer);
+      _hangWatchTimer = 0;
+    }
+  }
+
+  function scheduleHangRecovery(reason) {
+    if (_menuLiveOk) return;
+    if (_hangWatchTimer) return;
+    var wait = HANG_RECOVERY_MS;
+    if (_hangAttempt === 0 && _bootAt) {
+      var elapsed = Date.now() - _bootAt;
+      wait = elapsed >= HANG_RECOVERY_MS ? 0 : HANG_RECOVERY_MS - elapsed;
+    }
+    tokiWarn(
+      "hang recovery in " + wait + "ms —",
+      reason || "data load failed"
+    );
+    _hangWatchTimer = setTimeout(function () {
+      _hangWatchTimer = 0;
+      recoverFromHang();
+    }, wait);
+  }
+
+  function applySoftPaint(prevIndex) {
+    const pause =
+      new URLSearchParams(window.location.search).get("pause") === "1";
+    stopSlideshow();
+    stopAnnouncementSlideshow();
+    renderTitle();
+    renderList();
+    renderFooterBoxes();
+    applyStageBackground();
+    if (_encoreSolidBg) {
+      const g = document.getElementById("galaxy") || els.galaxy;
+      if (g) g.style.backgroundColor = encoreBackgroundHex();
+    }
+    applyBgPattern();
+    if (config.bgImage) startGalaxyScroll();
+    const maxIdx =
+      isDrinks || usesBoardSlides()
+        ? Math.max(0, slides.length - 1)
+        : Math.max(0, items.length - 1);
+    const idx = Number.isFinite(prevIndex) ? prevIndex : 0;
+    setActive(Math.min(idx, maxIdx), true);
+    if (!pause) {
+      startSlideshow();
+      if (isDrinks) startAnnouncementSlideshow();
+    } else if (isDrinks) {
+      setAnnouncementMessage(announcementIndex, { instant: true });
+    }
+    _menuPainted = true;
+  }
+
+  async function recoverFromHang() {
+    if (_menuLiveOk || _hangRecovering) return;
+    if (refreshInProgress) {
+      scheduleHangRecovery("load already in progress");
+      return;
+    }
+    _hangRecovering = true;
+    _hangAttempt += 1;
+    refreshInProgress = true;
+    tokiWarn("hang recovery: retry data load (attempt " + _hangAttempt + ")");
+    try {
+      _sheetsApiProxy = null;
+      if (_menuPainted) {
+        const source = await loadMenu({ soft: true });
+        if (source === "stale") return;
+        if (source !== "unchanged") {
+          tokiInfo("hang recovery: applied", source);
+          applySoftPaint(activeIndex);
+        } else {
+          tokiInfo("hang recovery: live sheet reachable (unchanged)");
+        }
+        markLiveSource(source === "unchanged" ? "google-sheet" : source);
+        startAutoRefresh();
+        return;
+      }
+      const source = await loadMenu();
+      if (source === "stale") {
+        scheduleHangRecovery("stale load");
+        return;
+      }
+      tokiInfo("hang recovery: first paint from", source);
+      finishFirstPaint(source);
+    } catch (err) {
+      tokiError(
+        "hang recovery failed",
+        err && err.message ? err.message : err
+      );
+      if (!_menuPainted && els.title) {
+        els.title.textContent = "Menu unavailable";
+        startGalaxyScroll();
+      }
+      scheduleHangRecovery(err && err.message ? err.message : err);
+    } finally {
+      _hangRecovering = false;
+      refreshInProgress = false;
+    }
+  }
+
   async function softReload() {
     const prevIndex = activeIndex;
     refreshInProgress = true;
@@ -15357,6 +15637,9 @@
         // OliToki Menu Settings sheet (per MENU_MANAGER). Data timer is paused only.
         tokiInfo("refresh: Require restart enabled — auto-refresh stopped");
         setFeatureActive("softRefresh", false, "require restart");
+        if (!_menuLiveOk) {
+          scheduleHangRecovery("require restart while waiting for live sheet");
+        }
         return;
       }
       // Clear current interval so we can re-arm with the live Refresh Timer value
@@ -15368,42 +15651,25 @@
       // Soft: re-fetch CSVs only. No embedded/xlsx fallback if offline.
       // Unchanged fingerprint → skip re-render. Network error → keep last UI.
       const source = await loadMenu({ soft: true });
+      if (source === "stale") return;
       if (source === "unchanged") {
+        markLiveSource("google-sheet");
         // Still re-arm in case Refresh Timer interval itself changed in Settings.
         armRefreshTimer(getRefreshIntervalSeconds());
         return;
       }
       tokiInfo("refreshed from", source);
-      const pause =
-        new URLSearchParams(window.location.search).get("pause") === "1";
-      stopSlideshow();
-      stopAnnouncementSlideshow();
-      renderTitle();
-      renderList();
-      renderFooterBoxes(); // includes fitFooterBoxes()
-      applyStageBackground();
-      if (_encoreSolidBg) {
-        const g = document.getElementById("galaxy") || els.galaxy;
-        if (g) g.style.backgroundColor = encoreBackgroundHex();
-      }
-      applyBgPattern();
-      // Image may be enabled after a color-only load — start pan if needed
-      if (config.bgImage) startGalaxyScroll();
-      const maxIdx =
-        isDrinks || usesBoardSlides()
-          ? Math.max(0, slides.length - 1)
-          : Math.max(0, items.length - 1);
-      setActive(Math.min(prevIndex, maxIdx), true);
-      if (!pause) {
-        startSlideshow();
-        if (isDrinks) startAnnouncementSlideshow();
-      }
+      applySoftPaint(prevIndex);
+      markLiveSource(source);
       // Re-arm at the (possibly new) interval from live Refresh Timer setting.
       // Use plain arm (no re-stagger) so wall preview boards keep their offset intervals.
       armRefreshTimer(getRefreshIntervalSeconds());
     } catch (err) {
       // Offline / incomplete fetch: leave slideshow + items as-is
       tokiWarn("refresh: keeping last good menu —", err && err.message ? err.message : err);
+      if (!_menuLiveOk) {
+        scheduleHangRecovery(err && err.message ? err.message : err);
+      }
     } finally {
       refreshInProgress = false;
       setFeatureActive('softRefresh', false, 'refresh work done');
@@ -15453,6 +15719,9 @@
               lastArmedRefreshSec = 0;
             }
             setFeatureActive("softRefresh", false, "require restart");
+            if (!_menuLiveOk) {
+              scheduleHangRecovery("require restart but no live sheet yet");
+            }
             return;
           }
           const sec = getRefreshIntervalSeconds();
@@ -15493,6 +15762,9 @@
       // require flag) must reach boards via the 10s poll + applySystemFont
       // even when data auto-refresh is gated by Require restart. See MENU_MANAGER.
       startSettingsWatcher();
+      if (!_menuLiveOk) {
+        scheduleHangRecovery("require restart but no live sheet yet");
+      }
       return;
     }
     const sec = getRefreshIntervalSeconds();
@@ -15554,6 +15826,7 @@
       { id: "softRefresh", label: "Soft Refresh", impact: "Medium" },
       { id: "requireRestart", label: "Require Restart", impact: "Info" },
       { id: "brokenImages", label: "Broken images", impact: "Info" },
+      { id: "drawTextBoxes", label: "Textbox Wireframes", impact: "Very Low" },
     ];
 
     const overrides = {}; // id -> boolean forced via console API
@@ -15708,6 +15981,9 @@
           case "versionStamp":
             // Version stamp is appended to the Toki Debug HUD header (when shown)
             return !!config.showVersion;
+
+          case "drawTextBoxes":
+            return isDrawTextBoxesEnabled();
 
           default:
             return false;
@@ -15883,6 +16159,10 @@
             if (refreshInProgress) return "fetching";
             if (refreshTimer) return "timer " + getRefreshIntervalSeconds() + "s";
             return "off";
+          case "drawTextBoxes":
+            if (textBoxDebugUrlOn()) return "url";
+            if (debugFeatureOn(TEXTBOX_WIREFRAME_FEATURE_NAMES)) return "debug";
+            return "off";
           default:
             return "";
         }
@@ -16023,6 +16303,10 @@
             }
             stopSettingsWatcher();
           }
+          if (id === "drawTextBoxes") {
+            _drawTextBoxesForced = !!on;
+            applyTextBoxDebug();
+          }
         } catch (e) { /* non-fatal */ }
 
         updateDebugVisuals();
@@ -16038,6 +16322,8 @@
 
       reset() {
         Object.keys(overrides).forEach(function (k) { delete overrides[k]; });
+        _drawTextBoxesForced = null;
+        applyTextBoxDebug();
         tokiInfo("DEBUG flags reset to sheet/config");
         updateDebugVisuals();
         if (shouldSendPerformanceConsole()) api.list();
@@ -16322,6 +16608,65 @@
 
   // ---------- boot ----------
 
+  function finishFirstPaint(source) {
+    renderTitle();
+    renderList();
+    renderFooterBoxes();
+
+    const params = new URLSearchParams(window.location.search);
+    const hashMatch = (window.location.hash || "").match(/item=(\d+)/i);
+    const startRaw = params.get("item") || (hashMatch ? hashMatch[1] : null);
+
+    startGalaxyScroll();
+
+    whenPresentationSurfaceReady(function () {
+      freezeDisplayBudget();
+      applyHeroStickerRasters();
+      if (startRaw != null) {
+        const idx = parseInt(startRaw, 10);
+        if (Number.isFinite(idx)) setActive(idx, true);
+        else setActive(0, true);
+      } else {
+        setActive(0, true);
+      }
+      playOpeningWindUp();
+      if (params.get("pause") !== "1") {
+        startSlideshow();
+        if (isDrinks) startAnnouncementSlideshow();
+      } else if (isDrinks) {
+        setAnnouncementMessage(announcementIndex, { instant: true });
+      }
+      startAutoRefresh();
+    });
+
+    updateDebugVisuals();
+    if (shouldSendPerformanceConsole()) {
+      try {
+        if (window.TokiMenuDebug && window.TokiMenuDebug.list) {
+        }
+      } catch (e) {}
+    }
+
+    function refitAll() {
+      fitTitle();
+      fitMenuText();
+      fitFooterBoxes();
+      if (isDrinks) fitDrinksBoxes();
+    }
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(refitAll);
+    }
+    window.setTimeout(refitAll, 50);
+    window.setTimeout(refitAll, 250);
+    window.setTimeout(refitAll, 600);
+
+    _menuPainted = true;
+    if (!markLiveSource(source)) {
+      scheduleHangRecovery("cold load used fallback " + source);
+    }
+  }
+
   async function init() {
     if (isPresentationStatic()) {
       document.body.classList.add("presentation-static");
@@ -16362,6 +16707,7 @@
     if (isDrinks) {
       document.body.classList.add("board-drinks", "stripes-off");
     }
+    applyTextBoxDebug();
     if (cfg.showHero === false && els.heroWrap) {
       els.heroWrap.hidden = true;
     } else if (els.heroWrap) {
@@ -16382,9 +16728,14 @@
       if (isDrinks) fitDrinksBoxes();
     });
 
+    _bootAt = Date.now();
     try {
       tokiInfo("loadMenu start");
       const source = await loadMenu();
+      if (source === "stale") {
+        scheduleHangRecovery("stale cold load");
+        return;
+      }
       tokiInfo(
         "loaded from",
         source,
@@ -16392,70 +16743,13 @@
         "items=" + (items && items.length),
         "bgImage=" + (config.bgImage || "(none)")
       );
+      finishFirstPaint(source);
     } catch (err) {
       tokiError("loadMenu failed", err);
       els.title.textContent = "Menu unavailable";
       startGalaxyScroll();
-      return;
+      scheduleHangRecovery("cold load failed");
     }
-
-    renderTitle();
-    renderList();
-    renderFooterBoxes();
-
-    const params = new URLSearchParams(window.location.search);
-    const hashMatch = (window.location.hash || "").match(/item=(\d+)/i);
-    const startRaw = params.get("item") || (hashMatch ? hashMatch[1] : null);
-
-    startGalaxyScroll();
-
-    whenPresentationSurfaceReady(function () {
-      freezeDisplayBudget();
-      applyHeroStickerRasters();
-      if (startRaw != null) {
-        const idx = parseInt(startRaw, 10);
-        if (Number.isFinite(idx)) setActive(idx, true);
-        else setActive(0, true);
-      } else {
-        setActive(0, true);
-      }
-      playOpeningWindUp();
-      if (params.get("pause") !== "1") {
-        startSlideshow();
-        if (isDrinks) startAnnouncementSlideshow();
-      } else if (isDrinks) {
-        setAnnouncementMessage(announcementIndex, { instant: true });
-      }
-      startAutoRefresh();
-    });
-
-    // Update hybrid debug visuals (CSS vars in Computed + HUD) when gate is satisfied.
-    // This gives real-time on/off view without console spam.
-    updateDebugVisuals();
-
-    // Legacy console snapshot still available under the same gate
-    if (shouldSendPerformanceConsole()) {
-      try {
-        if (window.TokiMenuDebug && window.TokiMenuDebug.list) {
-          // list() gives the full table in console when wanted
-        }
-      } catch (e) {}
-    }
-
-    function refitAll() {
-      fitTitle();
-      fitMenuText();
-      fitFooterBoxes();
-      if (isDrinks) fitDrinksBoxes();
-    }
-
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(refitAll);
-    }
-    // Extra passes: fonts/layout can settle after first paint (esp. Condensed)
-    window.setTimeout(refitAll, 50);
-    window.setTimeout(refitAll, 250);
-    window.setTimeout(refitAll, 600);
   }
 
   if (document.readyState === "loading") {
