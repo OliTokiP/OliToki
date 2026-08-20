@@ -11874,7 +11874,9 @@
     stage.classList.toggle("photo-left", isHeroPhotoLeft());
     setEncoreScaffoldBgActive(false);
 
-    // Rig holds optional BG + plates + veil so Ken Burns keeps them locked.
+    // Rig holds optional BG + plates. Default Encore also parks the veil
+    // here so Ken Burns keeps hole glued via nested scale. ?encore=new
+    // attaches the veil on the stage instead (sibling — no camera scale).
     // Stack: bg (z=0) · plates (z=1) · veil (z=2).
     const rig = document.createElement("div");
     rig.className = "family-portrait-rig";
@@ -11890,10 +11892,14 @@
     plates.className = "family-portrait-plates";
     rig.appendChild(plates);
 
-    const veil = document.createElement("div");
-    veil.className = "family-portrait-veil";
-    veil.setAttribute("aria-hidden", "true");
-    rig.appendChild(veil);
+    if (window.TOKI_MOTION && typeof TOKI_MOTION.attachEncoreVeil === "function") {
+      TOKI_MOTION.attachEncoreVeil(stage, rig);
+    } else {
+      const veil = document.createElement("div");
+      veil.className = "family-portrait-veil";
+      veil.setAttribute("aria-hidden", "true");
+      rig.appendChild(veil);
+    }
 
     const layout = fillPortraitPlates(plates, portraitItems || []);
     if (!layout) return;

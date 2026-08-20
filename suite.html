@@ -23,8 +23,15 @@
       background: #eee;
       margin: 0 0 .55rem;
       font-size: .92rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35em;
     }
     .live p { margin: .2rem 0; font-weight: 500; }
+    .status-dot {
+      flex-shrink: 0;
+      vertical-align: middle;
+    }
     .health { margin: 0 0 1.15rem; }
     .grid {
       display: grid;
@@ -116,7 +123,7 @@
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/surfaces.js?v=20260820health"></script>
+  <script src="js/surfaces.js?v=20260820health2"></script>
   <script>
     const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
@@ -267,17 +274,17 @@
         const p = (pm ? pm[1] : "").slice(0, 7).toLowerCase();
         if (g && p && g === p) {
           el.className = "live ok";
-          el.textContent = "Pages vs git: 🟢 " + g + " — safe to check live";
+          el.innerHTML = window.tokiStatusDot("ok") + " Pages vs git: " + g + " — safe to check live";
         } else if (g || p) {
           el.className = "live bad";
-          el.textContent = "Pages vs git: 🔴 live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
+          el.innerHTML = window.tokiStatusDot("bad") + " Pages vs git: live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
         } else {
           el.className = "live bad";
-          el.textContent = "Pages vs git: 🔴 could not read";
+          el.innerHTML = window.tokiStatusDot("bad") + " Pages vs git: could not read";
         }
       } catch (e) {
         el.className = "live bad";
-        el.textContent = "Pages vs git: 🔴 could not read";
+        el.innerHTML = window.tokiStatusDot("bad") + " Pages vs git: could not read";
       }
     }
 

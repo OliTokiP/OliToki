@@ -636,7 +636,7 @@
       '<section class="screen">' +
       header("System Settings") +
       statusBlock() +
-      '<div class="rows"><div class="bounce-inner" id="system-scroll">' +
+      '<div class="rows" id="system-scroll"><div class="bounce-inner">' +
       sysRows +
       linksBlock() +
       "</div></div></section>"
@@ -1052,8 +1052,18 @@
       ">" +
       '<div class="family-portrait-rig">' +
       '<div class="family-portrait-plates"></div>' +
-      '<div class="family-portrait-veil" aria-hidden="true"></div>' +
-      "</div></div></div>" +
+      (window.TOKI_MOTION &&
+      typeof TOKI_MOTION.encoreVeilDetached === "function" &&
+      TOKI_MOTION.encoreVeilDetached()
+        ? ""
+        : '<div class="family-portrait-veil" aria-hidden="true"></div>') +
+      "</div>" +
+      (window.TOKI_MOTION &&
+      typeof TOKI_MOTION.encoreVeilDetached === "function" &&
+      TOKI_MOTION.encoreVeilDetached()
+        ? '<div class="family-portrait-veil" aria-hidden="true"></div>'
+        : "") +
+      "</div></div>" +
       '<div class="preview-sticker"' +
       (first.isNew ? "" : " hidden") +
       ">" +
@@ -1092,6 +1102,7 @@
   }
 
   function renderScreen() {
+    rememberStyleScroll();
     var html = "";
     if (state.screen === "home") html = screenHome();
     else if (state.screen === "system") html = screenSystem();
@@ -2193,6 +2204,8 @@
     if (bc) state.boardScroll = bc.scrollTop;
     var sysc = document.getElementById("system-scroll");
     if (sysc) state.systemScroll = sysc.scrollTop;
+    var nav = els.app && els.app.querySelector(".nav-wrap");
+    if (nav) state.menuScroll = nav.scrollTop;
   }
 
   function go(screen, boardId) {

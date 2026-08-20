@@ -451,6 +451,84 @@
   var _encoreZoomRaf = 0;
   var _encoreZoomGen = 0;
 
+  /**
+   * ?encore=new — Spotlight Veil is a sibling of the camera rig, not a child.
+   * Hole x/y still use --encore-hole-x/y (same as transform-origin), so the
+   * lattice point stays under the aperture without stacking camera scale on
+   * the veil (radial-gradient + mix-blend + drop-shadow).
+   */
+  function readEncoreVeilDetachedFlag() {
+    function fromParams(raw) {
+      try {
+        var v = String(new URLSearchParams(raw || "").get("encore") || "")
+          .trim()
+          .toLowerCase();
+        return v === "new";
+      } catch (e) {
+        return false;
+      }
+    }
+    if (fromParams(typeof location !== "undefined" ? location.search : "")) {
+      return true;
+    }
+    try {
+      var hash = typeof location !== "undefined" ? location.hash : "";
+      var qi = hash.indexOf("?");
+      if (qi >= 0 && fromParams(hash.slice(qi + 1))) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  var _encoreVeilDetached = readEncoreVeilDetachedFlag();
+
+  function encoreVeilDetached() {
+    return !!_encoreVeilDetached;
+  }
+
+  function applyEncoreVeilDetachedClass() {
+    try {
+      var on = encoreVeilDetached();
+      if (document.documentElement) {
+        document.documentElement.classList.toggle("encore-veil-detached", on);
+      }
+      if (document.body) {
+        document.body.classList.toggle("encore-veil-detached", on);
+      }
+    } catch (e) {}
+  }
+
+  if (_encoreVeilDetached) {
+    console.info(
+      "[TokiMenu] encore=new — Spotlight Veil detached from camera rig"
+    );
+  }
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", applyEncoreVeilDetachedClass);
+    } else {
+      applyEncoreVeilDetachedClass();
+    }
+  }
+
+  /** Park the veil on the stage (new) or on the rig (default). */
+  function attachEncoreVeil(stage, rig) {
+    if (!stage) return null;
+    var veil = stage.querySelector(".family-portrait-veil");
+    if (!veil) {
+      veil = document.createElement("div");
+      veil.className = "family-portrait-veil";
+      veil.setAttribute("aria-hidden", "true");
+    }
+    var detached = encoreVeilDetached();
+    var home =
+      detached
+        ? stage
+        : rig || stage.querySelector(".family-portrait-rig") || stage;
+    if (veil.parentNode !== home) home.appendChild(veil);
+    stage.classList.toggle("encore-veil-detached", detached);
+    return veil;
+  }
+
   function encorePinchNode(stage) {
     if (!stage) return null;
     return (
@@ -896,13 +974,7 @@
       plates.className = "family-portrait-plates";
       rig.appendChild(plates);
     }
-    var veil = rig.querySelector(".family-portrait-veil");
-    if (!veil) {
-      veil = document.createElement("div");
-      veil.className = "family-portrait-veil";
-      veil.setAttribute("aria-hidden", "true");
-      rig.appendChild(veil);
-    }
+    attachEncoreVeil(stage, rig);
     return stage;
   }
 
@@ -1138,6 +1210,8 @@
     readEncoreZoomTo: readEncoreZoomTo,
     encoreHolePinchPx: encoreHolePinchPx,
     encoreFpsCap: encoreFpsCap,
+    encoreVeilDetached: encoreVeilDetached,
+    attachEncoreVeil: attachEncoreVeil,
     applyEncoreChrome: applyEncoreChrome,
     fillEncorePlates: fillEncorePlates,
     ensureEncoreDom: ensureEncoreDom,
