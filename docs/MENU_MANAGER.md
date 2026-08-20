@@ -72,6 +72,8 @@ Context-driven children (same idea as the mockup):
 | Background = Wallpaper | Wallpaper Type, BG Scroll Speed |
 | Encore (global) | Spotlight Style, Spotlight Color, Encore Background |
 
+Pattern Color 1 / 2 are per-theme (Themes Database K/L on the selected row). The Style preview updates from the draft immediately; Confirm Yes writes those cells so TV boards (`#bg-pattern`, Board 4 `#stripes`) pick them up on the next sheet load.
+
 Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Encore calls `TOKI_MOTION.encorePunchIn` / `encorePunchOut` on `#family-portrait-stage`. The 848.1×1080 lattice is cover-scaled into the photo box using `--device-w` (not `100cqi` — Fire Stick Silk has no container query units). Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).

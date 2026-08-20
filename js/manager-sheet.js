@@ -2,8 +2,10 @@
  * OliToki Menu Manager — sheet read + theme write.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
  * Field-name draft only (no column indexes in the UI). Confirm posts
- * theme + background to /api/manager/style; the server maps Theme
- * Selector (A3) and BG Color / Pattern / Wallpaper (B3 / C3 / D3).
+ * theme + background + Pattern Color 1 / 2 to /api/manager/style; the
+ * server maps Theme Selector (A3), BG Color / Pattern / Wallpaper
+ * (B3 / C3 / D3), and Pattern Color 1 / 2 on the selected Themes
+ * Database row (K/L).
  * Board Settings Yes posts /api/manager/board (Menu Title, Family Portrait,
  * Presentation Mode, Include Descriptions?) — field names, not columns.
  * System Settings (incl. Confirm save?) post via /api/manager/settings (fallback always).

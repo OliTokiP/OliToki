@@ -1371,6 +1371,50 @@ class SheetsBackend:
                 return name
         raise ValueError("theme is not in Themes Database")
 
+    def _themes_layout(self, rows: list) -> tuple[int, int, dict[str, int]]:
+        header_idx = -1
+        for i, row in enumerate(rows or []):
+            a = _cell(row, 0).lower()
+            if a.startswith("themes database"):
+                if i + 1 < len(rows):
+                    header_idx = i + 1
+                break
+        if header_idx < 0:
+            header_idx = 4
+        headers = (rows[header_idx] if header_idx < len(rows or []) else []) or []
+        data_idx = header_idx + 1
+        cols: dict[str, int] = {}
+        for c, h in enumerate(headers):
+            fold = self._header_fold(str(h or ""))
+            if fold:
+                cols[fold] = c
+        return header_idx, data_idx, cols
+
+    def _theme_row_index(self, rows: list, theme_name: str) -> int:
+        want = str(theme_name or "").strip().lower()
+        if not want:
+            raise ValueError("missing theme")
+        _header_idx, data_idx, cols = self._themes_layout(rows)
+        name_col = cols.get("themename", 0)
+        for i, row in enumerate((rows or [])[data_idx:], start=data_idx):
+            if _cell(row, name_col).lower() == want:
+                return i
+        raise ValueError("theme is not in Themes Database")
+
+    def _current_theme_selector(self, rows: list) -> str:
+        _header_idx, data_idx, cols = self._settings_layout(rows)
+        row = rows[data_idx] if data_idx < len(rows or []) else []
+        return _cell(row, cols.get("themeselector", 0))
+
+    def _pattern_color_a1(self, rows: list, theme_name: str) -> dict[str, str]:
+        row_idx = self._theme_row_index(rows, theme_name)
+        _h, _d, cols = self._themes_layout(rows)
+        excel = row_idx + 1
+        return {
+            "patterncolor1": f"{self._col_letters(cols.get('patterncolor1', 10))}{excel}",
+            "patterncolor2": f"{self._col_letters(cols.get('patterncolor2', 11))}{excel}",
+        }
+
     @staticmethod
     def _is_none_token(raw: str) -> bool:
         s = str(raw or "").strip().lower()
@@ -1569,10 +1613,12 @@ class SheetsBackend:
             ),
         }
         values: dict[str, str] = {}
+        extra: list[dict] = []
         wrote_theme = False
         wrote_bg = False
         wrote_speeds = False
         wrote_encore = False
+        wrote_pattern = False
         theme = str(body.get("theme") or body.get("themeName") or "").strip()
         if theme:
             values["themeselector"] = self._canonical_theme(rows, theme)
@@ -1632,8 +1678,40 @@ class SheetsBackend:
                 "color",
             )
             wrote_encore = True
-        if not values:
-            raise ValueError("nothing to write")
+
+        def _body_color(keys: tuple[str, ...]):
+            for k in keys:
+                if k in body and body.get(k) not in (None, ""):
+                    return body.get(k)
+            return None
+
+        pat1 = _body_color(("patternColor1", "pattern_color_1"))
+        pat2 = _body_color(("patternColor2", "pattern_color_2"))
+        if pat1 is not None or pat2 is not None:
+            theme_for_pat = values.get("themeselector") or ""
+            if not theme_for_pat:
+                raw_theme = theme or self._current_theme_selector(rows)
+                theme_for_pat = self._canonical_theme(rows, raw_theme)
+            colors = self._glossary_list(
+                rows, "colorpickerfordropdowns", "colorpicker"
+            )
+            a1 = self._pattern_color_a1(rows, theme_for_pat)
+            if pat1 is not None:
+                extra.append(
+                    {
+                        "range": safe_title + "!" + a1["patterncolor1"],
+                        "values": [[self._match_glossary(colors, pat1, "color")]],
+                    }
+                )
+            if pat2 is not None:
+                extra.append(
+                    {
+                        "range": safe_title + "!" + a1["patterncolor2"],
+                        "values": [[self._match_glossary(colors, pat2, "color")]],
+                    }
+                )
+            wrote_pattern = True
+
         data = [
             {
                 "range": safe_title + "!" + field_a1[fold],
@@ -1642,6 +1720,9 @@ class SheetsBackend:
             for fold, val in values.items()
             if fold in field_a1
         ]
+        data.extend(extra)
+        if not data:
+            raise ValueError("nothing to write")
         with self._api_lock:
             updated = (
                 self.sheets.spreadsheets()
@@ -1662,6 +1743,7 @@ class SheetsBackend:
         ]
         _log(
             f"style write {source_name or sid} {values} "
+            f"pattern={wrote_pattern} "
             f"cells={updated.get('totalUpdatedCells')} "
             f"({time.time() - t0:.2f}s)"
         )
@@ -1680,6 +1762,7 @@ class SheetsBackend:
             "wroteBackground": wrote_bg,
             "wroteSpeeds": wrote_speeds,
             "wroteEncore": wrote_encore,
+            "wrotePattern": wrote_pattern,
             "scrollSpeed": values.get("bgscrollspeed"),
             "presentationSpeed": values.get("presentationspeed"),
             "range": ", ".join([r for r in ranges if r]),

@@ -1,7 +1,8 @@
 /**
  * OliToki Menu Manager — layout + sheet read.
  * Draft theme tokens restyle the app immediately. Confirm-on-back Yes writes
- * Theme Selector, Background (BG Color / Pattern / Wallpaper), and the
+ * Theme Selector, Background (BG Color / Pattern / Wallpaper), Pattern
+ * Color 1 / 2 (selected Themes Database row K/L), and the
  * speed pills (scroll + presentation) on the selected catalog
  * (via TOKI_MANAGER_SHEET.writeStyle), including Presentation Speed and
  * Encore spotlight/background (global Style K/L/M). Board Yes writes Menu Title,
@@ -1222,6 +1223,18 @@
         },
         set: function (id) {
           state.draft.themeName = id;
+          var i;
+          for (i = 0; i < D.themes.length; i++) {
+            if (D.themes[i].name === id) {
+              if (D.themes[i].patternColor1) {
+                state.draft.patternColor1 = D.themes[i].patternColor1;
+              }
+              if (D.themes[i].patternColor2) {
+                state.draft.patternColor2 = D.themes[i].patternColor2;
+              }
+              break;
+            }
+          }
         },
       };
     }
@@ -2145,14 +2158,20 @@
       wrote.wroteEncore &&
       !wrote.wroteTheme &&
       !wrote.wroteBackground &&
-      !wrote.wroteSpeeds
+      !wrote.wroteSpeeds &&
+      !wrote.wrotePattern
     );
   }
 
   function yesToastSkippingEncore(needed, wrote, fb, kind) {
     if (!wrote || styleWroteOnlyEncore(wrote)) return "";
     if (kind === "board" || kind === "both") return "";
-    if (!wrote.wroteTheme && !wrote.wroteBackground && !wrote.wroteSpeeds) {
+    if (
+      !wrote.wroteTheme &&
+      !wrote.wroteBackground &&
+      !wrote.wroteSpeeds &&
+      !wrote.wrotePattern
+    ) {
       return "";
     }
     var cloneWrote = Object.assign({}, wrote, { wroteEncore: false });
@@ -2587,6 +2606,8 @@
       background: d.background || "",
       bgColor: d.bgColor || "",
       patternType: d.patternType || "",
+      patternColor1: d.patternColor1 || "",
+      patternColor2: d.patternColor2 || "",
       wallpaper: d.wallpaper || "",
       scrollSpeed: d.scrollSpeed,
       presentationSpeed: d.presentationSpeed,
@@ -2606,7 +2627,8 @@
         (wrote.wroteTheme ||
           wrote.wroteBackground ||
           wrote.wroteSpeeds ||
-          wrote.wroteEncore)
+          wrote.wroteEncore ||
+          wrote.wrotePattern)
       );
       if (boardOk && styleOk) return "Board and Style saved to " + src;
       if (boardOk && wrote && wrote.wroteInventory) {
@@ -2630,6 +2652,7 @@
         var bits = [];
         if (wrote.wroteTheme) bits.push("Theme");
         if (wrote.wroteBackground) bits.push("background");
+        if (wrote.wrotePattern) bits.push("pattern colors");
         if (wrote.wroteSpeeds) bits.push("speeds");
         if (wrote.wroteEncore) bits.push("Encore");
         var what = bits.length ? bits.join(" and ") : "Style";
@@ -2667,12 +2690,16 @@
       next.encoreStyle !== prev.encoreStyle ||
       next.encoreSpot !== prev.encoreSpot ||
       next.encoreBg !== prev.encoreBg;
+    var patternChanged =
+      next.patternColor1 !== prev.patternColor1 ||
+      next.patternColor2 !== prev.patternColor2;
     if (
       !themeChanged &&
       !bgChanged &&
       !scrollChanged &&
       !presChanged &&
-      !encoreChanged
+      !encoreChanged &&
+      !patternChanged
     ) {
       return Promise.resolve({ needed: false, wrote: null });
     }
@@ -2703,6 +2730,10 @@
       payload.encoreSpot = next.encoreSpot;
       payload.encoreBg = next.encoreBg;
     }
+    if (patternChanged) {
+      payload.patternColor1 = next.patternColor1;
+      payload.patternColor2 = next.patternColor2;
+    }
     var req = sheet.writeStyle
       ? sheet.writeStyle(payload)
       : sheet.writeTheme(next.themeName, sheetId);
@@ -2713,6 +2744,16 @@
         state.lastSheet.style = next;
         if (wrote.sheetId) state.lastSheet.sheetId = wrote.sheetId;
         if (wrote.sourceName) state.lastSheet.sourceName = wrote.sourceName;
+        if (patternChanged && next.themeName) {
+          var ti;
+          for (ti = 0; ti < D.themes.length; ti++) {
+            if (D.themes[ti].name === next.themeName) {
+              D.themes[ti].patternColor1 = next.patternColor1;
+              D.themes[ti].patternColor2 = next.patternColor2;
+              break;
+            }
+          }
+        }
       }
       return { needed: true, wrote: wrote };
     });
