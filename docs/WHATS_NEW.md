@@ -1,9 +1,21 @@
 # What’s New
 
-**Last updated:** 2026-08-20 17:43  
+**Last updated:** 2026-08-20 18:39  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 18:39 — Suite hub: Local / Testing / Restaurant
+
+**Boards / surface:** `suite.html` (operator hub — not the TV boards)  
+**Sheet:** none  
+**Summary:** Suite is one chart, not two. Hub and boards each appear once. Columns are **Local** (this Mac), **Test** (beta / Alpha sheet), **TVs** (Restaurant). “This copy · Live” is gone. Health now has a Restaurant line and a Testing line. On-this-Mac tool cards stay as one-tap shortcuts.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
 
 ---
 

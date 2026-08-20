@@ -1,10 +1,12 @@
 # Deployer
 
-**Last updated:** 2026-08-20 12:45
+**Last updated:** 2026-08-20 18:39
 
 Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
 
-**Health** on Suite (under the hub blurb): TVs vs last restaurant ship vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Deployer uses the same TV verdict.
+**Health** on Suite: Restaurant TVs vs last restaurant ship vs `main`, Testing vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Deployer uses the same TV verdict.
+
+**Open a copy** is one matrix: Hub (Suite, Deployer, Tickets, Menu Manager, Brightness) then Boards. Columns are **Local** (this Mac), **Test** (beta / Alpha sheet), **TVs** (Restaurant / GitHub Pages). Boards are not listed twice. The column you are on is marked. Brightness is Mac-only.
 
 Green when Pages matches the last restaurant ship. Yellow if `main` is ahead of that ship (unpublished work — not a dining-room outage). Red only when Pages does not match the last restaurant ship.
 

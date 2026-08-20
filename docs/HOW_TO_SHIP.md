@@ -4,6 +4,8 @@ This is the operator guide. You do **not** need to understand git, Cloud Run, or
 
 Open the ship form from [[Launcher]] → **Suite** or **Deployer** → **Live**, or here: [Suite](https://olitokip.github.io/OliToki/suite.html) · [Deployer](https://olitokip.github.io/OliToki/deploy.html). Suite, Deployer, and Tickets share the same top bar. The current page is plain text in that same slot. Menu Manager opens the local Manager in a new window.
 
+Suite’s **Open a copy** chart is the three copies of every surface: **Local** (this Mac), **Test** (beta / Alpha), **TVs** (Restaurant). Same meaning as the table below.
+
 ---
 
 ## The only picture you need

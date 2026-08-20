@@ -5,41 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
   <title>Suite — OliToki</title>
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260820hub2" />
   <style>
-    :root { color-scheme: light dark; }
-    html { -webkit-text-size-adjust: 100%; }
-    body {
-      font: 16px/1.4 system-ui, sans-serif;
-      margin: 0 auto;
-      padding: 1.25rem;
-      max-width: 36rem;
-    }
-    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-    .sub { color: #666; margin: 0 0 1.25rem; font-size: .95rem; }
     .live {
       font-weight: 600;
       padding: .65rem .85rem;
       border-radius: 10px;
       background: #eee;
-      margin: 0 0 .55rem;
+      margin: 0 0 .45rem;
       font-size: .92rem;
       display: flex;
-      align-items: center;
-      gap: 0.35em;
+      align-items: flex-start;
+      gap: 0.45em;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     .live.ok { background: #d8f3d8; }
     .live.warn { background: #f8eccc; }
     .live.bad { background: #f8d4d4; }
-    .live p { margin: .2rem 0; font-weight: 500; }
-    .status-dot {
-      flex-shrink: 0;
-      vertical-align: middle;
+    .live .live-body {
+      font-weight: 500;
+      min-width: 0;
+      flex: 1;
+      overflow-wrap: anywhere;
     }
-    .health { margin: 0 0 1.15rem; }
+    .live .live-k {
+      display: block;
+      font-size: .68rem;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #666;
+      margin-bottom: .15rem;
+    }
+    .status-dot { flex-shrink: 0; margin-top: .35rem; }
+    .health { margin: 0 0 1.35rem; }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: .45rem;
+      margin-top: .45rem;
     }
     .tile {
       border-radius: 10px;
@@ -67,7 +72,7 @@
     .ok { color: #1b7f37; }
     .warn { color: #b7791f; }
     .bad { color: #c0392b; }
-    .lab { display: block; font-weight: 600; margin: 1rem 0 .35rem; }
+    .lab { display: block; font-weight: 600; margin: 1.15rem 0 .35rem; }
     .health .lab { margin-top: 0; }
     .cards { display: flex; flex-direction: column; gap: .55rem; }
     a.card {
@@ -82,64 +87,145 @@
       box-sizing: border-box;
     }
     a.card .blurb { display: block; font-weight: 500; color: #666; font-size: .88rem; margin-top: .15rem; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: .92rem;
+    .copy-note { margin: 0 0 .65rem; }
+    .copy-scroller {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
-    th, td { padding: .45rem .3rem; text-align: center; }
-    th:first-child, td:first-child { text-align: left; font-weight: 600; }
-    tr { border-bottom: 1px solid #ddd; }
-    th { font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; color: #666; }
-    .tiny { color: #666; font-size: .88rem; }
-    a { color: inherit; }
+    .copy-grid {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .copy-head, .copy-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .copy-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f4f4f4;
+      font-size: .72rem;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #666;
+    }
+    .copy-head span {
+      padding: .5rem .2rem;
+      text-align: center;
+      line-height: 1.25;
+      min-width: 0;
+    }
+    .copy-head span:first-child { text-align: left; padding-left: .65rem; }
+    .copy-head .is-you { color: #111; }
+    .copy-group {
+      font-size: .72rem;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #666;
+      background: #fafafa;
+      padding: .4rem .75rem;
+      border-top: 1px solid #eee;
+    }
+    .copy-row { border-top: 1px solid #eee; }
+    .copy-name {
+      font-weight: 650;
+      padding: .65rem .5rem .65rem .65rem;
+      font-size: .88rem;
+      line-height: 1.25;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .copy-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: .35rem .2rem;
+      text-align: center;
+      font-weight: 600;
+      font-size: .84rem;
+      min-width: 0;
+      text-decoration: none;
+      color: inherit;
+      border-left: 1px solid #eee;
+    }
+    a.copy-cell:hover { background: #f4f4f4; text-decoration: underline; }
+    .copy-cell.is-here {
+      font-weight: 700;
+      background: #e8f4ea;
+      color: #1b7f37;
+      cursor: default;
+    }
+    .copy-cell.is-na {
+      font-weight: 500;
+      color: #999;
+      cursor: default;
+    }
+    .copy-col-you { background: rgba(27, 127, 55, 0.04); }
     @media (prefers-color-scheme: dark) {
       .live, .tile { background: #2a2a2a; }
       .live.ok { background: #16351c; }
       .live.warn { background: #3a2e12; }
       .live.bad { background: #3a1616; }
-      .sub, .tiny, a.card .blurb, th, .tile .k, .tile .s { color: #aaa; }
-      tr { border-bottom-color: #333; }
+      .live .live-k, .sub, .tiny, a.card .blurb, .tile .k, .tile .s,
+      .copy-head, .copy-group { color: #aaa; }
       .ok { color: #5ee08a; }
       .warn { color: #f0c14b; }
       .bad { color: #ff7b7b; }
+      .copy-grid { border-color: #333; }
+      .copy-head { background: #1c1c1c; }
+      .copy-head .is-you { color: #eee; }
+      .copy-group { background: #191919; }
+      .copy-row, .copy-group { border-top-color: #2e2e2e; }
+      .copy-cell { border-left-color: #2e2e2e; }
+      a.copy-cell:hover { background: #222; }
+      .copy-cell.is-here { background: #16351c; color: #5ee08a; }
+      .copy-cell.is-na { color: #666; }
+      .copy-col-you { background: rgba(94, 224, 138, 0.06); }
     }
   </style>
 </head>
-<body>
-  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="new-bug.html">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
+<body class="suite-page suite-hub">
+  <p class="suite-nav tiny" id="nav">Suite · Deployer · Tickets · Menu Manager</p>
   <h1>Suite</h1>
-  <p class="sub">Local portal. Bookmark <code>/portal</code> on this Mac — not a Wi-Fi IP. Ship from Deployer. File tickets from Tickets. Boards are in the table below.</p>
+  <p class="sub">Operator hub. Bookmark <code>/portal</code> on this Mac — not a Wi-Fi IP. Three copies of the app: Local (this Mac), Testing (beta, Alpha sheet), Restaurant (TVs).</p>
 
   <div class="health">
     <div class="lab">Health</div>
-    <div class="live" id="live">TVs vs today’s work: checking…</div>
+    <div class="live" id="live-restaurant">Restaurant: checking…</div>
+    <div class="live" id="live-testing">Testing: checking…</div>
     <div class="grid" id="sys"></div>
     <p class="tiny" id="sys-foot"></p>
   </div>
 
-  <div class="lab">Tools</div>
+  <div class="lab">On this Mac</div>
   <div class="cards" id="tools"></div>
 
-  <div class="lab" id="table-lab">This copy · Live</div>
+  <div class="lab" id="table-lab">Open a copy</div>
+  <p class="tiny copy-note">Local is this laptop. Test is the beta site (Alpha sheet). TVs is Restaurant — what the dining-room screens run. A git push to main updates neither; ship from Deployer.</p>
   <div id="table-wrap"></div>
-
-  <div class="lab">Boards</div>
-  <div id="boards-wrap"></div>
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/surfaces.js?v=20260820health3"></script>
+  <script src="js/env.js?v=20260820hub1"></script>
+  <script src="js/surfaces.js?v=20260820hub1"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
+    const TESTING_FALLBACK = "https://toki-api-testing-3rx5m3qpzq-uc.a.run.app";
+    const LOCAL_FALLBACK = "http://Peters-Mac.local:8765/";
     const SUITE = window.TOKI_SUITE || {};
 
+    function slash(url) {
+      return String(url || "").replace(/\/?$/, "/");
+    }
     function hereBase() {
       return location.origin + location.pathname.replace(/[^/]+$/, "");
-    }
-    function liveBase() {
-      return PAGES.replace(/\/$/, "") + "/";
     }
     function onLive() {
       return /github\.io/i.test(location.host);
@@ -147,18 +233,47 @@
     function onTesting() {
       return /run\.app/i.test(location.host);
     }
-
+    function currentEnv() {
+      if (onLive()) return "restaurant";
+      if (onTesting()) return "testing";
+      return "local";
+    }
+    function localBase() {
+      if (currentEnv() === "local") return hereBase();
+      return LOCAL_FALLBACK;
+    }
+    function testingBase() {
+      const raw = (window.TOKI_TESTING_SITE || TESTING_FALLBACK).replace(/\/$/, "");
+      return slash(raw);
+    }
+    function restaurantBase() {
+      const raw = (window.TOKI_RESTAURANT_SITE || PAGES).replace(/\/$/, "");
+      return slash(raw);
+    }
     function operatorHref(page) {
       return window.tokiBustOperatorHref ? window.tokiBustOperatorHref(page) : page;
     }
+    function joinPage(base, page) {
+      if (!page) return "";
+      if (/^https?:\/\//i.test(page)) return page;
+      return slash(base) + String(page).replace(/^\//, "");
+    }
+    function samePage(href) {
+      if (!href) return false;
+      try {
+        const a = new URL(href, location.href);
+        const b = new URL(location.href);
+        const ap = a.pathname.replace(/\/index\.html$/, "/").replace(/\/$/, "") || "/";
+        const bp = b.pathname.replace(/\/index\.html$/, "/").replace(/\/$/, "") || "/";
+        return a.origin === b.origin && ap === bp;
+      } catch (e) {
+        return false;
+      }
+    }
 
     (function paintNav() {
-      const nav = SUITE.nav || [];
-      if (!nav.length) return;
-      document.getElementById("nav").innerHTML = nav.map((item) => {
-        if (item.name === "Suite") return "Suite";
-        return '<a href="' + operatorHref(item.page) + '">' + item.name + "</a>";
-      }).join(" · ");
+      const html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Suite");
+      if (html) document.getElementById("nav").innerHTML = html;
     })();
 
     function card(item) {
@@ -170,53 +285,115 @@
       );
     }
 
-    const tools = SUITE.tools || [
-      { name: "Deployer", page: "deploy.html", blurb: "Ship testing or restaurant." },
-      { name: "Tickets", page: "new-bug.html", blurb: "Log a bug or a feature request." },
-      { name: "Menu Manager", page: "manager.html", blurb: "Edit the menu on your phone." },
+    const tools = (SUITE.tools || []).filter((t) => t.page && t.page !== "suite.html");
+    document.getElementById("tools").innerHTML = tools.map(card).join("");
+
+    function localTickets() {
+      if (currentEnv() === "local" && window.tokiGetTicketsUrl) {
+        return window.tokiGetTicketsUrl();
+      }
+      try {
+        const u = new URL(LOCAL_FALLBACK);
+        u.port = "18765";
+        u.pathname = "/";
+        u.search = "";
+        u.hash = "";
+        return u.href;
+      } catch (e) {
+        return "http://Peters-Mac.local:18765/";
+      }
+    }
+
+    const you = currentEnv();
+    const bases = {
+      local: localBase(),
+      testing: testingBase(),
+      restaurant: restaurantBase(),
+    };
+
+    function hrefFor(row, env) {
+      if (row.only === "local" && env !== "local") return "";
+      if (row.kind === "tickets") {
+        if (env === "local") return localTickets();
+        return joinPage(bases[env], "tickets.html");
+      }
+      const page = row.page;
+      if (!page || page === "portal") {
+        return joinPage(bases[env], "suite.html");
+      }
+      let href = joinPage(bases[env], page);
+      if (env === "local") href = operatorHref(href);
+      return href;
+    }
+
+    function cellHtml(row, env) {
+      const href = hrefFor(row, env);
+      const youCol = env === you ? " copy-col-you" : "";
+      if (!href) {
+        return '<span class="copy-cell is-na' + youCol + '">—</span>';
+      }
+      if (samePage(href)) {
+        return '<span class="copy-cell is-here' + youCol + '">Here</span>';
+      }
+      const extra =
+        row.name === "Menu Manager" ? ' target="_blank" rel="noopener"' : "";
+      return (
+        '<a class="copy-cell' +
+        youCol +
+        '" href="' +
+        href +
+        '"' +
+        extra +
+        ">Open</a>"
+      );
+    }
+
+    function rowHtml(row) {
+      return (
+        '<div class="copy-row">' +
+        '<div class="copy-name">' + row.label + "</div>" +
+        cellHtml(row, "local") +
+        cellHtml(row, "testing") +
+        cellHtml(row, "restaurant") +
+        "</div>"
+      );
+    }
+
+    const hubRows = [
+      { label: "Suite", page: "suite.html" },
+      { label: "Deployer", page: "deploy.html" },
+      { label: "Tickets", page: "tickets.html", kind: "tickets" },
+      { label: "Menu Manager", page: "manager.html" },
+      { label: "Brightness", page: "brightness.html", only: "local" },
     ];
-    document.getElementById("tools").innerHTML = tools
-      .filter((t) => t.page !== "suite.html")
-      .map(card)
-      .join("");
+    const boardRows = (SUITE.screens || []).map((s) => ({
+      label: s.label,
+      page: s.page,
+    }));
 
-    function linkCell(href, label) {
-      return '<a href="' + href + '">' + (label || "open") + "</a>";
-    }
-
-    function tableFor(rows) {
-      const live = liveBase();
-      const here = hereBase();
-      const showThis = !onLive();
-      let head = "<tr><th></th>";
-      if (showThis) head += "<th>This copy</th>";
-      head += "<th>Live</th></tr>";
-      const body = rows.map((row) => {
-        let cells = "<td>" + row.label + "</td>";
-        if (showThis) cells += "<td>" + linkCell(operatorHref(here + row.page)) + "</td>";
-        cells += "<td>" + linkCell(live + row.page) + "</td>";
-        return "<tr>" + cells + "</tr>";
-      }).join("");
-      return "<table>" + head + body + "</table>";
-    }
-
-    const tableRows = (SUITE.launcher || []).filter((r) => r.page);
-    document.getElementById("table-wrap").innerHTML = tableFor(tableRows);
-    document.getElementById("table-lab").textContent = onLive()
-      ? "Live"
-      : "This copy · Live";
-
-    const boardRows = (SUITE.screens || []).filter((r) => r.page !== "preview-all.html");
-    const wall = (SUITE.screens || []).filter((r) => r.page === "preview-all.html");
-    document.getElementById("boards-wrap").innerHTML = tableFor(
-      boardRows.concat(wall).map((s) => ({ label: s.label, page: s.page }))
-    );
+    document.getElementById("table-wrap").innerHTML =
+      '<div class="copy-scroller"><div class="copy-grid">' +
+      '<div class="copy-head">' +
+      "<span></span>" +
+      '<span' + (you === "local" ? ' class="is-you"' : "") + ">Local</span>" +
+      '<span' + (you === "testing" ? ' class="is-you"' : "") + ">Test</span>" +
+      '<span' + (you === "restaurant" ? ' class="is-you"' : "") + ">TVs</span>" +
+      "</div>" +
+      '<div class="copy-group">Hub</div>' +
+      hubRows.map(rowHtml).join("") +
+      '<div class="copy-group">Boards</div>' +
+      boardRows.map(rowHtml).join("") +
+      "</div></div>";
 
     const bits = [];
-    if (onLive()) bits.push("You are on Live (GitHub Pages). Laptop Local / Tailscale are on [[Launcher]].");
-    else if (onTesting()) bits.push("You are on the testing site. TVs stay on restaurant until you ship Restaurant.");
-    else bits.push("This copy is the Mac server (Local or Tailscale). Live is GitHub Pages — what the TVs load after a restaurant ship.");
-    bits.push("A git push to main does not update TVs.");
+    if (you === "restaurant") {
+      bits.push("You are on Restaurant (GitHub Pages) — what the TVs load.");
+    } else if (you === "testing") {
+      bits.push("You are on Testing. TVs stay on Restaurant until you ship Restaurant.");
+    } else {
+      bits.push("You are on Local (this Mac).");
+    }
+    bits.push("Testing uses the Alpha sheet. Restaurant uses Restaurant Copy.");
     document.getElementById("hint").textContent = bits.join(" ");
 
     function cls(lvl) {
@@ -235,6 +412,14 @@
         (sub ? '<div class="s">' + sub + "</div>" : "") +
         "</div>"
       );
+    }
+    function banner(el, kind, k, text) {
+      el.className = window.tokiLiveClass(kind);
+      el.innerHTML =
+        window.tokiStatusDot(kind) +
+        '<span class="live-body"><span class="live-k">' + k + "</span>" +
+        text +
+        "</span>";
     }
 
     async function ping(url, ms) {
@@ -268,19 +453,22 @@
     }
 
     async function refreshLive() {
-      const el = document.getElementById("live");
+      const restEl = document.getElementById("live-restaurant");
+      const testEl = document.getElementById("live-testing");
       try {
-        const [main, restaurant, pageHash] = await Promise.all([
+        const [main, restaurant, pageHash, testingHash] = await Promise.all([
           window.tokiMainHead(),
           window.tokiBranchStamp("restaurant"),
           window.tokiPagesStamp(),
+          window.tokiBranchStamp("testing"),
         ]);
         const tv = window.tokiTvVerdict(pageHash, restaurant, main);
-        el.className = window.tokiLiveClass(tv.kind);
-        el.innerHTML = window.tokiStatusDot(tv.kind) + " " + tv.text;
+        banner(restEl, tv.kind, "Restaurant · TVs", tv.text);
+        const te = window.tokiTestingVerdict(testingHash, main);
+        banner(testEl, te.kind, "Testing · beta", te.text);
       } catch (e) {
-        el.className = "live bad";
-        el.innerHTML = window.tokiStatusDot("bad") + " Could not read TVs vs today’s work";
+        banner(restEl, "bad", "Restaurant · TVs", "Could not read TVs vs last ship");
+        banner(testEl, "bad", "Testing · beta", "Could not read testing stamp");
       }
     }
 
@@ -301,7 +489,7 @@
         netBits.push("Local " + (sys.ms != null ? sys.ms + " ms" : "ok"));
         if (sys.ms != null && sys.ms > 1500) netLvl = "warn";
         netV = sys.ms != null ? sys.ms + " ms" : "ok";
-      } else if (!onLive()) {
+      } else if (currentEnv() === "local") {
         netLvl = "bad";
         netV = "down";
         netBits.push("Local API");
@@ -384,9 +572,11 @@
           "restaurant API",
           rest.ok ? "ok" : "bad"
         ));
-        foot.textContent = onLive()
-          ? "On Live — Mac meters need the laptop server."
-          : "Could not reach this Mac’s API.";
+        foot.textContent = currentEnv() === "restaurant"
+          ? "On Restaurant — Mac meters need the laptop server."
+          : currentEnv() === "testing"
+            ? "On Testing — Mac meters need the laptop server."
+            : "Could not reach this Mac’s API.";
       }
       grid.innerHTML = tiles.join("");
     }

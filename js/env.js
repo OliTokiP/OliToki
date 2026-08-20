@@ -12,8 +12,12 @@
   if (!global.TOKI_RESTAURANT_API) {
     global.TOKI_RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
   }
-  if (!global.TOKI_TESTING_SITE) global.TOKI_TESTING_SITE = "";
-  if (!global.TOKI_TESTING_API) global.TOKI_TESTING_API = "";
+  if (!global.TOKI_TESTING_SITE) {
+    global.TOKI_TESTING_SITE = "https://toki-api-testing-3rx5m3qpzq-uc.a.run.app";
+  }
+  if (!global.TOKI_TESTING_API) {
+    global.TOKI_TESTING_API = "https://toki-api-testing-3rx5m3qpzq-uc.a.run.app";
+  }
   if (!global.TOKI_API_BASE) {
     if (global.TOKI_ENV === "restaurant") {
       global.TOKI_API_BASE = global.TOKI_RESTAURANT_API;

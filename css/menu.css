@@ -2267,7 +2267,8 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 
 /* Announcement body — bg from --announcement-bg (Main or override);
    text from --announcement-body-text (Main vs Secondary by contrast; JS sets).
-   --box-scale shrinks as more F-column lines are added (fitDrinksBoxes). */
+   --box-scale shrinks as more F-column lines are added (fitDrinksBoxes).
+   Markdown lives here: never paint outside the shell (overflow hidden + fit). */
 #announcement-box .drinks-box-body {
   /* Extra side padding so type sits farther from box edges */
   padding: 20px 40px 24px;
@@ -2280,6 +2281,16 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   justify-content: center;
   gap: calc(10px * var(--box-scale));
   overflow: hidden;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#announcement-box .drinks-box-body > * {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Tighter packing when many announcement lines */
@@ -2311,14 +2322,156 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   color: inherit;
 }
 
+#announcement-box .announcement-md-h1,
+#announcement-box .announcement-md-h2,
+#announcement-box .announcement-md-h3 {
+  margin: 0;
+  font-family: var(--toki-font);
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+#announcement-box .announcement-md-h1 {
+  font-size: 1.42em;
+}
+
+#announcement-box .announcement-md-h2 {
+  font-size: 1.22em;
+}
+
+#announcement-box .announcement-md-h3 {
+  font-size: 1.08em;
+}
+
+#announcement-box .announcement-md-blockquote {
+  margin: 0;
+  padding: 0.08em 0 0.08em 0.55em;
+  border-left: 0.16em solid currentColor;
+  font-style: italic;
+  opacity: 0.95;
+}
+
+#announcement-box .announcement-md-ul,
+#announcement-box .announcement-md-ol {
+  margin: 0;
+  padding: 0 0 0 1.15em;
+}
+
+#announcement-box .announcement-md-li {
+  margin: 0;
+  padding: 0;
+}
+
+#announcement-box .announcement-md-task {
+  list-style: none;
+  margin-left: -0.85em;
+}
+
+#announcement-box .announcement-md-check {
+  display: inline-block;
+  width: 0.85em;
+  margin-right: 0.28em;
+}
+
+#announcement-box .announcement-md-check::before {
+  content: "☐";
+}
+
+#announcement-box .announcement-md-check.is-checked::before {
+  content: "☑";
+}
+
+#announcement-box .announcement-md-hr {
+  display: block;
+  width: 100%;
+  height: 0;
+  margin: 0.12em 0;
+  border: 0;
+  border-top: 2px solid currentColor;
+  opacity: 0.4;
+  flex: 0 0 auto;
+}
+
+#announcement-box .announcement-md-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+#announcement-box .announcement-md-pre {
+  margin: 0;
+  padding: 0.2em 0.35em;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: pre-wrap;
+  font-size: 0.82em;
+  line-height: 1.18;
+}
+
+#announcement-box .announcement-md-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+#announcement-box .announcement-md-th,
+#announcement-box .announcement-md-td {
+  padding: 0.12em 0.28em;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+#announcement-box .announcement-md-th {
+  font-weight: 700;
+  border-bottom: 2px solid currentColor;
+}
+
+#announcement-box .announcement-md-td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+#announcement-box .announcement-md-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+#announcement-box .announcement-md-img-alt {
+  font-style: italic;
+}
+
+#announcement-box .announcement-md-mark {
+  color: var(--highlight, currentColor);
+  font-weight: 700;
+  background: transparent;
+}
+
+#announcement-box .announcement-md-strike {
+  text-decoration: line-through;
+  opacity: 0.78;
+}
+
+#announcement-box .announcement-md-sub,
+#announcement-box .announcement-md-sup {
+  font-size: 0.72em;
+  line-height: 0;
+}
+
 /* Guard if any anchor ever appears in announcement copy */
 #announcement-box a {
   color: inherit;
   text-decoration: none;
+  pointer-events: none;
 }
 
-/* First line slightly larger only when there aren't many lines */
-#announcement-box .drinks-box-body:not(.many-lines) .announcement-line:first-child {
+/* First paragraph slightly larger only when there aren't many lines */
+#announcement-box .drinks-box-body:not(.many-lines) > p.announcement-line:first-child {
   font-size: 1.05em;
 }
 
@@ -2356,8 +2509,20 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 
 #announcement-box .drinks-box-body.is-shout-type .announcement-line,
 #announcement-box .drinks-box-body.is-shout-type .announcement-run,
+#announcement-box .drinks-box-body.is-shout-type .announcement-md-h1,
+#announcement-box .drinks-box-body.is-shout-type .announcement-md-h2,
+#announcement-box .drinks-box-body.is-shout-type .announcement-md-h3,
+#announcement-box .drinks-box-body.is-shout-type .announcement-md-li,
+#announcement-box .drinks-box-body.is-shout-type .announcement-md-th,
+#announcement-box .drinks-box-body.is-shout-type .announcement-md-td,
 #announcement-box .drinks-box-body.is-shout .announcement-line,
-#announcement-box .drinks-box-body.is-shout .announcement-run {
+#announcement-box .drinks-box-body.is-shout .announcement-run,
+#announcement-box .drinks-box-body.is-shout .announcement-md-h1,
+#announcement-box .drinks-box-body.is-shout .announcement-md-h2,
+#announcement-box .drinks-box-body.is-shout .announcement-md-h3,
+#announcement-box .drinks-box-body.is-shout .announcement-md-li,
+#announcement-box .drinks-box-body.is-shout .announcement-md-th,
+#announcement-box .drinks-box-body.is-shout .announcement-md-td {
   font-family: var(--toki-font);
   font-weight: 900 !important;
   font-style: normal !important;
@@ -2376,14 +2541,19 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 }
 
 /* Text quake: lines only. Amp from --shout-shake-amp (sheet K / 0.75) */
-#announcement-box .drinks-box-body.is-shout .announcement-line {
+#announcement-box .drinks-box-body.is-shout .announcement-line,
+#announcement-box .drinks-box-body.is-shout .announcement-md-blockquote,
+#announcement-box .drinks-box-body.is-shout .announcement-md-ul,
+#announcement-box .drinks-box-body.is-shout .announcement-md-ol,
+#announcement-box .drinks-box-body.is-shout .announcement-md-table,
+#announcement-box .drinks-box-body.is-shout .announcement-md-pre {
   animation: ann-shout-shake 0.42s ease-in-out infinite;
   transform-origin: center center;
   will-change: transform;
   max-width: 100%;
 }
 
-#announcement-box .drinks-box-body.is-shout .announcement-line:nth-child(even) {
+#announcement-box .drinks-box-body.is-shout > *:nth-child(even) {
   animation-delay: -0.14s;
   animation-direction: reverse;
 }
@@ -2822,6 +2992,8 @@ body.textbox-wireframes #stage .drink-item-sub,
 body.textbox-wireframes #stage .info-box-subtitle,
 body.textbox-wireframes #stage .drinks-box-subtitle,
 body.textbox-wireframes #stage .announcement-line,
+body.textbox-wireframes #stage .announcement-md-th,
+body.textbox-wireframes #stage .announcement-md-td,
 body.textbox-wireframes #stage .new-sticker-label {
   outline: 1px solid rgba(255, 255, 255, 0.9);
 }

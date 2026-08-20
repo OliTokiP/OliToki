@@ -4,8 +4,9 @@
  * Theme Selector, Background (BG Color / Pattern / Wallpaper), Pattern
  * Color 1 / 2 (selected Themes Database row K/L), and the
  * speed pills (scroll + presentation) on the selected catalog
- * (via TOKI_MANAGER_SHEET.writeStyle), including Presentation Speed and
- * Encore spotlight/background (global Style K/L/M). Board Yes writes Menu Title,
+ * (via TOKI_MANAGER_SHEET.writeStyle), including Presentation Speed.
+ * Encore spotlight/background (global Style K/L/M) are edited on board
+ * editors 1–3 when Presentation Style is Encore. Board Yes writes Menu Title,
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
  * System Settings persist via writeSystem + fallback. Confirm save? No skips the
@@ -959,23 +960,8 @@
         "scroll"
       );
     }
-    // Encore settings (global K/L/M) are always listed here. Presentation
-    // Style choice lives only in per-board editors (see MENU_MANAGER).
-    html += row({
-      key: "encoreStyle",
-      label: "Encore Spotlight Style",
-      value: labelOf(D.encoreStyles, d.encoreStyle),
-    });
-    html += row({
-      key: "encoreSpot",
-      label: "Encore Spotlight Color",
-      value: labelOf(D.encoreSpotColors, d.encoreSpot),
-    });
-    html += row({
-      key: "encoreBg",
-      label: "Encore Background",
-      value: labelOf(D.colorRoles, d.encoreBg),
-    });
+    // Presentation Style + Encore extras (global K/L/M) live on board
+    // editors 1–3 only. Style and Theme shows speed (see MENU_MANAGER).
     html += speedRow(
       "Presentation Speed",
       "presentationSpeed",

@@ -16,7 +16,8 @@ for name in js css assets food-pics data; do
   if [[ -d "$REPO/$name" ]]; then cp -R "$REPO/$name" "$STAGE/$name"; fi
 done
 for html in index.html index2.html index3.html index4.html manager.html \
-  deploy.html preview-all.html new-bug.html push.html glossary.html; do
+  deploy.html preview-all.html new-bug.html push.html glossary.html \
+  suite.html tickets.html brightness.html; do
   if [[ -f "$REPO/$html" ]]; then cp "$REPO/$html" "$STAGE/$html"; fi
 done
 printf '.*\n' > "$STAGE/.gcloudignore"

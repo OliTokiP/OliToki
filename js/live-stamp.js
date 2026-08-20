@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "c928434",
-  "hashFull": "c92843426c30c906549608227b74c080fab30758",
-  "subject": "QA: 2026-08-20 Investigate fallback save behavior (pass 2)"
+  "hash": "74b1a4d",
+  "hashFull": "74b1a4d0f0ae2acaca62abdd61628fbe74a2325e",
+  "subject": "QA: 2026-08-20 Presentation style shouldn't be in Style and Theme - it is local to boards (pass 2)"
 };
