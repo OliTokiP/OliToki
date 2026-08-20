@@ -6376,23 +6376,6 @@
 
   /** Last successful soft/cold load fingerprint (null until first good load). */
   let _lastDataFingerprint = null;
-  /** Last /api/sheets/rev stamp — skip CSV download when the workbook is unchanged. */
-  let _lastWorkbookRev = "";
-
-  async function fetchWorkbookRev() {
-    try {
-      const useProxy = await detectSheetsApiProxy();
-      if (!useProxy) return "";
-      const res = await fetch(tokiApiUrl("/api/sheets/rev") + "?t=" + Date.now(), {
-        cache: "no-store",
-      });
-      if (!res.ok) return "";
-      const j = await res.json();
-      return String((j && j.rev) || "");
-    } catch (e) {
-      return "";
-    }
-  }
 
   /**
    * Fetch one sheet as rows.
@@ -8190,18 +8173,6 @@
     const t0 =
       typeof performance !== "undefined" ? performance.now() : Date.now();
 
-    let pollRev = "";
-    if (opts.soft) {
-      pollRev = await fetchWorkbookRev();
-      if (pollRev && _lastWorkbookRev && pollRev === _lastWorkbookRev) {
-        tokiInfo("refresh: workbook unchanged — skip fetch");
-        return {
-          __tokiUnchanged: true,
-          _fingerprint: _lastDataFingerprint,
-        };
-      }
-    }
-
     const csvJobs = {
       main: fetchSheetRows(cfg.googleSheetGid || "0"),
     };
@@ -8289,7 +8260,6 @@
       dataFingerprint === _lastDataFingerprint
     ) {
       tokiInfo("refresh: sheet unchanged — skip re-render");
-      if (pollRev) _lastWorkbookRev = pollRev;
       const unchanged = { __tokiUnchanged: true, _fingerprint: dataFingerprint };
       return unchanged;
     }
@@ -8381,10 +8351,6 @@
       "fp=" + dataFingerprint
     );
     parsed._fingerprint = dataFingerprint;
-    if (!pollRev) {
-      pollRev = await fetchWorkbookRev();
-    }
-    if (pollRev) _lastWorkbookRev = pollRev;
     return parsed;
   }
 
@@ -15453,11 +15419,14 @@
     return Number(cfg.refreshSeconds) || 30;
   }
 
+  let lastArmedRefreshSec = 0;
+
   function armRefreshTimer(sec) {
     if (refreshTimer) {
       clearInterval(refreshTimer);
       refreshTimer = null;
     }
+    lastArmedRefreshSec = sec || 0;
     if (!sec || sec <= 0) return;
     refreshTimer = setInterval(softReload, sec * 1000);
   }
@@ -15481,13 +15450,14 @@
             if (refreshTimer) {
               clearInterval(refreshTimer);
               refreshTimer = null;
+              lastArmedRefreshSec = 0;
             }
             setFeatureActive("softRefresh", false, "require restart");
             return;
           }
           const sec = getRefreshIntervalSeconds();
-          if (sec > 0) {
-            // Re-arm data poll to the (possibly new) live rate right now.
+          // Do not reset the 30s countdown every 10s — that prevented soft reload.
+          if (sec > 0 && (!refreshTimer || lastArmedRefreshSec !== sec)) {
             armRefreshTimer(sec);
           }
         } catch (e) {}

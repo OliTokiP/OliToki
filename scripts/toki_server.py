@@ -80,8 +80,7 @@ REV_MIN_INTERVAL_S = 1.0
 META_TTL = 120.0
 # Opportunistic cache only (non-force). Menu loads pass force=1 for live sheet edits.
 CSV_TTL = 90.0
-# Fallback only when Drive metadata is unavailable. With Drive, we skip
-# Google entirely until modifiedTime changes — this window is unused.
+# Concurrent force=1 boards share one batchGet if a fetch landed this recently.
 CSV_FORCE_COALESCE_S = 8.0
 _settings_lock = threading.Lock()
 _settings_cache: dict = {"at": 0.0, "data": None}
@@ -900,9 +899,9 @@ class SheetsBackend:
         """
         Load *all* spreadsheet tabs into the CSV cache with one values.batchGet.
 
-        force=True: re-fetch from Google only if the workbook revision changed
-        (Drive modifiedTime). If Drive is unavailable, coalesce within
-        CSV_FORCE_COALESCE_S like before.
+        force=True: re-fetch from Google unless a fetch just landed (coalesce
+        parallel boards). Drive modifiedTime is not a skip signal — Sheets
+        cell edits often do not bump it, which froze live soft-refresh.
         force=False: only fill missing/stale entries (TTL).
         """
         global _csv_batch_event, _csv_batch_error, _csv_book_rev, _csv_book_sid
@@ -913,16 +912,9 @@ class SheetsBackend:
 
         with _csv_lock:
             if force and _csv_cache and _csv_batch_event is None:
-                if (
-                    book_rev
-                    and _csv_book_sid == self.sheet_id
-                    and _csv_book_rev == book_rev
-                ):
-                    _log("csv batch: skip Google (workbook rev unchanged)")
-                    return
                 ages = [now - v["at"] for v in _csv_cache.values()]
                 # Concurrent boards all pass force=1 in the same wave → share one batch
-                if not book_rev and ages and max(ages) < CSV_FORCE_COALESCE_S:
+                if ages and max(ages) < CSV_FORCE_COALESCE_S:
                     _log(
                         f"csv batch: coalesce force "
                         f"(cache max age {max(ages):.2f}s < {CSV_FORCE_COALESCE_S}s)"
