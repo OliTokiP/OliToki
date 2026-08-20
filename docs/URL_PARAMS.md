@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-08-19
+**Last updated:** 2026-08-20
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -28,6 +28,7 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`debug=1`** or **`tokiDebug=1`** | Dump the debug feature table to the console once. |
 | **`portraitDebug=1`** | Draw the Family Portrait lattice outlines. |
 | **`imgScale=0.25`** | Debug only: smash images down (looks terrible on purpose). Bare `?imgScale` = 1/100. |
+| **`encore=new`** | Encore only: park the Spotlight Veil as a **stage sibling** of the camera rig (not a child). Hole x/y still track the lattice point; the veil does not inherit `scale(--encore-zoom)`. Default (omit) keeps the live veil-on-rig path. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 
@@ -47,12 +48,15 @@ These can sit on the query string or after the hash (`#/menu/style?pick=theme`).
 | **`confirm=1`** | Show the Yes/No save dialog. |
 | **`newtheme=1`** | Show create-theme. |
 | **`holdGrid=1`** | Encore grid held (speed 0). |
+| **`encore=new`** | Same as the board flag: Spotlight Veil lives on `#family-portrait-stage`, not on `.family-portrait-rig`. Use with `pres=encore`. |
 
 ## Combine
 
 ```text
 index.html?w=1920&dpr=1&pause=1
 index2.html?w=1920&dpr=1&item=0
+index.html?encore=new
+manager.html?pres=encore&encore=new
 ```
 
 Related: [[SUPPORTED_DEVICES]] · [[DEBUG_CONSOLE]]

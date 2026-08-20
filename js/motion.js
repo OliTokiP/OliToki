@@ -503,10 +503,9 @@
     );
   }
   if (typeof document !== "undefined") {
+    applyEncoreVeilDetachedClass();
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", applyEncoreVeilDetachedClass);
-    } else {
-      applyEncoreVeilDetachedClass();
     }
   }
 
@@ -1058,7 +1057,10 @@
     }
     var plateW = 1500 * (layout.scale || 1);
     var holeR = Math.max(70, plateW * 0.42);
-    if (stage) stage.style.setProperty("--encore-hole-r", holeR + "px");
+    if (stage) {
+      attachEncoreVeil(stage, stage.querySelector(".family-portrait-rig"));
+      stage.style.setProperty("--encore-hole-r", holeR + "px");
+    }
     return layout;
   }
 
