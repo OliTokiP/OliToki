@@ -46,6 +46,7 @@
     tooltipSeq: 0,
     tooltipRootTimer: null,
     tooltipShroudOn: false,
+    tooltipRect: null,
     pendingTip: null,
     tipQueryApplied: false,
     styleScroll: 0,
@@ -1148,6 +1149,10 @@
     } else {
       stopPreviewCycle();
     }
+    if (state.tooltipItems.length) {
+      if (els.app) void els.app.offsetHeight;
+      layoutTooltipOverlay(true);
+    }
   }
 
   function pickerSpec(key) {
@@ -1616,14 +1621,16 @@
   }
 
   var TOOLTIP_FADE_MS = 400;
+  var TOOLTIP_LAYOUT_MS = 520;
   var TOOLTIP_HOLD_MS = 6200;
   var ITEM_ORDER_IDLE_MS = 3000;
   var MSG_BOARD_SAVED = "Board Saved to Restaurant Settings";
   var MSG_ENCORE_SAVED = "Global Encore Style Settings updated";
   var MSG_ORDER_SAVED = "Menu Items Order Saved.";
 
-  function playTooltipAnim(el, frames, onDone) {
+  function playTooltipAnim(el, frames, onDone, duration) {
     var finished = false;
+    var dur = duration == null ? TOOLTIP_FADE_MS : duration;
     function done() {
       if (finished) return;
       finished = true;
@@ -1640,27 +1647,128 @@
         if (from.opacity != null) el.style.opacity = cs.opacity;
         if (from.transform != null) el.style.transform = cs.transform;
         if (from.height != null) el.style.height = cs.height;
+        if (from.top != null) el.style.top = cs.top;
         el._tokiTipAnim.cancel();
       } catch (err) {}
     }
     if (typeof el.animate === "function") {
       var anim = el.animate(frames, {
-        duration: TOOLTIP_FADE_MS,
+        duration: dur,
         easing: "cubic-bezier(0.32, 0.72, 0, 1)",
         fill: "forwards"
       });
       el._tokiTipAnim = anim;
       anim.addEventListener("finish", done);
       anim.addEventListener("cancel", done);
-      setTimeout(done, TOOLTIP_FADE_MS + 100);
+      setTimeout(done, dur + 100);
       return anim;
     }
     var to = frames[frames.length - 1] || {};
     if (to.opacity != null) el.style.opacity = String(to.opacity);
     if (to.transform != null) el.style.transform = to.transform;
     if (to.height != null) el.style.height = to.height;
-    setTimeout(done, TOOLTIP_FADE_MS);
+    if (to.top != null) el.style.top = to.top;
+    setTimeout(done, dur);
     return null;
+  }
+
+  function tooltipBoxPx(rect) {
+    return { top: rect.top + "px", height: rect.height + "px" };
+  }
+
+  function applyTooltipBox(el, rect) {
+    if (!el || !rect) return;
+    el.style.top = rect.top + "px";
+    el.style.height = rect.height + "px";
+  }
+
+  function readTooltipBox(el) {
+    if (!el) return null;
+    var cs = window.getComputedStyle(el);
+    var top = parseFloat(cs.top);
+    var height = parseFloat(cs.height);
+    if (isNaN(top) || isNaN(height) || height <= 0) return null;
+    return { top: Math.round(top), height: Math.round(height) };
+  }
+
+  function tooltipRectsEqual(a, b) {
+    return !!(a && b && a.top === b.top && a.height === b.height);
+  }
+
+  function tooltipRectContains(outer, inner) {
+    if (!outer || !inner) return false;
+    return (
+      outer.top <= inner.top &&
+      outer.top + outer.height >= inner.top + inner.height
+    );
+  }
+
+  function tooltipDisplayRect() {
+    var device = els.device;
+    if (!device) return { top: 0, height: 0 };
+    var dRect = device.getBoundingClientRect();
+    if (state.screen === "home") {
+      var hero = document.querySelector(".home-hero");
+      if (hero) {
+        var hr = hero.getBoundingClientRect();
+        return {
+          top: Math.round(hr.top - dRect.top),
+          height: Math.round(hr.height)
+        };
+      }
+      return { top: 0, height: Math.round(device.clientHeight * 0.75) };
+    }
+    var slot = document.querySelector(".status, .preview");
+    if (slot) {
+      var sr = slot.getBoundingClientRect();
+      return {
+        top: Math.round(sr.top - dRect.top),
+        height: Math.round(sr.height)
+      };
+    }
+    var header = document.querySelector(".header");
+    var top = 0;
+    if (header) {
+      top = Math.round(header.getBoundingClientRect().bottom - dRect.top);
+    }
+    return {
+      top: top,
+      height: Math.round(device.clientWidth * (2 / 3))
+    };
+  }
+
+  function layoutTooltipOverlay(animate) {
+    var root = els.tooltipRoot;
+    if (!root || root.hidden) return;
+    var shroud = root.querySelector(".tooltip-shroud");
+    var scroll = els.tooltipScroll || root.querySelector(".tooltip-scroll");
+    var dest = tooltipDisplayRect();
+    if (!dest || dest.height <= 0) return;
+    var from = readTooltipBox(scroll) || state.tooltipRect;
+    state.tooltipRect = dest;
+    var same = tooltipRectsEqual(from, dest);
+    if (!animate || !from || same) {
+      if (scroll && scroll._tokiTipAnim && typeof scroll._tokiTipAnim.cancel === "function") {
+        try {
+          scroll._tokiTipAnim.cancel();
+        } catch (err) {}
+      }
+      applyTooltipBox(shroud, dest);
+      applyTooltipBox(scroll, dest);
+      return;
+    }
+    var expanding = tooltipRectContains(dest, from);
+    if (expanding) applyTooltipBox(shroud, dest);
+    else applyTooltipBox(shroud, from);
+    playTooltipAnim(
+      scroll,
+      [tooltipBoxPx(from), tooltipBoxPx(dest)],
+      function () {
+        applyTooltipBox(scroll, dest);
+        applyTooltipBox(shroud, dest);
+      },
+      TOOLTIP_LAYOUT_MS
+    );
   }
 
   function tooltipMarkup(opts) {
@@ -1747,6 +1855,7 @@
       root.hidden = false;
       if (wasHidden) {
         void root.offsetWidth;
+        layoutTooltipOverlay(false);
         fadeTooltipShroud(true);
       } else {
         root.classList.add("is-on");
@@ -1755,7 +1864,10 @@
       if (state.tooltipShroudOn) fadeTooltipShroud(false);
       clearTimeout(state.tooltipRootTimer);
       state.tooltipRootTimer = setTimeout(function () {
-        if (!state.tooltipItems.length) root.hidden = true;
+        if (!state.tooltipItems.length) {
+          root.hidden = true;
+          state.tooltipRect = null;
+        }
       }, TOOLTIP_FADE_MS);
     }
   }
@@ -2084,7 +2196,6 @@
   }
 
   function go(screen, boardId) {
-    dismissAllTooltips(true);
     if (state.screen === "style") rememberStyleScroll();
     state.picker = null;
     state.dialog = null;
@@ -2225,7 +2336,6 @@
       renderDialog();
       return;
     }
-    dismissAllTooltips(true);
     var target = backTarget();
     if (state.screen === target.screen && String(state.boardId || "") === String(target.boardId || "")) {
       return;
@@ -3778,7 +3888,6 @@
       if (confirmSaveOff()) {
         if (anySaveDirty()) confirmChoice("yes", true);
         readHash();
-        dismissAllTooltips(true);
         renderAll();
         return;
       }
@@ -3826,7 +3935,6 @@
       if (confirmSaveOff()) {
         if (anySaveDirty()) confirmChoice("yes", true);
         readHash();
-        dismissAllTooltips(true);
         renderAll();
         return;
       }
@@ -3844,7 +3952,6 @@
     readHash();
     var boardChanged = (target.boardId || null) !== (prevBoard || null);
     if (target.screen !== prevScreen || boardChanged) {
-      dismissAllTooltips(true);
       renderAll();
     } else {
       // Same screen (hashchange/pop from our writeHash when entering Style,
@@ -4136,6 +4243,7 @@
         slot.style.height = "";
       }
       syncEncoreLayout();
+      if (state.tooltipItems.length) layoutTooltipOverlay(false);
       return;
     }
     var pad = 32;
@@ -4149,6 +4257,7 @@
       slot.style.height = 844 * s + "px";
     }
     syncEncoreLayout();
+    if (state.tooltipItems.length) layoutTooltipOverlay(false);
   }
 
   function escapeHtml(s) {
@@ -4166,6 +4275,7 @@
     els.dialog = document.getElementById("dialog");
     els.toast = document.getElementById("toast");
     els.tooltipRoot = document.getElementById("tooltip-root");
+    els.tooltipScroll = document.getElementById("tooltip-scroll");
     els.tooltipStack = document.getElementById("tooltip-stack");
     els.device.addEventListener("click", onClick);
     function blockHeroScroll(e) {

@@ -1,9 +1,20 @@
 # What’s New
 
-**Last updated:** 2026-08-20 00:40  
+**Last updated:** 2026-08-20 01:05  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 01:05 — Menu Manager notification stack follows splash
+
+**Boards / surface:** `manager.html` (phone UI — not the TV boards)  
+**Sheet:** none  
+**Summary:** The notification stack no longer sits in a fixed mini-display strip when you back out to splash mid-toast. The shroud snaps to `.home-hero` (everything except the two splash buttons); the centering box eases into that area so the cards float to the new middle. Settings screens still veil only the top slot, so the list stays tappable.
+
+### Docs updated
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
 
 ---
 

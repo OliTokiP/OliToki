@@ -1566,38 +1566,42 @@ img {
 }
 
 /* —— Tooltip stack (mini-display overlay)
-   Covers the top slot (.status / .preview, --top-slot-h) with a shroud.
-   Cards stack like Notification Center: oldest on top, newest below;
-   the stack stays vertically centered as cards enter/leave.
+   Settings: shroud + stack box cover the top slot (.status / .preview).
+   Splash: they cover .home-hero (not .home-body / the two buttons).
+   Shroud geometry is JS (instant on grow). The stack box (.tooltip-scroll)
+   animates top/height so cards re-center. CSS fallback is the settings slot.
    See docs/MENU_MANAGER.md §Tooltip.
 */
 
 .tooltip-root {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
-  height: var(--top-slot-h);
+  inset: 0;
   z-index: 18;
   pointer-events: none;
   overflow: hidden;
 }
 
-.tooltip-root.is-on {
-  pointer-events: auto;
-}
-
-.tooltip-shroud {
+.tooltip-shroud,
+.tooltip-scroll {
   position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--main) 52%, transparent);
-  opacity: 0;
+  left: 0;
+  right: 0;
+  top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  height: var(--top-slot-h);
   pointer-events: none;
 }
 
+.tooltip-shroud {
+  background: color-mix(in srgb, var(--main) 52%, transparent);
+  opacity: 0;
+}
+
+.tooltip-root.is-on .tooltip-shroud,
+.tooltip-root.is-on .tooltip-scroll {
+  pointer-events: auto;
+}
+
 .tooltip-scroll {
-  position: absolute;
-  inset: 0;
   z-index: 1;
   overflow-x: hidden;
   overflow-y: auto;
