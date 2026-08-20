@@ -5,6 +5,11 @@ secrets/
 !tsconfig.json
 !data/manager-fallback.json
 
+# Local build / agent droppings (Suite App build, agent exits, etc.)
+Suite.app/
+grok.exit
+grok-*.log
+
 # Local / OS
 .DS_Store
 __pycache__/

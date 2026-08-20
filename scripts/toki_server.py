@@ -2340,6 +2340,34 @@ def make_handler(
                     import toki_deploy
 
                     result = toki_deploy.file_deploy_issue(body or {})
+                    # Dispatch the workflow explicitly from the local Mac so that
+                    # "File deploy" in the UI reliably starts the ship/push without
+                    # depending only on the GitHub issues event.
+                    try:
+                        import subprocess
+                        f = body or {}
+                        t = f.get("target") or "testing"
+                        src = f.get("source") or "main"
+                        sh = f.get("ship") or "both"
+                        p = f.get("pin") or "auto"
+                        dry = str(bool(f.get("dry"))).lower()
+                        conf = str(bool(f.get("confirm") or f.get("confirm-restaurant"))).lower()
+                        nt = f.get("notes") or ""
+                        disp_args = [
+                            "/usr/local/bin/gh", "workflow", "run", "deploy.yml",
+                            "--ref", "main",
+                            "-f", f"target={t}",
+                            "-f", f"source={src}",
+                            "-f", f"ship={sh}",
+                            "-f", f"pin={p}",
+                            "-f", f"dry_run={dry}",
+                            "-f", f"confirm_restaurant={conf}",
+                            "-f", f"notes={nt}",
+                        ]
+                        subprocess.run(disp_args, capture_output=True, text=True, timeout=20)
+                        result["dispatched"] = True
+                    except Exception as _de:
+                        _log(f"deploy dispatch warning (push may rely on issue event): {_de}")
                     self._json(200, result)
                 except ValueError as e:
                     self._json(400, {"error": str(e)})

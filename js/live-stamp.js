@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "b2a598a",
-  "hashFull": "b2a598a926214e3e5c324037f11805c6f524a5e9",
-  "subject": "QA: 2026-08-20 Markdown Support for Announcements Panel (pass 2)"
+  "hash": "f52d195",
+  "hashFull": "f52d195a5fdd29221ffe809afcbdc8e7680bffba",
+  "subject": "Fix Deployer to actually push when user files from UI: dispatch workflow explicitly on local submit + robust issues trigger for opened+ labeled + ignore Suite.app/grok droppings + clean stamp dupe"
 };
