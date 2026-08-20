@@ -1186,7 +1186,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   border: 0;
   font-family: var(--toki-font);
   font-weight: 900;
-  font-size: 0.25714em; /* ~144px when wrapper is 560px */
+  font-size: calc(0.25714em * var(--toki-font-scale, 1)); /* ~144px * scale (0.92 for Poppins) when wrapper 560px */
   line-height: 1;
   letter-spacing: -0.02em;
   color: #ffffff;
