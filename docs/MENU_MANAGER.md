@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-20 (tooltip stack adapts splash vs mini-display) 
+**Last updated:** 2026-08-20 (tooltip veil full-page behind chrome) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -109,8 +109,9 @@ Add a field: option list in `manager-data.js` → picker spec + `styleRows()` br
 
 The `#tooltip-root` stack (manager.html + manager.js + manager.css) is a reusable overlay for post-choice explanations. Confirm Changes and dropdown pickers stay as they are.
 
-- **Display area** is the mini-display on settings screens (top slot: `.status` or `.preview`, `--top-slot-h`) and `.home-hero` on splash (the bunny, not `.home-body` / the two buttons). A shroud covers that area only; the list and splash buttons stay tappable. Veil opacity is WAAPI-only (no CSS snap); it fades with the last card’s wind-down.
-- Screen changes do **not** clear the stack. The shroud snaps to the new area when growing (settings → splash) so the veil is coherent immediately; when shrinking it stays with the stack box until the ease finishes so cards never hang over the list without a veil. `.tooltip-scroll` (the invisible centering box) animates `top` / `height` with the same WAAPI bezier as the cards (~0.52s) so the stack re-centers into the new area.
+- **Layering:** the veil is full-device (`#tooltip-root` z-index 2) and paints in front of splash (`.home-hero`), the misc-data mini-display (`.status`), and the mini-presentation (`.preview`) only. Header, option lists, splash buttons (`.home-body`), and footer sit at z-index 5, so they stay bright and tappable. The shroud does **not** resize with the screen — chrome hides it.
+- **Scaffold:** `.tooltip-scroll` tracks the current plate in layout pixels (divides out `.device` CSS scale so desktop studio and native phone match). Settings = top slot (`.status` / `.preview`); splash = `.home-hero`. It eases `top` / `height` with the same WAAPI bezier as the cards (~0.52s) so the stack re-centers. Veil opacity is WAAPI-only (no CSS snap); it fades with the last card’s wind-down.
+- Screen changes do **not** clear the stack.
 - Cards stack like Notification Center: oldest on top, newest below. The stack stays centered as cards enter or leave. Drop-shadow sits on the slot (filter) with height clip on an inner wrapper so the shadow is not cropped. Overflow stack is on `.tooltip-scroll` so a tall stack pans on phone and desktop.
 - New cards fade and slide in (~0.4s) via the Web Animations API (not CSS transitions), so OS “Reduce Motion” does not skip them. Each auto-fades and slides out after ~6s (oldest first). Slot height animates so neighbors physically slide as the centered stack grows or shrinks (Notification Center). Tap a card to dismiss that card; tap empty stack / shroud / Escape to dismiss the stack.
 - **Info:** centered bold title (hard return) + left-aligned body. Multiple lines become a `•` list (soft return between items).

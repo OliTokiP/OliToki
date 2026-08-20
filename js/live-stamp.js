@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "a8d9caa",
-  "hashFull": "a8d9caa31af4a26c8d4af354eaea06b1e55f2a0a",
-  "subject": "QA: 2026-08-20 Encore Ticket Inquiry (pass 1)"
+  "hash": "91b92d1",
+  "hashFull": "91b92d11b297703ed44de706f7e2908a1ef97e8f",
+  "subject": "QA: 2026-08-20 Notification stack shroud nuance needed (pass 2)"
 };

@@ -1719,42 +1719,36 @@
     return !!(a && b && a.top === b.top && a.height === b.height);
   }
 
-  function tooltipRectContains(outer, inner) {
-    if (!outer || !inner) return false;
-    return (
-      outer.top <= inner.top &&
-      outer.top + outer.height >= inner.top + inner.height
-    );
+  function deviceCssScale() {
+    var device = els.device;
+    if (!device || !device.offsetWidth) return 1;
+    return device.getBoundingClientRect().width / device.offsetWidth || 1;
+  }
+
+  function rectInDevice(el) {
+    var device = els.device;
+    if (!el || !device) return null;
+    var scale = deviceCssScale();
+    var d = device.getBoundingClientRect();
+    var r = el.getBoundingClientRect();
+    return {
+      top: Math.round((r.top - d.top) / scale),
+      height: Math.round(r.height / scale)
+    };
   }
 
   function tooltipDisplayRect() {
     var device = els.device;
     if (!device) return { top: 0, height: 0 };
-    var dRect = device.getBoundingClientRect();
     if (state.screen === "home") {
-      var hero = document.querySelector(".home-hero");
-      if (hero) {
-        var hr = hero.getBoundingClientRect();
-        return {
-          top: Math.round(hr.top - dRect.top),
-          height: Math.round(hr.height)
-        };
-      }
+      var hero = rectInDevice(document.querySelector(".home-hero"));
+      if (hero && hero.height > 0) return hero;
       return { top: 0, height: Math.round(device.clientHeight * 0.75) };
     }
-    var slot = document.querySelector(".status, .preview");
-    if (slot) {
-      var sr = slot.getBoundingClientRect();
-      return {
-        top: Math.round(sr.top - dRect.top),
-        height: Math.round(sr.height)
-      };
-    }
-    var header = document.querySelector(".header");
-    var top = 0;
-    if (header) {
-      top = Math.round(header.getBoundingClientRect().bottom - dRect.top);
-    }
+    var slot = rectInDevice(document.querySelector(".status, .preview"));
+    if (slot && slot.height > 0) return slot;
+    var header = rectInDevice(document.querySelector(".header"));
+    var top = header ? header.top + header.height : 0;
     return {
       top: top,
       height: Math.round(device.clientWidth * (2 / 3))
@@ -1766,6 +1760,10 @@
     if (!root || root.hidden) return;
     var shroud = root.querySelector(".tooltip-shroud");
     var scroll = els.tooltipScroll || root.querySelector(".tooltip-scroll");
+    if (shroud) {
+      shroud.style.top = "";
+      shroud.style.height = "";
+    }
     var dest = tooltipDisplayRect();
     if (!dest || dest.height <= 0) return;
     var from = readTooltipBox(scroll) || state.tooltipRect;
@@ -1777,19 +1775,14 @@
           scroll._tokiTipAnim.cancel();
         } catch (err) {}
       }
-      applyTooltipBox(shroud, dest);
       applyTooltipBox(scroll, dest);
       return;
     }
-    var expanding = tooltipRectContains(dest, from);
-    if (expanding) applyTooltipBox(shroud, dest);
-    else applyTooltipBox(shroud, from);
     playTooltipAnim(
       scroll,
       [tooltipBoxPx(from), tooltipBoxPx(dest)],
       function () {
         applyTooltipBox(scroll, dest);
-        applyTooltipBox(shroud, dest);
       },
       TOOLTIP_LAYOUT_MS
     );

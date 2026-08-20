@@ -1,17 +1,17 @@
 # What’s New
 
-**Last updated:** 2026-08-20 01:05  
+**Last updated:** 2026-08-20 01:35  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 ---
 
-## 2026-08-20 01:05 — Menu Manager notification stack follows splash
+## 2026-08-20 01:35 — Menu Manager notification veil sits behind chrome
 
 **Boards / surface:** `manager.html` (phone UI — not the TV boards)  
 **Sheet:** none  
-**Summary:** The notification stack no longer sits in a fixed mini-display strip when you back out to splash mid-toast. The shroud snaps to `.home-hero` (everything except the two splash buttons); the centering box eases into that area so the cards float to the new middle. Settings screens still veil only the top slot, so the list stays tappable.
+**Summary:** The notification veil is full-page and paints only over splash, the mini-display, and the Style preview — header, option lists, splash buttons, and footer stay on top, so the shroud no longer visibly grows or shrinks. The invisible stack box still eases to the current plate (hero vs top slot) and tracks that plate in layout pixels so a scaled desktop studio matches the phone.
 
 ### Docs updated
 - [MENU_MANAGER.md](./MENU_MANAGER.md)
