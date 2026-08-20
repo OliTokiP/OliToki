@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "91b92d1",
-  "hashFull": "91b92d11b297703ed44de706f7e2908a1ef97e8f",
-  "subject": "QA: 2026-08-20 Notification stack shroud nuance needed (pass 2)"
+  "hash": "b74d0a5",
+  "hashFull": "b74d0a5516103750109b8b5e45241b27e5a79daa",
+  "subject": "QA: 2026-08-20 Add Disconnect Agent feature to grok pills (pass 1)"
 };
