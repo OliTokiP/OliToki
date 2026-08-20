@@ -1,22 +1,32 @@
 # What’s New
 
-**Last updated:** 2026-08-19 12:30  
+**Last updated:** 2026-08-20 00:40  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 ---
 
-## 2026-08-19 12:30 — ← Suite on Listener home + matching Suite bar
+## 2026-08-20 00:40 — Suite Health grid
 
-**Boards / surface:** Listener homepage, Suite, Deployer, Tickets, Menu Manager splash  
+**Boards / surface:** `suite.html` (operator hub — not the TV boards)  
 **Sheet:** none  
-**Summary:** Operator pages share one tiny top bar from `js/surfaces.js` `nav`. Children start with **← Suite**; the current page is plain text. Listener home now has that bar (links use this Mac’s menu server, rewritten to the hostname you used). Menu Manager splash gets the same bar. Deployer Tickets points at `new-bug.html`, same as Suite.
+**Summary:** Suite front page now has a **Health** block: the Pages vs git Live line, then a two-column grid (Network, Load, Swap, Grok, Open sockets, Leftover CLOSE_WAIT, Sheets, Servers). Numbers are green / yellow / red. Mac meters come from local `GET /api/sys` (never Google). On GitHub Pages the Mac tiles show “Mac only”; restaurant API still pings Cloud Run.
 
 ### Docs updated
 - [DEPLOYER.md](./DEPLOYER.md)
-- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
-- [MENU_MANAGER.md](./MENU_MANAGER.md)
+
+---
+
+## 2026-08-19 23:28 — Wallpaper average-color Background Plate
+
+**Boards / surface:** all four live boards + wall preview  
+**Sheet:** Style BG Wallpaper, BG Opacity, BG Blend Mode  
+**Summary:** Wallpaper at 100% opacity and Normal blend paints the Background Plate with the wallpaper’s average color so the dual-layer scroll/crossfade loop does not flash Style BG Color. Other opacity or blend values keep the sheet BG Color. Contract is [STYLE_GUIDE.md](./STYLE_GUIDE.md) §11 (`maybeApplyImageAverageAsPlate` in `js/menu.js`; first landed 2026-08-11).
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
 
 ---
 

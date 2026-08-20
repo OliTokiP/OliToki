@@ -15344,6 +15344,10 @@
       renderList();
       renderFooterBoxes(); // includes fitFooterBoxes()
       applyStageBackground();
+      if (_encoreSolidBg) {
+        const g = document.getElementById("galaxy") || els.galaxy;
+        if (g) g.style.backgroundColor = encoreBackgroundHex();
+      }
       applyBgPattern();
       // Image may be enabled after a color-only load — start pan if needed
       if (config.bgImage) startGalaxyScroll();

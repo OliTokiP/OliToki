@@ -33,6 +33,7 @@ import json
 import mimetypes
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -1816,6 +1817,166 @@ class SheetsBackend:
         }
 
 
+_SYS_LOCK = threading.Lock()
+_SYS_CACHE: dict = {"at": 0.0, "data": None}
+SYS_TTL = 2.5
+
+
+def _ps_ax() -> str:
+    try:
+        r = subprocess.run(
+            ["ps", "-axo", "pid=,command="],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        return r.stdout or ""
+    except Exception:
+        return ""
+
+
+def _parse_swap(text: str) -> tuple[float, float]:
+    tot = used = 0.0
+    m = re.search(r"total\s*=\s*([\d.]+)\s*M", text, re.I)
+    if m:
+        tot = float(m.group(1))
+    m = re.search(r"used\s*=\s*([\d.]+)\s*M", text, re.I)
+    if m:
+        used = float(m.group(1))
+    return tot, used
+
+
+def collect_sys_snapshot(port: int, bind: str, backend) -> dict:
+    """Mac load / grok / sockets. Cached; never calls Google."""
+    now = time.time()
+    with _SYS_LOCK:
+        hit = _SYS_CACHE.get("data")
+        if hit and now - float(_SYS_CACHE.get("at") or 0) < SYS_TTL:
+            return dict(hit)
+
+    cpus = os.cpu_count() or 1
+    try:
+        load1, load5, load15 = os.getloadavg()
+    except OSError:
+        load1 = load5 = load15 = 0.0
+
+    swap_tot = swap_used = 0.0
+    try:
+        sw = subprocess.run(
+            ["sysctl", "vm.swapusage"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        swap_tot, swap_used = _parse_swap(sw.stdout or "")
+    except Exception:
+        pass
+
+    mem_mb = 0
+    try:
+        r = subprocess.run(
+            ["sysctl", "-n", "hw.memsize"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        mem_mb = int(int((r.stdout or "0").strip() or 0) / (1024 * 1024))
+    except Exception:
+        pass
+
+    grok = 0
+    grok_tickets = 0
+    servers = 0
+    server_pids: list[int] = []
+    for line in _ps_ax().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 1)
+        if len(parts) < 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        cmd = parts[1]
+        if "toki_server.py" in cmd and "zsh" not in cmd:
+            servers += 1
+            server_pids.append(pid)
+        if "listener.py" in cmd or "zsh -c" in cmd:
+            continue
+        if (
+            "/usr/local/bin/grok " in cmd
+            or cmd.strip() == "grok"
+            or cmd.startswith("grok ")
+        ):
+            grok += 1
+        if "toki-listener/tickets" in cmd and "run-grok" in cmd:
+            grok_tickets += 1
+
+    listen = established = close_wait = 0
+    if server_pids:
+        try:
+            r = subprocess.run(
+                [
+                    "lsof",
+                    "-nP",
+                    "-p",
+                    ",".join(str(p) for p in server_pids),
+                    "-a",
+                    "-iTCP",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            for ln in (r.stdout or "").splitlines():
+                if "(LISTEN)" in ln:
+                    listen += 1
+                elif "(ESTABLISHED)" in ln:
+                    established += 1
+                elif "(CLOSE_WAIT)" in ln:
+                    close_wait += 1
+        except Exception:
+            pass
+
+    live = None
+    if backend:
+        with _settings_lock:
+            cached = _settings_cache.get("data")
+            if isinstance(cached, dict):
+                live = dict(cached)
+
+    data = {
+        "ok": True,
+        "mac": True,
+        "hosted": False,
+        "cpus": cpus,
+        "load1": round(load1, 2),
+        "load5": round(load5, 2),
+        "load15": round(load15, 2),
+        "swapTotalMb": round(swap_tot, 1),
+        "swapUsedMb": round(swap_used, 1),
+        "swapUsedPct": round((100.0 * swap_used / swap_tot), 1) if swap_tot else 0.0,
+        "memTotalMb": mem_mb,
+        "grok": grok,
+        "grokTickets": grok_tickets,
+        "servers": servers,
+        "listen": listen,
+        "established": established,
+        "closeWait": close_wait,
+        "sheetsApi": backend is not None,
+        "dataSource": (live or {}).get("dataSource") or "",
+        "port": port,
+        "bind": bind,
+        "pid": os.getpid(),
+    }
+    with _SYS_LOCK:
+        _SYS_CACHE["at"] = time.time()
+        _SYS_CACHE["data"] = data
+    return dict(data)
+
+
 def make_handler(
     api: dict, root: Path, bind: str = "127.0.0.1", api_only: bool = False
 ):
@@ -2068,6 +2229,14 @@ def make_handler(
                         ),
                     },
                 )
+                return
+
+            if path == "/api/sys":
+                try:
+                    sys_port = int(self.server.server_address[1])
+                except Exception:
+                    sys_port = 0
+                self._json(200, collect_sys_snapshot(sys_port, bind, backend))
                 return
 
             if path == "/api/settings":

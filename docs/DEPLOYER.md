@@ -1,16 +1,16 @@
 # Deployer
 
-**Last updated:** 2026-08-19
+**Last updated:** 2026-08-18
 
-Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards. The top bar is the same on Suite, Deployer, and Tickets (current page is plain text in that slot). Menu Manager opens the local Manager in a new window. Shared list: `js/surfaces.js` `nav`.
+Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
+
+**Health** on Suite (under the hub blurb): Pages vs git plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Live (Pages) still shows Pages vs git and the restaurant API.
 
 Phone form: [`deploy.html`](../deploy.html). Worker: GitHub Actions [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 
 Your laptop is staging. **main** is today’s work. **testing** is unmerged beta. **restaurant** is what the dining-room TVs run.
 
 **Set and forget:** leave Ship on **Website + API**. One restaurant ship updates Pages and Cloud Run together. Menu edits do not need a redeploy. The laptop is not the live server. Only ship again when app code changes.
-
-The Sheets robot key is **not** in git. It lives in Cloud Run secret `toki-sa-json` and in `secrets/google-service-account.json` on the Mac. A Deployer push does not “reconnect” the API. If Menu Settings cannot write the sheet, the API process is down, cold, or quota-limited — ship will not restore a missing key. Both Cloud Run services stay at **min instances 1** so they do not scale to zero.
 
 ## Two branches
 
@@ -24,13 +24,10 @@ GitHub Pages **must** publish from `restaurant`, not `main`. Otherwise every Lis
 
 ## How to ship
 
-1. Open [`deploy.html`](https://olitokip.github.io/OliToki/deploy.html) (or local `/deploy.html` from Suite App).
+1. Open [`deploy.html`](https://olitokip.github.io/OliToki/deploy.html) (or local `/deploy.html`).
 2. Pick **Testing** (default) or **Restaurant**.
-3. Tap **File … deploy**. Suite App stays on Deployer. The Mac files the GitHub issue (signed in as `OliTokiP` via `gh`). Dining-room checkbox still required for Restaurant.
-4. **Latest GitHub commit** (below the form) opens the current commit in a **new window**. It updates after you file. Do not navigate the Suite App window to GitHub — there is no back button.
-5. Actions merges the source onto that branch, writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
-
-On Live (GitHub Pages) without the Mac, GitHub’s new-issue form opens in a **new window** instead. Submit there; Deployer stays put.
+3. File the issue. You must be signed into GitHub as someone with repo write access.
+4. Actions merges the source onto that branch, writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
 
 Restaurant requires the dining-room checkbox. Dry run comments the plan only.
 
@@ -64,4 +61,3 @@ TOKI_GCP_SERVICE=toki-api-testing TOKI_DEPLOY_MODE=web ./scripts/cloud-run/deplo
 - Force-push
 - Point Pages back at `main`
 - Put the service account in `js/`
-- Navigate the Suite App window to GitHub (no back button). File from Deployer; **Latest GitHub commit** opens a new window.

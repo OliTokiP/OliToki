@@ -4,19 +4,61 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
-  <title>Suite</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819dot1" />
+  <title>Suite — OliToki</title>
   <style>
+    :root { color-scheme: light dark; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font: 16px/1.4 system-ui, sans-serif;
+      margin: 0 auto;
+      padding: 1.25rem;
+      max-width: 36rem;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    .sub { color: #666; margin: 0 0 1.25rem; font-size: .95rem; }
     .live {
       font-weight: 600;
       padding: .65rem .85rem;
       border-radius: 10px;
       background: #eee;
-      margin: 0 0 .75rem;
+      margin: 0 0 .55rem;
       font-size: .92rem;
     }
     .live p { margin: .2rem 0; font-weight: 500; }
+    .health { margin: 0 0 1.15rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .45rem;
+    }
+    .tile {
+      border-radius: 10px;
+      background: #eee;
+      padding: .55rem .7rem .5rem;
+      min-height: 3.35rem;
+      box-sizing: border-box;
+    }
+    .tile .k {
+      font-size: .7rem;
+      font-weight: 650;
+      letter-spacing: .045em;
+      text-transform: uppercase;
+      color: #666;
+    }
+    .tile .v {
+      font-size: 1.18rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      margin-top: .08rem;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .tile .s { font-size: .78rem; color: #666; margin-top: .08rem; }
+    .ok { color: #1b7f37; }
+    .warn { color: #b7791f; }
+    .bad { color: #c0392b; }
     .lab { display: block; font-weight: 600; margin: 1rem 0 .35rem; }
+    .health .lab { margin-top: 0; }
     .cards { display: flex; flex-direction: column; gap: .55rem; }
     a.card {
       display: block;
@@ -39,20 +81,29 @@
     th:first-child, td:first-child { text-align: left; font-weight: 600; }
     tr { border-bottom: 1px solid #ddd; }
     th { font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; color: #666; }
-    .codes { font-size: .88rem; }
-    .codes td:first-child { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+    .tiny { color: #666; font-size: .88rem; }
+    a { color: inherit; }
     @media (prefers-color-scheme: dark) {
-      .live { background: #2a2a2a; }
-      a.card .blurb, th { color: #aaa; }
+      .live, .tile { background: #2a2a2a; }
+      .sub, .tiny, a.card .blurb, th, .tile .k, .tile .s { color: #aaa; }
       tr { border-bottom-color: #333; }
+      .ok { color: #5ee08a; }
+      .warn { color: #f0c14b; }
+      .bad { color: #ff7b7b; }
     }
   </style>
 </head>
-<body class="suite-page">
-  <p class="suite-nav" id="nav"><span class="is-current">Suite</span> · <a href="deploy.html">Deployer</a> · <a href="http://127.0.0.1:18765/">Tickets</a> · <a href="manager.html" target="_blank" rel="noopener">Menu Manager</a></p>
+<body>
+  <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="new-bug.html">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Suite</h1>
   <p class="sub">Phone hub for the development tools. Same idea as Launcher: this copy, plus Live. Ship from Deployer. File tickets from Tickets.</p>
-  <div class="live" id="live">Pages vs git: checking…</div>
+
+  <div class="health">
+    <div class="lab">Health</div>
+    <div class="live" id="live">Pages vs git: checking…</div>
+    <div class="grid" id="sys"></div>
+    <p class="tiny" id="sys-foot"></p>
+  </div>
 
   <div class="lab">Tools</div>
   <div class="cards" id="tools"></div>
@@ -65,28 +116,11 @@
 
   <p class="tiny" id="hint"></p>
 
-  <div class="lab">URL codes</div>
-  <p class="tiny">Stick on a board URL. First <code>?</code>, then <code>&amp;</code>. Fire Stick / AbleSign: <code>?w=1920&amp;dpr=1</code>.</p>
-  <table class="codes">
-    <thead>
-      <tr><th>Code</th><th>What it does</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>dpr=1</td><td>Honest 1× pixels. Stops AbleSign from loading 4K art on a 1080p stick.</td></tr>
-      <tr><td>w=1920</td><td>Pretend the stage is 1920 CSS pixels wide (<code>width</code> too).</td></tr>
-      <tr><td>h=1080</td><td>Pretend height is 1080 (<code>height</code>). Missing side is 16:9.</td></tr>
-      <tr><td>display=1920x1080</td><td>Same as w + h.</td></tr>
-      <tr><td>pause=1</td><td>Freeze motion (screenshots).</td></tr>
-      <tr><td>item=0</td><td>Start on that menu row.</td></tr>
-      <tr><td>debug=1</td><td>Dump debug table to the console.</td></tr>
-      <tr><td>preview=all</td><td>Wall preview path — not for TVs.</td></tr>
-    </tbody>
-  </table>
-  <p class="tiny">Full list including Manager QA codes: repo <code>docs/URL_PARAMS.md</code>.</p>
-
-  <script src="js/surfaces.js?v=20260819dot1"></script>
+  <script src="js/surfaces.js?v=20260820health"></script>
   <script>
+    const REPO = "OliTokiP/OliToki";
     const PAGES = "https://olitokip.github.io/OliToki";
+    const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
     const SUITE = window.TOKI_SUITE || {};
 
     function hereBase() {
@@ -103,15 +137,17 @@
     }
 
     (function paintNav() {
-      const html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Suite");
-      if (html) document.getElementById("nav").innerHTML = html;
+      const nav = SUITE.nav || [];
+      if (!nav.length) return;
+      document.getElementById("nav").innerHTML = nav.map((item) => {
+        if (item.name === "Suite") return "Suite";
+        return '<a href="' + item.page + '">' + item.name + "</a>";
+      }).join(" · ");
     })();
 
     function card(item) {
-      var h = (item && item.name === "Tickets" && window.tokiGetTicketsUrl) ? window.tokiGetTicketsUrl() : (item.page || "#");
-      var extra = (item && item.name === "Menu Manager") ? ' target="_blank" rel="noopener"' : "";
       return (
-        '<a class="card" href="' + h + '"' + extra + ">" +
+        '<a class="card" href="' + item.page + '">' +
         item.name +
         (item.blurb ? '<span class="blurb">' + item.blurb + "</span>" : "") +
         "</a>"
@@ -120,7 +156,7 @@
 
     const tools = SUITE.tools || [
       { name: "Deployer", page: "deploy.html", blurb: "Ship testing or restaurant." },
-      { name: "Tickets", page: "tickets.html", blurb: "Queues and new tickets on this Mac." },
+      { name: "Tickets", page: "new-bug.html", blurb: "Log a bug or a feature request." },
       { name: "Menu Manager", page: "manager.html", blurb: "Edit the menu on your phone." },
     ];
     document.getElementById("tools").innerHTML = tools
@@ -129,8 +165,7 @@
       .join("");
 
     function linkCell(href, label) {
-      var blank = /manager\.html/i.test(href) ? ' target="_blank" rel="noopener"' : "";
-      return '<a href="' + href + '"' + blank + ">" + (label || "open") + "</a>";
+      return '<a href="' + href + '">' + (label || "open") + "</a>";
     }
 
     function tableFor(rows) {
@@ -168,53 +203,195 @@
     bits.push("A git push to main does not update TVs.");
     document.getElementById("hint").textContent = bits.join(" ");
 
-    async function refreshLive() {
-      const el = document.getElementById("live");
-      const dot = window.tokiStatusDot || function () { return ""; };
+    function cls(lvl) {
+      return lvl === "bad" ? "bad" : lvl === "warn" ? "warn" : "ok";
+    }
+    function band(n, okAt, warnAt) {
+      if (n == null || isNaN(n)) return "warn";
+      if (n <= okAt) return "ok";
+      if (n <= warnAt) return "warn";
+      return "bad";
+    }
+    function tile(k, v, sub, lvl) {
+      return (
+        '<div class="tile"><div class="k">' + k + "</div>" +
+        '<div class="v ' + cls(lvl) + '">' + v + "</div>" +
+        (sub ? '<div class="s">' + sub + "</div>" : "") +
+        "</div>"
+      );
+    }
+
+    async function ping(url, ms) {
+      const ctrl = new AbortController();
+      const t = setTimeout(function () { ctrl.abort(); }, ms);
+      const t0 = performance.now();
       try {
-        const [pageHash, restaurant, main] = await Promise.all([
-          window.tokiPagesStamp(),
-          window.tokiBranchStamp("restaurant"),
-          window.tokiBranchBuild("main"),
-        ]);
-        const ok = !!(pageHash && restaurant && pageHash === restaurant);
-        const lines = [];
-        if (ok) {
-          lines.push(
-            dot("ok") +
-              "Live `" +
-              pageHash +
-              "` matches restaurant — TVs are current"
-          );
-        } else if (pageHash && restaurant) {
-          lines.push(
-            dot("bad") +
-              "Live `" +
-              pageHash +
-              "` · restaurant `" +
-              restaurant +
-              "` — ship restaurant to update TVs"
-          );
-        } else {
-          lines.push(
-            dot("off") +
-              "Live `" +
-              (pageHash || "?") +
-              "` · restaurant `" +
-              (restaurant || "can't read") +
-              "`"
-          );
-        }
-        if (!onLive()) {
-          lines.push("This copy (main work): `" + (main || "?") + "`");
-        }
-        el.innerHTML = lines.map(function (l) { return "<p>" + l + "</p>"; }).join("");
+        const res = await fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now(), {
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+        const dt = Math.round(performance.now() - t0);
+        let j = null;
+        try { j = await res.json(); } catch (e) {}
+        return { ok: !!(res.ok && j), ms: dt, json: j };
       } catch (e) {
-        el.innerHTML = "<p>" + dot("off") + "Could not read live status</p>";
+        return { ok: false, ms: null, json: null };
+      } finally {
+        clearTimeout(t);
       }
     }
+
+    let lastCloud = { ok: null, ms: null, json: null, at: 0 };
+    async function cloudHealth() {
+      if (lastCloud.at && Date.now() - lastCloud.at < 20000 && lastCloud.ok != null) {
+        return lastCloud;
+      }
+      const r = await ping(RESTAURANT_API + "/api/health", 4000);
+      lastCloud = { ok: r.ok, ms: r.ms, json: r.json, at: Date.now() };
+      return lastCloud;
+    }
+
+    async function refreshLive() {
+      const el = document.getElementById("live");
+      try {
+        const [git, stamp] = await Promise.all([
+          fetch("https://api.github.com/repos/" + REPO + "/commits/main", {
+            headers: { Accept: "application/vnd.github+json" },
+          }).then((r) => r.json()),
+          fetch(PAGES + "/js/live-stamp.js?t=" + Date.now()).then((r) =>
+            r.ok ? r.text() : ""
+          ),
+        ]);
+        const g = String(git.sha || "").slice(0, 7).toLowerCase();
+        const pm = String(stamp).match(/"hash"\s*:\s*"([0-9a-fA-F]+)"/);
+        const p = (pm ? pm[1] : "").slice(0, 7).toLowerCase();
+        if (g && p && g === p) {
+          el.className = "live ok";
+          el.textContent = "Pages vs git: 🟢 " + g + " — safe to check live";
+        } else if (g || p) {
+          el.className = "live bad";
+          el.textContent = "Pages vs git: 🔴 live `" + (p || "?") + "` · git `" + (g || "?") + "` — wait to check live";
+        } else {
+          el.className = "live bad";
+          el.textContent = "Pages vs git: 🔴 could not read";
+        }
+      } catch (e) {
+        el.className = "live bad";
+        el.textContent = "Pages vs git: 🔴 could not read";
+      }
+    }
+
+    async function refreshSys() {
+      const grid = document.getElementById("sys");
+      const foot = document.getElementById("sys-foot");
+      const [sys, rest] = await Promise.all([
+        ping("/api/sys", 4000),
+        cloudHealth(),
+      ]);
+      const mac = sys.ok && sys.json && sys.json.ok ? sys.json : null;
+      const tiles = [];
+
+      let netLvl = "ok";
+      let netV = "ok";
+      const netBits = [];
+      if (mac) {
+        netBits.push("Local " + (sys.ms != null ? sys.ms + " ms" : "ok"));
+        if (sys.ms != null && sys.ms > 1500) netLvl = "warn";
+        netV = sys.ms != null ? sys.ms + " ms" : "ok";
+      } else if (!onLive()) {
+        netLvl = "bad";
+        netV = "down";
+        netBits.push("Local API");
+      }
+      if (rest.ok) {
+        netBits.push("Cloud " + (rest.ms != null ? rest.ms + " ms" : "ok"));
+        if (!mac) {
+          netV = rest.ms != null ? rest.ms + " ms" : "ok";
+          netLvl = rest.ms != null && rest.ms > 1500 ? "warn" : "ok";
+        }
+      } else {
+        netBits.push("Cloud down");
+        if (mac) {
+          netLvl = "warn";
+          netV = "split";
+        } else {
+          netLvl = "bad";
+          netV = "down";
+        }
+      }
+      tiles.push(tile("Network", netV, netBits.join(" · "), netLvl));
+
+      if (mac) {
+        const cpus = mac.cpus || 1;
+        tiles.push(tile(
+          "Load",
+          String(mac.load1),
+          "1 min · " + cpus + " CPU",
+          band(mac.load1, cpus * 0.7, cpus * 1.25)
+        ));
+        tiles.push(tile(
+          "Swap",
+          (mac.swapUsedPct != null ? mac.swapUsedPct + "%" : "—"),
+          Math.round(mac.swapUsedMb || 0) + " / " + Math.round(mac.swapTotalMb || 0) + " MB",
+          band(mac.swapUsedPct, 40, 70)
+        ));
+        tiles.push(tile(
+          "Grok",
+          String(mac.grok),
+          mac.grokTickets
+            ? mac.grokTickets + " ticket terminal" + (mac.grokTickets === 1 ? "" : "s")
+            : "agent processes",
+          band(mac.grok, 1, 3)
+        ));
+        tiles.push(tile(
+          "Open",
+          String(mac.established),
+          "live sockets",
+          band(mac.established, 20, 50)
+        ));
+        tiles.push(tile(
+          "Leftover",
+          String(mac.closeWait),
+          "CLOSE_WAIT",
+          band(mac.closeWait, 4, 20)
+        ));
+        tiles.push(tile(
+          "Sheets",
+          mac.sheetsApi ? "ok" : "off",
+          mac.dataSource || "no catalog",
+          mac.sheetsApi ? "ok" : "warn"
+        ));
+        tiles.push(tile(
+          "Servers",
+          String(mac.servers),
+          ":" + mac.port,
+          band(mac.servers, 1, 3)
+        ));
+        const gb = mac.memTotalMb ? (mac.memTotalMb / 1024).toFixed(0) + " GB · " : "";
+        foot.textContent = "This Mac · " + gb + "5 min load " + mac.load5;
+      } else {
+        tiles.push(tile("Load", "—", "Mac only", "warn"));
+        tiles.push(tile("Swap", "—", "Mac only", "warn"));
+        tiles.push(tile("Grok", "—", "Mac only", "warn"));
+        tiles.push(tile("Open", "—", "Mac only", "warn"));
+        tiles.push(tile("Leftover", "—", "Mac only", "warn"));
+        tiles.push(tile(
+          "Sheets",
+          rest.ok ? "cloud" : "down",
+          "restaurant API",
+          rest.ok ? "ok" : "bad"
+        ));
+        foot.textContent = onLive()
+          ? "On Live — Mac meters need the laptop server."
+          : "Could not reach this Mac’s API.";
+      }
+      grid.innerHTML = tiles.join("");
+    }
+
     refreshLive();
+    refreshSys();
     setInterval(refreshLive, 30000);
+    setInterval(refreshSys, 5000);
   </script>
 </body>
 </html>
