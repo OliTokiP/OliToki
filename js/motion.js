@@ -927,6 +927,7 @@
       stage.style.transition = "opacity " + opSec + "s var(--ease-fade, ease)";
       stage.classList.remove("is-zoom-out");
       if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
+      setEncoreActiveSticker(stage, opts.itemIndex);
       parkEncorePinchCss(stage);
       if (
         !tryEncoreFpsZoom(
@@ -944,7 +945,6 @@
       }
       setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
-      setEncoreActiveSticker(stage, opts.itemIndex);
       return;
     }
 
@@ -954,6 +954,7 @@
     setEncoreCameraTransition(stage, "none");
     snapEncoreHolePinch(stage, 0);
     if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
+    setEncoreActiveSticker(stage, opts.itemIndex);
     void stage.offsetWidth;
     setEncoreCameraTransition(stage, camEase);
     parkEncorePinchCss(stage);
@@ -972,7 +973,6 @@
       else syncEncoreDetachedHole(stage);
     }
     setEncoreVeilDimmed(stage, true);
-    setEncoreActiveSticker(stage, opts.itemIndex);
   }
 
   /**

@@ -34,7 +34,7 @@ window.tokiSuiteNavHtml = function (currentName) {
         '<a href="' + href + '" target="_blank" rel="noopener">Menu Manager</a>'
       );
     } else {
-      parts.push('<a href="' + href + '">' + label + "</a>");
+      parts.push('<a href="' + tokiBustOperatorHref(href) + '">' + label + "</a>");
     }
   }
   return parts.join(" · ");
@@ -60,11 +60,27 @@ function tokiListenerHomeUrl() {
 }
 window.tokiGetTicketsUrl = tokiListenerHomeUrl;
 
+function tokiBustOperatorHref(href) {
+  if (!href) return href;
+  try {
+    var u = new URL(href, location.href);
+    if (u.origin !== location.origin) return href;
+    var name = (u.pathname.split("/").pop() || "").toLowerCase();
+    if (name !== "deploy.html") return href;
+    u.searchParams.set("_toki", String(Date.now()));
+    return u.pathname + u.search + u.hash;
+  } catch (e) {
+    return href;
+  }
+}
+window.tokiBustOperatorHref = tokiBustOperatorHref;
+
 window.TOKI_GITHUB_REPO = "OliTokiP/OliToki";
 window.TOKI_PAGES = "https://olitokip.github.io/OliToki";
 
 window.tokiStatusDot = function (kind) {
-  var fill = kind === "ok" ? "#16a34a" : kind === "bad" ? "#dc2626" : "#9ca3af";
+  var fill =
+    kind === "ok" ? "#16a34a" : kind === "bad" ? "#dc2626" : kind === "warn" ? "#ca8a04" : "#9ca3af";
   return (
     '<svg class="status-dot" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">' +
     '<circle cx="4" cy="4" r="3.5" fill="' +
@@ -89,7 +105,7 @@ window.tokiHashFromStampText = function (text) {
 window.tokiFetchStampHash = async function (url) {
   try {
     var sep = String(url).indexOf("?") >= 0 ? "&" : "?";
-    var res = await fetch(url + sep + "t=" + Date.now());
+    var res = await fetch(url + sep + "t=" + Date.now(), { cache: "no-store" });
     if (!res.ok) return "";
     return window.tokiHashFromStampText(await res.text());
   } catch (e) {
@@ -148,7 +164,7 @@ window.tokiMainHead = async function () {
 
   var hash = "";
   try {
-    var local = await fetch("/api/build?t=" + now);
+    var local = await fetch("/api/build?t=" + now, { cache: "no-store" });
     if (local.ok) {
       var info = await local.json();
       hash = window.tokiShortHash(info && (info.hashFull || info.hash));
@@ -161,7 +177,10 @@ window.tokiMainHead = async function () {
       var repo = window.TOKI_GITHUB_REPO || "OliTokiP/OliToki";
       var res = await fetch(
         "https://api.github.com/repos/" + repo + "/commits/main",
-        { headers: { Accept: "application/vnd.github+json" } }
+        {
+          headers: { Accept: "application/vnd.github+json" },
+          cache: "no-store",
+        }
       );
       if (res.status === 403) {
         var reset = Number(res.headers.get("x-ratelimit-reset") || 0) * 1000;
@@ -185,6 +204,13 @@ window.tokiMainHead = async function () {
   return "";
 };
 
+window.tokiLiveClass = function (kind) {
+  if (kind === "ok") return "live ok";
+  if (kind === "bad") return "live bad";
+  if (kind === "warn") return "live warn";
+  return "live";
+};
+
 window.tokiTvVerdict = function (pageHash, restaurantHash, mainHash) {
   var p = window.tokiShortHash(pageHash);
   var r = window.tokiShortHash(restaurantHash);
@@ -197,37 +223,77 @@ window.tokiTvVerdict = function (pageHash, restaurantHash, mainHash) {
     "` · main `" +
     (m || "?") +
     "`";
-  if (m && p && p === m) {
+  var tvsHaveShip = !!(p && r && p === r);
+  var shipIsMain = !!(r && m && r === m);
+
+  // Dining room truth: Pages matches last restaurant ship.
+  // main ahead of that ship is unpublished work, not a TV outage.
+  if (tvsHaveShip && shipIsMain) {
+    return { kind: "ok", text: "TVs have last restaurant ship · " + hashes };
+  }
+  if (tvsHaveShip && m && !shipIsMain) {
     return {
-      kind: "ok",
-      text: "TVs have today’s work · " + hashes,
+      kind: "warn",
+      text:
+        "TVs have last restaurant ship `" +
+        p +
+        "`. main `" +
+        m +
+        "` is not on TVs — ship Restaurant only if that work belongs in the dining room.",
     };
   }
-  if (m && p && p !== m) {
-    var why =
-      r && p === r
-        ? " Last restaurant ship is behind main — file a Restaurant ship."
-        : r && p !== r
-          ? " Pages is still publishing, and last restaurant ship is behind main."
-          : " File a Restaurant ship.";
+  if (tvsHaveShip) {
+    return { kind: "ok", text: "TVs have last restaurant ship · " + hashes };
+  }
+  if (p && r && p !== r) {
     return {
       kind: "bad",
-      text: "TVs do not have today’s work · " + hashes + "." + why,
-    };
-  }
-  if (!m) {
-    return {
-      kind: "off",
       text:
-        "Cannot confirm today’s work · " +
+        "TVs do not have last restaurant ship · " +
         hashes +
-        ". Matching live to last restaurant ship is not a green light.",
+        ". Pages is still publishing.",
     };
   }
   return {
     kind: "off",
-    text: "Could not read the restaurant site · " + hashes,
+    text: "Could not read TVs vs last restaurant ship · " + hashes,
   };
+};
+
+window.tokiReloadIfBuildMoved = async function () {
+  var h = "";
+  try {
+    var r = await fetch("/api/build?t=" + Date.now(), { cache: "no-store" });
+    if (r.ok) {
+      var info = await r.json();
+      h = window.tokiShortHash(info && (info.hashFull || info.hash));
+    }
+  } catch (e) {}
+  if (!h) {
+    h = await window.tokiFetchStampHash("js/build-info.js");
+  }
+  if (!h) return;
+  var key = "tokiOperatorBuildSeen";
+  var prev = "";
+  try {
+    prev = sessionStorage.getItem(key) || "";
+  } catch (e) {}
+  if (prev && prev !== h) {
+    try {
+      sessionStorage.setItem(key, h);
+    } catch (e) {}
+    try {
+      var u = new URL(location.href);
+      u.searchParams.set("_toki", String(Date.now()));
+      location.replace(u.href);
+    } catch (e) {
+      location.reload();
+    }
+    return;
+  }
+  try {
+    sessionStorage.setItem(key, h);
+  } catch (e) {}
 };
 
 window.tokiTestingVerdict = function (testingHash, mainHash) {
@@ -272,7 +338,7 @@ window.TOKI_SUITE = {
     { "page": "preview-all.html", "label": "Wall" }
   ],
   "launcher": [
-    { "label": "Suite", "page": "suite.html" },
+    { "label": "Suite", "page": "portal" },
     { "label": "1 · Bowls", "page": "index.html" },
     { "label": "2 · Handhelds", "page": "index2.html" },
     { "label": "3 · Munchies", "page": "index3.html" },
@@ -281,7 +347,7 @@ window.TOKI_SUITE = {
     { "label": "Deployer", "page": "deploy.html" }
   ],
   "tools": [
-    { "name": "Suite", "page": "suite.html", "blurb": "This page — all the operator tools." },
+    { "name": "Suite", "page": "suite.html", "blurb": "Local portal — bookmark /portal, not a Wi-Fi IP." },
     { "name": "Deployer", "page": "deploy.html", "blurb": "Ship testing or restaurant." },
     { "name": "Tickets", "page": "tickets.html", "blurb": "Queues and new tickets on this Mac." },
     { "name": "Menu Manager", "page": "manager.html", "blurb": "Edit the menu on your phone." },

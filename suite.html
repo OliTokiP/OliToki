@@ -28,6 +28,7 @@
       gap: 0.35em;
     }
     .live.ok { background: #d8f3d8; }
+    .live.warn { background: #f8eccc; }
     .live.bad { background: #f8d4d4; }
     .live p { margin: .2rem 0; font-weight: 500; }
     .status-dot {
@@ -95,6 +96,7 @@
     @media (prefers-color-scheme: dark) {
       .live, .tile { background: #2a2a2a; }
       .live.ok { background: #16351c; }
+      .live.warn { background: #3a2e12; }
       .live.bad { background: #3a1616; }
       .sub, .tiny, a.card .blurb, th, .tile .k, .tile .s { color: #aaa; }
       tr { border-bottom-color: #333; }
@@ -107,7 +109,7 @@
 <body>
   <p class="tiny" id="nav">Suite · <a href="deploy.html">Deployer</a> · <a href="new-bug.html">Tickets</a> · <a href="manager.html">Menu Manager</a></p>
   <h1>Suite</h1>
-  <p class="sub">Phone hub for the development tools. Same idea as Launcher: this copy, plus Live. Ship from Deployer. File tickets from Tickets.</p>
+  <p class="sub">Local portal. Bookmark <code>/portal</code> on this Mac — not a Wi-Fi IP. Ship from Deployer. File tickets from Tickets. Boards are in the table below.</p>
 
   <div class="health">
     <div class="lab">Health</div>
@@ -127,7 +129,7 @@
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/surfaces.js?v=20260820tv"></script>
+  <script src="js/surfaces.js?v=20260820health3"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -146,18 +148,22 @@
       return /run\.app/i.test(location.host);
     }
 
+    function operatorHref(page) {
+      return window.tokiBustOperatorHref ? window.tokiBustOperatorHref(page) : page;
+    }
+
     (function paintNav() {
       const nav = SUITE.nav || [];
       if (!nav.length) return;
       document.getElementById("nav").innerHTML = nav.map((item) => {
         if (item.name === "Suite") return "Suite";
-        return '<a href="' + item.page + '">' + item.name + "</a>";
+        return '<a href="' + operatorHref(item.page) + '">' + item.name + "</a>";
       }).join(" · ");
     })();
 
     function card(item) {
       return (
-        '<a class="card" href="' + item.page + '">' +
+        '<a class="card" href="' + operatorHref(item.page) + '">' +
         item.name +
         (item.blurb ? '<span class="blurb">' + item.blurb + "</span>" : "") +
         "</a>"
@@ -187,7 +193,7 @@
       head += "<th>Live</th></tr>";
       const body = rows.map((row) => {
         let cells = "<td>" + row.label + "</td>";
-        if (showThis) cells += "<td>" + linkCell(here + row.page) + "</td>";
+        if (showThis) cells += "<td>" + linkCell(operatorHref(here + row.page)) + "</td>";
         cells += "<td>" + linkCell(live + row.page) + "</td>";
         return "<tr>" + cells + "</tr>";
       }).join("");
@@ -270,7 +276,7 @@
           window.tokiPagesStamp(),
         ]);
         const tv = window.tokiTvVerdict(pageHash, restaurant, main);
-        el.className = "live" + (tv.kind === "ok" ? " ok" : tv.kind === "bad" ? " bad" : "");
+        el.className = window.tokiLiveClass(tv.kind);
         el.innerHTML = window.tokiStatusDot(tv.kind) + " " + tv.text;
       } catch (e) {
         el.className = "live bad";

@@ -34,15 +34,15 @@ The table is three ways to open the **same page**:
 
 | Column | Meaning |
 |--------|---------|
-| **Local** | This Mac, this Wi‑Fi. Needs **Enable local server** on. Good for sitting at the counter with the laptop. |
+| **Local** | This Mac’s portal. Stable `.local` name (does not change when Wi‑Fi hands out a new IP). Bookmark `/portal`. Needs **Enable local server** on. |
 | **Tailscale** | This Mac from anywhere (phone, another network). Same server as Local. The laptop must be awake. |
 | **Live** | The real internet copy on GitHub Pages. This is what the restaurant screens load. **Does not need your laptop.** |
 
-The green / red on **Deployer** and Suite Health is “do the TVs have **today’s work on main**?” Matching GitHub Pages to the last restaurant ship is **not** a green light — that stays true after a Testing-only ship, and after any later commit on main.
+The Health line is “do the TVs have the **last restaurant ship**?”
 
-- 🟢 live hash = main — TVs have today’s work
-- 🔴 live hash ≠ main — TVs do not have today’s work; file a **Restaurant** ship
-- Gray — could not read main, so Deployer will not say the TVs are current
+- 🟢 live = last restaurant ship = main — dining room matches main
+- Yellow — TVs have the last restaurant ship; main has newer commits that are **not** a TV outage. Ship Restaurant only if that work belongs in the dining room
+- 🔴 live ≠ last restaurant ship — Pages is still publishing, or the last ship did not land
 
 ### The three switches
 
@@ -59,6 +59,8 @@ Check a box, then **save** the note. The Mac does the work.
 ## What each Deployer setting means
 
 Open [Deployer](https://olitokip.github.io/OliToki/deploy.html). From **Suite App** the Mac files the GitHub issue itself (stay on Deployer). From Live without the Mac, GitHub opens in a **new window** — you must be signed in as `OliTokiP`. The dining-room checkbox on the form is the confirmation; GitHub does not need a second “are you sure?”
+
+Deployer hard-refreshes itself on open (`_toki=` on the URL). You do not need the Launcher **Hard refresh** switch to see a new status line.
 
 ### Target — where should this go?
 
@@ -193,7 +195,7 @@ On Local (this Mac), Data Source still follows the Settings sheet, so you can st
 
 1. Are the TVs wrong, or is only your laptop wrong? TVs = restaurant. Laptop Local = this Mac.
 2. Did you file a **Restaurant** deploy, or only Testing?
-3. Does Deployer say **TVs have today’s work** (live hash = main)? Live 🟢 on [[Launcher]] is not enough if you only shipped Testing.
+3. Does Deployer say TVs have the last restaurant ship (live = last ship)? Yellow means main is ahead of that ship — not that the dining room is broken.
 4. Did you refresh the TV?
 
 Tech background (optional): [[Docs/DEPLOYER]]

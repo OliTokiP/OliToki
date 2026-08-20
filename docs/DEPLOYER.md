@@ -4,9 +4,9 @@
 
 Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
 
-**Health** on Suite (under the hub blurb): TVs vs today’s work on `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Deployer uses the same TV verdict.
+**Health** on Suite (under the hub blurb): TVs vs last restaurant ship vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Deployer uses the same TV verdict.
 
-Green only when the GitHub Pages stamp equals **main HEAD**. Matching Pages to the last restaurant-ship stamp is not “TVs are current” — that is still true after a Testing-only ship.
+Green when Pages matches the last restaurant ship. Yellow if `main` is ahead of that ship (unpublished work — not a dining-room outage). Red only when Pages does not match the last restaurant ship.
 
 Phone form: [`deploy.html`](../deploy.html). Worker: GitHub Actions [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 

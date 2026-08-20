@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9ee4f74",
-  "hashFull": "9ee4f740f375794c84f2b6dc1e735b5186616f65",
-  "subject": "Sheets poll: skip Google when the workbook has not changed"
+  "hash": "e96d28c",
+  "hashFull": "e96d28c8cec122233f0929e58580bdc31b2712f7",
+  "subject": "QA: 2026-08-20 Encore Ticket Inquiry (pass 10)"
 };
