@@ -50,6 +50,8 @@
     zoomTo: 1.24,
     veilInMult: 0.5,
     holdMult: 0.5,
+    /** Punch-In pinch ÷ camera punch-in. 1 = lock to zoom (Pass 1). */
+    pinchInMult: 0.5,
     holePinchLive: 40,
     holeRefLive: 160,
     shadow: { x: 18, y: 22, blur: 2, opacity: 0.5 },
@@ -444,8 +446,6 @@
   }
 
   var ENCORE_HOLE_PINCH_OUT = false;
-  /** Punch-In pinch duration ÷ camera punch-in. 1 = lock to zoom (Pass 1). */
-  var ENCORE_HOLE_PINCH_IN_MULT = 0.5;
   var PORTRAIT_STAGE_W = 848.1;
   var PORTRAIT_STAGE_H = 1080;
   var _encoreZoomRaf = 0;
@@ -604,7 +604,7 @@
    * Camera + Hard hole pinch share this stepper (same easeUnit).
    * fpsCap > 0 = Hard_Shadow 30fps. Pinch still runs when fpsCap is 0 so Hard
    * keeps the aperture (CSS @property cannot ease radial-gradient circle size).
-   * pinchSec defaults to punch-in × ENCORE_HOLE_PINCH_IN_MULT (hole settles
+   * pinchSec defaults to punch-in × ENCORE.pinchInMult (hole settles
    * halfway through the zoom). Pass pinchSec === durationSec to lock them.
    */
   function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo, fpsCap, pinchSec) {
@@ -622,7 +622,7 @@
     var t0 = performance.now();
     var dur = durationSec * 1000;
     var pSec = Number(pinchSec);
-    if (!(pSec > 0)) pSec = durationSec * ENCORE_HOLE_PINCH_IN_MULT;
+    if (!(pSec > 0)) pSec = durationSec * ENCORE.pinchInMult;
     var pinchDur = wantPinch ? pSec * 1000 : dur;
     var pinchDone = !wantPinch;
     var minDt = cap > 0 ? 1000 / cap : 0;
@@ -1099,7 +1099,7 @@
     PORTRAIT_STAGE_W: PORTRAIT_STAGE_W,
     PORTRAIT_STAGE_H: PORTRAIT_STAGE_H,
     ENCORE_HOLE_PINCH_OUT: ENCORE_HOLE_PINCH_OUT,
-    ENCORE_HOLE_PINCH_IN_MULT: ENCORE_HOLE_PINCH_IN_MULT,
+    ENCORE_HOLE_PINCH_IN_MULT: ENCORE.pinchInMult,
     styleByMode: styleByMode,
     parseMotionSeconds: parseMotionSeconds,
     parseMotionStylesTable: parseMotionStylesTable,

@@ -205,7 +205,7 @@ radial-gradient(
 | Token | Live | Notes |
 |-------|------|--------|
 | `--encore-zoom` | `1` rest, `1.24` punch (`--encore-zoom-to`) | Relative — keep |
-| `--encore-hole-pinch` | `0` → `40px` on Punch-In | Same `--ease-out` as zoom, duration `punchIn × 0.5` (`1.7s`). Hole settles; zoom finishes in the tight aperture. `ENCORE_HOLE_PINCH_IN_MULT = 1` locks pinch to the full camera clock (Pass 1). Scale px: `40 * (holeR / 160)` |
+| `--encore-hole-pinch` | `0` → `40px` on Punch-In | Same `--ease-out` as zoom, duration `punchIn × 0.5` (`1.7s`). Hole settles; zoom finishes in the tight aperture. `ENCORE.pinchInMult = 1` locks pinch to the full camera clock (Pass 1). Scale px: `40 * (holeR / 160)` |
 | `--encore-hole-r` | `max(70, plateW × 0.42)` (`renderFamilyPortrait`) | `plateW = 1500 × layout.scale`. 160 is only a CSS fallback. Preview uses this same formula in the 848×1080 world (scales with the world). |
 | `ENCORE_HOLE_PINCH_OUT` | `false` | Punch-Out **keeps** pinch |
 | Veil fade-in | `punchIn * 0.5` = **1.7s** | `--motion-veil` |
