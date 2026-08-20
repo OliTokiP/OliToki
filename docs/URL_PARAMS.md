@@ -57,6 +57,7 @@ These can sit on the query string or after the hash (`#/menu/style?pick=theme`).
 index.html?w=1920&dpr=1&pause=1
 index2.html?w=1920&dpr=1&item=0
 index.html?encore=old
+index.html?textBoxDebug=1&pause=1
 manager.html?pres=encore&encore=old
 ```
 

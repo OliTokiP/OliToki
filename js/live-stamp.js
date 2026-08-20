@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2c0ecff",
-  "hashFull": "2c0ecff198c5b354f547ee60a4bed231d0258b22",
-  "subject": "QA: 2026-08-20 Menu screens hang when data load fails - requires refresh (pass 1)"
+  "hash": "8337ea0",
+  "hashFull": "8337ea0bc9385c6a1748fa26deb4a0444aeeeed4",
+  "subject": "QA: 2026-08-20 Add draw text boxes debug option (pass 1)"
 };

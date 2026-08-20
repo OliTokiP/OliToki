@@ -179,6 +179,7 @@ For now, **Performance Console** is the one that turns on the reporting stream.
 | `active` says YES but I hid the element in DOM | The detector looks at config + classes + timers. Use `.set('xxx', false)` to force a hard kill |
 | Wall looks different | `source = wall-lean` is expected and intentional |
 | `?tokiDebug=1` gives a list but normal load is silent | Expected — the URL forces one dump |
+| No text-box outlines | Need **Debug Mode** + **Show Textbox Wireframes**, or `?textBoxDebug=1` on this tab. Performance Console is not required. |
 
 ---
 

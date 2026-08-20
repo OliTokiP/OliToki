@@ -10842,9 +10842,11 @@
     if (!list || items.length === 0) return;
     if (list.clientHeight <= 0) return;
 
-    // Measure with top packing so height isn't inflated by centering
+    // Measure with top packing so height isn't inflated by centering / fill gap
     list.style.justifyContent = "flex-start";
     list.style.alignContent = "start";
+    list.style.gap = "";
+    list.style.rowGap = "";
 
     /**
      * Height must fit the panel AND every .item-line (name+price) must stay
@@ -10884,12 +10886,13 @@
         }
       }
 
-      // Handhelds: midpoint pull (was 0.97 default, then 0.995 tight)
-      const pull = isHandhelds ? 0.983 : 0.97;
+      // Same pull on every board so leftover height goes into type, not empty
+      // bands. Handhelds settled at 0.983 (0.995 overflowed glyphs).
+      const pull = 0.983;
       best = Math.max(MIN_MENU_SCALE, best * pull);
       let guard = 0;
       while (!fits(best) && best > MIN_MENU_SCALE && guard < 40) {
-        best = Math.max(MIN_MENU_SCALE, best - (isHandhelds ? 0.01 : 0.015));
+        best = Math.max(MIN_MENU_SCALE, best - 0.01);
         guard++;
       }
       fits(best);
@@ -10957,7 +10960,11 @@
     setMenuColumnMode(list, chosenCols);
     fits(chosenScale);
 
-    // Short menus: vertically center in the panel. Full/overflow: stick to top.
+    // Leftover height: dense lists (Bowls with 8 items) used to sit as a
+    // centered cluster with empty bands that read as padding. Handhelds
+    // already fills because type hits the height cap. Put modest leftover
+    // into inter-item gap so the stack uses the Menu Panel; keep centering
+    // only when a short list would get huge gutters.
     // Don't use scrollHeight — with flex + overflow it often equals clientHeight
     // even when children leave empty space at the bottom.
     void list.offsetHeight;
@@ -10973,9 +10980,27 @@
       }
       spare = list.clientHeight - maxBottom - padBottom;
     }
+    const n = kids.length;
+    const rows =
+      chosenCols >= 2 ? Math.max(1, Math.ceil(n / chosenCols)) : n;
+    const extraPerGap = rows > 1 ? spare / (rows - 1) : spare;
+    const fillPanel = spare > 12 && n >= 5 && extraPerGap <= 32;
+
+    list.style.justifyContent = "flex-start";
     if (chosenCols >= 2) {
-      list.style.alignContent = spare > 12 ? "center" : "start";
-      list.style.justifyContent = "flex-start";
+      if (fillPanel && rows > 1) {
+        const cs = window.getComputedStyle(list);
+        const currentGap = parseFloat(cs.rowGap) || 0;
+        list.style.rowGap = currentGap + extraPerGap + "px";
+        list.style.alignContent = "start";
+      } else {
+        list.style.alignContent = spare > 12 ? "center" : "start";
+      }
+    } else if (fillPanel && rows > 1) {
+      const cs = window.getComputedStyle(list);
+      const currentGap = parseFloat(cs.gap) || 0;
+      list.style.gap = currentGap + extraPerGap + "px";
+      list.style.alignContent = "";
     } else {
       list.style.justifyContent = spare > 12 ? "center" : "flex-start";
       list.style.alignContent = "";
