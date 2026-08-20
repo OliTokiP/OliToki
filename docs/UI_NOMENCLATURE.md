@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-08-11 (Motion phases: Wind-up / Punch-in / Hold / Punch-out / Wind-down)  
+**Last updated:** 2026-08-20 18:48 (Announcement Body markdown)  
 
 **Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **What each style actually does (times, veil, highlight, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md).  
@@ -220,7 +220,7 @@ Frame on the **right**; photo side on the **left**.
 |----------------|------------|-------------------|
 | **Stripes** | Optional pinstripe layer on the Menu Panel | `#stripes` |
 | **Announcement Panel** | Large message box (title, subtitle, body, motion) | `#announcement-box`, Announcement |
-| **Announcement Body** | Main copy area inside the Announcement Panel | `#announcement-body` |
+| **Announcement Body** | Main copy area inside the Announcement Panel. Sheet **Text** is markdown; type hyphenates and scales so it stays inside the shell. | `#announcement-body` |
 | **Drink Options Box** | Footer-style box of drink items / overview | `#drink-options-box` |
 | **Hero Panel** | Same idea as boards 1–3; sits on the left over the Background | `#hero-wrap` |
 | **Plate** | Drink or feature image in the Hero Panel | `#hero` |

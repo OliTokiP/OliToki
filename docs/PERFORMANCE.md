@@ -103,7 +103,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | **Menu List fit bake-off** (`fitMenuText`, multi-pass scale) | **Medium** (spike) | Measure + reflow | Run on content/theme change only; skip if fingerprint unchanged. |
 | **Footer Boxes** (Proteins / Sauces / Drinks) | **Low–Medium** | DOM + optional multi-column fit | Create Columns? can add layout passes. |
 | **Include Descriptions / Columns?** | **Low** | More text / columns → slightly harder fit | Content density, not continuous GPU. |
-| **Announcement Panel** (Board 4 body + rich text) | **Medium** | Text, optional rich styles, slide timer | Motion styles (future) may raise cost — rate per style. |
+| **Announcement Panel** (Board 4 body + markdown) | **Medium** | Text parse + fit scale + slide timer | Markdown parse is once per slide (cheap). Motion styles (future) may raise cost — rate per style. |
 | **Shout / future Motion Styles** | **Low–High** | Depends on effect | Treat each named style separately when implementing; default to Low until measured. |
 | **Stripes** (Board 4 scroll) | **Medium** | Extra scrolling layer | Kill = hide + stop stripe animation. |
 | **Disclaimer / Version Stamp** | **Very Low** | Text paint | Disclaimer always shows allergy text. Version Stamp (when enabled) is appended only to the floating Toki Debug header. |

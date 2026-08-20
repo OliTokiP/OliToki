@@ -1,9 +1,31 @@
 # What’s New
 
-**Last updated:** 2026-08-20 18:39  
+**Last updated:** 2026-08-20 18:48  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-20 18:48 — Announcement Panel markdown
+
+**Boards / surface:** Menu Screens — Board 4 only (`index4.html`)  
+**Sheet:** Announcements tab · **Announcement Text** (Inventory)  
+**Summary:** Message copy is markdown. Type **bold**, *italic*, headings, lists, tables, quotes, and the rest of the [Markdown cheat sheet](https://www.markdownguide.org/cheat-sheet/) basics in the Google Sheet **Text** cell (Alt+Enter for new lines). The Announcement Body paints the styles, hyphenates long words, and **shrinks** until nothing leaves the box. In-cell Google rich text stays off (too heavy). Manager authoring comes later.
+
+### Details
+- One slide per non-empty Text cell, same as before. Plain sentences with no markdown look the same.
+- Single newlines stay as line breaks (Sheet Alt+Enter), not CommonMark “join into one paragraph.”
+- Links paint as underlined type; they do not navigate. Images render as alt text only (no remote fetch on the Fire Stick).
+- Lists / tables / headings left-align when the sheet align is still the default center.
+- Debug: `?annMdDemo=1` paints cheat-sheet sample slides (does not write the sheet). `?ann=2` picks a slide. Combine with `?pause=1` for screenshots.
+
+### Docs updated
+- [SHEET_MIGRATION.md](./SHEET_MIGRATION.md)
+- [DATA_MODEL.md](./DATA_MODEL.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
 
 ---
 

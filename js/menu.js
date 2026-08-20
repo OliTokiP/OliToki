@@ -4446,7 +4446,7 @@
    * Announcements tab (gid 149404218): Settings + message inventory under it.
    * Each non-empty Announcement Text is one message-board slide.
    * Title/subtitle married; speed/box-color/shout inherit blanks.
-   * Plain text from the Text cell (xlsx rich runs quarantined). Motion Style/Setting stored for later.
+   * Text is markdown (plain CSV; xlsx rich runs quarantined). Motion Style/Setting stored for later.
    */
   /** Style / Announcements BG Pattern: "Stripes" vs None. Blank → None. */
   function isStripesPatternToken(raw) {
@@ -5218,6 +5218,11 @@
         bgFill: parsed.announcementBox.bgFill,
       };
       if (announcementIndex >= msgs.length) announcementIndex = 0;
+      applyAnnouncementMarkdownDemo();
+      const startAnn = announcementStartIndexFromUrl(
+        (announcementBox.messages || []).length
+      );
+      if (startAnn != null) announcementIndex = startAnn;
     }
     if (parsed.drinkBox) {
       drinkBox = {
@@ -8987,16 +8992,86 @@
     return lines.length ? lines : [[]];
   }
 
+  function announcementQueryFlag(name) {
+    const p = new URLSearchParams(window.location.search || "");
+    if (!p.has(name)) return false;
+    const v = String(p.get(name) || "")
+      .trim()
+      .toLowerCase();
+    return v === "" || v === "1" || v === "true" || v === "yes";
+  }
+
+  function announcementStartIndexFromUrl(len) {
+    const raw = new URLSearchParams(window.location.search || "").get("ann");
+    if (raw == null || raw === "") return null;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || !(len > 0)) return null;
+    return ((n % len) + len) % len;
+  }
+
+  /**
+   * QA / screenshot helper: ?annMdDemo=1 paints cheat-sheet slides
+   * instead of live sheet copy. Does not write the sheet.
+   */
+  function applyAnnouncementMarkdownDemo() {
+    if (!announcementQueryFlag("annMdDemo")) return false;
+    const api = window.TOKI_ANNOUNCEMENT_MD;
+    if (!api || typeof api.demoMessages !== "function") return false;
+    const demos = api.demoMessages() || [];
+    if (!demos.length) return false;
+    const template =
+      (announcementBox.messages && announcementBox.messages[0]) || {};
+    announcementBox.messages = demos.map(function (d) {
+      return {
+        title: d.title || template.title || "",
+        subtitle: d.subtitle || template.subtitle || "",
+        text: d.text || "",
+        speedSec: d.speedSec || 8,
+        textAlign: d.textAlign || "left",
+        shout: false,
+        shakeIntensity: 0,
+        color: template.color || null,
+        bold: false,
+        italic: false,
+        runs: null,
+        bgChoice: template.bgChoice || announcementBox.bgChoice || null,
+        bgFill: template.bgFill || announcementBox.bgFill || null,
+        motionStyle: "",
+        motionSetting: null,
+      };
+    });
+    tokiInfo(
+      "announcement markdown demo",
+      announcementBox.messages.length,
+      "slides"
+    );
+    return true;
+  }
+
+  function announcementBodyHasMarkdownChrome(el) {
+    if (!el) return false;
+    return !!el.querySelector(
+      "ul, ol, table, h1, h2, h3, blockquote, pre, hr"
+    );
+  }
+
   /**
    * Paint announcement body from one message.
-   * Rich runs: per-span bold/color only (no whole-cell style bleed).
-   * No runs: whole-cell font from sheet (legacy).
+   * Live path: markdown from the Text cell (js/announcement-md.js).
+   * Fallback: legacy per-run / per-line spans if the renderer is missing.
    */
   function paintAnnouncementBody(msg, annBodyText) {
     if (!els.announcementBody) return;
     els.announcementBody.innerHTML = "";
     els.announcementBody.style.setProperty("--box-scale", "1");
     els.announcementBody.style.color = annBodyText;
+
+    const text = String((msg && msg.text) || "");
+    const md = window.TOKI_ANNOUNCEMENT_MD;
+    if (md && typeof md.render === "function") {
+      md.render(text, els.announcementBody);
+      return;
+    }
 
     const hasRuns = msg && msg.runs && msg.runs.length > 0;
 
@@ -9132,7 +9207,13 @@
 
     function applyAlignAndShout() {
       // Message body only — titles/header stay default (left cluster)
-      const align = parseTextAlign(msg.textAlign, "center");
+      let align = parseTextAlign(msg.textAlign, "center");
+      if (
+        align === "center" &&
+        announcementBodyHasMarkdownChrome(els.announcementBody)
+      ) {
+        align = "left";
+      }
       const shoutOn = !!msg.shout;
       const shakeI =
         msg.shakeIntensity != null && Number.isFinite(Number(msg.shakeIntensity))
@@ -9158,8 +9239,8 @@
     }
 
     function applyBody() {
-      applyAlignAndShout();
       paintAnnouncementBody(msg, annBodyText);
+      applyAlignAndShout();
       announcementBox.lines = String(msg.text || "")
         .split(/\n/)
         .map(function (t) {
@@ -9435,19 +9516,17 @@
   }
 
   /**
-   * Shout fit: maximize type to fill body height (padding kept).
-   * Measures line boxes + gap directly — flex + justify-content:center makes
-   * scrollHeight unreliable (especially if overflow was ever visible).
+   * Announcement Body fit: type stays inside the shell.
+   * Measures direct children + gap — flex + justify-content:center makes
+   * scrollHeight unreliable. Overflow stays hidden; scale walks down if needed.
    */
-  function fitAnnouncementShout(el) {
+  function fitAnnouncementBody(el, minS, maxS, opts) {
     if (!el || !el.children || !el.children.length) return;
-    // Type metrics only while measuring (shake class restored by setAnnouncementShoutClass)
-    el.classList.add("is-shout-type");
-    // Honest clip while measuring (CSS also keeps overflow:hidden on shout)
+    opts = opts || {};
+    if (opts.shout) el.classList.add("is-shout-type");
     el.style.overflow = "hidden";
-
-    const minS = 0.3;
-    const maxS = 20;
+    minS = minS == null ? 0.3 : minS;
+    maxS = maxS == null ? 1.55 : maxS;
 
     const contentMetrics = function () {
       const cs = window.getComputedStyle(el);
@@ -9458,23 +9537,27 @@
       const gap = parseFloat(cs.rowGap || cs.gap) || 0;
       const contentW = Math.max(1, el.clientWidth - padX);
       const availH = Math.max(1, el.clientHeight - padY);
-      const lines = el.querySelectorAll(".announcement-line");
+      const kids = el.children;
       let contentH = 0;
       let overflowW = false;
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        // offsetHeight at current wrap width (allow soft-wrap multi-line)
-        contentH += line.offsetHeight || 0;
-        // Unbreakable overflow only (long word); soft wrap is fine
-        const lineBoxW = Math.max(line.clientWidth || 0, contentW);
-        if (line.scrollWidth > lineBoxW + 2) overflowW = true;
+      for (let i = 0; i < kids.length; i++) {
+        const kid = kids[i];
+        contentH += kid.offsetHeight || 0;
+        if (i > 0) contentH += gap;
+        if (kid.scrollWidth > contentW + 2) overflowW = true;
+        const inner = kid.querySelectorAll(
+          "p, li, td, th, h1, h2, h3, pre, code"
+        );
+        for (let j = 0; j < inner.length; j++) {
+          const boxW = Math.max(inner[j].clientWidth || 0, contentW);
+          if (inner[j].scrollWidth > boxW + 2) overflowW = true;
+        }
       }
-      if (lines.length > 1) contentH += gap * (lines.length - 1);
       return {
         contentH: contentH || 1,
         availH: availH,
         overflowW: overflowW,
-        lineCount: lines.length,
+        lineCount: kids.length,
       };
     };
 
@@ -9482,10 +9565,15 @@
       el.style.setProperty("--box-scale", String(scale));
       void el.offsetHeight;
       const m = contentMetrics();
-      // Height first: packed lines must sit inside padding box
-      if (m.contentH > m.availH + 1) return false;
+      // Height first: packed lines must sit inside padding box (8px air)
+      if (m.contentH > m.availH - 8) return false;
       // Width: only fail on unbreakable overflow (soft wrap is allowed)
       if (m.overflowW) return false;
+      // scrollHeight > clientHeight means real clip. Do not use a negative
+      // air here: flex + justify-content:center makes scrollHeight == clientHeight
+      // even when the type is a single centered line.
+      if (el.scrollHeight > el.clientHeight + 1) return false;
+      if (el.scrollWidth > el.clientWidth + 1) return false;
       return true;
     };
 
@@ -9510,10 +9598,10 @@
         }
       }
       // Tiny cushion so multi-line glyphs don't kiss the clip edge
-      best = Math.max(minS, best * 0.99);
+      best = Math.max(minS, best * 0.97);
       let guard = 0;
-      while (!fits(best) && best > minS && guard < 40) {
-        best -= 0.02;
+      while (!fits(best) && best > 0.12 && guard < 60) {
+        best -= 0.015;
         guard++;
       }
       fits(best);
@@ -9521,18 +9609,28 @@
 
     el.style.removeProperty("overflow");
     tokiInfo(
-      "shout fit scale",
+      opts.shout ? "shout fit scale" : "announcement fit scale",
       el.style.getPropertyValue("--box-scale"),
-      "lines",
-      el.querySelectorAll(".announcement-line").length
+      "blocks",
+      el.children.length
     );
+  }
+
+  function fitAnnouncementShout(el) {
+    fitAnnouncementBody(el, 0.3, 20, { shout: true });
+  }
+
+  function announcementBlockCount(el) {
+    if (!el) return 0;
+    const n = el.querySelectorAll(
+      "p, li, tr, h1, h2, h3, blockquote, pre"
+    ).length;
+    return Math.max(n, el.children.length);
   }
 
   function fitDrinksBoxes() {
     // Announcement: tasteful cap ~1.55, unless Shout → extreme vertical fill
-    const annLines = els.announcementBody
-      ? els.announcementBody.querySelectorAll(".announcement-line").length
-      : 0;
+    const annLines = announcementBlockCount(els.announcementBody);
     const msgs = announcementBox.messages || [];
     const curMsg = msgs[announcementIndex] || msgs[0] || null;
     const isShout = !!(curMsg && curMsg.shout);
@@ -9551,9 +9649,7 @@
     } else {
       const annMin =
         annLines >= 6 ? 0.2 : annLines >= 4 ? 0.26 : annLines >= 3 ? 0.34 : 0.45;
-      fitBoxScale(els.announcementBody, annMin, 1.55, {
-        checkChildWidth: false,
-      });
+      fitAnnouncementBody(els.announcementBody, annMin, 1.55);
     }
     if (!els.drinkBoxBody) return;
 

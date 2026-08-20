@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-08-20 17:43
+**Last updated:** 2026-08-20 18:48
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -23,6 +23,8 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`display=1920x1080`** | Same as `w=1920&h=1080` (dpr still defaults to 1 if you set display). |
 | **`pause=1`** | Freeze slideshow / Ken Burns / announcements. Good for screenshots. |
 | **`item=3`** | Start on that menu row (0-based). `#3` in the hash also works. |
+| **`ann=0`** | Board 4: start on that announcement slide (0-based). |
+| **`annMdDemo=1`** | Board 4 debug: paint markdown cheat-sheet sample slides (does not write the sheet). |
 | **`preview=all`** | Lean wall path (used by the 4-up preview). Do not use on a TV. |
 | **`wall=0`** … **`wall=3`** | Which cell you are in the 4-up wall (staggers refresh). Set by `preview-all.html`. |
 | **`debug=1`** or **`tokiDebug=1`** | Dump the debug feature table to the console once. |
@@ -58,6 +60,7 @@ index.html?w=1920&dpr=1&pause=1
 index2.html?w=1920&dpr=1&item=0
 index.html?encore=old
 index.html?textBoxDebug=1&pause=1
+index4.html?annMdDemo=1&pause=1&ann=0
 manager.html?pres=encore&encore=old
 ```
 

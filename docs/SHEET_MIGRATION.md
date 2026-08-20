@@ -3,7 +3,7 @@
 Living notes for the **revised sheet tabs** and runtime cutovers.  
 Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on Revised.
 
-**Last updated:** 2026-08-11 14:05 (Box image folders; Box Menu presentation G–I)  
+**Last updated:** 2026-08-20 18:48 (Announcement Text markdown)  
 **Spreadsheet:** `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
 | Revised tab | GID | Live counterpart | Runtime status |
@@ -29,6 +29,7 @@ Not a full rewrite of [DATA_MODEL.md](./DATA_MODEL.md) until every board is on R
 - **Include Footer Box:** one of `Drinks` / `Proteins` / `Sauces` / `Veggies` / blank → paints `#drink-options-box` from that sheet’s Settings + Inventory (CF / Create Columns / Align / colors).
 - **BG Pattern + Pattern Colors:** panel FOREGROUND stripes (`#stripes`) at **100%** opacity. Style tab BG Pattern remains atmospheric on `#bg-pattern`.
 - **Motion Style / Setting:** parsed and stored on each message for the upcoming announcements motion feature (not yet applied).
+- **Announcement Text:** markdown (cheat-sheet basics + tables / strike / task lists / highlight). Plain CSV; xlsx rich runs stay quarantined. Alt+Enter = new line on the board. Type is hyphenated and scaled so it never leaves the Announcement Body.
 
 **Tab rename (2026-08-10):** revised tabs now use bare names (`Proteins`, `Sauces`, `Drinks`, `Board 1`…); archives are `… (old)`. Live loads use **gid** (unchanged). Name-based xlsx fill / local workbook pick prefers non-`(old)` exact titles via `pickBestSheetName`.
 
