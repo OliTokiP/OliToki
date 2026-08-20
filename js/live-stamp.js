@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "b74d0a5",
-  "hashFull": "b74d0a5516103750109b8b5e45241b27e5a79daa",
-  "subject": "QA: 2026-08-20 Add Disconnect Agent feature to grok pills (pass 1)"
+  "hash": "27da56b",
+  "hashFull": "27da56bab2e567c28c927c5400da42ea3dddfc38",
+  "subject": "QA: 2026-08-19 Encore Background Screen doesn't change when user updates from menu manager (require restart off) (pass 1)"
 };

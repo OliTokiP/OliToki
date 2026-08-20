@@ -8597,6 +8597,10 @@
       const fp = parsed._fingerprint || null;
       if (parsed._fingerprint) delete parsed._fingerprint;
       applyParsedMenu(parsed);
+      if (isEncoreSegmentNow() && _encoreSolidBg) {
+        const g = document.getElementById("galaxy") || els.galaxy;
+        if (g) g.style.backgroundColor = encoreBackgroundHex();
+      }
       try {
         await applyBetaFooterBoxesOverride(parsed);
       } catch (betaErr) {

@@ -155,12 +155,14 @@ window.TOKI_SUITE = {
     { "name": "Suite", "page": "suite.html", "blurb": "This page — all the operator tools." },
     { "name": "Deployer", "page": "deploy.html", "blurb": "Ship testing or restaurant." },
     { "name": "Tickets", "page": "tickets.html", "blurb": "Queues and new tickets on this Mac." },
-    { "name": "Menu Manager", "page": "manager.html", "blurb": "Edit the menu on your phone." }
+    { "name": "Menu Manager", "page": "manager.html", "blurb": "Edit the menu on your phone." },
+    { "name": "Brightness", "page": "brightness.html", "blurb": "Screen + keyboard backlight (+/− buttons, hold to repeat)" }
   ],
   "nav": [
     { "name": "Suite", "page": "suite.html" },
     { "name": "Deployer", "page": "deploy.html" },
     { "name": "Tickets", "page": "tickets.html" },
-    { "name": "Menu Manager", "page": "manager.html" }
+    { "name": "Menu Manager", "page": "manager.html" },
+    { "name": "Brightness", "page": "brightness.html" }
   ]
 };

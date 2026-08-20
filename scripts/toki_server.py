@@ -2239,6 +2239,44 @@ def make_handler(
                 self._json(200, collect_sys_snapshot(sys_port, bind, backend))
                 return
 
+            if path == "/api/brightness":
+                qs = parse_qs(parsed.query)
+                target = (qs.get("target") or ["screen"])[0]
+                action = (qs.get("action") or ["up"])[0]
+                if target == "screen":
+                    delta = 0.25 if action == "up" else -0.25
+                    try:
+                        result = subprocess.run(["/usr/local/bin/brightness", "-l"], capture_output=True, text=True, check=True)
+                        current = 0.5
+                        for line in result.stdout.splitlines():
+                            if "brightness" in line.lower():
+                                try:
+                                    current = float(line.split()[-1])
+                                    break
+                                except:
+                                    pass
+                        new = max(0.0, min(1.0, current + delta))
+                        subprocess.run(["/usr/local/bin/brightness", str(new)], check=True, capture_output=True)
+                        self._json(200, {"status": "ok", "brightness": new})
+                    except Exception as e:
+                        self._json(500, {"status": "error", "message": str(e)})
+                    return
+                # keyboard uses key code
+                keycodes = {"up": 97, "down": 96}
+                keycode = keycodes.get(action)
+                if keycode is None:
+                    self._json(400, {"status": "error", "message": "bad action"})
+                    return
+                try:
+                    subprocess.run(
+                        ["osascript", "-e", f'tell application "System Events" to key code {keycode}'],
+                        check=True, capture_output=True, text=True
+                    )
+                    self._json(200, {"status": "ok"})
+                except Exception as e:
+                    self._json(500, {"status": "error", "message": str(e)})
+                return
+
             if path == "/api/settings":
                 if not backend:
                     self._json(503, {"error": "Sheets API not configured"})
