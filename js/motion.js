@@ -724,23 +724,12 @@
     return out;
   }
 
-  function stickerFadeTransition() {
-    return "opacity var(--motion-veil, 1.7s) var(--ease-fade, ease)";
-  }
-
   function setEncoreCameraTransition(stage, value) {
     if (!stage) return;
-    var photo = stage.querySelector(".family-portrait-rig");
-    var stick = stage.querySelector(".family-portrait-sticker-rig");
-    if (photo) photo.style.transition = value;
-    if (!stick) return;
-    var fade = stickerFadeTransition();
-    if (!value || value === "none") {
-      stick.style.transition = fade;
-    } else if (value === "") {
-      stick.style.transition = "";
-    } else {
-      stick.style.transition = value + ", " + fade;
+    var rigs = encoreCameraRigs(stage);
+    var i;
+    for (i = 0; i < rigs.length; i++) {
+      rigs[i].style.transition = value;
     }
   }
 
@@ -977,6 +966,8 @@
         if (doPinch) setEncoreHolePinch(stage, pinchPx);
         else syncEncoreDetachedHole(stage);
       }
+      /* Commit undimmed + is-active at opacity 0 before house lights. */
+      void stage.offsetWidth;
       setEncoreVeilDimmed(stage, true);
       stage.style.opacity = "1";
       return;
@@ -1006,6 +997,7 @@
       if (doPinch) setEncoreHolePinch(stage, pinchPx);
       else syncEncoreDetachedHole(stage);
     }
+    void stage.offsetWidth;
     setEncoreVeilDimmed(stage, true);
   }
 

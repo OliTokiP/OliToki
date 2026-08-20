@@ -106,27 +106,32 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
   z-index: 6;
   isolation: isolate;
   pointer-events: none;
-  opacity: 0;
   overflow: visible;
+  /* Camera only — badge opacity is on the sticker, same clock as the veil. */
   transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
   transform: scale(var(--encore-zoom, 1));
-  transition:
-    opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade),
-    transform var(--motion-punch-in, var(--dur-encore-zoom)) var(--ease-out);
+  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
+    var(--ease-out);
 }
 
 #family-portrait-stage.is-zoom-out .family-portrait-sticker-rig {
-  transition:
-    opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade),
-    transform var(--motion-punch-out, var(--dur-slow, 1.05s)) var(--ease-fade);
+  transition: transform var(--motion-punch-out, var(--dur-slow, 1.05s))
+    var(--ease-fade);
 }
 
-#family-portrait-stage.is-dimmed .family-portrait-sticker-rig {
+/* Same is-dimmed + --motion-veil as .family-portrait-veil. Inactive badges
+   stay at 0; Punch-In swaps is-active while undimmed, then house lights
+   fade the active New sticker in. */
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-sticker {
+  opacity: 0;
+  transition: opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade);
+}
+
+#family-portrait-stage.is-dimmed
+  .family-portrait-sticker-rig
+  .family-portrait-slot.is-active
+  .family-portrait-sticker {
   opacity: 1;
-}
-
-#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot:not(.is-active) {
-  visibility: hidden;
 }
 
 #family-portrait-stage .family-portrait-veil {

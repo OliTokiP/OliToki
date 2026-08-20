@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "ec23cb4",
-  "hashFull": "ec23cb42f968f3e36db53807c0faa141a35e927a",
-  "subject": "QA: 2026-08-20 Encore Ticket Inquiry (pass 11)"
+  "hash": "0fd99a9",
+  "hashFull": "0fd99a9df6e81e68aa84ca30d0b3d497c507ece2",
+  "subject": "QA: 2026-08-20 Encore Ticket Inquiry (pass 12)"
 };

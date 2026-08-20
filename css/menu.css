@@ -713,36 +713,35 @@ html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
 }
 
 /* Sticker lattice: same slot offsets as the photo grid, own camera
-   (same --encore-zoom), ABOVE the veil / Encore BG. Fades with house lights. */
+   (same --encore-zoom), ABOVE the veil / Encore BG. Camera only here —
+   badge opacity lives on the sticker (same is-dimmed / --motion-veil as the veil). */
 #family-portrait-stage .family-portrait-sticker-rig {
   position: absolute;
   inset: 0;
   z-index: 6;
   isolation: isolate;
   pointer-events: none;
-  opacity: 0;
   overflow: visible;
   transform-origin: var(--encore-hole-x, 50%) var(--encore-hole-y, 50%);
   transform: scale(var(--encore-zoom, 1));
-  transition:
-    opacity var(--motion-veil, var(--dur-slow)) var(--ease-fade),
-    transform var(--motion-punch-in, var(--dur-encore-zoom)) var(--ease-out);
+  transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
+    var(--ease-out);
 }
 
 #family-portrait-stage.is-zoom-out .family-portrait-sticker-rig {
-  transition:
-    opacity var(--motion-veil, var(--dur-slow)) var(--ease-fade),
-    transform var(--motion-punch-out, var(--dur-slow)) var(--ease-fade);
+  transition: transform var(--motion-punch-out, var(--dur-slow)) var(--ease-fade);
 }
 
-#family-portrait-stage.is-dimmed .family-portrait-sticker-rig {
+#family-portrait-stage .family-portrait-sticker-rig .family-portrait-sticker {
+  opacity: 0;
+  transition: opacity var(--motion-veil, var(--dur-slow)) var(--ease-fade);
+}
+
+#family-portrait-stage.is-dimmed
+  .family-portrait-sticker-rig
+  .family-portrait-slot.is-active
+  .family-portrait-sticker {
   opacity: 1;
-}
-
-/* Which badge is shown is instant (same as hole origin). Fade is the
-   rig opacity above — same --motion-veil clock as the Spotlight Veil. */
-#family-portrait-stage .family-portrait-sticker-rig .family-portrait-slot:not(.is-active) {
-  visibility: hidden;
 }
 
 html.encore-veil-detached body.board-drinks #family-portrait-stage .family-portrait-rig,
