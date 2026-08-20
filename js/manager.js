@@ -52,6 +52,7 @@
     styleScroll: 0,
     boardScroll: 0,
     systemScroll: 0,
+    menuScroll: 0,
     pillScroll: {},
     pendingLeave: null,
     sheetDirty: false,
@@ -954,12 +955,21 @@
     return paper;
   }
 
+  function encoreVeilIsDetached() {
+    return !!(
+      window.TOKI_MOTION &&
+      typeof TOKI_MOTION.encoreVeilDetached === "function" &&
+      TOKI_MOTION.encoreVeilDetached()
+    );
+  }
+
   function encoreStageClass(d) {
     var type = d.encoreStyle === "soft" ? "soft" : "hard";
     var cls = "encore-spot-" + (d.encoreStyle === "hard_shadow" ? "hard-shadow" : type);
     if (d.encoreStyle === "hard_shadow") cls += " encore-spot-hard";
     if (d.encoreSpot === "highlight") cls += " encore-spot-color-highlight";
     else cls += " encore-spot-color-black";
+    if (encoreVeilIsDetached()) cls += " encore-veil-detached";
     return cls;
   }
 
@@ -999,6 +1009,8 @@
     var wp = wallpaperSrc();
     var wpFb = wallpaperFallback();
     var first = D.previewItems[0] || { src: "", isNew: false };
+    var veilDetached = encoreVeilIsDetached();
+    var veilHtml = '<div class="family-portrait-veil" aria-hidden="true"></div>';
     var n;
     var nums = "";
     for (n = 0; n < D.previewItems.length; n++) {
@@ -1052,17 +1064,9 @@
       ">" +
       '<div class="family-portrait-rig">' +
       '<div class="family-portrait-plates"></div>' +
-      (window.TOKI_MOTION &&
-      typeof TOKI_MOTION.encoreVeilDetached === "function" &&
-      TOKI_MOTION.encoreVeilDetached()
-        ? ""
-        : '<div class="family-portrait-veil" aria-hidden="true"></div>') +
+      (veilDetached ? "" : veilHtml) +
       "</div>" +
-      (window.TOKI_MOTION &&
-      typeof TOKI_MOTION.encoreVeilDetached === "function" &&
-      TOKI_MOTION.encoreVeilDetached()
-        ? '<div class="family-portrait-veil" aria-hidden="true"></div>'
-        : "") +
+      (veilDetached ? veilHtml : "") +
       "</div></div>" +
       '<div class="preview-sticker"' +
       (first.isNew ? "" : " hidden") +
@@ -1140,18 +1144,27 @@
     els.app.innerHTML = html;
     applyTheme();
     if (state.screen === "home") attachPeak();
-    if (state.screen === "style" || state.screen === "board" || state.screen === "system") {
-      var id =
-        state.screen === "board"
-          ? "board-scroll"
-          : state.screen === "style"
-          ? "style-scroll"
-          : "system-scroll";
-      var sc = document.getElementById(id);
+    if (
+      state.screen === "style" ||
+      state.screen === "board" ||
+      state.screen === "system" ||
+      state.screen === "menu"
+    ) {
+      var sc =
+        state.screen === "menu"
+          ? els.app.querySelector(".nav-wrap")
+          : document.getElementById(
+              state.screen === "board"
+                ? "board-scroll"
+                : state.screen === "style"
+                ? "style-scroll"
+                : "system-scroll"
+            );
       if (sc) {
         if (state.screen === "style") sc.scrollTop = state.styleScroll;
         else if (state.screen === "board") sc.scrollTop = state.boardScroll;
         else if (state.screen === "system") sc.scrollTop = state.systemScroll;
+        else if (state.screen === "menu") sc.scrollTop = state.menuScroll;
       }
       restorePillScroll();
       bindWpFallback();
@@ -2217,6 +2230,7 @@
     if (screen !== "style") state.styleScroll = 0;
     if (screen !== "board") state.boardScroll = 0;
     if (screen !== "system") state.systemScroll = 0;
+    if (screen !== "menu") state.menuScroll = 0;
     writeHash(true);
     renderAll();
   }
@@ -2239,6 +2253,7 @@
     state.boardId = boardId || null;
     if (screen !== "style") state.styleScroll = 0;
     if (screen !== "system") state.systemScroll = 0;
+    if (screen !== "menu") state.menuScroll = 0;
     writeHash(false);
     renderAll();
   }

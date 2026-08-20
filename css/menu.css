@@ -673,9 +673,12 @@ body.preview-wall #hero-plate {
 }
 
 /*
-  Ken Burns rig: plates + veil (+ optional BG) scale together so the spotlight
-  hole stays glued to the lattice point. Origin = --encore-hole-x/y (per bow).
-  Stage clips; rig zooms inside.
+  Ken Burns rig: plates (+ optional BG) scale together.
+  Default Encore also parks the Spotlight Veil on this node so the hole
+  inherits camera scale (glued to the lattice point). ?encore=new moves
+  the veil to a stage sibling — hole x/y still use --encore-hole-x/y
+  (same as transform-origin) without stacking scale on the veil layer.
+  Origin = --encore-hole-x/y (per bow). Stage clips; rig zooms inside.
   Push-in: long ease-out. Pull-out (.is-zoom-out): same duration/easing as
   the veil fade so origin can retarget under the blackout (no snap).
 */
@@ -688,6 +691,12 @@ body.preview-wall #hero-plate {
   transition: transform var(--motion-punch-in, var(--dur-encore-zoom))
     var(--ease-out);
   will-change: transform;
+}
+
+/* ?encore=new: veil is a stage sibling of the camera, not a rig child. */
+html.encore-veil-detached #family-portrait-stage .family-portrait-rig,
+#family-portrait-stage.encore-veil-detached .family-portrait-rig {
+  z-index: 1;
 }
 
 #family-portrait-stage.is-zoom-out .family-portrait-rig {
@@ -916,6 +925,13 @@ body.preview-wall #family-portrait-stage .family-portrait-veil {
 #family-portrait-stage.encore-spot-soft.encore-spot-color-highlight.is-dimmed
   .family-portrait-veil {
   opacity: 0.9;
+}
+
+/* Detached veil: same hole paint, no inherited camera scale. After pinch
+   the aperture holds while the lattice continues Punch-In to 1.24. */
+html.encore-veil-detached #family-portrait-stage .family-portrait-veil,
+#family-portrait-stage.encore-veil-detached .family-portrait-veil {
+  z-index: 2;
 }
 
 /* Encore: fade wallpaper + Style #bg-pattern out. Frame #stripes stay
