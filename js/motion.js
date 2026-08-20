@@ -451,7 +451,11 @@
 
   function encorePinchNode(stage) {
     if (!stage) return null;
-    return stage.querySelector(".family-portrait-rig") || stage;
+    return (
+      stage.querySelector(".family-portrait-veil") ||
+      stage.querySelector(".family-portrait-rig") ||
+      stage
+    );
   }
 
   function setEncoreZoomOrigin(stage, latticeX, latticeY) {
@@ -497,20 +501,15 @@
     setEncoreHolePinch(stage, px);
     for (i = 0; i < nodes.length; i++) void nodes[i].offsetWidth;
     for (i = 0; i < nodes.length; i++) nodes[i].style.transition = prev[i];
+    parkEncorePinchCss(stage);
   }
 
-  function armEncorePinchTransition(stage, sec, easeVar, easeFallback) {
+  /** Pinch is JS-owned (same easeUnit as camera). Do not CSS-ease the hole. */
+  function parkEncorePinchCss(stage) {
     var veil = stage && stage.querySelector(".family-portrait-veil");
     if (!veil) return;
     veil.style.transition =
-      "opacity var(--motion-veil, 1.7s) var(--ease-fade, ease), " +
-      "--encore-hole-pinch " +
-      sec +
-      "s var(" +
-      easeVar +
-      ", " +
-      easeFallback +
-      ")";
+      "opacity var(--motion-veil, 1.7s) var(--ease-fade, ease)";
   }
 
   function encoreHolePinchPx(spotlightType) {
@@ -534,21 +533,9 @@
     return zoomTo;
   }
 
-  function encoreRigTransition(sec, easeVar, easeFallback, includePinch, fpsCap) {
+  function encoreRigTransition(sec, easeVar, easeFallback, _includePinch, fpsCap) {
     if (fpsCap) return "none";
-    var t =
-      "transform " + sec + "s var(" + easeVar + ", " + easeFallback + ")";
-    if (!includePinch) return t;
-    return (
-      t +
-      ", --encore-hole-pinch " +
-      sec +
-      "s var(" +
-      easeVar +
-      ", " +
-      easeFallback +
-      ")"
-    );
+    return "transform " + sec + "s var(" + easeVar + ", " + easeFallback + ")";
   }
 
   function cancelEncoreZoomStepper() {
@@ -611,37 +598,53 @@
     return ((ay * x + by) * x + cy) * x;
   }
 
-  /** Hard_Shadow 30fps stepper. fpsCap 0 = use CSS (normal path). */
+  /**
+   * Camera + Hard hole pinch share this stepper (same easeUnit).
+   * fpsCap > 0 = Hard_Shadow 30fps. Pinch still runs when fpsCap is 0 so Hard
+   * keeps the aperture (CSS @property cannot ease radial-gradient circle size).
+   */
   function tryEncoreFpsZoom(stage, toScale, durationSec, easeVar, pinchTo, fpsCap) {
     var cap = Number(fpsCap) || 0;
-    if (!cap || !stage || !(durationSec > 0)) return false;
+    var wantPinch = pinchTo != null && isFinite(Number(pinchTo));
+    if (!stage || !(durationSec > 0)) return false;
+    if (!cap && !wantPinch) return false;
+    cancelEncoreZoomStepper();
     var rig = stage.querySelector(".family-portrait-rig");
     if (rig) rig.style.transition = "none";
+    parkEncorePinchCss(stage);
     var from = readEncoreZoomNow(stage);
     var pinchFrom = readEncorePinchNow(stage);
-    var wantPinch = pinchTo != null && isFinite(Number(pinchTo));
     var gen = ++_encoreZoomGen;
     var t0 = performance.now();
     var dur = durationSec * 1000;
-    var minDt = 1000 / cap;
+    var minDt = cap > 0 ? 1000 / cap : 0;
     var lastPaint = -1e9;
-    function frame(now) {
-      if (gen !== _encoreZoomGen) return;
-      _encoreZoomRaf = requestAnimationFrame(frame);
-      if (now - lastPaint < minDt - 1) return;
-      lastPaint = now;
+    function paint(now) {
       var u = (now - t0) / dur;
-      if (u >= 1) {
-        u = 1;
-        _encoreZoomGen += 1;
-        _encoreZoomRaf = 0;
-      }
+      if (u >= 1) u = 1;
       var e = easeUnit(easeVar, u);
       stage.style.setProperty("--encore-zoom", String(from + (toScale - from) * e));
       if (wantPinch) {
         setEncoreHolePinch(stage, pinchFrom + (Number(pinchTo) - pinchFrom) * e);
       }
+      return u >= 1;
     }
+    function frame(now) {
+      if (gen !== _encoreZoomGen) return;
+      if (minDt && now - lastPaint < minDt - 1) {
+        _encoreZoomRaf = requestAnimationFrame(frame);
+        return;
+      }
+      lastPaint = now;
+      if (paint(now)) {
+        _encoreZoomGen += 1;
+        _encoreZoomRaf = 0;
+        return;
+      }
+      _encoreZoomRaf = requestAnimationFrame(frame);
+    }
+    paint(t0);
+    lastPaint = t0;
     _encoreZoomRaf = requestAnimationFrame(frame);
     return true;
   }
@@ -720,9 +723,7 @@
       stage.style.transition = "opacity " + opSec + "s var(--ease-fade, ease)";
       stage.classList.remove("is-zoom-out");
       if (origin) setEncoreZoomOrigin(stage, origin.x, origin.y);
-      if (doPinch && !fpsCap) {
-        armEncorePinchTransition(stage, entranceSec, "--ease-out", "ease-out");
-      }
+      parkEncorePinchCss(stage);
       if (
         !tryEncoreFpsZoom(
           stage,
@@ -757,9 +758,7 @@
         fpsCap
       );
     }
-    if (doPinch && !fpsCap) {
-      armEncorePinchTransition(stage, entranceSec, "--ease-out", "ease-out");
-    }
+    parkEncorePinchCss(stage);
     if (
       !tryEncoreFpsZoom(
         stage,
@@ -792,6 +791,7 @@
 
     stage.style.setProperty("--motion-veil", String(exitSec) + "s");
     applyCssDurations(punchIn, exitSec);
+    parkEncorePinchCss(stage);
 
     setEncoreVeilDimmed(stage, false);
     stage.classList.add("is-zoom-out");

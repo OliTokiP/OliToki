@@ -96,9 +96,10 @@
   z-index: 2;
   pointer-events: none;
   opacity: 0;
-  transition:
-    opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade),
-    --encore-hole-pinch var(--motion-punch-in, 3.4s) var(--ease-out);
+  /* Hole pinch is JS-owned (same easeUnit as --encore-zoom). CSS-easing
+     --encore-hole-pinch here double-eased the 30fps stepper into a slow
+     linear close, and radial-gradient circle size does not interpolate. */
+  transition: opacity var(--motion-veil, var(--dur-slow, 1.05s)) var(--ease-fade);
   transform: translateZ(0);
   --veil-hole-x: calc(
     var(--encore-hole-x, 50%) + var(--veil-extend, 20px)
