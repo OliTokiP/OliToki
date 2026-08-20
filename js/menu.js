@@ -10993,6 +10993,10 @@
         const currentGap = parseFloat(cs.rowGap) || 0;
         list.style.rowGap = currentGap + extraPerGap + "px";
         list.style.alignContent = "start";
+        console.info(
+          menuColumnLabel() + " list fill: row-gap+" + extraPerGap.toFixed(1) +
+            "px (spare " + spare.toFixed(0) + ", scale " + chosenScale.toFixed(3) + ")"
+        );
       } else {
         list.style.alignContent = spare > 12 ? "center" : "start";
       }
@@ -11001,6 +11005,10 @@
       const currentGap = parseFloat(cs.gap) || 0;
       list.style.gap = currentGap + extraPerGap + "px";
       list.style.alignContent = "";
+      console.info(
+        menuColumnLabel() + " list fill: gap+" + extraPerGap.toFixed(1) +
+          "px (spare " + spare.toFixed(0) + ", scale " + chosenScale.toFixed(3) + ")"
+      );
     } else {
       list.style.justifyContent = spare > 12 ? "center" : "flex-start";
       list.style.alignContent = "";

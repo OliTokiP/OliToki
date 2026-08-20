@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "8337ea0",
-  "hashFull": "8337ea0bc9385c6a1748fa26deb4a0444aeeeed4",
-  "subject": "QA: 2026-08-20 Add draw text boxes debug option (pass 1)"
+  "hash": "55a0f9a",
+  "hashFull": "55a0f9a958971343bbd46412cbe74be53d18933e",
+  "subject": "QA: 2026-08-20 Menu text should utilize space better when more items are present. (pass 1)"
 };

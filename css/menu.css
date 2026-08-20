@@ -1225,6 +1225,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 .board-munchies.footer-protein-only #menu-list,
 .board-munchies.footer-sauces-only #menu-list {
   height: 620px;
+  padding-top: 14px;
   padding-bottom: 8px;
 }
 

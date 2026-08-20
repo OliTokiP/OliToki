@@ -117,6 +117,8 @@ List height when **no** footer boxes: full panel `1080 − 234`.
 
 Auto **2-column** bake-off (JS): try when ≥7 items / always ≥10 / or 1-col scale &lt; 0.78; keep 2-col only if scale ≥ 1.06× better. Column-major grid; gutter ~36–40px × scale.
 
+`--menu-scale` is height- and nowrap-limited. When a dense list (≥5 items) still has leftover height, `fitMenuText` adds that leftover to inter-item gap so the stack fills the Menu Panel (same visual fill as a short list that already hit the height cap). Short lists with huge leftover still center.
+
 ---
 
 ## 5. Footer info boxes (Boards 1–3) — **live** geometry
