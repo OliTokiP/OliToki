@@ -200,6 +200,7 @@
     refreshTimer: "30 seconds",
     systemFont: "poppins",
     limitHeavyFilters: "yes",
+    debugMode: "no",
   };
 
   global.TOKI_MANAGER_DATA = {

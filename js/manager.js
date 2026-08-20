@@ -65,6 +65,8 @@
   };
   state.draft.confirmSave = state.draft.confirmSave || "yes";
   state.committed.confirmSave = state.committed.confirmSave || "yes";
+  state.draft.debugMode = state.draft.debugMode || "no";
+  state.committed.debugMode = state.committed.debugMode || "no";
 
   var previewCtl = {
     gen: 0,
@@ -621,6 +623,11 @@
         key: "confirmSave",
         label: "Confirm save?",
         value: labelOf(D.yesNo, state.draft.confirmSave),
+      }) +
+      row({
+        key: "debugMode",
+        label: "Debug Mode",
+        value: labelOf(D.yesNo, state.draft.debugMode),
       });
     return (
       '<section class="screen">' +
@@ -1416,6 +1423,19 @@
         },
       };
     }
+    if (key === "debugMode") {
+      return {
+        title: "Debug Mode",
+        kind: "trueFalse",
+        options: D.yesNo,
+        get: function () {
+          return state.draft.debugMode;
+        },
+        set: function (id) {
+          state.draft.debugMode = id;
+        },
+      };
+    }
     return null;
   }
 
@@ -1914,6 +1934,13 @@
     });
   }
 
+  function showDebugModeTooltip() {
+    showTooltip({
+      title: "Debug Mode Enabled",
+      body: "Debugger Console now showing on Menu Screens.",
+    });
+  }
+
   function showEncoreHardTooltip() {
     showTooltip({
       title: "WARNING:",
@@ -2081,7 +2108,15 @@
 
   function systemSettingsDirty() {
     if (!state.committed) return false;
-    var keys = ["dataSource", "requireRestart", "systemFont", "limitHeavyFilters", "confirmSave", "refreshTimer"];
+    var keys = [
+      "dataSource",
+      "requireRestart",
+      "systemFont",
+      "limitHeavyFilters",
+      "confirmSave",
+      "refreshTimer",
+      "debugMode",
+    ];
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
       if (state.draft[k] !== state.committed[k]) return true;
@@ -2275,6 +2310,9 @@
     }
     if (pickKey === "limitHeavyFilters" && id === "yes") {
       showFilterCapTooltip();
+    }
+    if (pickKey === "debugMode" && id === "yes") {
+      showDebugModeTooltip();
     }
     if (pickKey === "encoreStyle" && id === "hard_shadow") {
       showEncoreHardTooltip();
@@ -2615,6 +2653,7 @@
       limitHeavyFilters: state.draft.limitHeavyFilters,
       confirmSave: state.draft.confirmSave,
       refreshTimer: state.draft.refreshTimer,
+      debugMode: state.draft.debugMode,
     };
     // Settings workbook id is known to server (different from catalog sheetId).
     // Writing here makes e.g. System Font affect the menu boards.
@@ -2642,6 +2681,7 @@
             limitHeavyFilters: state.committed ? state.committed.limitHeavyFilters : "",
             confirmSave: state.committed ? state.committed.confirmSave : "",
             refreshTimer: state.committed ? state.committed.refreshTimer : "",
+            debugMode: state.committed ? state.committed.debugMode : "",
           }
         : null;
       var confirmedSave = !confirmSaveOff();
@@ -3635,6 +3675,8 @@
         showRequireRestartTooltip("no");
       } else if (tip === "filter") {
         showFilterCapTooltip();
+      } else if (tip === "debug") {
+        showDebugModeTooltip();
       } else if (tip === "hard" || tip === "hard-shadow") {
         showEncoreHardTooltip();
       } else if (tip === "confirm" || tip === "yes") {
@@ -3879,6 +3921,7 @@
       var fromSheet = Object.assign({}, D.defaultDraft, payload.draft);
       fromSheet.confirmSave = fromSheet.confirmSave || "yes";
       fromSheet.refreshTimer = fromSheet.refreshTimer || "30 seconds";
+      fromSheet.debugMode = fromSheet.debugMode || "no";
       // Keep draft numbers inside the live tile set (sheet conditionals).
       fromSheet.scrollSpeed = clampDraftSpeed(
         fromSheet.scrollSpeed,

@@ -444,6 +444,7 @@ class SheetsBackend:
         self.creds, self.sheets = _load_creds(key_path)
         # googleapiclient is not reliably thread-safe — serialize API calls
         self._api_lock = threading.Lock()
+        self._debugger_title = ""
         _log(f"API ready as {self.creds.service_account_email}")
         _log(f"fallback spreadsheet={sheet_id}")
         if self.settings_sheet_id:
@@ -478,9 +479,12 @@ class SheetsBackend:
         return result.get("values") or []
 
     def _debugger_tab_title(self) -> str:
+        if self._debugger_title:
+            return self._debugger_title
         sid = self.settings_sheet_id
         if not sid:
-            return DEBUGGER_TAB
+            self._debugger_title = DEBUGGER_TAB
+            return self._debugger_title
         try:
             with self._api_lock:
                 meta = (
@@ -497,10 +501,12 @@ class SheetsBackend:
                 if str(p.get("sheetId")) == want:
                     title = str(p.get("title") or "").strip()
                     if title:
+                        self._debugger_title = title
                         return title
         except Exception as e:
             _log(f"Debugger tab title lookup failed ({e}); using {DEBUGGER_TAB}")
-        return DEBUGGER_TAB
+        self._debugger_title = DEBUGGER_TAB
+        return self._debugger_title
 
     def _debugger_rows(self) -> list:
         sid = self.settings_sheet_id

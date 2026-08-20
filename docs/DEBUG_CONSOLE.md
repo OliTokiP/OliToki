@@ -5,7 +5,7 @@ This document explains how the performance feature flag output works and how to 
 **Last updated:** 2026-08-09 (Full View mode, Version Stamp location)
 
 **Primary reference:** [PERFORMANCE.md](./PERFORMANCE.md)  
-**Control source:** Google Sheet **Debug Menu** tab (gid `1793812854`)
+**Control source:** OliToki Menu Settings → **Debugger** tab (gid `195166367`, cell **A2**). Menu Manager **System Settings → Debug Mode** writes that cell. The catalog **Debug Menu** tab (gid `1793812854`) is leftover and is no longer read.
 
 ---
 
@@ -26,13 +26,13 @@ You can still inspect state manually at any time (see below).
 
 ## 2. How to enable
 
-In the Google Sheet:
+In Menu Manager **System Settings**, set **Debug Mode** to Yes (writes Debugger **A2**). Or in the Google Sheet:
 
-1. Go to the **Debug Menu** tab.
-2. Set the cell under **Debug Mode** to `TRUE`.
-3. Under **Debug Features**, set **Performance Console** to `TRUE`.
-4. (Optional) Set other future columns (e.g. Version History) as needed.
-5. Save. Boards soft-refresh (or hard reload for immediate effect).
+1. Open **OliToki Menu Settings** → **Debugger** tab (`gid=195166367`).
+2. Set **A2** under **Debug Mode** to `TRUE`.
+3. Under **Debug Features**, keep **Performance Console** `TRUE` (already on in the current sheet).
+4. (Optional) Set other columns (e.g. Version History, Full View) as needed.
+5. Save. Boards pick it up on the next settings load / soft refresh. Turning Debug Mode **off** closes the HUD on that same refresh.
 
 Example current shape (as of 2026-08-09):
 

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "0fab65b",
-  "hashFull": "0fab65b539e5ae94f1a792b5a40e7797f9102a19",
-  "subject": "QA: 2026-08-19 Menu Screen Scope forces user to pick screen (pass 1)"
+  "hash": "c486a70",
+  "hashFull": "c486a70d7e256c37a9266415b4c9ecb23213da3b",
+  "subject": "QA: 2026-08-19 Connect Debug to System Settings screen (pass 1)"
 };

@@ -36,6 +36,8 @@ Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and 
 
 **Confirm save?** (System Settings, Settings tab column) applies to **every** option, not only System Settings: Style and Theme (theme, background, speeds, Encore extras) and Board editors (title, family portrait, presentation mode, descriptions, menu-item order). **Yes** (default) = Confirm-on-back before any sheet write. **No** = skip the dialog; each change writes immediately (`POST /api/manager/style`, `/api/manager/board`, `/api/manager/settings` as needed) so the catalog and TVs update on the next board refresh — except menu-item reorder, which waits 3 seconds of idle so a drag session is one write. The Confirm save? toggle itself always writes the moment it is changed, whether it was on or off.
 
+**Debug Mode** (System Settings, between Confirm save? and Links) writes **Debugger!A2** (`gid=195166367`) on the OliToki Menu Settings workbook — not a Settings-tab column. Yes shows the Toki Debug HUD on the TV boards; No hides it. Boards pick the cell up on the next settings load / soft refresh and close the HUD if A2 is off. Menu Manager itself does not get a debug console. Tooltip preview: `?tip=debug`.
+
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
 Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extras) use a lightened Highlight.
@@ -47,7 +49,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 | Route | Screen |
 |-------|--------|
 | `#/` | Splash — OliToki Menu Manager. |
-| `#/system` | System Settings (Data Source, Require Restart, System Font, Sheet link) |
+| `#/system` | System Settings (Data Source, Require Restart, System Font, Confirm save, Debug Mode, Sheet link) |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
 | `#/menu/board/1` … `/3` | Board editor (title, family portrait, presentation, descriptions, drag-reorder items) |
@@ -55,7 +57,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 
-QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`.
+QA query extras on Style: `?pick=theme`, `?pick=background`, `?pick=presentation`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?theme=Halloween`, `?confirm=1`. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`.
 
 ---
 
@@ -98,7 +100,7 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `js/manager-sheet.js` | Settings + Style and Theme + board tab read; Theme + Background write via `/api/manager/style`; board Settings via `/api/manager/board` |
 | `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
 | `js/manager.js` | Router, draft/commit, preview; Yes writes Theme + Background or board Settings |
-| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board` |
+| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board`, `POST /api/manager/settings` (incl. Debugger!A2) |
 | `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme + Background use the server adapter (`Theme Selector` / A3, `BG Color` / B3, `BG Pattern` / C3, `BG Wallpaper` / D3). Number options should come from sheet dataValidation when present, not hard-coded spans.
@@ -122,6 +124,7 @@ Triggered from picker `choose()`:
 | Require restart to update? Yes | Soft refresh disabled. | TVs must be restarted for changes to take effect. |
 | Require restart to update? No | Soft refresh enabled. | Menus will check for updates on a fixed timer — you don't have to do a thing. |
 | Limit Heavy Filters to 30FPS Yes | Filter Cap Enabled for Heavy Effects. | (title only) |
+| Debug Mode Yes | Debug Mode Enabled | Debugger Console now showing on Menu Screens. |
 | Family Portrait Yes | Family Portrait Enabled | Shows spread of all items in first slide of presentation. |
 | Presentation Style → Encore | Encore Enabled | Spread + zoom, own background, heavy filter |
 | Encore Spotlight Style → Hard (with shadow) | WARNING: | Performance issues with Fire Stick. Use with caution. |

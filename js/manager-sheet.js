@@ -22,6 +22,7 @@
   var STYLE_GID = "183083022";
   var BETA_FEATURES_GID = "1710200195";
   var INFO_GID = "605471002";
+  var DEBUGGER_GID = "195166367";
 
   var STYLE_SETTINGS = {
     themeSelector: 0,
@@ -755,6 +756,46 @@
     };
   }
 
+  function parseDebugMenu(rows) {
+    var out = { debugMode: "no", features: {} };
+    var i;
+    var c;
+    if (!rows || !rows.length) return out;
+    for (i = 0; i < rows.length - 1; i++) {
+      if (cell(rows[i], 0).toLowerCase() === "debug mode") {
+        out.debugMode = parseYesNo(cell(rows[i + 1], 0), false);
+        break;
+      }
+    }
+    for (i = 0; i < rows.length - 2; i++) {
+      if (cell(rows[i], 0).toLowerCase() === "debug features") {
+        var headers = rows[i + 1] || [];
+        var values = rows[i + 2] || [];
+        for (c = 0; c < headers.length; c++) {
+          var name = String(headers[c] || "").trim();
+          if (name) out.features[name] = parseYesNo(values[c], false);
+        }
+        break;
+      }
+    }
+    return out;
+  }
+
+  function attachDebugSettings(settings, dbg) {
+    if (!settings) return settings;
+    if (dbg) {
+      settings.debugMode = dbg.debugMode || "no";
+      settings.debugFeatures = dbg.features || {};
+    }
+    if (!settings.debugMode) settings.debugMode = "no";
+    return settings;
+  }
+
+  async function fetchDebuggerPublic() {
+    var rows = parseCsv(await fetchText(publicCsvUrl(settingsSheetId(), DEBUGGER_GID)));
+    return parseDebugMenu(rows);
+  }
+
   function isHeavyFilterHeader(raw) {
     var h = String(raw || "").trim().toLowerCase();
     if (h.indexOf("heavy") === -1) return false;
@@ -838,17 +879,25 @@
               if (pub.catalog && pub.catalog.length) catalog = pub.catalog;
             } catch (e) {}
           }
-          return applyPinnedSource({
+          var settings = applyPinnedSource({
             dataSource: j.dataSource || "",
             requireRestart: parseYesNo(j.requireRestart, false),
             systemFont: parseSystemFont(j.systemFont),
             limitHeavyFilters: parseYesNo(j.limitHeavyFilters, true),
             confirmSave: parseYesNo(j.confirmSave, true),
             refreshTimer: j.refreshTimer || "",
+            debugMode: parseYesNo(j.debugMode, false),
+            debugFeatures: j.debugFeatures || {},
             sheetId: j.sheetId || "",
             sourceName: j.sourceName || j.dataSource || "",
             catalog: catalog,
           });
+          if (j.debugMode == null) {
+            try {
+              attachDebugSettings(settings, await fetchDebuggerPublic());
+            } catch (dbgErr) {}
+          }
+          return settings;
         }
       } catch (err) {
         console.warn("manager-sheet: /api/settings failed", err);
@@ -859,7 +908,13 @@
 
   async function fetchSettingsPublic() {
     var text = await fetchText(publicCsvUrl(settingsSheetId(), 0));
-    return applyPinnedSource(parseSettingsRows(parseCsv(text)));
+    var settings = applyPinnedSource(parseSettingsRows(parseCsv(text)));
+    try {
+      attachDebugSettings(settings, await fetchDebuggerPublic());
+    } catch (err) {
+      settings.debugMode = settings.debugMode || "no";
+    }
+    return settings;
   }
 
   function isThemeNameJunk(name) {
@@ -1178,6 +1233,7 @@
       systemFont: settings.systemFont,
       limitHeavyFilters: settings.limitHeavyFilters || "yes",
       confirmSave: settings.confirmSave || "yes",
+      debugMode: settings.debugMode || "no",
     };
     return {
       ok: true,
@@ -1512,7 +1568,8 @@
 
   async function writeSystem(payload) {
     // Persists Data Source / Require restart / System Font / Limit Heavy Filters /
-    // Confirm Save / Refresh Timer into the OliToki Menu Settings workbook (top row values).
+    // Confirm Save / Refresh Timer / Debug Mode into the OliToki Menu Settings workbook.
+    // Debug Mode writes Debugger!A2 (gid 195166367), not a Settings-tab column.
     // See scripts/toki_server.py for the full "all new settings must be in the sheet" contract.
     // Server maps to the correct cells under the matching header. This makes e.g.
     // Refresh Timer and System Font affect the menu boards on their next settings load.

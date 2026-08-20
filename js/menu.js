@@ -1518,8 +1518,9 @@
   let settingsWatchTimer = null;
   let dataSource = "";
 
-  /** Parsed from Debug Menu sheet (when debugMenuGid configured) */
+  /** Parsed from OliToki Menu Settings → Debugger (gid 195166367). */
   let debugConfig = { debugMode: false, features: {} };
+  const SETTINGS_DEBUGGER_GID = "195166367";
 
   // Transient debug activity flags for accurate "doing work right now" detection
   let kbZoomActive = false;
@@ -5820,6 +5821,8 @@
     systemFont: "roboto",
     limitHeavyFilters: true,
     refreshTimer: "",
+    debugMode: false,
+    debugFeatures: {},
     sheetId: "",
   };
 
@@ -6064,6 +6067,30 @@
     return null;
   }
 
+  function applyDebugConfig(next) {
+    next = next || {};
+    let features = next.features || {};
+    if (!Object.keys(features).length && debugConfig && debugConfig.features) {
+      features = debugConfig.features;
+    }
+    if (!Object.keys(features).length && next.debugMode) {
+      features = { "Performance Console": true };
+    }
+    const wasOn = !!(debugConfig && debugConfig.debugMode);
+    debugConfig = {
+      debugMode: !!next.debugMode,
+      features: features,
+    };
+    liveSettings.debugMode = debugConfig.debugMode;
+    liveSettings.debugFeatures = debugConfig.features;
+    try {
+      updateDebugVisuals();
+    } catch (e) {}
+    if (wasOn && !debugConfig.debugMode) {
+      tokiInfo("debug menu closed (Debug Mode off)");
+    }
+  }
+
   function applyLiveSettingsPayload(j) {
     const pin = pinnedWorkbook();
     liveSettings = {
@@ -6073,12 +6100,20 @@
       limitHeavyFilters:
         j.limitHeavyFilters == null ? true : !!j.limitHeavyFilters,
       refreshTimer: j.refreshTimer || "",
+      debugMode: liveSettings.debugMode,
+      debugFeatures: liveSettings.debugFeatures,
       sheetId: (pin && pin.sheetId) || j.sheetId || "",
     };
     if (liveSettings.sheetId) {
       cfg.googleSheetId = liveSettings.sheetId;
     }
     applySystemFont(liveSettings.systemFont);
+    if (j && Object.prototype.hasOwnProperty.call(j, "debugMode")) {
+      applyDebugConfig({
+        debugMode: parseYesNo(j.debugMode, false),
+        features: j.debugFeatures || {},
+      });
+    }
     tokiInfo(
       "live settings:",
       "dataSource=" + (liveSettings.dataSource || "?"),
@@ -6086,8 +6121,29 @@
       "systemFont=" + (liveSettings.systemFont || "roboto"),
       "limitHeavyFilters=" + liveSettings.limitHeavyFilters,
       "refreshTimer=" + (liveSettings.refreshTimer || ""),
+      "debugMode=" + !!liveSettings.debugMode,
       "sheet=" + (liveSettings.sheetId || "?")
     );
+  }
+
+  async function fetchSettingsDebuggerPublic() {
+    const sid = settingsSheetId();
+    const url =
+      "https://docs.google.com/spreadsheets/d/" +
+      encodeURIComponent(sid) +
+      "/export?format=csv&gid=" +
+      encodeURIComponent(SETTINGS_DEBUGGER_GID) +
+      "&cachebust=" +
+      Date.now();
+    const res = await fetch(url, { cache: "no-store", mode: "cors" });
+    if (!res.ok) {
+      throw new Error("Debugger export HTTP " + res.status);
+    }
+    const text = await res.text();
+    if (/^\s*</.test(text)) {
+      throw new Error("Debugger tab is not public");
+    }
+    return parseDebugMenu(parseCsv(text));
   }
 
   async function fetchLiveSettingsFromPublicExport() {
@@ -6107,7 +6163,18 @@
         "Settings sheet is not public (Google returned a login page). Share OliToki Menu Settings as Anyone with the link → Viewer."
       );
     }
-    return parseSettingsRows(parseCsv(text));
+    const parsed = parseSettingsRows(parseCsv(text));
+    try {
+      const dbg = await fetchSettingsDebuggerPublic();
+      parsed.debugMode = dbg.debugMode;
+      parsed.debugFeatures = dbg.features;
+    } catch (dbgErr) {
+      tokiWarn(
+        "debug menu: public Debugger failed",
+        dbgErr && dbgErr.message ? dbgErr.message : dbgErr
+      );
+    }
+    return parsed;
   }
 
   async function fetchLiveSettings() {
@@ -6126,7 +6193,12 @@
             // Settings may put the child "Refresh Timer" value outside the matched header col).
             const timerRe = /^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i;
             const jHasGoodRefresh = !!(j && j.refreshTimer && timerRe.test(j.refreshTimer));
-            if (!j.systemFont || j.limitHeavyFilters == null || !jHasGoodRefresh) {
+            if (
+              !j.systemFont ||
+              j.limitHeavyFilters == null ||
+              !jHasGoodRefresh ||
+              !Object.prototype.hasOwnProperty.call(j, "debugMode")
+            ) {
               try {
                 const pub = await fetchLiveSettingsFromPublicExport();
                 if (pub && pub.systemFont && !j.systemFont) {
@@ -6138,6 +6210,16 @@
                 }
                 if (pub && pub.refreshTimer && timerRe.test(pub.refreshTimer) && !jHasGoodRefresh) {
                   liveSettings.refreshTimer = pub.refreshTimer;
+                }
+                if (
+                  pub &&
+                  Object.prototype.hasOwnProperty.call(pub, "debugMode") &&
+                  !Object.prototype.hasOwnProperty.call(j, "debugMode")
+                ) {
+                  applyDebugConfig({
+                    debugMode: parseYesNo(pub.debugMode, false),
+                    features: pub.debugFeatures || {},
+                  });
                 }
               } catch (fontErr) {
                 tokiWarn(
@@ -6709,7 +6791,7 @@
   }
 
   /**
-   * Parse Debug Menu tab.
+   * Parse Debugger tab (OliToki Menu Settings, gid 195166367).
    * Structure:
    *   A1: "Debug Mode"   A2: TRUE/FALSE
    *   Then "Debug Features"
@@ -8023,9 +8105,8 @@
     if (cfg.styleThemeGid != null && cfg.styleThemeGid !== "") {
       csvJobs.style = fetchSheetRows(cfg.styleThemeGid);
     }
-    if (cfg.debugMenuGid != null && cfg.debugMenuGid !== "") {
-      csvJobs.debug = fetchSheetRows(cfg.debugMenuGid);
-    }
+    // Debug Mode lives on OliToki Menu Settings → Debugger (gid 195166367),
+    // not the catalog Debug Menu tab. fetchLiveSettings applies it.
 
     const csvKeys = Object.keys(csvJobs);
     const csvSettled = await Promise.all(
@@ -8163,22 +8244,9 @@
       }
     }
 
-    // Debug Menu (master switch + feature toggles)
-    if (cfg.debugMenuGid != null && cfg.debugMenuGid !== "") {
-      try {
-        debugConfig = parseDebugMenu(csv.debug);
-        tokiInfo(
-          "debug menu",
-          "mode=",
-          debugConfig.debugMode,
-          "features=",
-          debugConfig.features
-        );
-      } catch (err) {
-        console.warn("Could not load Debug Menu:", err);
-        debugConfig = { debugMode: false, features: {} };
-      }
-    }
+    // Debugger tab is on the Settings workbook (applied in fetchLiveSettings).
+    // Do not parse the catalog Debug Menu — that A2 is stale and would
+    // reopen the HUD after Manager turns Debug Mode off.
 
     const ms =
       (typeof performance !== "undefined" ? performance.now() : Date.now()) -
@@ -15237,8 +15305,8 @@
   function startSettingsWatcher() {
     stopSettingsWatcher();
     // 10s fixed settings watch: cheap (just System Settings). Allows System Font,
-    // Refresh Timer, and require restart changes from the Settings sheet to take
-    // effect on boards without a manual reload. See MENU_MANAGER.
+    // Refresh Timer, Debug Mode, and require restart changes from the Settings
+    // workbook to take effect on boards without a manual reload. See MENU_MANAGER.
     settingsWatchTimer = setInterval(function () {
       fetchLiveSettings().then(function () {
         try {
