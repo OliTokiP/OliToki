@@ -2069,7 +2069,7 @@
     shiftRight: 18,
     shiftDown: 22,
     spread: 3,
-    blur: 6,
+    blur: 2,
     opacity: 0.5,
   };
 
@@ -2208,9 +2208,7 @@
     const root = document.documentElement;
     // Filter numbers always live on :root. Style type Hard_Shadow is what
     // paints them — Hard is the same hole with no drop-shadow (Fire Stick).
-    // Old Hard_Shadow used 2px blur (spread copies at 0 blur) when we thought
-    // blur was the Fire Stick cost. A smidge of softness is 6px.
-    if (veilShadowSettings.blur <= 2) veilShadowSettings.blur = 6;
+    // Do not lift blur — Pass 8/9: 6px was too costly; keep 2px hard.
     if (root && root.style) {
       root.style.setProperty(
         "--veil-shadow-filter",
