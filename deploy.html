@@ -104,22 +104,22 @@
   <form id="form">
     <div class="lab">Target</div>
     <div class="picks">
-      <label class="pick"><input type="checkbox" name="target" value="testing" checked /> Testing</label>
-      <label class="pick"><input type="checkbox" name="target" value="restaurant" /> Restaurant</label>
+      <label class="pick"><input type="radio" name="target" value="testing" /> Testing</label>
+      <label class="pick"><input type="radio" name="target" value="restaurant" checked /> Restaurant</label>
     </div>
 
     <div class="lab">Ship</div>
     <div class="picks">
-      <label class="pick"><input type="checkbox" name="ship" value="both" checked /> Website + API</label>
-      <label class="pick"><input type="checkbox" name="ship" value="website" /> Website only</label>
-      <label class="pick"><input type="checkbox" name="ship" value="api" /> API only</label>
+      <label class="pick"><input type="radio" name="ship" value="both" checked /> Website + API</label>
+      <label class="pick"><input type="radio" name="ship" value="website" /> Website only</label>
+      <label class="pick"><input type="radio" name="ship" value="api" /> API only</label>
     </div>
 
     <div class="lab">Source commit</div>
     <div class="picks">
-      <label class="pick"><input type="checkbox" name="source" value="main" checked /> main (today’s work)</label>
-      <label class="pick"><input type="checkbox" name="source" value="testing" /> testing (promote)</label>
-      <label class="pick"><input type="checkbox" name="source" value="other" /> Other SHA / branch</label>
+      <label class="pick"><input type="radio" name="source" value="main" checked /> main (today’s work)</label>
+      <label class="pick"><input type="radio" name="source" value="testing" /> testing (promote)</label>
+      <label class="pick"><input type="radio" name="source" value="other" /> Other SHA / branch</label>
     </div>
     <label id="source-extra" hidden>SHA or branch
       <input type="text" name="sourceRef" placeholder="abc1234 or a branch name" autocomplete="off" />
@@ -127,9 +127,9 @@
 
     <div class="lab">Data source pin</div>
     <div class="picks">
-      <label class="pick"><input type="checkbox" name="pin" value="auto" checked /> Auto (testing → Alpha, restaurant → Restaurant)</label>
-      <label class="pick"><input type="checkbox" name="pin" value="alpha" /> Force Alpha Copy</label>
-      <label class="pick"><input type="checkbox" name="pin" value="restaurant" /> Force Restaurant Copy</label>
+      <label class="pick"><input type="radio" name="pin" value="auto" /> Auto (testing → Alpha, restaurant → Restaurant)</label>
+      <label class="pick"><input type="radio" name="pin" value="alpha" /> Force Alpha Copy</label>
+      <label class="pick"><input type="radio" name="pin" value="restaurant" checked /> Force Restaurant Copy</label>
     </div>
     <p class="tiny">Auto is what you want. Testing serves unmerged code against Alpha. Restaurant TVs stay on Restaurant Copy even if someone flips the Settings cell.</p>
 
@@ -141,16 +141,16 @@
       <input type="checkbox" name="dry" id="dry" />
       <label for="dry">Dry run (comment the plan, do not ship)</label>
     </div>
-    <div class="row" id="confirm-row" hidden>
-      <input type="checkbox" name="confirm" id="confirm" />
+    <div class="row" id="confirm-row">
+      <input type="checkbox" name="confirm" id="confirm" checked />
       <label for="confirm">I am shipping to the dining room. TVs will update.</label>
     </div>
 
     <label>Notes
-      <textarea name="notes" rows="3" placeholder="What is in this ship? Optional."></textarea>
+      <textarea name="notes" rows="3" placeholder="What is in this ship? Optional.">Deploy latest to restaurant menus and TVs (Restaurant Copy)</textarea>
     </label>
 
-    <div class="warn" id="summary">Shipping <strong>main</strong> → <strong>testing</strong> (website + API), Alpha sheet.</div>
+    <div class="warn" id="summary">Shipping <strong>main</strong> → <strong>restaurant</strong> (website + API), Restaurant Copy.</div>
     <button type="submit" id="go">File deploy</button>
   </form>
   <div class="advice" id="filed" hidden></div>
@@ -166,20 +166,17 @@
       if (html && el) el.innerHTML = html;
     })();
 
-    function onlyOne(name) {
-      const boxes = [...document.querySelectorAll('input[name="' + name + '"]')];
-      boxes.forEach((box) => {
-        box.addEventListener("change", () => {
-          if (box.checked) boxes.forEach((o) => { if (o !== box) o.checked = false; });
-          updateSummary();
-        });
+    function groupInputs(name) {
+      const inputs = [...document.querySelectorAll('input[name="' + name + '"]')];
+      inputs.forEach((input) => {
+        input.addEventListener("change", updateSummary);
       });
-      return boxes;
+      return inputs;
     }
-    const targets = onlyOne("target");
-    const ships = onlyOne("ship");
-    const sources = onlyOne("source");
-    const pins = onlyOne("pin");
+    const targets = groupInputs("target");
+    const ships = groupInputs("ship");
+    const sources = groupInputs("source");
+    const pins = groupInputs("pin");
 
     function picked(list, fallback) {
       const on = list.find((b) => b.checked);
@@ -217,6 +214,27 @@
     document.getElementById("promote").addEventListener("change", updateSummary);
     document.getElementById("dry").addEventListener("change", updateSummary);
     document.querySelector("[name=sourceRef]").addEventListener("input", updateSummary);
+
+    // Force the checkboxes/radios needed for a successful (actual push, non-dry) build by default.
+    // Default: Restaurant target + Restaurant Copy (as requested) + both + main + no dry.
+    (function forceSuccessfulDefaults() {
+      const restaurantTarget = document.querySelector('input[name="target"][value="restaurant"]');
+      const both = document.querySelector('input[name="ship"][value="both"]');
+      const mainSrc = document.querySelector('input[name="source"][value="main"]');
+      const restaurantPin = document.querySelector('input[name="pin"][value="restaurant"]');
+      const confirm = document.getElementById("confirm");
+      const dry = document.getElementById("dry");
+
+      if (restaurantTarget) restaurantTarget.checked = true;
+      if (both) both.checked = true;
+      if (mainSrc) mainSrc.checked = true;
+      if (restaurantPin) restaurantPin.checked = true;
+      if (confirm) confirm.checked = true;
+      if (dry) dry.checked = false;
+
+      // promote is left off by default
+    })();
+
     updateSummary();
 
     async function apiHealth(url) {
@@ -445,7 +463,7 @@
           const n = res.j.issueNumber ? "#" + res.j.issueNumber : "the GitHub issue";
           const href = githubHref(res.j.issueUrl);
           showFiled(
-            "<p><strong>Filed.</strong> Actions is shipping. Stay here — Suite App does not need GitHub.</p>" +
+            "<p><strong>Filed + dispatched.</strong> Push is starting. Stay here — Suite App does not need GitHub.</p>" +
               (href
                 ? "<p><a href=\"" +
                   href +
