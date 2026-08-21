@@ -124,6 +124,12 @@
     .preview .announcement-md-td { border-bottom: 1px solid rgba(255, 255, 255, 0.22); }
     .preview .announcement-md-link { color: inherit; text-decoration: underline; text-underline-offset: 0.12em; }
     .preview .announcement-md-mark { color: var(--highlight); font-weight: 700; background: transparent; }
+    .preview .announcement-md-hilite {
+      padding: 0 0.18em;
+      border-radius: 0.12em;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
     .preview .announcement-md-strike { text-decoration: line-through; opacity: 0.78; }
     .preview .is-bold { font-weight: 700; }
     .preview .is-italic { font-style: italic; }
@@ -172,15 +178,17 @@
         <tr><td><code>| Item | Price |</code></td><td>Table</td></tr>
         <tr><td><code>[label](url)</code></td><td>Underlined type (does not navigate)</td></tr>
         <tr><td><code>H~2~O</code> · <code>2^4^</code></td><td>Sub / superscript</td></tr>
+        <tr><td><code>&lt;font color="#ff0000"&gt;text&lt;/font&gt;</code></td><td>Text color (Editing Toolbar)</td></tr>
+        <tr><td><code>&lt;mark style="background:#affad1"&gt;text&lt;/mark&gt;</code></td><td>Background highlight</td></tr>
       </tbody>
     </table>
-    <p class="note">Not painted: footnotes, heading IDs, definition lists, emoji shortcodes, remote images (alt text only). HTML is not executed. Don’t start a cell with <code>=</code>.</p>
+    <p class="note">Not painted: footnotes, heading IDs, definition lists, emoji shortcodes, remote images (alt text only). Color HTML (<code>font</code> / <code>mark</code> / <code>span</code> color and background) is painted; other HTML stays literal. Don’t start a cell with <code>=</code>.</p>
 
     <h2>Examples</h2>
-    <p class="note">Same four samples as <code>?annMdDemo=1</code>. Left = paste into the Text cell. Right = live renderer.</p>
+    <p class="note">Same samples as <code>?annMdDemo=1</code> (including color, <code>?ann=4</code>). Left = paste into the Text cell. Right = live renderer.</p>
     <div id="examples"></div>
   </main>
-  <script src="js/announcement-md.js?v=20260820md2"></script>
+  <script src="js/announcement-md.js?v=20260821md3"></script>
   <script>
     (function () {
       var params = new URLSearchParams(location.search || "");

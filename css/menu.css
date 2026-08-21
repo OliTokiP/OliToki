@@ -2452,6 +2452,17 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   background: transparent;
 }
 
+#announcement-box .announcement-md-hilite {
+  padding: 0 0.18em;
+  border-radius: 0.12em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+#announcement-box .announcement-md-color {
+  font-weight: inherit;
+}
+
 #announcement-box .announcement-md-strike {
   text-decoration: line-through;
   opacity: 0.78;

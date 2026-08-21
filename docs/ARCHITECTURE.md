@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-08-20 18:48 (Board 4 announcement markdown renderer)
+**Last updated:** 2026-08-21 02:20 (Board 4 announcement color HTML)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -24,7 +24,7 @@
 | `js/config*.js` | Per-board sheet gids, layout name, image folder, column maps |
 | `js/data-source.js` | `google` vs `local` switch |
 | `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, Plate objects (hero + portrait), hero motion, stickers, stripes |
-| `js/announcement-md.js` | Board 4 Announcement Body markdown (plain CSV Text → safe DOM) |
+| `js/announcement-md.js` | Board 4 Announcement Body markdown + typed color HTML (plain CSV Text → safe DOM) |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
 | `scripts/toki_server.py` | Static file server + Sheets CSV proxy + caches |

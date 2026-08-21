@@ -1,9 +1,27 @@
 # What’s New
 
-**Last updated:** 2026-08-20 19:04  
+**Last updated:** 2026-08-21 02:20  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-21 02:20 — Announcement text color + vault cheat sheet
+
+**Boards / surface:** Menu Screens — Board 4 Announcement Body (`index4.html`)  
+**Sheet:** Announcements tab · **Text**  
+**Summary:** Typed **color** and **background highlight** in the Text cell, using the same HTML [Editing Toolbar](https://github.com/PKM-er/obsidian-editing-toolbar) writes in Obsidian (`<font color="#ff0000">`, `<mark style="background:#affad1">`, nested, markdown inside). Other HTML stays literal. Authoring cheat sheet is in the Obsidian vault as [[ANNOUNCEMENT_MARKDOWN]] (repo copy `docs/ANNOUNCEMENT_MARKDOWN.md`). Demo: `?annMdDemo=1&pause=1&ann=4`.
+
+### Details
+- Hex / `rgb()` / `hsl()` / CSS color names only — no `url()`, no scripts.
+- Nested example: mint highlight + red type + italic on *crispy chicken tenders!*
+- Plain sentences and existing markdown slides are unchanged.
+
+### Docs updated
+- [ANNOUNCEMENT_MARKDOWN.md](./ANNOUNCEMENT_MARKDOWN.md)
+- [SHEET_MIGRATION.md](./SHEET_MIGRATION.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
 
 ---
 

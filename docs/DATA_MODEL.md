@@ -124,7 +124,7 @@ GID `1962117802` — announcement + stripes (drink items come from drinks sheet 
 | D | Stripe Color 2 | 3 | |
 | E | Announcement Title | 4 | |
 | F | Announcement Subtitle | 5 | |
-| G | Announcement Copy | 6 | Multi-line markdown (xlsx rich-text runs quarantined 2026-08-13) |
+| G | Announcement Copy | 6 | Multi-line markdown + typed color HTML (xlsx rich-text runs quarantined 2026-08-13) |
 | H | Announcement Color | 7 | Body fill |
 | I–S | Legacy drink columns | 8+ | Fallback only if drinks sheet fails |
 

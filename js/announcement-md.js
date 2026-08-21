@@ -9,6 +9,8 @@
  * Subset: cheat-sheet basic + tables, fenced code, strikethrough, task lists,
  * highlight == ==, sub ~ ~, sup ^ ^. Images: alt only (no remote fetch).
  * Links: painted, not navigated (Fire Stick).
+ * Color HTML (Editing Toolbar / Obsidian): <font color>, <mark style="background">,
+ * <span style="color|background">. Other HTML stays literal — never innerHTML.
  *
  * Authoring cheat sheet + demo examples: docs/ANNOUNCEMENT_MARKDOWN.md
  * and announcement-markdown.html (demoMessages()).
@@ -34,10 +36,145 @@
     link: "announcement-md-link",
     imgAlt: "announcement-md-img-alt",
     mark: "announcement-md-mark",
+    hilite: "announcement-md-hilite",
+    color: "announcement-md-color",
     strike: "announcement-md-strike",
     check: "announcement-md-check",
     task: "announcement-md-task",
   };
+
+  var NAMED_COLORS = {
+    aliceblue: 1, antiquewhite: 1, aqua: 1, aquamarine: 1, azure: 1,
+    beige: 1, bisque: 1, black: 1, blanchedalmond: 1, blue: 1, blueviolet: 1,
+    brown: 1, burlywood: 1, cadetblue: 1, chartreuse: 1, chocolate: 1,
+    coral: 1, cornflowerblue: 1, cornsilk: 1, crimson: 1, cyan: 1,
+    darkblue: 1, darkcyan: 1, darkgoldenrod: 1, darkgray: 1, darkgreen: 1,
+    darkgrey: 1, darkkhaki: 1, darkmagenta: 1, darkolivegreen: 1, darkorange: 1,
+    darkorchid: 1, darkred: 1, darksalmon: 1, darkseagreen: 1, darkslateblue: 1,
+    darkslategray: 1, darkslategrey: 1, darkturquoise: 1, darkviolet: 1,
+    deeppink: 1, deepskyblue: 1, dimgray: 1, dimgrey: 1, dodgerblue: 1,
+    firebrick: 1, floralwhite: 1, forestgreen: 1, fuchsia: 1, gainsboro: 1,
+    ghostwhite: 1, gold: 1, goldenrod: 1, gray: 1, green: 1, greenyellow: 1,
+    grey: 1, honeydew: 1, hotpink: 1, indianred: 1, indigo: 1, ivory: 1,
+    khaki: 1, lavender: 1, lavenderblush: 1, lawngreen: 1, lemonchiffon: 1,
+    lightblue: 1, lightcoral: 1, lightcyan: 1, lightgoldenrodyellow: 1,
+    lightgray: 1, lightgreen: 1, lightgrey: 1, lightpink: 1, lightsalmon: 1,
+    lightseagreen: 1, lightskyblue: 1, lightslategray: 1, lightslategrey: 1,
+    lightsteelblue: 1, lightyellow: 1, lime: 1, limegreen: 1, linen: 1,
+    magenta: 1, maroon: 1, mediumaquamarine: 1, mediumblue: 1, mediumorchid: 1,
+    mediumpurple: 1, mediumseagreen: 1, mediumslateblue: 1, mediumspringgreen: 1,
+    mediumturquoise: 1, mediumvioletred: 1, midnightblue: 1, mintcream: 1,
+    mistyrose: 1, moccasin: 1, navajowhite: 1, navy: 1, oldlace: 1, olive: 1,
+    olivedrab: 1, orange: 1, orangered: 1, orchid: 1, palegoldenrod: 1,
+    palegreen: 1, paleturquoise: 1, palevioletred: 1, papayawhip: 1, peachpuff: 1,
+    peru: 1, pink: 1, plum: 1, powderblue: 1, purple: 1, rebeccapurple: 1,
+    red: 1, rosybrown: 1, royalblue: 1, saddlebrown: 1, salmon: 1, sandybrown: 1,
+    seagreen: 1, seashell: 1, sienna: 1, silver: 1, skyblue: 1, slateblue: 1,
+    slategray: 1, slategrey: 1, snow: 1, springgreen: 1, steelblue: 1, tan: 1,
+    teal: 1, thistle: 1, tomato: 1, turquoise: 1, transparent: 1, violet: 1,
+    wheat: 1, white: 1, whitesmoke: 1, yellow: 1, yellowgreen: 1,
+  };
+
+  function sanitizeCssColor(raw) {
+    var s = String(raw || "").trim();
+    if (!s || /url\s*\(|expression\s*\(|javascript:|@import|var\s*\(/i.test(s)) {
+      return "";
+    }
+    if (/^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s)) {
+      return s.toLowerCase();
+    }
+    if (
+      /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(
+        s
+      )
+    ) {
+      return s.replace(/\s+/g, " ");
+    }
+    if (
+      /^hsla?\(\s*\d{1,3}(?:\.\d+)?\s*,\s*\d{1,3}(?:\.\d+)?%\s*,\s*\d{1,3}(?:\.\d+)?%(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(
+        s
+      )
+    ) {
+      return s.replace(/\s+/g, " ");
+    }
+    var named = s.toLowerCase();
+    return NAMED_COLORS[named] ? named : "";
+  }
+
+  function attrValue(attrs, name) {
+    var re = new RegExp(
+      "(?:^|\\s)" + name + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))",
+      "i"
+    );
+    var m = String(attrs || "").match(re);
+    if (!m) return "";
+    return m[1] || m[2] || m[3] || "";
+  }
+
+  function parseStyleColorProps(styleRaw) {
+    var color = "";
+    var background = "";
+    String(styleRaw || "")
+      .split(";")
+      .forEach(function (part) {
+        var idx = part.indexOf(":");
+        if (idx < 0) return;
+        var key = part.slice(0, idx).trim().toLowerCase();
+        var val = part.slice(idx + 1).trim();
+        var safe = sanitizeCssColor(val);
+        if (!safe) return;
+        if (key === "color") color = safe;
+        if (key === "background" || key === "background-color") background = safe;
+      });
+    return { color: color, background: background };
+  }
+
+  function parseColorOpenTag(src, i) {
+    if (src.charAt(i) !== "<") return null;
+    var m = src.slice(i).match(/^<(font|mark|span)(\s+[^>]*)?>/i);
+    if (!m) return null;
+    var tag = m[1].toLowerCase();
+    var attrs = String(m[2] || "").replace(/^\s+|\s+$/g, "");
+    var color = sanitizeCssColor(attrValue(attrs, "color"));
+    var fromStyle = parseStyleColorProps(attrValue(attrs, "style"));
+    if (fromStyle.color) color = fromStyle.color;
+    var background = fromStyle.background;
+    if (!color && !background && tag !== "mark") return null;
+    return {
+      tag: tag,
+      color: color,
+      background: background,
+      len: m[0].length,
+    };
+  }
+
+  function findMatchingCloseTag(src, from, tag) {
+    var openPat = new RegExp("<" + tag + "\\b", "i");
+    var closePat = new RegExp("</" + tag + "\\s*>", "i");
+    var depth = 1;
+    var i = from;
+    while (i < src.length) {
+      var rest = src.slice(i);
+      var om = rest.search(openPat);
+      var cm = rest.search(closePat);
+      if (cm < 0) return null;
+      if (om >= 0 && om < cm) {
+        var gt = src.indexOf(">", i + om);
+        if (gt < 0) return null;
+        depth += 1;
+        i = gt + 1;
+        continue;
+      }
+      var closeMatch = rest.slice(cm).match(closePat);
+      if (!closeMatch) return null;
+      if (depth === 1) {
+        return { start: i + cm, end: i + cm + closeMatch[0].length };
+      }
+      depth -= 1;
+      i = i + cm + closeMatch[0].length;
+    }
+    return null;
+  }
 
   function isWordChar(c) {
     return c != null && /[A-Za-z0-9]/.test(c);
@@ -188,6 +325,32 @@
           continue;
         }
       }
+      if (ch === "<") {
+        var openTag = parseColorOpenTag(src, i);
+        if (openTag) {
+          var closeTag = findMatchingCloseTag(src, i + openTag.len, openTag.tag);
+          if (closeTag) {
+            var innerHtml = src.slice(i + openTag.len, closeTag.start);
+            var clsParts = [];
+            var useMark =
+              openTag.tag === "mark" && !openTag.background && !openTag.color;
+            if (openTag.background) clsParts.push(CLS.hilite);
+            else if (useMark) clsParts.push(CLS.mark);
+            if (openTag.color) clsParts.push(CLS.color);
+            flush();
+            out.push({
+              t: "el",
+              tag: useMark ? "mark" : "span",
+              cls: clsParts.join(" "),
+              color: openTag.color || "",
+              background: openTag.background || "",
+              kids: tokenizeInline(innerHtml),
+            });
+            i = closeTag.end;
+            continue;
+          }
+        }
+      }
       if (ch === "!" && src.charAt(i + 1) === "[") {
         var imgClose = src.indexOf("](", i + 2);
         var imgEnd = imgClose >= 0 ? src.indexOf(")", imgClose + 2) : -1;
@@ -292,6 +455,8 @@
       }
       var el = document.createElement(tok.tag || "span");
       if (tok.cls) el.className = tok.cls;
+      if (tok.color) el.style.color = tok.color;
+      if (tok.background) el.style.backgroundColor = tok.background;
       if (tok.href) {
         el.setAttribute("data-url", String(tok.href).slice(0, 200));
         el.title = String(tok.href);
@@ -658,6 +823,19 @@
           "stays literal **not bold**\n" +
           "```",
       },
+      {
+        title: "New tenders",
+        subtitle: "Color",
+        textAlign: "center",
+        speedSec: 8,
+        text:
+          '<font color="#ffffff">**Limited time**</font>\n\n' +
+          '<mark style="background:#affad1"><font color="#ff0000">Try our all new *crispy chicken tenders!*</font></mark>\n\n' +
+          '<font color="#ff3b30">Red</font> · ' +
+          '<font color="#ffd60a">Gold</font> · ' +
+          '<span style="color:#ffffff">White</span> · ' +
+          '<mark style="background:#ffe08a">highlight</mark>',
+      },
     ];
   }
 
@@ -667,6 +845,7 @@
     demoMessages: demoMessages,
     tokenizeInline: tokenizeInline,
     parseBlocks: parseBlocks,
+    sanitizeCssColor: sanitizeCssColor,
   };
 
   if (typeof module !== "undefined" && module.exports) {

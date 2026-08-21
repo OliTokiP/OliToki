@@ -1,6 +1,6 @@
 # TokiMenu documentation
 
-**Last updated:** 2026-08-20 19:04  
+**Last updated:** 2026-08-21 02:20  
 
 | Doc | Purpose |
 |-----|---------|

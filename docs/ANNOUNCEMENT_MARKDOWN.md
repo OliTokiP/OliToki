@@ -1,13 +1,13 @@
 # Announcement markdown (Board 4)
 
-**Last updated:** 2026-08-20 19:04  
+**Last updated:** 2026-08-21 02:20  
 
 How to style the **Announcement Body** from the Google Sheet.  
 **Board:** `index4.html` · **Tab:** Announcements · **Column:** Inventory **Text**  
 **On-screen:** Announcement Panel / Announcement Body ([[UI_NOMENCLATURE]] §5)  
 **Browsable copy** (examples painted with the live renderer): [announcement-markdown.html](../announcement-markdown.html)
 
-In-cell Google rich text / fills stay off. Type markdown in the **Text** cell. The board hyphenates long words and **shrinks** so copy never leaves the 976×452 shell.
+In-cell Google rich text / fills stay off. Type markdown in the **Text** cell. Add **text color** and **background highlight** with the same HTML [Editing Toolbar](https://github.com/PKM-er/obsidian-editing-toolbar) writes in Obsidian (`<font color>`, `<mark style="background">`). The board hyphenates long words and **shrinks** so copy never leaves the 976×452 shell.
 
 Reference: [Markdown cheat sheet](https://www.markdownguide.org/cheat-sheet/) (we paint the useful TV subset below).
 
@@ -21,7 +21,8 @@ Reference: [Markdown cheat sheet](https://www.markdownguide.org/cheat-sheet/) (w
 | **Alt+Enter** (Windows: Ctrl+Enter) for a new line | Expect a single Return to make a new sheet row |
 | Start lists with `- ` or `1. ` (space after the mark) | Start a cell with `=` (Sheets treats that as a formula) |
 | `# Heading` with a space after the hashes | `#Heading` (no space) — that stays literal |
-| Wrap the Text column so you can read the cell | Paste HTML tags — they show as plain text |
+| Wrap the Text column so you can read the cell | Paste unknown HTML — it shows as plain text |
+| `<font color="#ff0000">` / `<mark style="background:#affad1">` for color | Expect Google in-cell font color / cell fill |
 
 Plain sentences with no markdown look the same as before (centered). Headings, lists, tables, quotes, and code **left-align**.
 
@@ -62,8 +63,13 @@ A single newline in the cell is a **line break** on the board (Sheet Alt+Enter).
 | `==highlight==` | Highlight color |
 | `H~2~O` | Subscript |
 | `2^4^` | Superscript |
+| `<font color="#ff0000">text</font>` | Text color |
+| `<mark style="background:#affad1">text</mark>` | Background highlight |
+| `<span style="color:#7ee0a3">text</span>` | Same as font color (span form) |
 
-**Not painted (stay literal or skipped):** footnotes, heading IDs, definition lists, emoji shortcodes like `:joy:`. HTML in the cell is **not** executed.
+Color tags nest, and markdown still runs inside them (`*italic*` stays italic). Hex (`#ff0000`), `rgb()`, `hsl()`, and CSS color names are ok. Other HTML (`<script>`, `<img>`, random tags) stays **literal** — never executed.
+
+**Not painted (stay literal or skipped):** footnotes, heading IDs, definition lists, emoji shortcodes like `:joy:`.
 
 Escape a mark with a backslash: `\*not italic\*`.
 
@@ -71,7 +77,7 @@ Escape a mark with a backslash: `\*not italic\*`.
 
 ## 3. Examples (paste into **Text**)
 
-These are the four samples on `?annMdDemo=1`. Paste the **Text** block into one inventory row. Title / Subtitle are separate columns.
+These are the samples on `?annMdDemo=1`. Paste the **Text** block into one inventory row. Title / Subtitle are separate columns.
 
 ### Example 1 — Happy Hour (`?ann=0`)
 
@@ -156,6 +162,20 @@ stays literal **not bold**
 
 A cell with only `Sign up for our rewards program!` still paints as one centered sentence. No marks required.
 
+### Example 5 — Color (`?ann=4`)
+
+**Title:** New tenders · **Subtitle:** Color
+
+```markdown
+<font color="#ffffff">**Limited time**</font>
+
+<mark style="background:#affad1"><font color="#ff0000">Try our all new *crispy chicken tenders!*</font></mark>
+
+<font color="#ff3b30">Red</font> · <font color="#ffd60a">Gold</font> · <span style="color:#ffffff">White</span> · <mark style="background:#ffe08a">highlight</mark>
+```
+
+That nested `<mark>` + `<font>` line is the Editing Toolbar form (mint background, red type, italic on *crispy chicken tenders!*).
+
 ---
 
 ## 4. Preview on the board
@@ -166,7 +186,7 @@ Does **not** write the sheet.
 http://Peters-Mac.local:8765/index4.html?annMdDemo=1&pause=1&ann=0
 ```
 
-`ann=0` Happy Hour · `ann=1` table · `ann=2` packed fit · `ann=3` basics.
+`ann=0` Happy Hour · `ann=1` table · `ann=2` packed fit · `ann=3` basics · `ann=4` color.
 
 Browsable cheat sheet with the same four examples painted live: [announcement-markdown.html](../announcement-markdown.html)
 
