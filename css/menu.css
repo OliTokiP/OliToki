@@ -2107,6 +2107,10 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   display: block;
 }
 
+#bg-pattern[hidden] {
+  display: none !important;
+}
+
 #bg-pattern-track {
   position: absolute;
   width: 320%;

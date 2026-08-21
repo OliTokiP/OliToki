@@ -824,6 +824,11 @@ img {
   overflow: hidden;
 }
 
+.preview-pattern[hidden],
+.preview-wallpaper[hidden] {
+  display: none !important;
+}
+
 .preview-pattern-track {
   position: absolute;
   width: 320%;

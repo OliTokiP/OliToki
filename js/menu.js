@@ -4965,7 +4965,11 @@
       bgImage = config.bgImage || null;
     }
     // Style BG Pattern owns the hero texture — wallpaper is not part of that theme.
-    if (isStripesPatternToken(parsed.bgPattern)) {
+    // Style tab always sets bgPattern (null = none). Do not keep the previous Stripes.
+    const bgPattern = Object.prototype.hasOwnProperty.call(parsed, "bgPattern")
+      ? parsed.bgPattern
+      : config.bgPattern;
+    if (isStripesPatternToken(bgPattern)) {
       bgImage = null;
     }
     const bgBlur = parseUnit01(
@@ -5001,7 +5005,7 @@
       bgOpacity: bgOpacity,
       bgMode: bgImage ? "image" : "solid",
       bgSolid: bgColor,
-      bgPattern: parsed.bgPattern != null ? parsed.bgPattern : config.bgPattern,
+      bgPattern: bgPattern,
       bgScrollSpeed: parseBgScrollSpeed(
         parsed.bgScrollSpeed != null
           ? parsed.bgScrollSpeed
@@ -5903,12 +5907,20 @@
     }
     if (!bp) return;
 
-    // Board 4 frame stripes already own the only stripe animation.
-    if (isDrinks && config.includeStripes) {
+    function hidePattern() {
       bp.hidden = true;
       bp.style.display = "none";
       bp.classList.remove("active");
       document.body.classList.remove("has-bg-pattern-stripes");
+      if (track) {
+        track.style.animationDuration = "0s";
+        track.style.animationPlayState = "paused";
+      }
+    }
+
+    // Board 4 frame stripes already own the only stripe animation.
+    if (isDrinks && config.includeStripes) {
+      hidePattern();
       return;
     }
 
@@ -5925,10 +5937,7 @@
       root.style.setProperty("--bg-pattern-2", c2);
       updateBgPatternAnimation(track);
     } else {
-      bp.hidden = true;
-      bp.style.display = "none";
-      bp.classList.remove("active");
-      document.body.classList.remove("has-bg-pattern-stripes");
+      hidePattern();
     }
   }
 

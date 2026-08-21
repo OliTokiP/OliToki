@@ -3550,8 +3550,14 @@
     preview.style.setProperty("--pattern-b", bakePatternHex(roleHex(d.patternColor2)));
     var pat = preview.querySelector(".preview-pattern");
     var wpp = preview.querySelector(".preview-wallpaper");
-    if (pat) pat.hidden = encore || d.background !== "pattern";
-    if (wpp) wpp.hidden = encore || d.background !== "wallpaper";
+    if (pat) {
+      pat.hidden = encore || d.background !== "pattern";
+      pat.style.display = pat.hidden ? "none" : "";
+    }
+    if (wpp) {
+      wpp.hidden = encore || d.background !== "wallpaper";
+      wpp.style.display = wpp.hidden ? "none" : "";
+    }
     // Sync wallpaper image srcs from draft so the selector immediately updates
     // the mini-display preview (both crossfade layers) before any Save.
     // wallpaperSrc/wallpaperFallback always return the -sm variant for preview.
