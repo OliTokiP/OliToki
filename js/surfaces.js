@@ -29,15 +29,37 @@ window.tokiSuiteNavHtml = function (currentName) {
     if (!label) continue;
     if (label === currentName) {
       parts.push('<span class="is-current">' + label + "</span>");
-    } else if (label === "Menu Manager") {
-      parts.push(
-        '<a href="' + href + '" target="_blank" rel="noopener">Menu Manager</a>'
-      );
     } else {
-      parts.push('<a href="' + tokiBustOperatorHref(href) + '">' + label + "</a>");
+      if (label !== "Tickets") href = tokiBustOperatorHref(href);
+      var extra =
+        window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)
+          ? ' target="_blank" rel="noopener"'
+          : "";
+      parts.push('<a href="' + href + '"' + extra + ">" + label + "</a>");
     }
   }
   return parts.join(" · ");
+};
+
+window.tokiOpensOutsideSuite = function (href) {
+  if (!href) return false;
+  try {
+    var u = new URL(href, location.href);
+    var name = (u.pathname.split("/").pop() || "").toLowerCase();
+    if (String(u.port) === "18765") return false;
+    if (u.origin !== location.origin) return true;
+    return (
+      name === "manager.html" ||
+      name === "index.html" ||
+      name === "index2.html" ||
+      name === "index3.html" ||
+      name === "index4.html" ||
+      name === "preview-all.html" ||
+      name === "glossary.html"
+    );
+  } catch (e) {
+    return true;
+  }
 };
 
 function isLiveHost() {

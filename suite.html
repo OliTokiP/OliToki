@@ -262,8 +262,8 @@
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/env.js?v=20260820hub1"></script>
-  <script src="js/surfaces.js?v=20260820hub1"></script>
+  <script src="js/env.js?v=20260821app1"></script>
+  <script src="js/surfaces.js?v=20260821app1"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -326,9 +326,16 @@
       if (html) document.getElementById("nav").innerHTML = html;
     })();
 
+    function outsideAttrs(href) {
+      if (window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)) {
+        return ' target="_blank" rel="noopener"';
+      }
+      return "";
+    }
     function card(item) {
+      const href = operatorHref(item.page);
       return (
-        '<a class="card" href="' + operatorHref(item.page) + '">' +
+        '<a class="card" href="' + href + '"' + outsideAttrs(href) + ">" +
         item.name +
         (item.blurb ? '<span class="blurb">' + item.blurb + "</span>" : "") +
         "</a>"
@@ -387,8 +394,6 @@
       if (samePage(href)) {
         return '<span class="copy-cell is-here' + youCol + '"' + envAttr + ">Here</span>";
       }
-      const extra =
-        row.label === "Menu Manager" ? ' target="_blank" rel="noopener"' : "";
       return (
         '<a class="copy-cell' +
         youCol +
@@ -396,7 +401,7 @@
         href +
         '"' +
         envAttr +
-        extra +
+        outsideAttrs(href) +
         ">Open</a>"
       );
     }
