@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "b1edac2",
-  "hashFull": "b1edac2857195c8d37b347924dad9c781fe16afa",
-  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 1)"
+  "hash": "171398c",
+  "hashFull": "171398c9318675074283e791e162bc0f54972ecf",
+  "subject": "Restore Film and Galaxy sm.webp backgrounds"
 };
