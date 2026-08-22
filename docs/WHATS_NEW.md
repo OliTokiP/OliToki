@@ -1,6 +1,6 @@
 # What’s New
 
-**Last updated:** 2026-08-22 14:52  
+**Last updated:** 2026-08-22 19:35  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
@@ -14,7 +14,9 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 **Summary:** Local Suite now has a **Restart local server** button under the Health meters. It POSTs `/api/sys/restart` on this Mac’s `toki_server`, which bounces the process the same way a file-watch reload does. Restaurant TVs and Cloud Run are not touched. The button is hidden on Pages and Testing.
 
 ### Details
-- Confirm first; the button waits until `GET /api/sys` comes back with a new `startedAt`.
+- In-page **Cancel / Confirm restart** (not a browser alert). While bouncing, the button uses a three-dot wait animation.
+- The Mac posts to Notification Center when the process is back. The page also fires a web notification if the browser allowed it.
+- The button waits until `GET /api/sys` comes back with a new `startedAt`.
 - Hosted API returns **404** for the restart route.
 
 ### Docs updated

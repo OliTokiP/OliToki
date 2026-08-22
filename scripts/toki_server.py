@@ -147,6 +147,32 @@ def _log(msg: str) -> None:
     print(f"[toki_server] {msg}", flush=True)
 
 
+def _mac_notify(title: str, message: str) -> None:
+    """Local Notification Center ping. No-op on Cloud Run."""
+    if _hosted():
+        return
+
+    def go() -> None:
+        try:
+            def esc(s: str) -> str:
+                return s.replace("\\", "\\\\").replace('"', '\\"')
+
+            subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    f'display notification "{esc(message)}" with title "{esc(title)}"',
+                ],
+                check=False,
+                capture_output=True,
+                timeout=5,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=go, name="mac-notify", daemon=True).start()
+
+
 def _reexec_self(reason: str) -> None:
     """Replace this process with a fresh toki_server (same argv / pid)."""
     path = Path(__file__).resolve()
@@ -2312,6 +2338,7 @@ def make_handler(
                         "startedAt": int(_STARTED_AT),
                     },
                 )
+                os.environ["TOKI_RESTART_NOTIFY"] = "1"
                 _schedule_reexec("restart requested from Suite — bouncing")
                 return
             if parsed.path in ("/api/manager/theme", "/api/manager/style"):
@@ -3009,6 +3036,12 @@ def main():
     _watch_api_and_reexec()
     if not _hosted() and not args.no_api:
         _init_in_background()
+    if str(os.environ.pop("TOKI_RESTART_NOTIFY", "")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        _mac_notify("Toki Menu", "Local server restarted.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
   <title>Suite — OliToki</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260822restart" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260822restart2" />
   <style>
     html, body { max-width: 100%; }
     *, *::before, *::after { box-sizing: border-box; }
@@ -173,21 +173,65 @@
       cursor: default;
     }
     .copy-col-you { background: rgba(27, 127, 55, 0.04); }
-    .restart-wrap { margin-top: .55rem; }
+    .restart-wrap { margin-top: .55rem; max-width: 100%; }
     .restart-wrap[hidden] { display: none; }
-    .restart-btn {
-      width: 100%;
+    .restart-btn,
+    .restart-cancel,
+    .restart-go {
       font: inherit;
       font-weight: 700;
       padding: .85rem;
       min-height: 44px;
-      border: 1px solid #bbb;
       border-radius: 10px;
-      background: #1a1a1a;
-      color: #fff;
       box-sizing: border-box;
     }
+    .restart-btn {
+      width: 100%;
+      border: 1px solid #bbb;
+      background: #1a1a1a;
+      color: #fff;
+    }
     .restart-btn[disabled] { opacity: .6; }
+    .restart-btn.is-busy { letter-spacing: 0.01em; }
+    .restart-dots {
+      display: inline-block;
+      min-width: 1.1em;
+      text-align: left;
+    }
+    .restart-dots span {
+      opacity: 0;
+      animation: restart-dot 1.2s infinite;
+    }
+    .restart-dots span:nth-child(2) { animation-delay: .2s; }
+    .restart-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes restart-dot {
+      0%, 80%, 100% { opacity: 0; }
+      40% { opacity: 1; }
+    }
+    .restart-confirm {
+      border: 1px solid #bbb;
+      border-radius: 10px;
+      padding: .7rem .85rem .75rem;
+    }
+    .restart-confirm[hidden] { display: none; }
+    .restart-confirm p {
+      margin: 0;
+      font-weight: 500;
+      overflow-wrap: anywhere;
+    }
+    .restart-confirm-row {
+      display: flex;
+      flex-direction: column;
+      gap: .45rem;
+      margin-top: .55rem;
+    }
+    .restart-cancel,
+    .restart-go {
+      width: 100%;
+      border: 1px solid #bbb;
+    }
+    .restart-cancel { background: transparent; color: inherit; }
+    .restart-go { background: #1a1a1a; color: #fff; }
     .restart-note { margin: .35rem 0 0; }
     @media (max-width: 520px) {
       .copy-head { display: none; }
@@ -248,11 +292,13 @@
       .copy-cell.is-here { background: #16351c; color: #5ee08a; }
       .copy-cell.is-na { color: #666; }
       .copy-col-you { background: rgba(94, 224, 138, 0.06); }
-      .restart-btn {
+      .restart-btn,
+      .restart-go {
         background: #eee;
         color: #111;
         border-color: #444;
       }
+      .restart-confirm { border-color: #444; }
       @media (max-width: 520px) {
         .copy-cell { border-color: #333; }
         .copy-cell::before { color: #aaa; }
@@ -274,6 +320,13 @@
     <p class="tiny" id="sys-foot"></p>
     <div class="restart-wrap" id="sys-restart" hidden>
       <button type="button" class="restart-btn" id="sys-restart-btn">Restart local server</button>
+      <div class="restart-confirm" id="sys-restart-confirm" hidden>
+        <p>Restart this Mac’s menu server? TVs are not affected.</p>
+        <div class="restart-confirm-row">
+          <button type="button" class="restart-cancel" id="sys-restart-cancel">Cancel</button>
+          <button type="button" class="restart-go" id="sys-restart-go">Confirm restart</button>
+        </div>
+      </div>
       <p class="tiny restart-note" id="sys-restart-note"></p>
     </div>
   </div>
@@ -287,8 +340,8 @@
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/env.js?v=20260822restart"></script>
-  <script src="js/surfaces.js?v=20260822suite1"></script>
+  <script src="js/env.js?v=20260822restart2"></script>
+  <script src="js/surfaces.js?v=20260822restart2"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -569,26 +622,89 @@
       if (note) note.textContent = text || "";
     }
 
+    function restartEls() {
+      return {
+        wrap: document.getElementById("sys-restart"),
+        btn: document.getElementById("sys-restart-btn"),
+        confirm: document.getElementById("sys-restart-confirm"),
+        cancel: document.getElementById("sys-restart-cancel"),
+        go: document.getElementById("sys-restart-go"),
+      };
+    }
+
+    function showRestartConfirm(show) {
+      const els = restartEls();
+      if (els.confirm) els.confirm.hidden = !show;
+      if (els.btn && !restarting) els.btn.hidden = !!show;
+    }
+
+    function setRestartButtonIdle() {
+      const els = restartEls();
+      if (!els.btn) return;
+      els.btn.classList.remove("is-busy");
+      els.btn.hidden = false;
+      els.btn.disabled = false;
+      els.btn.textContent = "Restart local server";
+      showRestartConfirm(false);
+    }
+
+    function setRestartButtonBusy() {
+      const els = restartEls();
+      if (!els.btn) return;
+      showRestartConfirm(false);
+      els.btn.hidden = false;
+      els.btn.disabled = true;
+      els.btn.classList.add("is-busy");
+      els.btn.innerHTML =
+        'Restarting<span class="restart-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>';
+    }
+
     function syncRestartButton(mac) {
-      const wrap = document.getElementById("sys-restart");
-      const btn = document.getElementById("sys-restart-btn");
-      if (!wrap || !btn) return;
-      wrap.hidden = currentEnv() !== "local";
+      const els = restartEls();
+      if (!els.wrap || !els.btn) return;
+      els.wrap.hidden = currentEnv() !== "local";
       if (restarting) return;
-      btn.disabled = !mac;
+      els.btn.disabled = !mac;
+      if (els.go) els.go.disabled = !mac;
+    }
+
+    function askNotifyPermission() {
+      try {
+        if (!("Notification" in window)) return;
+        if (Notification.permission === "default") {
+          Notification.requestPermission().catch(function () {});
+        }
+      } catch (e) {}
+    }
+
+    function pingNotificationCenter(title, body) {
+      try {
+        if (!("Notification" in window)) return;
+        if (Notification.permission !== "granted") return;
+        new Notification(title, { body: body, tag: "toki-local-restart" });
+      } catch (e) {}
+    }
+
+    function armRestart() {
+      if (restarting) return;
+      const els = restartEls();
+      if (!els.btn || els.btn.disabled) return;
+      setRestartNote("");
+      showRestartConfirm(true);
+    }
+
+    function cancelRestart() {
+      if (restarting) return;
+      showRestartConfirm(false);
+      setRestartNote("");
     }
 
     async function restartLocalServer() {
-      const btn = document.getElementById("sys-restart-btn");
-      if (!btn || restarting) return;
-      if (!window.confirm(
-        "Restart this Mac’s menu server? Local boards and Suite will blink for a few seconds. Restaurant TVs are not affected."
-      )) {
-        return;
-      }
+      const els = restartEls();
+      if (!els.btn || restarting) return;
+      askNotifyPermission();
       restarting = true;
-      btn.disabled = true;
-      btn.textContent = "Restarting…";
+      setRestartButtonBusy();
       setRestartNote("Waiting for the laptop API to come back.");
       let prevStarted = null;
       const snap = await ping("/api/sys", 2000);
@@ -598,8 +714,7 @@
         const res = await fetch("/api/sys/restart", { method: "POST", cache: "no-store" });
         if (res.status === 404) {
           restarting = false;
-          btn.disabled = false;
-          btn.textContent = "Restart local server";
+          setRestartButtonIdle();
           setRestartNote("This server has no restart route.");
           return;
         }
@@ -619,10 +734,10 @@
         }
       }
       restarting = false;
-      btn.disabled = false;
-      btn.textContent = "Restart local server";
+      setRestartButtonIdle();
       if (back) {
         setRestartNote("Server came back.");
+        pingNotificationCenter("Toki Menu", "Local server restarted.");
         await refreshSys();
         setTimeout(function () {
           const note = document.getElementById("sys-restart-note");
@@ -745,7 +860,11 @@
     }
 
     const restartBtn = document.getElementById("sys-restart-btn");
-    if (restartBtn) restartBtn.addEventListener("click", restartLocalServer);
+    const restartCancel = document.getElementById("sys-restart-cancel");
+    const restartGo = document.getElementById("sys-restart-go");
+    if (restartBtn) restartBtn.addEventListener("click", armRestart);
+    if (restartCancel) restartCancel.addEventListener("click", cancelRestart);
+    if (restartGo) restartGo.addEventListener("click", restartLocalServer);
 
     refreshLive();
     refreshSys();
