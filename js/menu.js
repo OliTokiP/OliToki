@@ -1451,6 +1451,8 @@
     familyPortrait: false,
     presentationMode: "slideshow",
   };
+  /** ?boxPackLab=1 inquiry HUD (item slider / 1–3 box widths). Null when off. */
+  let _boxPackLab = null;
   /** Board list options from Include Descriptions? / Columns? (first filled cell) */
   let boardListOptions = {
     showDescriptions: true,
@@ -9914,6 +9916,7 @@
     setBoxLayoutMode(bodyEl, columnsOn);
     setBoxTextAlign(bodyEl, box.textAlign);
     setFooterTypoMode(bodyEl, footerTypoModeClass(box.items));
+    bodyEl.removeAttribute("data-pack-tag");
 
     if (box.include === false) return;
 
@@ -9953,8 +9956,17 @@
       balanceOptsFromBox(bodyEl, {
         sepText: " · ",
         maxLines: 8,
+        forceLines:
+          _boxPackLab && _boxPackLab.packLines > 0
+            ? _boxPackLab.packLines
+            : 0,
       })
     );
+    if (balanceItemsIntoLines.lastMeta) {
+      bodyEl.dataset.packTag = String(
+        balanceItemsIntoLines.lastMeta.tag || ""
+      );
+    }
 
     // Conditional formatting for line count (used for tighter 2-line spacing)
     bodyEl.classList.remove("lines-1", "lines-2", "lines-3", "lines-4", "lines-many");
@@ -10063,6 +10075,7 @@
     if (!isDrinks) {
       buildBoardSlides();
     }
+    if (_boxPackLab) boxPackLabAfterRender();
   }
 
   /** Read data-box-item-index in DOM paint order → box.displayOrder */
@@ -10313,7 +10326,12 @@
     let bestScore = -Infinity;
     let bestType = -Infinity;
     let bestTag = "";
+    let bestFill = 0;
     const candidates = [];
+    const forceL =
+      o.forceLines > 0
+        ? Math.min(maxLines, Math.max(1, Math.round(Number(o.forceLines))))
+        : 0;
 
     function considerPacked(packed, tag) {
       if (!packed || !packed.length) return;
@@ -10356,42 +10374,49 @@
         bestType = typeScore;
         bestLines = lines;
         bestTag = tag;
+        bestFill = fill;
       }
     }
 
-    for (let L = 1; L <= maxLines; L++) {
-      considerPacked(packLptLines(items, L, sepW), "lpt-" + L);
-    }
-    // Sheet-order greedy: fills wide boxes without single-item orphan rows
-    if (!unmeasured) {
-      considerPacked(packGreedyByWidth(items, sepW, boxW * 0.96), "greedy");
-      considerPacked(
-        packGreedyByWidth(items, sepW, boxW * 0.88),
-        "greedy-tight"
-      );
-    }
+    if (forceL) {
+      considerPacked(packLptLines(items, forceL, sepW), "lpt-" + forceL);
+    } else {
+      for (let L = 1; L <= maxLines; L++) {
+        considerPacked(packLptLines(items, L, sepW), "lpt-" + L);
+      }
+      // Sheet-order greedy: fills wide boxes without single-item orphan rows
+      if (!unmeasured) {
+        considerPacked(packGreedyByWidth(items, sepW, boxW * 0.96), "greedy");
+        considerPacked(
+          packGreedyByWidth(items, sepW, boxW * 0.88),
+          "greedy-tight"
+        );
+      }
 
-    // Among packs within 8% of best type size, pick fullest width (then fewer lines)
-    if (candidates.length && bestType > 0) {
-      let pick = null;
-      for (let i = 0; i < candidates.length; i++) {
-        const c = candidates[i];
-        if (c.typeScore < bestType * 0.92) continue;
-        if (
-          !pick ||
-          c.fill > pick.fill + 0.03 ||
-          (Math.abs(c.fill - pick.fill) <= 0.03 && c.L < pick.L) ||
-          (Math.abs(c.fill - pick.fill) <= 0.03 &&
-            c.L === pick.L &&
-            c.score > pick.score)
-        ) {
-          pick = c;
+      // Among packs within 8% of best type size, pick fullest width (then fewer lines)
+      if (candidates.length && bestType > 0) {
+        let pick = null;
+        for (let i = 0; i < candidates.length; i++) {
+          const c = candidates[i];
+          if (c.typeScore < bestType * 0.92) continue;
+          if (
+            !pick ||
+            c.fill > pick.fill + 0.03 ||
+            (Math.abs(c.fill - pick.fill) <= 0.03 && c.L < pick.L) ||
+            (Math.abs(c.fill - pick.fill) <= 0.03 &&
+              c.L === pick.L &&
+              c.score > pick.score)
+          ) {
+            pick = c;
+          }
         }
-      }
-      if (pick) {
-        bestLines = pick.lines;
-        bestScore = pick.score;
-        bestTag = (pick.tag || "?") + "*";
+        if (pick) {
+          bestLines = pick.lines;
+          bestScore = pick.score;
+          bestTag = (pick.tag || "?") + "*";
+          bestFill = pick.fill;
+          bestType = pick.typeScore;
+        }
       }
     }
 
@@ -10413,6 +10438,14 @@
         "boxW=" + Math.round(boxW)
       );
     }
+    balanceItemsIntoLines.lastMeta = {
+      tag: bestTag,
+      L: bestLines.length,
+      fill: bestFill,
+      typeScore: bestType,
+      score: bestScore,
+      boxW: Math.round(boxW),
+    };
     return bestLines;
   }
 
@@ -16787,6 +16820,292 @@
 
   // ---------- boot ----------
 
+  function boxPackLabEnabled() {
+    try {
+      const q = new URLSearchParams(location.search || "");
+      if (!q.has("boxPackLab")) return false;
+      const v = String(q.get("boxPackLab") || "")
+        .trim()
+        .toLowerCase();
+      return v === "" || v === "1" || v === "true" || v === "yes";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function boxPackLabCloneItems(list) {
+    return (list || []).map(function (it) {
+      return Object.assign({}, it);
+    });
+  }
+
+  function boxPackLabClearWaste(body) {
+    if (!body) return;
+    body.querySelectorAll(".box-pack-lab-waste").forEach(function (n) {
+      n.remove();
+    });
+  }
+
+  function boxPackLabPaintWaste(body) {
+    boxPackLabClearWaste(body);
+    if (!_boxPackLab || !_boxPackLab.overlay || !body) return;
+    const cs = window.getComputedStyle(body);
+    const pl = parseFloat(cs.paddingLeft) || 0;
+    const pr = parseFloat(cs.paddingRight) || 0;
+    const contentW = Math.max(1, body.clientWidth - pl - pr);
+    const kids = Array.prototype.slice.call(body.children).filter(function (el) {
+      return !el.classList.contains("box-pack-lab-waste");
+    });
+    let line = [];
+    const lines = [];
+    function flush() {
+      if (line.length) lines.push(line);
+      line = [];
+    }
+    kids.forEach(function (el) {
+      if (
+        el.classList.contains("wrap-line-break") ||
+        el.classList.contains("veggie-line-break") ||
+        el.classList.contains("sauce-line-break") ||
+        el.classList.contains("protein-line-break") ||
+        el.classList.contains("footer-drink-line-break")
+      ) {
+        flush();
+        return;
+      }
+      if (el.classList.contains("box-pack-lab-waste")) return;
+      line.push(el);
+    });
+    flush();
+    const bodyRect = body.getBoundingClientRect();
+    lines.forEach(function (elsLine) {
+      if (!elsLine.length) return;
+      let lineW = 0;
+      let top = Infinity;
+      let bottom = -Infinity;
+      elsLine.forEach(function (el) {
+        lineW += el.offsetWidth;
+        const r = el.getBoundingClientRect();
+        if (r.top < top) top = r.top;
+        if (r.bottom > bottom) bottom = r.bottom;
+      });
+      const leftover = contentW - lineW;
+      if (leftover < 8) return;
+      const localTop = Math.max(0, top - bodyRect.top);
+      const h = Math.max(8, bottom - top);
+      const each = leftover / 2;
+      function waste(x, w) {
+        if (w < 6) return;
+        const d = document.createElement("div");
+        d.className = "box-pack-lab-waste";
+        d.setAttribute("aria-hidden", "true");
+        d.style.cssText =
+          "position:absolute;z-index:4;pointer-events:none;" +
+          "background:rgba(220,32,32,0.38);left:" +
+          Math.round(x) +
+          "px;top:" +
+          Math.round(localTop) +
+          "px;width:" +
+          Math.round(w) +
+          "px;height:" +
+          Math.round(h) +
+          "px;";
+        body.appendChild(d);
+      }
+      waste(pl, each);
+      waste(pl + each + lineW, each);
+    });
+  }
+
+  function boxPackLabAfterRender() {
+    if (!_boxPackLab) return;
+    const bodies = [
+      els.veggiesBody,
+      els.saucesBody,
+      els.proteinBody,
+      els.footerDrinksBody,
+    ];
+    bodies.forEach(function (b) {
+      boxPackLabPaintWaste(b);
+    });
+    const stats = document.getElementById("box-pack-lab-stats");
+    if (!stats) return;
+    const body = els.veggiesBody;
+    const scale = body
+      ? getComputedStyle(body).getPropertyValue("--box-scale").trim()
+      : "";
+    const meta = balanceItemsIntoLines.lastMeta || {};
+    const n = (veggiesBox.items || []).length;
+    stats.textContent =
+      (veggiesBox.include ? "Veggies " : "") +
+      n +
+      " items · " +
+      (meta.L || body && body.dataset.lineCount || "?") +
+      " lines · " +
+      (meta.tag || body && body.dataset.packTag || "?") +
+      " · scale " +
+      (scale ? Number(scale).toFixed(3) : "?") +
+      " · fill " +
+      (meta.fill ? Math.round(meta.fill * 100) + "%" : "?") +
+      " · boxW " +
+      (meta.boxW || "?");
+  }
+
+  function boxPackLabApply() {
+    if (!_boxPackLab) return;
+    const lab = _boxPackLab;
+    const n = Math.max(
+      1,
+      Math.min(lab.fullVeggies.length || 1, lab.itemCount | 0)
+    );
+    lab.itemCount = n;
+    if (lab.fullVeggies.length) {
+      veggiesBox.items = boxPackLabCloneItems(lab.fullVeggies.slice(0, n));
+      veggiesBox.include = true;
+    }
+    const boxes = lab.boxCount | 0;
+    if (boxes === 1) {
+      proteinBox.include = false;
+      saucesBox.include = false;
+      footerDrinksBox.include = false;
+      veggiesBox.include = true;
+    } else if (boxes === 3) {
+      proteinBox.include = true;
+      saucesBox.include = true;
+      footerDrinksBox.include = false;
+      veggiesBox.include = true;
+    } else {
+      proteinBox.include = lab.orig.protein;
+      saucesBox.include = lab.orig.sauces;
+      footerDrinksBox.include = lab.orig.drinks;
+      veggiesBox.include = true;
+      if (!lab.orig.sauces && !lab.orig.protein && !lab.orig.drinks) {
+        saucesBox.include = true;
+      }
+    }
+    renderFooterBoxes();
+  }
+
+  function initBoxPackLab() {
+    if (!boxPackLabEnabled() || isDrinks || _boxPackLab) return;
+    if (document.getElementById("box-pack-lab-hud")) return;
+
+    _boxPackLab = {
+      fullVeggies: boxPackLabCloneItems(veggiesBox.items),
+      orig: {
+        protein: proteinBox.include !== false,
+        sauces: saucesBox.include !== false,
+        drinks: !!footerDrinksBox.include,
+        veggies: !!veggiesBox.include,
+      },
+      itemCount: (veggiesBox.items || []).length || 1,
+      boxCount: 2,
+      packLines: 0,
+      overlay: true,
+    };
+    const qLines = Number(
+      new URLSearchParams(location.search || "").get("packLines") || 0
+    );
+    if (qLines === 3 || qLines === 4) _boxPackLab.packLines = qLines;
+
+    const nShow =
+      document.body.classList.contains("footer-three")
+        ? 3
+        : document.body.classList.contains("footer-one")
+          ? 1
+          : 2;
+    _boxPackLab.boxCount = nShow;
+
+    if (!document.getElementById("box-pack-lab-style")) {
+      const st = document.createElement("style");
+      st.id = "box-pack-lab-style";
+      st.textContent =
+        "#box-pack-lab-hud{position:fixed;left:12px;top:12px;z-index:99999;" +
+        "background:#111c;color:#f4f7fb;font:14px/1.35 ui-sans-serif,system-ui;" +
+        "padding:12px 14px;border-radius:10px;max-width:420px;" +
+        "box-shadow:0 8px 28px #0008;backdrop-filter:blur(8px)}" +
+        "#box-pack-lab-hud h2{margin:0 0 8px;font-size:14px;letter-spacing:.02em}" +
+        "#box-pack-lab-hud label{display:flex;align-items:center;gap:8px;margin:6px 0}" +
+        "#box-pack-lab-hud input[type=range]{flex:1}" +
+        "#box-pack-lab-hud .row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}" +
+        "#box-pack-lab-hud button{background:#243244;color:#fff;border:0;" +
+        "border-radius:6px;padding:4px 10px;cursor:pointer}" +
+        "#box-pack-lab-hud button.on{background:#26bbcb;color:#082026}" +
+        "#box-pack-lab-stats{margin-top:8px;color:#c9d6e2;font-size:12px}" +
+        "#box-pack-lab-hud a{color:#26bbcb}";
+      document.head.appendChild(st);
+    }
+
+    const hud = document.createElement("div");
+    hud.id = "box-pack-lab-hud";
+    hud.innerHTML =
+      "<h2>Box pack lab</h2>" +
+      "<div>Dummy inquiry UI — does not write the sheet. " +
+      "<a href=\"box-pack-lab.html\">Side-by-side widths</a></div>" +
+      "<label>Items <input id=\"box-pack-lab-count\" type=\"range\" min=\"1\" max=\"" +
+      Math.max(1, _boxPackLab.fullVeggies.length) +
+      "\" value=\"" +
+      _boxPackLab.itemCount +
+      "\" /> <span id=\"box-pack-lab-count-n\">" +
+      _boxPackLab.itemCount +
+      "</span></label>" +
+      "<div class=\"row\" data-lab=\"boxes\">Boxes " +
+      "<button type=\"button\" data-boxes=\"1\">1 · 1082</button>" +
+      "<button type=\"button\" data-boxes=\"2\">2 · 768+299</button>" +
+      "<button type=\"button\" data-boxes=\"3\">3 · thirds</button></div>" +
+      "<div class=\"row\" data-lab=\"lines\">Lines " +
+      "<button type=\"button\" data-lines=\"0\">Auto</button>" +
+      "<button type=\"button\" data-lines=\"3\">Force 3</button>" +
+      "<button type=\"button\" data-lines=\"4\">Force 4</button></div>" +
+      "<label><input id=\"box-pack-lab-overlay\" type=\"checkbox\" checked /> leftover overlay</label>" +
+      "<div id=\"box-pack-lab-stats\"></div>";
+    document.body.appendChild(hud);
+
+    function markRows() {
+      hud.querySelectorAll("[data-boxes]").forEach(function (b) {
+        b.classList.toggle("on", Number(b.getAttribute("data-boxes")) === _boxPackLab.boxCount);
+      });
+      hud.querySelectorAll("[data-lines]").forEach(function (b) {
+        b.classList.toggle("on", Number(b.getAttribute("data-lines")) === _boxPackLab.packLines);
+      });
+    }
+    markRows();
+
+    const slider = document.getElementById("box-pack-lab-count");
+    const sliderN = document.getElementById("box-pack-lab-count-n");
+    slider.addEventListener("input", function () {
+      _boxPackLab.itemCount = Number(slider.value) || 1;
+      sliderN.textContent = String(_boxPackLab.itemCount);
+      boxPackLabApply();
+    });
+    hud.querySelectorAll("[data-boxes]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        _boxPackLab.boxCount = Number(b.getAttribute("data-boxes")) || 2;
+        markRows();
+        boxPackLabApply();
+      });
+    });
+    hud.querySelectorAll("[data-lines]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        _boxPackLab.packLines = Number(b.getAttribute("data-lines")) || 0;
+        markRows();
+        boxPackLabApply();
+      });
+    });
+    document.getElementById("box-pack-lab-overlay").addEventListener("change", function (e) {
+      _boxPackLab.overlay = !!e.target.checked;
+      boxPackLabAfterRender();
+    });
+
+    if (!_boxPackLab.orig.veggies && _boxPackLab.fullVeggies.length) {
+      veggiesBox.include = true;
+    }
+    boxPackLabAfterRender();
+    console.info(
+      "Box pack lab ON — slider / 1–2–3 widths / force 3–4 lines. Live scorer unchanged unless you Force lines."
+    );
+  }
+
   function finishFirstPaint(source) {
     renderTitle();
     renderList();
@@ -16815,7 +17134,14 @@
       } else if (isDrinks) {
         setAnnouncementMessage(announcementIndex, { instant: true });
       }
-      startAutoRefresh();
+      if (params.get("pause") !== "1" && !boxPackLabEnabled()) {
+        startAutoRefresh();
+      }
+      try {
+        initBoxPackLab();
+      } catch (err) {
+        console.warn("Box pack lab failed to start", err);
+      }
     });
 
     updateDebugVisuals();
@@ -16831,6 +17157,7 @@
       fitMenuText();
       fitFooterBoxes();
       if (isDrinks) fitDrinksBoxes();
+      if (_boxPackLab) boxPackLabAfterRender();
     }
 
     if (document.fonts && document.fonts.ready) {

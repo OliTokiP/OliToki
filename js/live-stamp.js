@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "6cd0e80",
-  "hashFull": "6cd0e808433a9b32cf768de5f14f77501e65e530",
-  "subject": "QA: 2026-08-22 Add \u201crestart local server\u201d button (pass 1)"
+  "hash": "b1edac2",
+  "hashFull": "b1edac2857195c8d37b347924dad9c781fe16afa",
+  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 1)"
 };

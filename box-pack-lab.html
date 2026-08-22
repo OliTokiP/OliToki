@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" data-system-font="poppins">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toki Menu — footer box pack lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&amp;family=Roboto+Condensed:wght@300;700&amp;family=Poppins:wght@300;400;700;900&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/system-font.css?v=20260814font3" />
+  <link rel="stylesheet" href="css/menu.css?v=20260821bg1" />
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #071018;
+      color: #f4f7fb;
+      font-family: var(--toki-font);
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 80px;
+    }
+    h1 { font-size: 1.7rem; letter-spacing: -0.03em; margin: 0 0 8px; }
+    .lede { color: rgba(244,247,251,0.72); max-width: 46rem; margin: 0 0 18px; }
+    a { color: #26bbcb; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: center;
+      margin: 16px 0 22px;
+      padding: 12px 14px;
+      background: rgba(244,247,251,0.05);
+      border-radius: 10px;
+    }
+    .controls label { display: flex; align-items: center; gap: 8px; }
+    .controls input[type="range"] { width: 220px; }
+    .controls button {
+      background: #243244;
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .controls button.on { background: #26bbcb; color: #082026; font-weight: 700; }
+    .slots { display: flex; flex-direction: column; gap: 28px; }
+    .slot-wrap h2 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+    }
+    .lab-meta { color: rgba(244,247,251,0.6); font-size: 0.9rem; margin: 8px 0 0; }
+    .lab-strip {
+      position: relative !important;
+      left: auto !important;
+      top: auto !important;
+      width: auto !important;
+      height: 197px !important;
+      display: flex !important;
+      pointer-events: auto !important;
+      z-index: 1;
+      max-width: 100%;
+    }
+    .lab-strip.footer-one { width: 1082px !important; }
+    .lab-strip.footer-two-major { width: 768px !important; }
+    .lab-strip.footer-three { width: 351px !important; }
+    .lab-strip.footer-two-minor { width: 299px !important; }
+    .lab-strip .info-box {
+      flex: 1 1 auto !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      --secondary-color: #f4f7fb;
+      --main-color: #0b1c2c;
+    }
+    .lab-strip .info-box-body.layout-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: space-evenly;
+      align-items: baseline;
+      justify-content: center;
+      column-gap: 0;
+      row-gap: calc(2px * var(--box-scale, 1));
+      font-family: var(--toki-font);
+      font-size: calc(32px * var(--box-scale, 1) * var(--toki-font-scale, 1));
+      line-height: 1.1;
+      padding: 6px 10px 8px;
+      letter-spacing: -0.015em;
+      color: var(--secondary-color);
+      position: relative;
+    }
+    .lab-strip .wrap-line-break {
+      flex: 1 0 100%;
+      width: 100%;
+      height: 0;
+    }
+    .lab-strip .veggie-item,
+    .lab-strip .wrap-item {
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .lab-strip .veggie-sep,
+    .lab-strip .wrap-sep {
+      display: inline-block;
+      white-space: pre;
+      font-weight: 400;
+    }
+    #lab-table { margin-top: 36px; overflow-x: auto; }
+    #lab-table table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.92rem;
+    }
+    #lab-table th, #lab-table td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(244,247,251,0.12);
+    }
+    #lab-table th { color: rgba(244,247,251,0.5); }
+    #lab-table tr.is-pick td { color: #26bbcb; font-weight: 700; }
+    .note { color: rgba(244,247,251,0.55); font-size: 0.9rem; }
+    #lab-source { color: rgba(244,247,251,0.55); font-size: 0.9rem; margin: 0 0 8px; }
+  </style>
+</head>
+<body class="board-handhelds" data-system-font="poppins">
+  <main>
+    <h1>Footer box pack lab</h1>
+    <p class="lede">
+      Same Veggies inventory as the live boards. Slide how many items get through,
+      then compare the four Footer Box widths: one box (1082), two-box major (768),
+      three-box third (351), two-box minor (299). Red overlay = leftover black in the Box Body.
+      Live scorer is unchanged unless you Force 3 / Force 4.
+    </p>
+    <p id="lab-source">Loading Veggies sheet…</p>
+    <p>
+      On the real Handhelds board:
+      <a href="index2.html?boxPackLab=1&amp;pause=1&amp;w=1920&amp;dpr=1">index2.html?boxPackLab=1&amp;pause=1</a>
+    </p>
+    <div class="controls">
+      <label>Items
+        <input id="lab-count" type="range" min="1" max="11" value="11" />
+        <span id="lab-count-n">11</span>
+      </label>
+      <button type="button" data-mode="auto" class="on">Auto (live scorer)</button>
+      <button type="button" data-mode="3">Force 3 rows</button>
+      <button type="button" data-mode="4">Force 4 rows</button>
+      <label><input id="lab-overlay" type="checkbox" checked /> leftover overlay</label>
+    </div>
+    <div class="slots">
+      <div class="slot-wrap" id="slot-one">
+        <h2>One box · 1082</h2>
+        <div class="lab-strip footer-one">
+          <div class="info-box">
+            <svg class="info-box-shell" viewBox="0 0 1082 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="1082" height="197" />
+              <rect class="shell-body" x="4" y="64" width="1074" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
+        <p class="lab-meta"></p>
+      </div>
+      <div class="slot-wrap" id="slot-major">
+        <h2>Two-box major · 768 (Handhelds Veggies today)</h2>
+        <div class="lab-strip footer-two-major">
+          <div class="info-box footer-major">
+            <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="768" height="197" />
+              <rect class="shell-body" x="4" y="64" width="760" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
+        <p class="lab-meta"></p>
+      </div>
+      <div class="slot-wrap" id="slot-third">
+        <h2>Three-box third · 351</h2>
+        <div class="lab-strip footer-three">
+          <div class="info-box">
+            <svg class="info-box-shell" viewBox="0 0 351 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="351" height="197" />
+              <rect class="shell-body" x="4" y="64" width="343" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
+        <p class="lab-meta"></p>
+      </div>
+      <div class="slot-wrap" id="slot-minor">
+        <h2>Two-box minor · 299</h2>
+        <div class="lab-strip footer-two-minor">
+          <div class="info-box footer-minor">
+            <svg class="info-box-shell" viewBox="0 0 299 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="299" height="197" />
+              <rect class="shell-body" x="4" y="64" width="291" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
+        <p class="lab-meta"></p>
+      </div>
+    </div>
+    <div id="lab-table"></div>
+  </main>
+  <script src="js/box-pack-lab.js?v=20260822boxpack1"></script>
+</body>
+</html>
