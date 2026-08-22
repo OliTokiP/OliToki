@@ -1,9 +1,25 @@
 # What’s New
 
-**Last updated:** 2026-08-22 19:35  
+**Last updated:** 2026-08-22 19:50  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-22 19:50 — Footer wrap rows: fullest on top
+
+**Boards / surface:** Menu Screens — boards 1–3 Footer Boxes (`index.html`–`index3.html`)  
+**Sheet:** none (wrap packing only)  
+**Summary:** Wrap-mode Box Body rows (Create Columns? = No) now stack **fullest row on top**, shortest on the bottom. Which names share a row is unchanged (LPT + greedy bake-off). Live Handhelds Veggies already uses this.
+
+### Details
+- Same scorer as before (type size, longest-row fill, evenness).
+- After a pack is chosen, rows sort by measured width descending.
+- Inquiry lab: `box-pack-lab.html` / `?boxPackLab=1` (not a TV control).
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
 
 ---
 
