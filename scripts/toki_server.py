@@ -696,19 +696,9 @@ class SheetsBackend:
                 force = "alpha"
 
         if "dataSource" in body and body.get("dataSource") not in (None, ""):
-            if force:
-                _log("settings write: skip dataSource (env pin)")
-            else:
-                raw = str(body.get("dataSource") or "").strip()
-                live = parse_settings_rows(rows, self.fallback_sheet_id)
-                name = raw
-                for c in live.get("catalog") or []:
-                    n = str(c.get("name") or "").strip()
-                    cid = re.sub(r"[^a-z0-9]+", "", n.lower())
-                    if raw.lower() in (n.lower(), cid) or cid.startswith(raw.lower()):
-                        name = n
-                        break
-                values["datasource"] = (a1("datasource", default_col=0), name)
+            # Manager Data Source is which catalog you are editing. TVs stay
+            # on Settings A2 (Restaurant) unless a board URL has ?beta.
+            _log("settings write: skip dataSource (A2 is TV pointer, not Manager editor)")
 
         if "requireRestart" in body and body.get("requireRestart") not in (None, ""):
             values["requirerestart"] = (
@@ -772,7 +762,7 @@ class SheetsBackend:
             "ok": True,
             "settingsSheetId": sid,
             "wrote": {k: v[1] for k, v in values.items()},
-            "skippedDataSource": bool(force and "dataSource" in body),
+            "skippedDataSource": bool("dataSource" in body),
         }
 
     def apply_live_sheet(self, force_settings: bool = False) -> dict:
@@ -1076,10 +1066,53 @@ class SheetsBackend:
         )
         return text
 
-    def csv_for_gid_one(self, gid: str, force: bool = False) -> str:
-        """One tab only. Does not batchGet the rest of the workbook."""
+    def csv_for_gid_one(
+        self, gid: str, force: bool = False, sheet_id: str | None = None
+    ) -> str:
+        """One tab only. Does not batchGet the rest of the workbook.
+
+        Optional sheet_id (catalog workbook) reads that spreadsheet without
+        flipping the live TV pointer (Settings A2).
+        """
         gid = str(gid)
         now = time.time()
+        want_sid = ""
+        if sheet_id:
+            want_sid, _name = self.resolve_catalog_sheet_id(sheet_id)
+        if want_sid and want_sid != self.sheet_id:
+            cache_key = want_sid + ":" + gid
+            if not force:
+                with _csv_lock:
+                    hit = _csv_cache.get(cache_key)
+                    if hit and now - hit["at"] < CSV_TTL:
+                        _log(
+                            f"csv gid={gid} sid={want_sid} single cache hit "
+                            f"age={now - hit['at']:.1f}s"
+                        )
+                        return hit["text"]
+            t0 = time.time()
+            title = self._tab_title_for_gid(want_sid, gid)
+            safe = "'" + title.replace("'", "''") + "'"
+            with self._api_lock:
+                result = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .get(
+                        spreadsheetId=want_sid,
+                        range=safe,
+                        majorDimension="ROWS",
+                        valueRenderOption="FORMATTED_VALUE",
+                    )
+                    .execute()
+                )
+            text = self._values_to_csv(result.get("values") or [])
+            with _csv_lock:
+                _csv_cache[cache_key] = {"at": time.time(), "text": text}
+            _log(
+                f"csv gid={gid} sid={want_sid} title={title!r} single-only "
+                f"force={force} fetch={time.time() - t0:.2f}s bytes={len(text)}"
+            )
+            return text
         self.apply_live_sheet(force_settings=False)
         if not force:
             with _csv_lock:
@@ -2724,9 +2757,12 @@ def make_handler(
                     return
                 force = (qs.get("force") or ["0"])[0] in ("1", "true", "yes")
                 single = (qs.get("single") or ["0"])[0] in ("1", "true", "yes")
+                req_sid = (qs.get("sheetId") or qs.get("spreadsheetId") or [""])[0]
                 try:
                     if single:
-                        text = backend.csv_for_gid_one(str(gid), force=force)
+                        text = backend.csv_for_gid_one(
+                            str(gid), force=force, sheet_id=req_sid or None
+                        )
                     else:
                         text = backend.csv_for_gid(str(gid), force=force)
                     self._send(

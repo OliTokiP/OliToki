@@ -48,6 +48,7 @@
   };
 
   var _proxy = null;
+  var _tvSheetId = "";
 
   function cell(row, idx) {
     if (!row || idx == null || idx < 0 || idx >= row.length) return "";
@@ -118,6 +119,7 @@
 
   function sourceId(name) {
     var n = String(name || "").trim().toLowerCase();
+    if (n.indexOf("beta") !== -1) return "beta";
     if (n.indexOf("restaurant") !== -1) return "restaurant";
     if (n.indexOf("alpha") !== -1) return "alpha";
     return n.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "source";
@@ -723,10 +725,20 @@
     return text;
   }
 
+  function isForeignCatalog(sheetId) {
+    var id = String(sheetId || "").trim();
+    var live = String(_tvSheetId || "").trim();
+    return !!(id && live && id !== live);
+  }
+
   async function fetchCsv(gid, sheetId, force) {
     var useProxy = await detectProxy();
     var extra = force ? "&force=1" : "";
-    if (useProxy) {
+    var id = String(sheetId || "").trim();
+    var sidQ = id ? "&sheetId=" + encodeURIComponent(id) : "";
+    // Live A2 workbook can use the proxy. A different catalog (Beta) must
+    // not — older toki_server ignores sheetId and would return Restaurant.
+    if (useProxy && !isForeignCatalog(id)) {
       try {
         return parseCsv(
           await fetchText(
@@ -734,6 +746,7 @@
               encodeURIComponent(String(gid)) +
               "&single=1" +
               extra +
+              sidQ +
               "&t=" +
               Date.now()
           )
@@ -742,7 +755,6 @@
         console.warn("manager-sheet: proxy csv failed, trying public", err);
       }
     }
-    var id = String(sheetId || "").trim();
     if (!id) throw new Error("No spreadsheet id for gid " + gid);
     return parseCsv(await fetchText(publicCsvUrl(id, gid)));
   }
@@ -882,23 +894,49 @@
       src.env = "restaurant";
       src.siteUrl =
         global.TOKI_RESTAURANT_SITE || "https://olitokip.github.io/OliToki";
-    } else if (id === "alpha") {
-      src.env = "testing";
-      src.siteUrl = global.TOKI_TESTING_SITE || "";
+    } else if (id === "beta" || id === "alpha") {
+      // Catalog workbooks edited in this Manager. Not a testing/restaurant
+      // site pin — picking them must not navigate away or write Settings A2.
+      src.env = "";
+      src.siteUrl = "";
     }
     return src;
   }
 
+  function ensureCatalogSources(sources) {
+    var list = (sources || []).slice();
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === "beta") return list;
+    }
+    var stock = (global.TOKI_MANAGER_DATA && global.TOKI_MANAGER_DATA.dataSources) || [];
+    for (i = 0; i < stock.length; i++) {
+      if (stock[i] && stock[i].id === "beta") {
+        list.push(
+          decorateSource({
+            id: "beta",
+            name: stock[i].name,
+            sheetId: stock[i].sheetId || "",
+          })
+        );
+        break;
+      }
+    }
+    return list;
+  }
+
   function catalogToSources(catalog) {
-    return (catalog || [])
-      .filter(function (c) { return c && (c.name || c.sheetId); })
-      .map(function (c) {
-        return decorateSource({
-          id: sourceId(c.name),
-          name: c.name,
-          sheetId: c.sheetId || "",
-        });
-      });
+    return ensureCatalogSources(
+      (catalog || [])
+        .filter(function (c) { return c && (c.name || c.sheetId); })
+        .map(function (c) {
+          return decorateSource({
+            id: sourceId(c.name),
+            name: c.name,
+            sheetId: c.sheetId || "",
+          });
+        })
+    );
   }
 
   function pinnedSourceId() {
@@ -928,6 +966,28 @@
     settings.sourceName = match.name;
     if (match.sheetId) settings.sheetId = match.sheetId;
     settings.forcedSource = want;
+    return settings;
+  }
+
+  function applyEditorSource(settings, wantId) {
+    if (!settings) return settings;
+    _tvSheetId = String(settings.sheetId || "").trim();
+    var sources = catalogToSources(settings.catalog);
+    var want = String(wantId || "").trim();
+    if (!want) want = sourceId(settings.dataSource || settings.sourceName);
+    var match = null;
+    var i;
+    for (i = 0; i < sources.length; i++) {
+      if (sources[i].id === want || sources[i].name === want) {
+        match = sources[i];
+        break;
+      }
+    }
+    if (!match) return settings;
+    settings.dataSource = match.name || settings.dataSource;
+    settings.sourceName = match.name || settings.sourceName;
+    if (match.sheetId) settings.sheetId = match.sheetId;
+    settings.editorSource = match.id;
     return settings;
   }
 
@@ -1215,9 +1275,10 @@
     };
   }
 
-  async function fetchValidations(gid, force) {
+  async function fetchValidations(gid, force, sheetId) {
     var useProxy = await detectProxy();
     if (!useProxy) return null;
+    if (isForeignCatalog(sheetId)) return null;
     try {
       var res = await fetchWithTimeout(
         apiUrl("/api/sheets/validations") + "?gid=" +
@@ -1444,40 +1505,27 @@
       typeof performance !== "undefined" && performance.now
         ? performance.now()
         : Date.now();
-    var useProxy = await detectProxy();
     var settings;
     var styleRows;
     var validationFields = null;
     var motionStyles = {};
-    if (useProxy) {
-      var quad = await Promise.all([
-        fetchSettings(force),
-        fetchCsv(STYLE_GID, "", force),
-        fetchValidations(STYLE_GID, force),
-        fetchBetaMotion("", force),
-      ]);
-      settings = quad[0];
-      styleRows = quad[1];
-      validationFields = quad[2];
-      motionStyles = quad[3] || {};
-    } else {
-      settings = await fetchSettings(force);
-      if (!settings.sheetId && settings.catalog && settings.catalog.length) {
-        settings.sheetId = settings.catalog[0].sheetId || "";
-      }
-      var pair = await Promise.all([
-        fetchCsv(STYLE_GID, settings.sheetId, force),
-        fetchBetaMotion(settings.sheetId, force),
-      ]);
-      styleRows = pair[0];
-      motionStyles = pair[1] || {};
-    }
+    settings = await fetchSettings(force);
+    settings = applyEditorSource(settings, opts.sourceId);
     if (!settings.sheetId && settings.catalog && settings.catalog.length) {
       settings.sheetId = settings.catalog[0].sheetId || "";
     }
+    var sid = settings.sheetId || "";
+    var pack = await Promise.all([
+      fetchCsv(STYLE_GID, sid, force),
+      fetchValidations(STYLE_GID, force, sid),
+      fetchBetaMotion(sid, force),
+    ]);
+    styleRows = pack[0];
+    validationFields = pack[1];
+    motionStyles = pack[2] || {};
     var boards = [];
     try {
-      boards = await loadBoards(settings.sheetId, force);
+      boards = await loadBoards(sid, force);
     } catch (err) {
       console.warn("manager-sheet: boards catalog failed", err);
     }
@@ -1645,8 +1693,10 @@
   }
 
   async function writeSystem(payload) {
-    // Persists Data Source / Require restart / System Font / Limit Heavy Filters /
+    // Persists Require restart / System Font / Limit Heavy Filters /
     // Confirm Save / Refresh Timer / Debug Mode into the OliToki Menu Settings workbook.
+    // Data Source is Manager editor state only — never write Settings A2 (TVs
+    // stay on Restaurant unless a board URL has ?beta).
     // Debug Mode writes Debugger!A2 (gid 195166367), not a Settings-tab column.
     // See scripts/toki_server.py for the full "all new settings must be in the sheet" contract.
     // Server maps to the correct cells under the matching header. This makes e.g.
@@ -1655,7 +1705,9 @@
     // All new user-accessible settings features must live in (or be mapped from) the
     // Settings sheet. If a column does not exist yet for a feature worked on in a Pass,
     // the Pass text must carry a reminder to Lead to add the header.
-    var out = await postManager("/api/manager/settings", payload || {});
+    payload = Object.assign({}, payload || {});
+    delete payload.dataSource;
+    var out = await postManager("/api/manager/settings", payload);
     if (!out.ok) console.warn("manager-sheet: system settings write failed", out.error);
     return out;
   }

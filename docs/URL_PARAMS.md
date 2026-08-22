@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-08-21 02:20
+**Last updated:** 2026-08-22 (board / Manager `?beta`)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -33,6 +33,7 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`textBoxDebug=1`** | Draw text-box wireframes (Menu List, Footer Boxes, titles, prices, Board 4 announcement/drink boxes). Aliases: `textboxWireframes=1`, `drawTextBoxes=1`. Same overlay as Debugger **Show Textbox Wireframes**. |
 | **`imgScale=0.25`** | Debug only: smash images down (looks terrible on purpose). Bare `?imgScale` = 1/100. |
 | **`encore=old`** | Encore only: park the Spotlight Veil on the **camera rig** (nested `scale(--encore-zoom)`). Default (omit, or `encore=new`) keeps the veil as a stage sibling. |
+| **`beta`** | Load **Beta (Development) Copy** instead of Settings A2 (Restaurant). Dining-room TVs omit this. Also: `preview-all.html?beta` forwards it to each wall iframe. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 
@@ -53,6 +54,7 @@ These can sit on the query string or after the hash (`#/menu/style?pick=theme`).
 | **`newtheme=1`** | Show create-theme. |
 | **`holdGrid=1`** | Encore grid held (speed 0). |
 | **`encore=old`** | Same as the board flag: Spotlight Veil lives on `.family-portrait-rig` (nested scale). Default is detached. Use with `pres=encore`. |
+| **`beta`** | Edit **Beta (Development) Copy** and show unshipped Manager features (Announcements editor). Does not write Settings A2. Board permalinks copy with `?beta`. |
 
 ## Combine
 
@@ -65,6 +67,9 @@ index4.html?annMdDemo=1&pause=1&ann=0
 index2.html?boxPackLab=1&pause=1
 box-pack-lab.html?packLines=4
 manager.html?pres=encore&encore=old
+index.html?beta
+manager.html?beta#/system
+preview-all.html?beta
 ```
 
 Related: [[SUPPORTED_DEVICES]] · [[DEBUG_CONSOLE]]

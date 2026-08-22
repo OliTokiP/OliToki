@@ -22,11 +22,11 @@
       siteUrl: global.TOKI_RESTAURANT_SITE || "https://olitokip.github.io/OliToki",
     },
     {
-      id: "alpha",
-      name: "Alpha Copy",
-      sheetId: "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
-      env: "testing",
-      siteUrl: global.TOKI_TESTING_SITE || "",
+      id: "beta",
+      name: "Beta (Development) Copy",
+      sheetId: "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8",
+      env: "",
+      siteUrl: "",
     },
   ];
 

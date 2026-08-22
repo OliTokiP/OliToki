@@ -209,7 +209,101 @@
   }
 
   function dataSource() {
-    return find(D.dataSources, state.draft.dataSource);
+    var id = state.draft.dataSource;
+    var i;
+    var list = D.dataSources || [];
+    for (i = 0; i < list.length; i++) {
+      if (list[i].id === id || list[i].name === id) return list[i];
+    }
+    return list[0] || { id: "restaurant", name: "Restaurant Copy", sheetId: "" };
+  }
+
+  var CATALOG_STORAGE_KEY = "tokiManagerCatalog";
+
+  function urlHasBetaFlag() {
+    try {
+      if (new URLSearchParams(location.search || "").has("beta")) return true;
+    } catch (e) {}
+    var raw = (location.hash || "").replace(/^#/, "");
+    var qi = raw.indexOf("?");
+    if (qi >= 0) {
+      try {
+        if (new URLSearchParams(raw.slice(qi + 1)).has("beta")) return true;
+      } catch (e2) {}
+    }
+    return false;
+  }
+
+  function isBetaCatalog() {
+    var src = dataSource();
+    return !!(src && src.id === "beta");
+  }
+
+  function managerBetaFeatures() {
+    return urlHasBetaFlag() || isBetaCatalog();
+  }
+
+  function withBetaFlag(href) {
+    var s = String(href || "").trim();
+    if (!s) return s;
+    if (/(?:\?|&)beta(?:&|=|$)/i.test(s)) return s;
+    return s + (s.indexOf("?") >= 0 ? "&" : "?") + "beta";
+  }
+
+  function displayPermalink(raw) {
+    var href = String(raw || "").trim();
+    if (!href) return "";
+    if (isBetaCatalog()) return withBetaFlag(href);
+    return href;
+  }
+
+  function setBetaQuery(on) {
+    try {
+      var u = new URL(location.href);
+      if (on) u.searchParams.set("beta", "");
+      else u.searchParams.delete("beta");
+      var search = u.search.replace(/\?beta=&/, "?beta&").replace(/&beta=&/g, "&beta&");
+      if (search === "?beta=") search = "?beta";
+      if (search.slice(-6) === "&beta=") search = search.slice(0, -1);
+      var href = u.pathname + search + (location.hash || "");
+      if (href !== location.pathname + location.search + location.hash) {
+        history.replaceState(null, "", href);
+      }
+    } catch (e) {}
+  }
+
+  function persistCatalogChoice(id) {
+    try {
+      sessionStorage.setItem(CATALOG_STORAGE_KEY, id || "");
+    } catch (e) {}
+    setBetaQuery(id === "beta");
+  }
+
+  function editorSourceId() {
+    if (urlHasBetaFlag()) return "beta";
+    try {
+      var stored = sessionStorage.getItem(CATALOG_STORAGE_KEY);
+      if (stored) return stored;
+    } catch (e) {}
+    if (state.draft && state.draft.dataSource) return state.draft.dataSource;
+    return "restaurant";
+  }
+
+  function adoptCatalog(id) {
+    var src = null;
+    var i;
+    var list = D.dataSources || [];
+    for (i = 0; i < list.length; i++) {
+      if (list[i].id === id || list[i].name === id) {
+        src = list[i];
+        break;
+      }
+    }
+    var want = src ? src.id : id;
+    state.draft.dataSource = want;
+    if (state.committed) state.committed.dataSource = want;
+    persistCatalogChoice(want);
+    loadSheet({ force: true, sourceId: want });
   }
 
   function themeStatusName() {
@@ -406,7 +500,7 @@
 
   function copyPermalink() {
     var b = state.boardDraft || ensureBoardDraft();
-    var href = b && b.permalink;
+    var href = displayPermalink(b && b.permalink);
     if (!href) {
       toast("No permalink on this board");
       return;
@@ -435,12 +529,14 @@
   function statusBlock() {
     var t = currentTheme();
     var env = codeEnv();
+    var src = dataSource();
+    var srcName = (src && src.name) || "Restaurant Copy";
     var envLine =
       env === "local"
-        ? "Code: local (Settings sheet picks the workbook)"
+        ? "Code: local · editing " + srcName
         : env === "testing"
-          ? "Code: testing · Alpha sheet (unmerged)"
-          : "Code: restaurant · Restaurant sheet";
+          ? "Code: testing · editing " + srcName
+          : "Code: restaurant · editing " + srcName;
     return (
       '<div class="status">' +
       "<p>" +
@@ -449,6 +545,9 @@
       "<p>Data Source: " +
       escapeHtml(dataSource().name) +
       "</p>" +
+      (managerBetaFeatures()
+        ? "<p>Manager beta features: on</p>"
+        : "") +
       "<p>Current Theme: " +
       escapeHtml(themeStatusName()) +
       "</p>" +
@@ -713,22 +812,34 @@
     );
   }
 
+  function findBoard(id) {
+    var list = D.boards || [];
+    var i;
+    var want = String(id || "");
+    for (i = 0; i < list.length; i++) {
+      if (String(list[i].id) === want || String(list[i].number || "") === want) {
+        return list[i];
+      }
+    }
+    return null;
+  }
+
   function ensureBoardDraft() {
     var id = resolveBoardId(state.boardId);
     state.boardId = id;
-    var src = find(D.boards, id);
+    var src = findBoard(id);
     if (!src) return null;
-    if (!state.boardDraft || state.boardDraft.id !== id) {
+    if (!state.boardDraft || state.boardDraft.id !== src.id) {
       state.boardDraft = clone(src);
       state.boardCommitted = clone(src);
-      if (!state.lastBoardSnap[id]) rememberBoardSnap(src);
+      if (!state.lastBoardSnap[src.id]) rememberBoardSnap(src);
     }
     return state.boardDraft;
   }
 
   function resolveBoardId(id) {
     if (id === "announcements") {
-      var four = find(D.boards, "4");
+      var four = findBoard("4");
       if (four) return "4";
     }
     return id;
@@ -829,7 +940,7 @@
       '<button class="row" type="button" data-act="copy-permalink">' +
       '<span class="row-label">Permalink</span>' +
       '<span class="row-value row-value-url">' +
-      escapeHtml(b.permalink || "—") +
+      escapeHtml(displayPermalink(b.permalink) || "—") +
       "</span></button>";
     html += '<div class="row-subheader">Menu Items</div>';
     html +=
@@ -842,19 +953,29 @@
   function itemListHtml(items) {
     var html = "";
     var i;
+    var drag = !isAnnouncementsBoard(state.boardDraft);
     for (i = 0; i < items.length; i++) {
       html +=
         '<div class="item-row" data-item="' +
         i +
         '">' +
-        '<button class="item-handle" type="button" aria-label="Reorder ' +
-        escapeHtml(items[i].name) +
-        '"></button>' +
+        (drag
+          ? '<button class="item-handle" type="button" aria-label="Reorder ' +
+            escapeHtml(items[i].name) +
+            '"></button>'
+          : "") +
         '<span class="item-name">' +
         escapeHtml(items[i].name) +
         "</span></div>";
     }
     return html;
+  }
+
+  function isAnnouncementsBoard(b) {
+    return !!(
+      b &&
+      (b.kind === "announcements" || b.id === "4" || b.id === "announcements")
+    );
   }
 
   function screenBoard() {
@@ -866,7 +987,7 @@
         '<div class="soon-body"><h2 class="soon-title">Unknown board</h2></div></section>'
       );
     }
-    if (b.kind === "announcements" || b.id === "4" || b.id === "announcements") {
+    if (isAnnouncementsBoard(b) && !managerBetaFeatures()) {
       var soonTitle =
         (b.number ? b.number + ". " : "") + (b.menuTitle || b.title || "Announcements");
       return (
@@ -880,15 +1001,21 @@
     }
     var title =
       (b.number ? b.number + ". " : "") + (b.menuTitle || b.title);
+    var preview = isAnnouncementsBoard(b) ? "" : previewHtml();
+    var foot = isAnnouncementsBoard(b)
+      ? ""
+      : footerBar("Add Item From Toast", "toast-add");
     return (
-      '<section class="screen screen-board">' +
+      '<section class="screen screen-board" data-board-id="' +
+      escapeHtml(String(b.id || "")) +
+      '">' +
       header(title) +
-      previewHtml() +
+      preview +
       '<div class="style-scroll" id="board-scroll">' +
       '<div class="rows bounce-inner">' +
       boardRows() +
       "</div></div>" +
-      footerBar("Add Item From Toast", "toast-add") +
+      foot +
       "</section>"
     );
   }
@@ -1138,7 +1265,14 @@
 
     if (state.screen === "board") {
       var existingBoard = els.app.querySelector(".screen-board");
-      if (existingBoard) {
+      var draft = state.boardDraft;
+      var wantSoon = isAnnouncementsBoard(draft) && !managerBetaFeatures();
+      var shownId = existingBoard
+        ? String(existingBoard.getAttribute("data-board-id") || "")
+        : "";
+      var sameBoard =
+        !!(existingBoard && draft && shownId && shownId === String(draft.id));
+      if (existingBoard && sameBoard && !wantSoon) {
         refreshBoardRows();
         applyTheme();
         bindItemReorder();
@@ -1387,18 +1521,14 @@
         title: "Data Source",
         options: D.dataSources.slice()
           .sort(function (a, b) {
-            var pa =
-              a.env === "restaurant" || a.id === "restaurant"
-                ? 0
-                : a.env === "testing" || a.id === "alpha"
-                ? 1
-                : 2;
-            var pb =
-              b.env === "restaurant" || b.id === "restaurant"
-                ? 0
-                : b.env === "testing" || b.id === "alpha"
-                ? 1
-                : 2;
+            function rank(s) {
+              if (s.id === "restaurant") return 0;
+              if (s.id === "beta") return 1;
+              if (s.id === "alpha") return 3;
+              return 2;
+            }
+            var pa = rank(a);
+            var pb = rank(b);
             if (pa !== pb) return pa - pb;
             return String(a.name || a.id || "").localeCompare(
               String(b.name || b.id || "")
@@ -1411,9 +1541,21 @@
           return state.draft.dataSource;
         },
         set: function (id) {
-          var src = find(D.dataSources, id);
+          var src = null;
+          var i;
+          var list = D.dataSources || [];
+          for (i = 0; i < list.length; i++) {
+            if (list[i].id === id || list[i].name === id) {
+              src = list[i];
+              break;
+            }
+          }
           var here = codeEnv();
           var want = src && src.env;
+          if (src && src.id === "beta") {
+            adoptCatalog("beta");
+            return;
+          }
           if (src && want && here !== "local" && want !== here) {
             var dest = sourceSiteUrl(src);
             if (dest) {
@@ -1429,7 +1571,7 @@
             );
             return;
           }
-          state.draft.dataSource = id;
+          adoptCatalog(src ? src.id : id);
         },
       };
     }
@@ -2302,7 +2444,6 @@
   function systemSettingsDirty() {
     if (!state.committed) return false;
     var keys = [
-      "dataSource",
       "requireRestart",
       "systemFont",
       "limitHeavyFilters",
@@ -2472,6 +2613,12 @@
     var pickKey = state.picker;
     var wasPresentation = pickKey === "presentation";
     var oldPres = wasPresentation ? state.draft.presentation : null;
+    if (pickKey === "dataSource") {
+      spec.set(id);
+      state.picker = null;
+      renderAll();
+      return;
+    }
     spec.set(id);
     state.picker = null;
     if (state.screen !== "board") state.sheetDirty = true;
@@ -2882,7 +3029,6 @@
       });
     }
     var payload = {
-      dataSource: state.draft.dataSource,
       requireRestart: state.draft.requireRestart,
       systemFont: state.draft.systemFont,
       limitHeavyFilters: state.draft.limitHeavyFilters,
@@ -3703,6 +3849,7 @@
   }
 
   function bindItemReorder() {
+    if (isAnnouncementsBoard(state.boardDraft)) return;
     var board = els.app.querySelector(".screen-board");
     if (!board || board.getAttribute("data-reorder")) return;
     board.setAttribute("data-reorder", "1");
@@ -3882,11 +4029,12 @@
     else if (state.screen === "menu") hash = "#/menu";
     else if (state.screen === "style") hash = "#/menu/style";
     else if (state.screen === "board") hash = "#/menu/board/" + state.boardId;
+    var href = location.pathname + location.search + hash;
     if (location.hash !== hash) {
       if (shouldPush) {
-        history.pushState(null, "", hash);
+        history.pushState(null, "", href);
       } else {
-        history.replaceState(null, "", hash);
+        history.replaceState(null, "", href);
       }
     }
   }
@@ -3958,6 +4106,10 @@
 
   function applyQueryParams() {
     var params = queryParams();
+    if (urlHasBetaFlag()) {
+      state.draft.dataSource = "beta";
+      if (state.committed) state.committed.dataSource = "beta";
+    }
     if (params.get("pick")) state.picker = params.get("pick");
     if (params.get("confirm") === "1") state.dialog = "confirm";
     if (params.get("newtheme") === "1") state.dialog = "create";
@@ -4114,8 +4266,8 @@
         if (!keepDirty) rememberBoardSnap(pack);
       }
       if (state.screen === "board" && state.boardId && !boardDirty()) {
-        var fresh = find(D.boards, resolveBoardId(state.boardId));
-        if (fresh) {
+        var fresh = findBoard(resolveBoardId(state.boardId));
+        if (fresh && fresh.id) {
           state.boardDraft = clone(fresh);
           state.boardCommitted = clone(fresh);
         }
@@ -4207,6 +4359,7 @@
         state.draft = clone(fromSheet);
         applyQueryParams();
       }
+      persistCatalogChoice(state.draft.dataSource);
     }
     state.sheetSource = "sheet";
     applyTheme();
@@ -4279,6 +4432,7 @@
 
   function loadSheet(opts) {
     opts = opts || {};
+    if (!opts.sourceId) opts.sourceId = editorSourceId();
     var loader = window.TOKI_MANAGER_SHEET;
     if (!loader || !loader.load) {
       state.sheetSource = "local";
@@ -4404,7 +4558,7 @@
     } else if (act === "copy-hex") {
       copyHex(t.getAttribute("data-hex"));
     } else if (act === "reload-sheet") {
-      loadSheet({ force: true });
+      loadSheet({ force: true, sourceId: editorSourceId() });
     }
   }
 

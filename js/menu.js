@@ -6216,6 +6216,7 @@
       refreshTimer: refreshTimer || "",
       sheetId: (match && match.sheetId) || "",
       sourceName: (match && match.name) || "",
+      catalog: catalog,
     };
   }
 
@@ -6275,6 +6276,33 @@
     tokiInfo("System Font:", font, font === "poppins" ? "scale 0.92" : "scale 1");
   }
 
+  function urlWantsBeta() {
+    try {
+      const q = new URLSearchParams(
+        typeof location !== "undefined" ? location.search || "" : ""
+      );
+      if (q.has("beta")) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  const BETA_COPY_SHEET_ID = "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8";
+
+  function catalogBetaEntry(catalog) {
+    const list = catalog || [];
+    for (let i = 0; i < list.length; i++) {
+      const n = String((list[i] && list[i].name) || "").toLowerCase();
+      const id = String((list[i] && list[i].sheetId) || "").trim();
+      if (n.indexOf("beta") !== -1 && id) {
+        return { name: list[i].name, sheetId: id };
+      }
+    }
+    return {
+      name: "Beta (Development) Copy",
+      sheetId: BETA_COPY_SHEET_ID,
+    };
+  }
+
   function pinnedWorkbook() {
     const want = String(
       (typeof window !== "undefined" && window.TOKI_DEFAULT_SOURCE) || ""
@@ -6332,8 +6360,17 @@
 
   function applyLiveSettingsPayload(j) {
     const pin = pinnedWorkbook();
+    const tvSheet = (pin && pin.sheetId) || j.sheetId || "";
+    const tvName = (pin && pin.dataSource) || j.dataSource || "";
+    let dataSourceName = tvName;
+    let sheetId = tvSheet;
+    if (urlWantsBeta()) {
+      const beta = catalogBetaEntry(j.catalog);
+      dataSourceName = beta.name;
+      sheetId = beta.sheetId;
+    }
     liveSettings = {
-      dataSource: (pin && pin.dataSource) || j.dataSource || "",
+      dataSource: dataSourceName,
       requireRestart: !!j.requireRestart,
       systemFont: parseSystemFontName(j.systemFont),
       limitHeavyFilters:
@@ -6341,7 +6378,9 @@
       refreshTimer: j.refreshTimer || "",
       debugMode: liveSettings.debugMode,
       debugFeatures: liveSettings.debugFeatures,
-      sheetId: (pin && pin.sheetId) || j.sheetId || "",
+      sheetId: sheetId,
+      tvSheetId: tvSheet,
+      catalog: j.catalog || [],
     };
     if (liveSettings.sheetId) {
       cfg.googleSheetId = liveSettings.sheetId;
@@ -6361,7 +6400,8 @@
       "limitHeavyFilters=" + liveSettings.limitHeavyFilters,
       "refreshTimer=" + (liveSettings.refreshTimer || ""),
       "debugMode=" + !!liveSettings.debugMode,
-      "sheet=" + (liveSettings.sheetId || "?")
+      "sheet=" + (liveSettings.sheetId || "?"),
+      urlWantsBeta() ? "url=beta" : "url=live"
     );
   }
 
@@ -6533,10 +6573,18 @@
    *   show on hard refresh / soft reload. Concurrent boards coalesce server-side.
    *   force:false only for opportunistic reads (rare).
    */
+  function sheetFetchIsForeign() {
+    if (urlWantsBeta()) return true;
+    const want = String((cfg && cfg.googleSheetId) || "").trim();
+    const tv = String((liveSettings && liveSettings.tvSheetId) || "").trim();
+    return !!(want && tv && want !== tv);
+  }
+
   async function fetchSheetRows(gid, opts) {
     opts = opts || {};
     const force = opts.force !== false; // default TRUE — live sheet is the CMS
-    const useProxy = await detectSheetsApiProxy();
+    const foreign = sheetFetchIsForeign();
+    const useProxy = !foreign && (await detectSheetsApiProxy());
     let url;
     if (useProxy) {
       url =

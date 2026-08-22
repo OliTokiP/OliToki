@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-20 (tooltip veil full-page behind chrome) 
+**Last updated:** 2026-08-22 (Beta Copy catalog + `?beta`) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -49,7 +49,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 | Route | Screen |
 |-------|--------|
 | `#/` | Splash — OliToki Menu Manager. |
-| `#/system` | System Settings (Data Source, Require Restart, System Font, Confirm save, Debug Mode, Sheet link) |
+| `#/system` | System Settings (Data Source, Require Restart, System Font, Confirm save, Debug Mode, Sheet link). Data Source is the catalog you are **editing** — it does not write Settings A2. |
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
 | `#/menu/board/1` … `/3` | Board editor (title, family portrait, presentation, descriptions, drag-reorder items) |
@@ -57,7 +57,22 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 
-QA query extras on Style: `?pick=theme`, `?pick=background`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?encore=old`, `?theme=Halloween`, `?confirm=1`. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`. Splash overlay: `#/?tip=save` (home-hero shroud). Settings overlay: `#/system?tip=save` then Back to watch the stack box ease into splash.
+QA query extras on Style: `?pick=theme`, `?pick=background`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?encore=old`, `?theme=Halloween`, `?confirm=1`. **`?beta`** selects **Beta (Development) Copy** and gates unshipped Manager UI (Announcements editor). Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`. Splash overlay: `#/?tip=save` (home-hero shroud). Settings overlay: `#/system?tip=save` then Back to watch the stack box ease into splash.
+
+---
+
+## 3a. Data Source (catalog workbooks)
+
+Manager drives **two** workbooks:
+
+| Workbook | What it is |
+|----------|------------|
+| **OliToki Menu Settings** (`1OwNKHzjP…`) | Always. Require restart, font, refresh timer, catalog list, Confirm save, Debug Mode |
+| **Selected catalog** | Restaurant Copy or Beta (Development) Copy — theme, boards, items |
+
+The Data Source picker is the **Settings catalog** (Gsheet name / Gsheet URL rows), not a hardcoded Alpha/Restaurant pair. Local Manager always lists **Beta (Development) Copy** (`1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8`) even if the live catalog fetch is late.
+
+**Data Source is which workbook you are editing.** It does **not** write Settings A2. TVs stay on Restaurant unless the board URL has `?beta`. Copy-permalink and board links append `?beta` while you are on Beta. `manager.html?beta` is the same switch plus unshipped Manager features (Announcements editor). Alpha is retired as a first-class Manager target; if the sheet still lists it, it is just another catalog row.
 
 ---
 
@@ -150,7 +165,7 @@ When adding new post-choice explanations, prefer this stack over new toast varia
 
 ## 6. Not in this prototype
 
-- Writes for OliToki Menu Settings or Data Source
+- Writes for OliToki Menu Settings Data Source (A2) — intentionally never; TVs must not follow the Manager picker
 - Image upload, Toast import, blur / blend / opacity (called out in the mockup as later)
 
 System Font (System Settings) applies to the Manager UI and the menu boards (`html[data-system-font]` + `css/system-font.css` + JS apply on the TV pages). The boards poll it live (watcher) regardless of Require restart. See also the board read path in `js/menu.js`.
