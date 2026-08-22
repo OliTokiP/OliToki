@@ -43,6 +43,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
+# Wall-clock when this process started. Suite Health uses it to know a
+# bounce actually replaced the process (execv keeps the same pid).
+_STARTED_AT = time.time()
 DEFAULT_KEY = ROOT / "secrets" / "google-service-account.json"
 DEFAULT_SHEET_ID = "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10"
 DEFAULT_SETTINGS_SHEET_ID = "1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY"
@@ -144,6 +147,24 @@ def _log(msg: str) -> None:
     print(f"[toki_server] {msg}", flush=True)
 
 
+def _reexec_self(reason: str) -> None:
+    """Replace this process with a fresh toki_server (same argv / pid)."""
+    path = Path(__file__).resolve()
+    _log(reason)
+    argv = [sys.executable, str(path), *sys.argv[1:]]
+    os.execv(sys.executable, argv)
+
+
+def _schedule_reexec(reason: str, delay: float = 0.25) -> None:
+    """Finish the HTTP response, then bounce. Same path as the file watcher."""
+
+    def go() -> None:
+        time.sleep(delay)
+        _reexec_self(reason)
+
+    threading.Thread(target=go, name="reexec", daemon=True).start()
+
+
 def _watch_api_and_reexec() -> None:
     """Local only: restart this process when toki_server.py changes on disk."""
     if _hosted():
@@ -174,9 +195,7 @@ def _watch_api_and_reexec() -> None:
             last = now
             time.sleep(1.2)
             last = _mtime()
-            _log(f"API updated ({path.name}) — restarting")
-            argv = [sys.executable, str(path), *sys.argv[1:]]
-            os.execv(sys.executable, argv)
+            _reexec_self(f"API updated ({path.name}) — restarting")
 
     threading.Thread(target=loop, name="api-watch", daemon=True).start()
     _log(f"watching {path.name} for API updates")
@@ -2151,10 +2170,11 @@ def collect_sys_snapshot(port: int, bind: str, backend) -> dict:
             if isinstance(cached, dict):
                 live = dict(cached)
 
+    hosted = _hosted()
     data = {
         "ok": True,
-        "mac": True,
-        "hosted": False,
+        "mac": not hosted,
+        "hosted": hosted,
         "cpus": cpus,
         "load1": round(load1, 2),
         "load5": round(load5, 2),
@@ -2174,6 +2194,8 @@ def collect_sys_snapshot(port: int, bind: str, backend) -> dict:
         "port": port,
         "bind": bind,
         "pid": os.getpid(),
+        "startedAt": int(_STARTED_AT),
+        "canRestart": not hosted,
     }
     with _SYS_LOCK:
         _SYS_CACHE["at"] = time.time()
@@ -2243,6 +2265,22 @@ def make_handler(
 
         def do_POST(self):
             parsed = urlparse(self.path)
+            if parsed.path == "/api/sys/restart":
+                # Suite Health. Laptop only — never bounce Cloud Run.
+                if api_only or _hosted():
+                    self._json(404, {"error": "not found"})
+                    return
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "restarting": True,
+                        "pid": os.getpid(),
+                        "startedAt": int(_STARTED_AT),
+                    },
+                )
+                _schedule_reexec("restart requested from Suite — bouncing")
+                return
             if parsed.path in ("/api/manager/theme", "/api/manager/style"):
                 backend = self._backend()
                 if not backend:

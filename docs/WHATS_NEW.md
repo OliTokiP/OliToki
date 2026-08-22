@@ -1,9 +1,25 @@
 # What’s New
 
-**Last updated:** 2026-08-21 02:20  
+**Last updated:** 2026-08-22 14:52  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-22 14:52 — Restart local server from Suite Health
+
+**Boards / surface:** Suite (`suite.html`) — Health block  
+**Sheet:** none  
+**Summary:** Local Suite now has a **Restart local server** button under the Health meters. It POSTs `/api/sys/restart` on this Mac’s `toki_server`, which bounces the process the same way a file-watch reload does. Restaurant TVs and Cloud Run are not touched. The button is hidden on Pages and Testing.
+
+### Details
+- Confirm first; the button waits until `GET /api/sys` comes back with a new `startedAt`.
+- Hosted API returns **404** for the restart route.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 

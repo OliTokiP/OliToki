@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
   <title>Suite — OliToki</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260820hub2" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260822restart" />
   <style>
     html, body { max-width: 100%; }
     *, *::before, *::after { box-sizing: border-box; }
@@ -173,6 +173,22 @@
       cursor: default;
     }
     .copy-col-you { background: rgba(27, 127, 55, 0.04); }
+    .restart-wrap { margin-top: .55rem; }
+    .restart-wrap[hidden] { display: none; }
+    .restart-btn {
+      width: 100%;
+      font: inherit;
+      font-weight: 700;
+      padding: .85rem;
+      min-height: 44px;
+      border: 1px solid #bbb;
+      border-radius: 10px;
+      background: #1a1a1a;
+      color: #fff;
+      box-sizing: border-box;
+    }
+    .restart-btn[disabled] { opacity: .6; }
+    .restart-note { margin: .35rem 0 0; }
     @media (max-width: 520px) {
       .copy-head { display: none; }
       .copy-row {
@@ -232,6 +248,11 @@
       .copy-cell.is-here { background: #16351c; color: #5ee08a; }
       .copy-cell.is-na { color: #666; }
       .copy-col-you { background: rgba(94, 224, 138, 0.06); }
+      .restart-btn {
+        background: #eee;
+        color: #111;
+        border-color: #444;
+      }
       @media (max-width: 520px) {
         .copy-cell { border-color: #333; }
         .copy-cell::before { color: #aaa; }
@@ -251,6 +272,10 @@
     <div class="live" id="live-testing">Testing: checking…</div>
     <div class="grid" id="sys"></div>
     <p class="tiny" id="sys-foot"></p>
+    <div class="restart-wrap" id="sys-restart" hidden>
+      <button type="button" class="restart-btn" id="sys-restart-btn">Restart local server</button>
+      <p class="tiny restart-note" id="sys-restart-note"></p>
+    </div>
   </div>
 
   <div class="lab">On this Mac</div>
@@ -262,8 +287,8 @@
 
   <p class="tiny" id="hint"></p>
 
-  <script src="js/env.js?v=20260821app1"></script>
-  <script src="js/surfaces.js?v=20260821app1"></script>
+  <script src="js/env.js?v=20260822restart"></script>
+  <script src="js/surfaces.js?v=20260822restart"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -530,6 +555,85 @@
       }
     }
 
+    let restarting = false;
+
+    function macFromSys(sys) {
+      const j = sys && sys.json;
+      if (!sys || !sys.ok || !j || !j.ok) return null;
+      if (j.hosted === true || j.mac === false) return null;
+      return j;
+    }
+
+    function setRestartNote(text) {
+      const note = document.getElementById("sys-restart-note");
+      if (note) note.textContent = text || "";
+    }
+
+    function syncRestartButton(mac) {
+      const wrap = document.getElementById("sys-restart");
+      const btn = document.getElementById("sys-restart-btn");
+      if (!wrap || !btn) return;
+      wrap.hidden = currentEnv() !== "local";
+      if (restarting) return;
+      btn.disabled = !mac;
+    }
+
+    async function restartLocalServer() {
+      const btn = document.getElementById("sys-restart-btn");
+      if (!btn || restarting) return;
+      if (!window.confirm(
+        "Restart this Mac’s menu server? Local boards and Suite will blink for a few seconds. Restaurant TVs are not affected."
+      )) {
+        return;
+      }
+      restarting = true;
+      btn.disabled = true;
+      btn.textContent = "Restarting…";
+      setRestartNote("Waiting for the laptop API to come back.");
+      let prevStarted = null;
+      const snap = await ping("/api/sys", 2000);
+      const mac0 = macFromSys(snap);
+      if (mac0 && mac0.startedAt != null) prevStarted = mac0.startedAt;
+      try {
+        const res = await fetch("/api/sys/restart", { method: "POST", cache: "no-store" });
+        if (res.status === 404) {
+          restarting = false;
+          btn.disabled = false;
+          btn.textContent = "Restart local server";
+          setRestartNote("This server has no restart route.");
+          return;
+        }
+      } catch (e) {
+        // Connection drop is expected while the process execv’s.
+      }
+      const deadline = Date.now() + 20000;
+      let back = null;
+      while (Date.now() < deadline) {
+        await new Promise(function (resolve) { setTimeout(resolve, 400); });
+        const r = await ping("/api/sys", 2000);
+        const mac = macFromSys(r);
+        if (!mac) continue;
+        if (prevStarted == null || mac.startedAt == null || mac.startedAt !== prevStarted) {
+          back = mac;
+          break;
+        }
+      }
+      restarting = false;
+      btn.disabled = false;
+      btn.textContent = "Restart local server";
+      if (back) {
+        setRestartNote("Server came back.");
+        await refreshSys();
+        setTimeout(function () {
+          const note = document.getElementById("sys-restart-note");
+          if (note && note.textContent === "Server came back.") note.textContent = "";
+        }, 4000);
+      } else {
+        setRestartNote("No response yet — try again, or start the server from the launcher.");
+        syncRestartButton(null);
+      }
+    }
+
     async function refreshSys() {
       const grid = document.getElementById("sys");
       const foot = document.getElementById("sys-foot");
@@ -537,7 +641,7 @@
         ping("/api/sys", 4000),
         cloudHealth(),
       ]);
-      const mac = sys.ok && sys.json && sys.json.ok ? sys.json : null;
+      const mac = macFromSys(sys);
       const tiles = [];
 
       let netLvl = "ok";
@@ -637,7 +741,11 @@
             : "Could not reach this Mac’s API.";
       }
       grid.innerHTML = tiles.join("");
+      syncRestartButton(mac);
     }
+
+    const restartBtn = document.getElementById("sys-restart-btn");
+    if (restartBtn) restartBtn.addEventListener("click", restartLocalServer);
 
     refreshLive();
     refreshSys();

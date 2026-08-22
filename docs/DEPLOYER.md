@@ -1,10 +1,10 @@
 # Deployer
 
-**Last updated:** 2026-08-20 18:39
+**Last updated:** 2026-08-22 14:52
 
 Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
 
-**Health** on Suite: Restaurant TVs vs last restaurant ship vs `main`, Testing vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Deployer uses the same TV verdict.
+**Health** on Suite: Restaurant TVs vs last restaurant ship vs `main`, Testing vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Local Suite also has **Restart local server** — it POSTs `/api/sys/restart` so this Mac bounces `toki_server`. That does not touch Cloud Run or the TVs. The button stays off on Pages / Testing. Deployer uses the same TV verdict.
 
 **Open a copy** is one matrix: Hub (Suite, Deployer, Tickets, Menu Manager, Brightness) then Boards. Columns are **Local** (this Mac), **Test** (beta / Alpha sheet), **TVs** (Restaurant / GitHub Pages). Boards are not listed twice. The column you are on is marked. Brightness is Mac-only.
 

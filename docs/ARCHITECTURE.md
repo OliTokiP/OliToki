@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-08-21 02:20 (Board 4 announcement color HTML)
+**Last updated:** 2026-08-22 14:52 (Suite Health local server restart)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -272,6 +272,8 @@ Server:
 |----------|---------|
 | static `/*` | HTML/CSS/JS/assets |
 | `/api/health` | API + SA readiness |
+| `GET /api/sys` | Local Mac meters for Suite Health (load, swap, sockets, `toki_server` count) |
+| `POST /api/sys/restart` | Local only: bounce `toki_server` (Suite Health). 404 on Cloud Run. |
 | `/api/sheets/csv` | Tab values by gid/title |
 | `/api/sheets/xlsx` | **410 Gone** — Drive workbook export retired 2026-08-13 |
 | `/api/sheets/tabs` | gid ↔ title map |
