@@ -82,4 +82,4 @@ TokiMenu is a static, browser-based restaurant menu display system for TV / Fire
 - `Suite.app` — Chrome app-mode window for Suite (no URL bar; Tickets / Deployer / Manager via the in-page nav)
 - Optional local proxy: `scripts/toki_server.py` (see `scripts/gsheet_api.md`)
 - Live ship: `deploy.html` / GitHub Actions — **main** is work, **testing** is beta, **restaurant** is TVs. A git push to main does not update TVs.
-- **Local URLs in tickets and docs** use this Mac’s Bonjour name (`http://<LocalHostName>.local:8765/…` or `/portal`), never a DHCP Wi-Fi IP like `10.0.0.106`. That IP changes and Listener used to rewrite every ticket when it did. The numeric IP belongs only on [[Launcher]] as a fallback.
+- **Local URLs in tickets and docs** use the Listener portal (`http://<LocalHostName>.local:18765/to/<file>?…`), never a DHCP Wi-Fi IP like `10.0.0.106` and never a hopped menu port (`:8766`). `/to/` 302s to whichever Toki Menu Server is up. The numeric IP belongs only on [[Launcher]] as a fallback.

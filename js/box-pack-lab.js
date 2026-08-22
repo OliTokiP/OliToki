@@ -77,14 +77,20 @@
         line.width += line.items[i].width + (i ? sepW : 0);
       }
     });
-    lines.sort(function (a, b) {
-      if (!a.items.length) return 1;
-      if (!b.items.length) return -1;
-      return a.items[0].idx - b.items[0].idx;
-    });
+    sortPackedLinesFullestFirst(lines);
     return lines.filter(function (ln) {
       return ln.items.length > 0;
     });
+  }
+
+  function sortPackedLinesFullestFirst(lines) {
+    lines.sort(function (a, b) {
+      if (!a.items.length) return 1;
+      if (!b.items.length) return -1;
+      if (Math.abs(b.width - a.width) > 0.5) return b.width - a.width;
+      return a.items[0].idx - b.items[0].idx;
+    });
+    return lines;
   }
 
   function packGreedyByWidth(items, sepW, boxW) {
@@ -102,6 +108,7 @@
       cur.items.push(it);
     }
     if (cur.items.length) lines.push(cur);
+    sortPackedLinesFullestFirst(lines);
     return lines;
   }
 

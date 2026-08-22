@@ -45,18 +45,11 @@ window.tokiOpensOutsideSuite = function (href) {
   if (!href) return false;
   try {
     var u = new URL(href, location.href);
-    var name = (u.pathname.split("/").pop() || "").toLowerCase();
+    // Listener is another port but still the Suite App surface.
     if (String(u.port) === "18765") return false;
-    if (u.origin !== location.origin) return true;
-    return (
-      name === "manager.html" ||
-      name === "index.html" ||
-      name === "index2.html" ||
-      name === "index3.html" ||
-      name === "index4.html" ||
-      name === "preview-all.html" ||
-      name === "glossary.html"
-    );
+    // Same-origin operator pages stay in Suite (Manager, boards, Deployer).
+    // Only GitHub / Live / other hosts open a Chrome window.
+    return u.origin !== location.origin;
   } catch (e) {
     return true;
   }
