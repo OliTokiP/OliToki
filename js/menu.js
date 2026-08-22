@@ -17022,7 +17022,9 @@
       st.textContent =
         "#box-pack-lab-hud{position:fixed;left:12px;top:12px;z-index:99999;" +
         "background:#111c;color:#f4f7fb;font:14px/1.35 ui-sans-serif,system-ui;" +
-        "padding:12px 14px;border-radius:10px;max-width:420px;" +
+        "padding:12px 14px;border-radius:10px;max-width:min(420px,calc(100vw - 24px));" +
+        "max-height:calc(100dvh - 24px);overflow-x:hidden;overflow-y:auto;" +
+        "-webkit-overflow-scrolling:touch;" +
         "box-shadow:0 8px 28px #0008;backdrop-filter:blur(8px)}" +
         "#box-pack-lab-hud h2{margin:0 0 8px;font-size:14px;letter-spacing:.02em}" +
         "#box-pack-lab-hud label{display:flex;align-items:center;gap:8px;margin:6px 0}" +

@@ -532,12 +532,14 @@
 
   async function boot() {
     var nQ = 0;
+    var scrollTo = "";
     try {
       var q = new URLSearchParams(location.search || "");
       if (q.get("packLines") === "3" || q.get("packLines") === "4") {
         _mode = q.get("packLines");
       }
       nQ = Number(q.get("n") || 0);
+      scrollTo = String(q.get("scroll") || "").trim().toLowerCase();
     } catch (err) {}
     bind();
     document.querySelectorAll("[data-mode]").forEach(function (x) {
@@ -566,6 +568,20 @@
       await document.fonts.ready;
     }
     renderAll();
+    if (scrollTo) {
+      window.setTimeout(function () {
+        var target =
+          scrollTo === "table"
+            ? document.getElementById("lab-table")
+            : document.getElementById("slot-" + scrollTo) ||
+              document.getElementById(scrollTo);
+        if (target && typeof target.scrollIntoView === "function") {
+          target.scrollIntoView({ block: "start" });
+        } else if (scrollTo === "bottom") {
+          window.scrollTo(0, document.documentElement.scrollHeight);
+        }
+      }, 80);
+    }
   }
 
   if (document.readyState === "loading") {
