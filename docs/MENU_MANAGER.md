@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-22 (per-catalog Settings rows) 
+**Last updated:** 2026-08-22 23:31 (per-catalog Debug Mode) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -32,11 +32,11 @@ It should feel like a polished iPhone Settings app. Desktop is a centered phone 
 | **This app’s chrome** | Immediately, from a **draft** cache (CSS variables) |
 | **TV boards** | After a write of Theme, Background, speeds, Encore extras, or board Settings — immediately when **Confirm save?** is No; otherwise after Confirm-on-back **Yes**. Boards pick the cells up on their next sheet load |
 
-Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). System chrome — Require restart, System Font, Refresh Timer, Limit Heavy Filters, Confirm save? — comes from **that catalog’s Settings row** (Restaurant **A2–F2**, Beta **A3–F3**, next source the next row). Switching Data Source reapplies that row immediately on System Settings (no Confirm dialog). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm leaves immediately (then writes in the background). Writes go same-origin first (`POST /api/manager/style`). It sends the Theme dropdown and the **Background** conglomerate on the **selected catalog**. The UI sends field names; the server adapter maps Theme Selector (**A3**), BG Color (**B3**), BG Pattern (**C3**), BG Wallpaper (**D3**). Pattern wins on the live board, so a color or wallpaper choice writes `none` into the unused of C/D. **BG Scroll Speed** (**H3**) and **Presentation Speed** (**I3**) write when those pills change. Encore children — Spotlight Type (**K3**), Spotlight Color (**L3**), Background Color (**M3**) — are **global** even when edited on a board. Board Yes also persists dirty Style fields. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
+Draft loads from **OliToki Menu Settings** + the chosen catalog’s **Style and Theme** tab (`js/manager-sheet.js` → `/api/settings` and `/api/sheets/csv`, public CSV fallback if the proxy is down). System chrome — Require restart, System Font, Refresh Timer, Limit Heavy Filters, Confirm save?, Debug Mode — comes from **that catalog’s Settings row** (Restaurant **A2–G2**, Beta **A3–G3**, next source the next row). Switching Data Source reapplies that row immediately on System Settings (no Confirm dialog). `js/manager-data.js` is the offline stand-in only. **Yes** on confirm leaves immediately (then writes in the background). Writes go same-origin first (`POST /api/manager/style`). It sends the Theme dropdown and the **Background** conglomerate on the **selected catalog**. The UI sends field names; the server adapter maps Theme Selector (**A3**), BG Color (**B3**), BG Pattern (**C3**), BG Wallpaper (**D3**). Pattern wins on the live board, so a color or wallpaper choice writes `none` into the unused of C/D. **BG Scroll Speed** (**H3**) and **Presentation Speed** (**I3**) write when those pills change. Encore children — Spotlight Type (**K3**), Spotlight Color (**L3**), Background Color (**M3**) — are **global** even when edited on a board. Board Yes also persists dirty Style fields. **Yes** also overwrites `data/manager-fallback.json` when `toki_server` is up. Pages cannot write — the key stays on the Mac. **No** reverts to the last loaded sheet values.
 
 **Confirm save?** is per catalog (that row’s Confirm save? cell). It applies to **every** option on that catalog, not only System Settings: Style and Theme (theme, background, speeds) and Board editors (title, family portrait, presentation mode, Encore extras, descriptions, menu-item order). **Yes** (default) = Confirm-on-back before any sheet write. **No** = skip the dialog; each change writes immediately (`POST /api/manager/style`, `/api/manager/board`, `/api/manager/settings` as needed) so the catalog and TVs update on the next board refresh — except menu-item reorder, which waits 3 seconds of idle so a drag session is one write. The Confirm save? toggle itself always writes the moment it is changed, whether it was on or off. Data Source never prompts Confirm — it only switches which catalog row you are editing.
 
-**Debug Mode** (System Settings, between Confirm save? and Links) writes **Debugger!A2** (`gid=195166367`) on the OliToki Menu Settings workbook — not a Settings-tab column. Yes shows the Toki Debug HUD on the TV boards; No hides it. Boards pick the cell up on the next settings load / soft refresh and close the HUD if A2 is off. Menu Manager itself does not get a debug console. Tooltip preview: `?tip=debug`.
+**Debug Mode** (System Settings, between Confirm save? and Links) is a **per-catalog Settings column** — header **Debug Mode**, Restaurant **G2**, Beta **G3**. Yes shows the Toki Debug HUD on the TV boards that read that row; No hides it. Dining-room TVs keep the Restaurant cell (`GET /api/settings` top-level). Switching Data Source loads that row’s Debug Mode the same way as Require restart. Debug Features (Performance Console, Full View, …) stay on the **Debugger** tab. Menu Manager itself does not get a debug console. Tooltip preview: `?tip=debug`.
 
 Toki Default tokens match [STYLE_GUIDE.md](./STYLE_GUIDE.md): Main `#000000`, Secondary `#FFFFFF`, Highlight `#26BBCB`, Highlight Special `#FFF900`. Other palettes are catalog seeds (several from `themes-to-paste.csv`).
 
@@ -67,20 +67,20 @@ Manager drives **two** workbooks:
 
 | Workbook | What it is |
 |----------|------------|
-| **OliToki Menu Settings** (`1OwNKHzjP…`) | Always. Per-catalog chrome rows + Gsheet name / URL list + Debug Mode |
+| **OliToki Menu Settings** (`1OwNKHzjP…`) | Always. Per-catalog chrome rows (incl. Debug Mode) + Gsheet name / URL list. Debugger tab is Debug Features only |
 | **Selected catalog** | Restaurant Copy or Beta (Development) Copy — theme, boards, items |
 
 Settings tab chrome is **one row per catalog**, next to the Data Source name:
 
 | Row | Catalog | Cells |
 |-----|---------|--------|
-| **A2–F2** | Restaurant Copy | Require restart, System Font, Limit Heavy Filters, Refresh Timer, Confirm save? |
-| **A3–F3** | Beta (Development) Copy | Same columns for Beta |
+| **A2–G2** | Restaurant Copy | Require restart, System Font, Limit Heavy Filters, Refresh Timer, Confirm save?, Debug Mode |
+| **A3–G3** | Beta (Development) Copy | Same columns for Beta |
 | **A4…** | Next source | Same columns as we add catalogs |
 
-The Data Source picker is the **Settings catalog** (Gsheet name / Gsheet URL rows), not a hardcoded Alpha/Restaurant pair. Local Manager always lists **Beta (Development) Copy** (`1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8`) even if the live catalog fetch is late. Picking a catalog loads that row’s chrome on the same System Settings screen (font, require-restart, timer, confirm-save) and the catalog’s Style + boards. It does **not** prompt Confirm Changes.
+The Data Source picker is the **Settings catalog** (Gsheet name / Gsheet URL rows), not a hardcoded Alpha/Restaurant pair. Local Manager always lists **Beta (Development) Copy** (`1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8`) even if the live catalog fetch is late. Picking a catalog loads that row’s chrome on the same System Settings screen (font, require-restart, timer, confirm-save, debug mode) and the catalog’s Style + boards. It does **not** prompt Confirm Changes.
 
-**Data Source is which workbook — and which Settings row — you are editing.** Column A is the row’s name, not a TV pointer; writes go to that row via `POST /api/manager/settings` with `sourceId`. TVs keep reading the Restaurant row unless the board URL has `?beta`. Copy-permalink and board links append `?beta` while you are on Beta. `manager.html?beta` is the same switch plus unshipped Manager UI (Announcements editor). Alpha is retired as a first-class Manager target; if the sheet still lists it, it is just another catalog row. Debug Mode stays global (`Debugger!A2`).
+**Data Source is which workbook — and which Settings row — you are editing.** Column A is the row’s name, not a TV pointer; writes go to that row via `POST /api/manager/settings` with `sourceId`. TVs keep reading the Restaurant row unless the board URL has `?beta`. Copy-permalink and board links append `?beta` while you are on Beta. `manager.html?beta` is the same switch plus unshipped Manager UI (Announcements editor). Alpha is retired as a first-class Manager target; if the sheet still lists it, it is just another catalog row. Debug Mode is that row’s **G** cell, not a global Debugger checkbox.
 
 ---
 
@@ -126,7 +126,7 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `js/manager-sheet.js` | Settings + Style and Theme + board tab read; Theme + Background write via `/api/manager/style`; board Settings via `/api/manager/board` |
 | `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
 | `js/manager.js` | Router, draft/commit, preview; Yes writes Theme + Background or board Settings |
-| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board`, `POST /api/manager/settings` (incl. Debugger!A2) |
+| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board`, `POST /api/manager/settings` (Settings G = Debug Mode) |
 | `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme + Background use the server adapter (`Theme Selector` / A3, `BG Color` / B3, `BG Pattern` / C3, `BG Wallpaper` / D3). Number options should come from sheet dataValidation when present, not hard-coded spans.

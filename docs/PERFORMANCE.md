@@ -6,7 +6,7 @@
 2. Design **console kill-switches** that truly disable work (not just hide UI)  
 3. Decide when **tearing a feature down and rebuilding** costs more than **leaving it idle**
 
-**Last updated:** 2026-08-20 17:43 (textbox wireframes debug overlay)  
+**Last updated:** 2026-08-22 23:31 (per-catalog Debug Mode)  
 **Primary runtime:** `js/menu.js`, `css/menu.css`  
 **Target display:** 1920×1080; stress cases = Amazon Fire Stick, `preview-all.html` wall (4 boards)
 
@@ -303,9 +303,9 @@ The prompt in the previous section was executed (adapted for the actual Debug Me
 
 ### How it works now
 
-- Debug configuration lives in the **Debug Menu** tab (master `Debug Mode` + feature toggles under `Debug Features`).
+- Master **Debug Mode** lives on OliToki Menu Settings → **Settings** column G (per catalog row). Feature toggles live under **Debugger → Debug Features**.
 - **Automatic** detailed flag emission to console only occurs when **both**:
-  - `Debug Mode` = TRUE
+  - `Debug Mode` = TRUE (Settings G on the row the board is reading)
   - `Performance Console` = TRUE
 - Manual inspection via `TokiMenuDebug.list()` / `TokiMenuDebug.set(...)` is always available from DevTools.
 - A registry of the high-cost features from the original prompt (encore, bgBlur, softRefresh, etc.) reports honest `active` state + `source`.

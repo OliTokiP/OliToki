@@ -873,7 +873,7 @@
     settings.limitHeavyFilters = match.limitHeavyFilters;
     settings.confirmSave = match.confirmSave;
     settings.refreshTimer = match.refreshTimer || settings.refreshTimer;
-    settings.debugMode = match.debugMode || "no";
+    settings.debugMode = parseYesNo(match.debugMode, false);
     return settings;
   }
 

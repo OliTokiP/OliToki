@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "840990c",
-  "hashFull": "840990c4cffb6450ffd999c6d52bdd6729ca1afb",
-  "subject": "QA: 2026-08-22 Suite and all of its notification tabs should be Suite branded (pass 1)"
+  "hash": "7a3bd6c",
+  "hashFull": "7a3bd6c77566a2dd4cb32838b6d05780b8eb6fe0",
+  "subject": "QA: 2026-08-22 Support the Beta sheet (pass 3)"
 };

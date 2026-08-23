@@ -2,19 +2,19 @@
 
 This document explains how the performance feature flag output works and how to read it.
 
-**Last updated:** 2026-08-20 17:43 (Show Textbox Wireframes)
+**Last updated:** 2026-08-22 23:31 (per-catalog Debug Mode)
 
 **Primary reference:** [PERFORMANCE.md](./PERFORMANCE.md)  
-**Control source:** OliToki Menu Settings → **Debugger** tab (gid `195166367`, cell **A2**). Menu Manager **System Settings → Debug Mode** writes that cell. The catalog **Debug Menu** tab (gid `1793812854`) is leftover and is no longer read.
+**Control source:** OliToki Menu Settings → **Settings** tab, column **Debug Mode** (Restaurant **G2**, Beta **G3**). Menu Manager **System Settings → Debug Mode** writes the cell for the catalog you are editing. **Debug Features** (Performance Console, Full View, Show Textbox Wireframes, …) stay on the **Debugger** tab (gid `195166367`). The catalog **Debug Menu** tab (gid `1793812854`) is leftover and is no longer read.
 
 ---
 
 ## 1. Master gate (required)
 
-Console flag output is **never sent automatically** unless **both** of these are `TRUE` in the **Debug Menu** tab:
+Console flag output is **never sent automatically** unless **both** of these are `TRUE`:
 
-1. **Debug Mode** = `TRUE` (top master switch)
-2. **Performance Console** = `TRUE` (under Debug Features)
+1. **Debug Mode** = `TRUE` (Settings column G on the catalog row the board is reading — dining-room TVs use Restaurant **G2**)
+2. **Performance Console** = `TRUE` (Debugger tab → Debug Features)
 
 Only when **both** are true does the menu emit the `TokiMenuDebug` table on load and on important state changes.
 
@@ -26,23 +26,26 @@ You can still inspect state manually at any time (see below).
 
 ## 2. How to enable
 
-In Menu Manager **System Settings**, set **Debug Mode** to Yes (writes Debugger **A2**). Or in the Google Sheet:
+In Menu Manager **System Settings**, pick the catalog, then set **Debug Mode** to Yes (writes that row’s **G** cell). Or in the Google Sheet:
 
-1. Open **OliToki Menu Settings** → **Debugger** tab (`gid=195166367`).
-2. Set **A2** under **Debug Mode** to `TRUE`.
-3. Under **Debug Features**, keep **Performance Console** `TRUE` (already on in the current sheet).
-4. (Optional) Set other columns (e.g. Version History, Full View, Show Textbox Wireframes) as needed.
-5. Save. Boards pick it up on the next settings load / soft refresh. Turning Debug Mode **off** closes the HUD on that same refresh.
+1. Open **OliToki Menu Settings** → **Settings** tab.
+2. Set **Debug Mode** (column G) to `TRUE` on the catalog row (Restaurant row 2, Beta row 3).
+3. On the **Debugger** tab, keep **Performance Console** `TRUE` under Debug Features (already on in the current sheet).
+4. (Optional) Set other Debug Features columns (Version History, Full View, Show Textbox Wireframes) as needed.
+5. Save. Boards that read that catalog’s Settings row pick it up on the next settings load / soft refresh. Turning Debug Mode **off** closes the HUD on that same refresh.
 
-Example current shape (as of 2026-08-20):
+Example current shape (as of 2026-08-22):
 
 ```
-Debug Mode
-TRUE
+Settings
+Data Source                  …  Debug Mode
+Restaurant Copy              …  FALSE
+Beta (Development) Copy      …  TRUE
 
+Debugger
 Debug Features
 Performance Console   Version History   Full View   Hide Inactive Features?   Show Textbox Wireframes
-TRUE                  FALSE             FALSE       FALSE                     FALSE
+TRUE                  TRUE              TRUE        TRUE                      TRUE
 ```
 
 - **Full View** = TRUE (with Debug Mode) expands the floating HUD to natural content height with no body scroll — useful on Fire Stick / devices without mouse. The HUD sizes to fit the entire list instead of scrolling.

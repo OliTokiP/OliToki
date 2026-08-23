@@ -1,9 +1,28 @@
 # What’s New
 
-**Last updated:** 2026-08-22 23:20  
+**Last updated:** 2026-08-22 23:31  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-22 23:31 — Debug Mode is per catalog
+
+**Boards / surface:** Menu Manager (System Settings)  
+**Sheet:** OliToki Menu Settings → Settings column **Debug Mode** (Restaurant **G2**, Beta **G3**)  
+**Summary:** Debug Mode is no longer a single Debugger-tab checkbox. Each Data Source row has its own **G** cell. Picking Beta vs Restaurant on Manager loads and writes that row. Dining-room TVs still read the Restaurant row. Debug Features stay on the Debugger tab.
+
+### Details
+- Menu Manager **System Settings → Debug Mode** writes `Settings!G` on the catalog being edited (`POST /api/manager/settings` with `sourceId`).
+- Switching Data Source reapplies that row’s Debug Mode immediately (same as Require restart).
+- `GET /api/settings` top-level `debugMode` is Restaurant **G2**, so TVs do not follow Beta’s toggle.
+- Extra Scope was empty: `?beta` boards still read the Restaurant settings row until Menu Screens is in scope.
+
+### Docs updated
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
+- [DEBUG_CONSOLE.md](./DEBUG_CONSOLE.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
 
 ---
 
