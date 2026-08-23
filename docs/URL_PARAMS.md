@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-08-22 (board / Manager `?beta`)
+**Last updated:** 2026-08-23 (boxPackLab four boxes + font)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -25,7 +25,7 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`item=3`** | Start on that menu row (0-based). `#3` in the hash also works. |
 | **`ann=0`** | Board 4: start on that announcement slide (0-based). |
 | **`annMdDemo=1`** | Board 4 debug: paint markdown cheat-sheet sample slides (does not write the sheet). `ann=4` is the color HTML sample. Authoring copy: [ANNOUNCEMENT_MARKDOWN.md](./ANNOUNCEMENT_MARKDOWN.md) / `announcement-markdown.html`. |
-| **`boxPackLab=1`** | Boards 1–3 inquiry HUD: item-count slider, 1/2/3 Footer Box widths, force 3/4 wrap rows, leftover overlay. Does not write the sheet. Combine with `pause=1`. Side-by-side page: [box-pack-lab.html](../box-pack-lab.html). Optional `packLines=3` / `packLines=4`. |
+| **`boxPackLab=1`** | Boards 1–3 inquiry HUD: Footer Box picker (Proteins / Sauces / Drinks / Veggies), item-count slider, 1/2/3 widths, force 3/4 wrap rows, leftover overlay. Does not write the sheet. Combine with `pause=1`. Side-by-side page: [box-pack-lab.html](../box-pack-lab.html). Optional `packLines=3` / `packLines=4`, `box=protein` / `sauces` / `drinks` / `veggies`. Lab also: `box=all`, `font=poppins` / `roboto`. |
 | **`preview=all`** | Lean wall path (used by the 4-up preview). Do not use on a TV. |
 | **`wall=0`** … **`wall=3`** | Which cell you are in the 4-up wall (staggers refresh). Set by `preview-all.html`. |
 | **`debug=1`** or **`tokiDebug=1`** | Dump the debug feature table to the console once. |

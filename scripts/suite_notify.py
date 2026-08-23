@@ -19,7 +19,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 SUITE_BUNDLE_NATIVE = "local.toki.suite.app"
 SUITE_BUNDLE_WRAPPER = "local.toki.suite"
@@ -28,6 +28,9 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE_SUITE = (
     Path.home()
     / "Library/Mobile Documents/com~apple~CloudDocs/2026/OliTokiDev/Suite.app"
+)
+LOCAL_SUITE = (
+    Path.home() / "Library/Application Support/Toki/Suite.app"
 )
 
 
@@ -85,12 +88,14 @@ def suite_app_running() -> bool:
 
 
 def _post_distributed(user_info: dict[str, str]) -> bool:
+    clean = {str(k): str(v) for k, v in (user_info or {}).items() if v}
     try:
-        from Foundation import NSDistributedNotificationCenter
+        from Foundation import NSDistributedNotificationCenter, NSDictionary
 
+        info = NSDictionary.dictionaryWithDictionary_(clean)
         center = NSDistributedNotificationCenter.defaultCenter()
         center.postNotificationName_object_userInfo_deliverImmediately_(
-            NOTIFY_NAME, None, user_info, True
+            NOTIFY_NAME, None, info, True
         )
         return True
     except Exception:
@@ -129,17 +134,29 @@ function run(argv) {
 
 
 def native_suite_app() -> Path | None:
-    if NATIVE_SUITE.is_dir():
-        return NATIVE_SUITE
+    for cand in (NATIVE_SUITE, LOCAL_SUITE):
+        if cand.is_dir():
+            return cand
     home = Path.home() / "Applications" / "Suite.app"
     if home.exists():
         try:
-            return home.resolve()
+            resolved = home.resolve()
         except OSError:
-            return home
+            resolved = home
+        exe = resolved / "Contents" / "MacOS" / "suite"
+        try:
+            if exe.read_bytes()[:2] != b"#!":
+                return resolved
+        except OSError:
+            return resolved
     repo = ROOT / "Suite.app"
     if (repo / "Contents").is_dir():
-        return repo
+        exe = repo / "Contents" / "MacOS" / "suite"
+        try:
+            if exe.read_bytes()[:2] != b"#!":
+                return repo
+        except OSError:
+            pass
     return None
 
 
@@ -183,7 +200,7 @@ def _open_suite_notify_url(info: dict[str, str]) -> bool:
         }.items()
         if v
     }
-    url = "suite://notify?" + urlencode(q)
+    url = "suite://notify?" + urlencode(q, quote_via=quote)
     try:
         r = subprocess.run(
             ["open", "-g", "-a", str(app), url],
@@ -291,8 +308,13 @@ def notify(
     subtitle: str = "",
     open_url: str = "",
     tag: str = "",
+    fallback: bool = True,
 ) -> bool:
-    """Post a Suite-branded Notification Center banner. Darwin only."""
+    """Post a Suite-branded Notification Center banner. Darwin only.
+
+    `fallback=False` skips the Python NSUserNotification path (that is the
+    scripts / Script Editor cluster). Listener ticket-ready badges use that.
+    """
     if not _darwin():
         return False
     title = (title or "").strip() or "Suite"
@@ -304,6 +326,8 @@ def notify(
         title, body, subtitle=subtitle, open_url=open_url, tag=tag
     ):
         return True
+    if not fallback:
+        return False
     return _fallback_ns(title, body, subtitle=subtitle, open_url=open_url)
 
 
