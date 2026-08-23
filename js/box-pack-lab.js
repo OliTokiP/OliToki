@@ -374,6 +374,13 @@
     showMeasureKind(kindId);
     syncMeasureShell(widthPx);
     liveBody.style.setProperty("--box-scale", "1");
+    liveBody.classList.remove(
+      "typo-name",
+      "typo-name-price",
+      "typo-name-sub",
+      "typo-name-sub-price"
+    );
+    liveBody.classList.add("layout-wrap", "align-center", typoModeClass(items));
     void liveBody.offsetWidth;
     var measured = items.map(function (it) {
       return Object.assign({ label: Pack.itemMeasureLabel(it) }, it);
@@ -397,6 +404,7 @@
       Pack.detachProbe();
     }
     paintWrapBody(liveBody, kind, items, packed);
+    Pack.reorderWrapRowsFullestFirst(liveBody);
     var isDense = kindId === "sauces" || kindId === "drinks";
     var scale = Pack.fitBoxScale(liveBody, isDense ? 0.45 : 0.5, isDense ? 2.4 : 2.2, {
       checkChildWidth: true,
@@ -442,6 +450,13 @@
     showMeasureKind(kind.id);
     syncMeasureShell(widthPx);
     liveBody.style.setProperty("--box-scale", "1");
+    liveBody.classList.remove(
+      "typo-name",
+      "typo-name-price",
+      "typo-name-sub",
+      "typo-name-sub-price"
+    );
+    liveBody.classList.add("layout-wrap", "align-center", typoModeClass(items));
     void liveBody.offsetWidth;
     var measured = items.map(function (it) {
       return Object.assign({ label: Pack.itemMeasureLabel(it) }, it);

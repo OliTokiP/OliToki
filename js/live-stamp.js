@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "b554f99",
-  "hashFull": "b554f9957ac6343e15ec97e17cc37e3e61550bc3",
-  "subject": "QA: 2026-08-23 Add beta indicator badge back to menus. (pass 1)"
+  "hash": "5bbd722",
+  "hashFull": "5bbd7228084c6b425076950c57b5340710623533",
+  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 8)"
 };

@@ -10168,7 +10168,6 @@
           (conf.wrapItemClass || "wrap-item") + " wrap-item";
         const invIdx = it._boxItemIndex != null ? it._boxItemIndex : -1;
         setBoxItemIndexAttr(span, invIdx);
-        if (invIdx >= 0) box.displayOrder.push(invIdx);
         appendFooterItemParts(span, it, partOpts);
         row.appendChild(span);
         if (i < line.length - 1) {
@@ -10188,6 +10187,15 @@
         bodyEl.appendChild(br);
       }
     });
+    boxPack().reorderWrapRowsFullestFirst(bodyEl);
+    box.displayOrder = [];
+    Array.prototype.forEach.call(
+      bodyEl.querySelectorAll(".wrap-line-row .wrap-item"),
+      function (span) {
+        const invIdx = Number(span.dataset.boxItemIndex);
+        if (invIdx >= 0) box.displayOrder.push(invIdx);
+      }
+    );
   }
 
   function renderFooterBoxes() {

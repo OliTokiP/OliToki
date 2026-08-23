@@ -1,14 +1,16 @@
 /**
  * Shared Footer Box wrap packer.
  * Live boards (menu.js) and the inquiry lab (box-pack-lab.html) both call this.
- * Scorer is unchanged: LPT + greedy, type size / longest-row fill / evenness,
- * then rows stack fullest → shortest.
+ * Scorer is unchanged: LPT + greedy, type size / longest-row fill / evenness.
+ * Row stack uses painted width (name at body size, subtitle at 0.82em Regular,
+ * price at Regular) so a parenthetical chip cannot steal “fullest on top.”
  */
 (function (root) {
   "use strict";
 
   let _measureCanvas = null;
   let _measureProbe = null;
+  let _itemProbe = null;
   let _measureHost = null;
 
   function setMeasureHost(el) {
@@ -23,6 +25,107 @@
     if (_measureProbe && _measureProbe.parentNode) {
       _measureProbe.parentNode.removeChild(_measureProbe);
     }
+    if (_itemProbe && _itemProbe.parentNode) {
+      _itemProbe.parentNode.removeChild(_itemProbe);
+    }
+  }
+
+  function footerPriceClean(price) {
+    if (price == null || price === "") return "";
+    return String(price)
+      .replace(/^\+\s*/, "")
+      .replace(/^\$/, "")
+      .trim();
+  }
+
+  function itemPaintParts(it) {
+    const src = it || {};
+    return {
+      name: String(src.name || "").trim(),
+      subtitle: src.subtitle ? String(src.subtitle).trim() : "",
+      price: footerPriceClean(src.price),
+    };
+  }
+
+  function deriveFont(font, weight, sizeScale) {
+    const s = String(font || "700 30px sans-serif");
+    const sizeM = s.match(/(\d+(?:\.\d+)?)px/);
+    const size =
+      (sizeM ? parseFloat(sizeM[1]) : 30) * (sizeScale != null ? sizeScale : 1);
+    const family = s.replace(/^.*?(\d+(?:\.\d+)?px)\s*/, "").trim() || "sans-serif";
+    const w = weight != null ? String(weight) : "700";
+    return w + " " + size + "px " + family;
+  }
+
+  /**
+   * Visual chip width as painted: bold name + 0.82em Regular (sub) + Regular price.
+   * Packing (LPT / greedy) still uses measureLabel — this is sort-only.
+   */
+  function measureItemPaintedPx(it, font) {
+    const parts = itemPaintParts(it);
+    if (!parts.name && !parts.subtitle && !parts.price) {
+      return measureTextPx(it && it.label ? it.label : "", font);
+    }
+    try {
+      const host = _measureHost;
+      if (host) {
+        if (!_itemProbe) {
+          _itemProbe = document.createElement("span");
+          _itemProbe.setAttribute("aria-hidden", "true");
+          _itemProbe.className = "wrap-item";
+          _itemProbe.style.cssText =
+            "position:absolute;left:-99999px;top:0;white-space:nowrap;" +
+            "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;" +
+            "display:inline-block;max-width:none;";
+          _itemProbe.innerHTML =
+            '<span class="box-item-name"></span>' +
+            '<span class="item-paren-sub box-item-sub"></span>' +
+            '<span class="box-item-price"></span>';
+        }
+        if (_itemProbe.parentNode !== host) host.appendChild(_itemProbe);
+        const nameEl = _itemProbe.querySelector(".box-item-name");
+        const subEl = _itemProbe.querySelector(".box-item-sub");
+        const priceEl = _itemProbe.querySelector(".box-item-price");
+        nameEl.textContent = parts.name;
+        if (parts.subtitle) {
+          subEl.textContent = " (" + parts.subtitle + ")";
+          subEl.style.display = "";
+        } else {
+          subEl.textContent = "";
+          subEl.style.display = "none";
+        }
+        if (parts.price) {
+          priceEl.textContent = " + $" + parts.price;
+          priceEl.style.display = "";
+        } else {
+          priceEl.textContent = "";
+          priceEl.style.display = "none";
+        }
+        const w = _itemProbe.offsetWidth;
+        if (w > 0) return w;
+      }
+    } catch (err) {
+      /* fall through */
+    }
+    let w = measureTextPx(parts.name, font);
+    if (parts.subtitle) {
+      w += measureTextPx(
+        " (" + parts.subtitle + ")",
+        deriveFont(font, "400", 0.82)
+      );
+    }
+    if (parts.price) {
+      w += measureTextPx(" + $" + parts.price, deriveFont(font, "400", 1));
+    }
+    return w;
+  }
+
+  function lineSortWidth(line) {
+    if (!line) return 0;
+    if (line.visualWidth != null && isFinite(line.visualWidth)) {
+      return line.visualWidth;
+    }
+    return line.width || 0;
   }
 
   /**
@@ -119,7 +222,8 @@
     lines.sort(function (a, b) {
       if (!a.items.length) return 1;
       if (!b.items.length) return -1;
-      if (Math.abs(b.width - a.width) > 0.5) return b.width - a.width;
+      const dw = lineSortWidth(b) - lineSortWidth(a);
+      if (Math.abs(dw) > 0.5) return dw;
       return a.items[0].idx - b.items[0].idx;
     });
     return lines;
@@ -128,7 +232,7 @@
   function packLptLines(items, lineCount, sepW) {
     const lines = [];
     for (let i = 0; i < lineCount; i++) {
-      lines.push({ items: [], width: 0 });
+      lines.push({ items: [], width: 0, visualWidth: 0 });
     }
     const sorted = items.slice().sort(function (a, b) {
       if (b.width !== a.width) return b.width - a.width;
@@ -148,8 +252,15 @@
         return a.idx - b.idx;
       });
       line.width = 0;
+      line.visualWidth = 0;
       for (let i = 0; i < line.items.length; i++) {
-        line.width += line.items[i].width + (i ? sepW : 0);
+        const sep = i ? sepW : 0;
+        line.width += line.items[i].width + sep;
+        const vw =
+          line.items[i].visualWidth != null
+            ? line.items[i].visualWidth
+            : line.items[i].width;
+        line.visualWidth += vw + sep;
       }
     });
     sortPackedLinesFullestFirst(lines);
@@ -160,16 +271,19 @@
 
   function packGreedyByWidth(items, sepW, boxW) {
     const lines = [];
-    let cur = { items: [], width: 0 };
+    let cur = { items: [], width: 0, visualWidth: 0 };
     const limit = Math.max(1, boxW);
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       const add = it.width + (cur.items.length ? sepW : 0);
       if (cur.items.length && cur.width + add > limit) {
         lines.push(cur);
-        cur = { items: [], width: 0 };
+        cur = { items: [], width: 0, visualWidth: 0 };
       }
-      cur.width += (cur.items.length ? sepW : 0) + it.width;
+      const sep = cur.items.length ? sepW : 0;
+      cur.width += sep + it.width;
+      const vw = it.visualWidth != null ? it.visualWidth : it.width;
+      cur.visualWidth += sep + vw;
       cur.items.push(it);
     }
     if (cur.items.length) lines.push(cur);
@@ -220,9 +334,15 @@
 
     const WIDTH_PAD = _measureHost ? 1.02 : 1.08;
     const items = list.map(function (it, idx) {
+      const packW = Math.max(1, measureLabel(it, font) * WIDTH_PAD);
+      const parts = itemPaintParts(it);
+      const canPaint = !!(parts.name || parts.subtitle || parts.price);
       return {
         idx: idx,
-        width: Math.max(1, measureLabel(it, font) * WIDTH_PAD),
+        width: packW,
+        visualWidth: canPaint
+          ? Math.max(1, measureItemPaintedPx(it, font))
+          : packW,
         raw: it,
       };
     });
@@ -478,17 +598,82 @@
     return opts.returnScale ? best : undefined;
   }
 
-  /** Name + optional (sub) + optional + $price — same string the live wrap probe uses. */
+  /** Name + optional (sub) + optional + $price — packing label only (same type size). */
   function itemMeasureLabel(it) {
-    const name = String((it && it.name) || "").trim();
-    if (!name) return "";
-    let label = name;
-    const sub = it && it.subtitle ? String(it.subtitle).trim() : "";
-    if (sub) label += " (" + sub + ")";
-    let price = it && it.price != null ? String(it.price) : "";
-    price = price.replace(/^\+\s*/, "").replace(/^\$/, "").trim();
-    if (price) label += " + $" + price;
+    const parts = itemPaintParts(it);
+    if (!parts.name) return "";
+    let label = parts.name;
+    if (parts.subtitle) label += " (" + parts.subtitle + ")";
+    if (parts.price) label += " + $" + parts.price;
     return label;
+  }
+
+  function paintedRowWidth(row) {
+    if (!row) return 0;
+    let w = 0;
+    const kids = row.children;
+    for (let i = 0; i < kids.length; i++) {
+      w += kids[i].offsetWidth;
+    }
+    if (w < 1) w = row.scrollWidth || row.offsetWidth || 0;
+    return w;
+  }
+
+  /**
+   * After paint: stack wrap rows by actual chip+sep width (subtitle at 0.82em).
+   * Does not regroup items — LPT / greedy stay as packed.
+   */
+  function reorderWrapRowsFullestFirst(body) {
+    if (!body) return;
+    const all = Array.prototype.slice.call(body.children);
+    const rows = [];
+    const breaks = [];
+    const other = [];
+    for (let i = 0; i < all.length; i++) {
+      const el = all[i];
+      if (el.classList && el.classList.contains("wrap-line-row")) {
+        rows.push(el);
+      } else if (
+        el.classList &&
+        (el.classList.contains("wrap-line-break") ||
+          el.classList.contains("wrap-force-break"))
+      ) {
+        breaks.push(el);
+      } else {
+        other.push(el);
+      }
+    }
+    if (rows.length < 2) return;
+    const ranked = rows.map(function (row, i) {
+      return { row: row, width: paintedRowWidth(row), i: i };
+    });
+    ranked.sort(function (a, b) {
+      if (Math.abs(b.width - a.width) > 0.5) return b.width - a.width;
+      return a.i - b.i;
+    });
+    let changed = false;
+    for (let i = 0; i < ranked.length; i++) {
+      if (ranked[i].row !== rows[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;
+    ranked.forEach(function (entry, li) {
+      body.appendChild(entry.row);
+      entry.row.setAttribute("data-line", String(li));
+      if (li < ranked.length - 1 && breaks[li]) {
+        body.appendChild(breaks[li]);
+      }
+    });
+    for (let i = ranked.length - 1; i < breaks.length; i++) {
+      if (breaks[i] && breaks[i].parentNode === body) {
+        body.removeChild(breaks[i]);
+      }
+    }
+    other.forEach(function (el) {
+      body.appendChild(el);
+    });
   }
 
   root.TOKI_BOX_PACK = {
@@ -496,10 +681,12 @@
     getMeasureHost: getMeasureHost,
     detachProbe: detachProbe,
     measureTextPx: measureTextPx,
+    measureItemPaintedPx: measureItemPaintedPx,
     parsePadXY: parsePadXY,
     balanceOptsFromBox: balanceOptsFromBox,
     packLptLines: packLptLines,
     sortPackedLinesFullestFirst: sortPackedLinesFullestFirst,
+    reorderWrapRowsFullestFirst: reorderWrapRowsFullestFirst,
     packGreedyByWidth: packGreedyByWidth,
     balanceItemsIntoLines: balanceItemsIntoLines,
     fitBoxScale: fitBoxScale,

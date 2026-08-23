@@ -1,9 +1,25 @@
 # What’s New
 
-**Last updated:** 2026-08-23 00:32  
+**Last updated:** 2026-08-23 14:49  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-23 14:49 — Wrap rows stack by painted width
+
+**Boards / surface:** Menu Screens — boards 1–3 Footer Boxes (`index.html`–`index3.html`)  
+**Sheet:** none (wrap packing only)  
+**Summary:** Fullest-on-top uses **painted** row width. A parenthetical subtitle (0.82em Regular) no longer makes a short chip like Guacamole (Ramen Seasoned) look like the longest row. LPT / greedy grouping is unchanged.
+
+### Details
+- Name at body size, subtitle at 0.82em Regular, price at Regular.
+- After paint, wrap rows are re-stacked by actual chip+sep width so the lab and the TV board match.
+- Inquiry lab still shares `js/box-pack.js`. Hard-refresh `?v=20260823boxpack8`.
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
 
 ---
 
