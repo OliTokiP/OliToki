@@ -1776,3 +1776,24 @@ img {
     box-shadow: none;
   }
 }
+
+/* Beta indicator badge for Menu Manager (extra scope). Positioned top-right
+   inside device frame when beta catalog or ?beta active. Matches boards. */
+#beta-badge.beta-badge {
+  position: absolute;
+  z-index: 30;
+  top: 12px;
+  right: 12px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 9px 3px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.9;
+  line-height: 1;
+}

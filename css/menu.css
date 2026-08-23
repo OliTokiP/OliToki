@@ -327,6 +327,38 @@ body.fp-alpha-header-hl #logo .logo-eye {
   text-overflow: ellipsis;
 }
 
+/* ---------- Beta indicator badge (top-left corner when beta mode active) ----------
+   Restored per feature request. Small, non-intrusive pill shown only on beta catalog
+   or ?beta param. Uses condensed font to match disclaimer. Positioned left of disclaimer
+   so both top indicators are visible together. Red accent for visibility on any BG.
+   z-index above most content but below HUD. */
+.beta-badge {
+  position: absolute;
+  z-index: 9;
+  top: 18px;
+  left: 28px;
+  background: #e74c3c;
+  color: #ffffff;
+  font-family: var(--toki-font-condensed, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 3.5px 13px 4px;
+  border-radius: 20px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35),
+              inset 0 1px 0 rgba(255,255,255,0.25);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+  opacity: 0.92;
+}
+
+.beta-badge:hover {
+  opacity: 1;
+}
+
 /* ---------- Menu list ----------
    Larger type to fill the black panel (mockup name ~34–40px, desc ~22px)
 */

@@ -6338,6 +6338,20 @@
     return false;
   }
 
+  /** Show restored beta indicator badge on menus when in beta/development mode.
+   * Called after liveSettings populated and on soft refresh. Matches original
+   * beta UX per the feature request. */
+  function showBetaBadgeIfNeeded() {
+    const badge = document.getElementById("beta-badge");
+    if (!badge) return;
+    const isBeta = urlWantsBeta() ||
+      !!(liveSettings && liveSettings.dataSource && /beta/i.test(liveSettings.dataSource));
+    badge.hidden = !isBeta;
+    if (isBeta) {
+      tokiInfo("Beta mode active — indicator badge shown (top-left)");
+    }
+  }
+
   const BETA_COPY_SHEET_ID = "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8";
 
   function catalogBetaEntry(catalog) {
@@ -6476,6 +6490,8 @@
       "sheet=" + (liveSettings.sheetId || "?"),
       urlWantsBeta() ? "url=beta" : "url=live"
     );
+
+    showBetaBadgeIfNeeded();
   }
 
   async function fetchSettingsDebuggerPublic() {
@@ -8960,7 +8976,7 @@
       if (parsed._fingerprint) delete parsed._fingerprint;
       if (stale()) return "stale";
       applyParsedMenu(parsed);
-      if (isEncoreSegmentNow() && _encoreSolidBg) {
+      if (isEncoreSegmentNow()) {
         const g = document.getElementById("galaxy") || els.galaxy;
         if (g) g.style.backgroundColor = encoreBackgroundHex();
       }
@@ -9031,6 +9047,8 @@
             betaErr && betaErr.message ? betaErr.message : betaErr
           );
         }
+
+        showBetaBadgeIfNeeded();
 
         captureLastPaintFromConfig(parsed && parsed.themeName); // successful live (google) paint → remember for next boot
         dataSource = "google-sheet";

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "125b6c0",
-  "hashFull": "125b6c00b09f80772ed862806e8fabf41193b072",
-  "subject": "QA: 2026-08-23 Clicking link in bug opens empty white \u201csuite\u201d window before opening the link (pass 1)"
+  "hash": "7536d63",
+  "hashFull": "7536d63ced454761646702da33b83b8c13955d2d",
+  "subject": "QA: 2026-08-19 Encore Background Screen doesn't change when user updates from menu manager (require restart off) (pass 2)"
 };

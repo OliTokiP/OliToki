@@ -244,6 +244,16 @@
     return urlHasBetaFlag() || isBetaCatalog();
   }
 
+  function showManagerBetaBadge() {
+    const badge = document.getElementById("beta-badge");
+    if (!badge) return;
+    const show = managerBetaFeatures();
+    badge.hidden = !show;
+    if (show) {
+      console.log("%cManager beta indicator badge shown", "color:#e74c3c;font-weight:700");
+    }
+  }
+
   function withBetaFlag(href) {
     var s = String(href || "").trim();
     if (!s) return s;
@@ -278,6 +288,7 @@
       sessionStorage.setItem(CATALOG_STORAGE_KEY, id || "");
     } catch (e) {}
     setBetaQuery(id === "beta");
+    showManagerBetaBadge();
   }
 
   function editorSourceId() {
@@ -4240,6 +4251,8 @@
       state.draft.presentationSpeed = 0;
       state.holdGrid = true;
     }
+
+    showManagerBetaBadge();
   }
 
   function readHash() {
