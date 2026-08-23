@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5bbd722",
-  "hashFull": "5bbd7228084c6b425076950c57b5340710623533",
-  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 8)"
+  "hash": "946aacc",
+  "hashFull": "946aacca1c89d433fa53bac506dc4b6360a5bf79",
+  "subject": "QA: 2026-08-23 Clicking link in bug opens empty white \u201csuite\u201d window before opening the link (pass 2)"
 };
