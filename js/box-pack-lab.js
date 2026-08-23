@@ -1,100 +1,24 @@
 /**
- * Inquiry lab UI for footer wrap packing.
- * Packing / fit live in js/box-pack.js (same module the TV boards load).
+ * Inquiry lab for footer wrap packing. Snapshot of the live scorer in menu.js
+ * (balanceItemsIntoLines / packLptLines / packGreedyByWidth) plus a side-by-side
+ * width compare. Does not drive the TV boards unless you open this page.
  */
 (function () {
   "use strict";
 
-  var Pack = window.TOKI_BOX_PACK;
-  if (!Pack) {
-    console.error("TOKI_BOX_PACK missing — load js/box-pack.js first");
-    return;
-  }
-
-  var KINDS = {
-    protein: {
-      id: "protein",
-      label: "Proteins",
-      gid: "1420775786",
-      boxId: "protein-box",
-      bodyId: "protein-body",
-      wrapItemClass: "protein-wrap-item",
-      sepClass: "protein-wrap-sep",
-      breakClass: "protein-line-break",
-      fallback: [
-        { name: "Soy Garlic Chicken", price: "0.50" },
-        { name: "Bulgogi Beef", price: "2.95" },
-        { name: "Fried Spam", price: "1.75" },
-        { name: "Chipotle Pulled Pork", price: "1.75" },
-        { name: "Crispy Tofu", price: "0.45" },
-        { name: "Fried Egg", price: "1.99" },
-      ],
-    },
-    sauces: {
-      id: "sauces",
-      label: "Sauces",
-      gid: "1630545949",
-      boxId: "sauces-box",
-      bodyId: "sauces-body",
-      wrapItemClass: "sauce-item",
-      sepClass: "sauce-sep",
-      breakClass: "sauce-line-break",
-      fallback: [
-        { name: "BBQ" },
-        { name: "Soy Vinegar" },
-        { name: "House Teriyaki" },
-        { name: "Ketchup" },
-        { name: "Ranch" },
-        { name: "Sriracha" },
-        { name: "Guacamole", subtitle: "Ramen Seasoned" },
-        { name: "Ai-Oli" },
-        { name: "Spicy Toki" },
-        { name: "GF Creamy Sesame" },
-      ],
-    },
-    drinks: {
-      id: "drinks",
-      label: "Drinks",
-      gid: "1145721787",
-      boxId: "footer-drinks-box",
-      bodyId: "footer-drinks-body",
-      wrapItemClass: "footer-drink-item",
-      sepClass: "footer-drink-sep",
-      breakClass: "footer-drink-line-break",
-      fallback: [
-        { name: "Coca-Cola" },
-        { name: "Diet Coke" },
-        { name: "Sprite" },
-        { name: "Fanta" },
-        { name: "Shikye" },
-        { name: "Soy Milk" },
-        { name: "Ramune" },
-      ],
-    },
-    veggies: {
-      id: "veggies",
-      label: "Veggies",
-      gid: "640368705",
-      boxId: "veggies-box",
-      bodyId: "veggies-body",
-      wrapItemClass: "veggie-item",
-      sepClass: "veggie-sep",
-      breakClass: "veggie-line-break",
-      fallback: [
-        { name: "Veggie Stirfry Mix" },
-        { name: "Fresh Broccoli" },
-        { name: "Mixed Greens" },
-        { name: "Lettuce" },
-        { name: "Shredded Carrot" },
-        { name: "Tangy Cucumbers" },
-        { name: "Vegan Kimchi" },
-        { name: "Onion-Cilantro Mix" },
-        { name: "Corn" },
-        { name: "Crispy Corn", subtitle: "Seasoned" },
-        { name: "Black Beans" },
-      ],
-    },
-  };
+  var VEGGIES_FALLBACK = [
+    { name: "Veggie Stirfry Mix" },
+    { name: "Fresh Broccoli" },
+    { name: "Mixed Greens" },
+    { name: "Lettuce" },
+    { name: "Shredded Carrot" },
+    { name: "Tangy Cucumbers" },
+    { name: "Vegan Kimchi" },
+    { name: "Onion-Cilantro Mix" },
+    { name: "Corn" },
+    { name: "Crispy Corn", subtitle: "Seasoned" },
+    { name: "Black Beans" },
+  ];
 
   var WIDTHS = [
     { id: "one", label: "One box · 1082", width: 1082, className: "footer-one" },
@@ -103,137 +27,316 @@
     { id: "minor", label: "Two-box minor · 299", width: 299, className: "footer-two-minor" },
   ];
 
-  var _catalog = {
-    protein: { items: KINDS.protein.fallback.slice(), title: "Proteins", source: "fallback" },
-    sauces: { items: KINDS.sauces.fallback.slice(), title: "Sauces", source: "fallback" },
-    drinks: { items: KINDS.drinks.fallback.slice(), title: "Drinks", source: "fallback" },
-    veggies: { items: KINDS.veggies.fallback.slice(), title: "Veggies", source: "fallback" },
-  };
-  var _kind = "veggies";
-  var _font = "poppins";
-  var _count = 11;
+  var _probe = null;
+  var _measureHost = null;
+  var _items = VEGGIES_FALLBACK.slice();
+  var _count = VEGGIES_FALLBACK.length;
   var _mode = "auto";
   var _overlay = true;
 
-  function applyFont(name) {
-    _font = name === "roboto" ? "roboto" : "poppins";
-    document.documentElement.setAttribute("data-system-font", _font);
-    document.body.setAttribute("data-system-font", _font);
-  }
-
-  function currentKind() {
-    return KINDS[_kind] || KINDS.veggies;
-  }
-
-  function currentItems(kindId) {
-    var cat = _catalog[kindId || _kind];
-    var list = (cat && cat.items) || [];
-    return list.slice(0, Math.max(1, Math.min(list.length, _count)));
-  }
-
-  function sliderMax() {
-    if (_kind === "all") {
-      return Math.max(
-        1,
-        _catalog.protein.items.length,
-        _catalog.sauces.items.length,
-        _catalog.drinks.items.length,
-        _catalog.veggies.items.length
-      );
+  function measureTextPx(text, font) {
+    var str = String(text || "");
+    var host = _measureHost || document.body;
+    if (!_probe) {
+      _probe = document.createElement("span");
+      _probe.setAttribute("aria-hidden", "true");
+      _probe.className = "veggie-item wrap-item";
+      _probe.style.cssText =
+        "position:absolute;left:-99999px;top:0;white-space:nowrap;" +
+        "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;";
     }
-    return Math.max(1, (_catalog[_kind] && _catalog[_kind].items.length) || 1);
+    if (_probe.parentNode !== host) {
+      host.appendChild(_probe);
+    }
+    var face =
+      (document.documentElement.getAttribute("data-system-font") || "") ===
+      "poppins"
+        ? "Poppins, Roboto, sans-serif"
+        : "Roboto Condensed, Roboto, sans-serif";
+    var fontStr = font || "700 30px " + face;
+    if (font) {
+      _probe.style.font = fontStr;
+    } else {
+      _probe.style.font = "";
+    }
+    if (
+      (document.documentElement.getAttribute("data-system-font") || "") ===
+      "poppins"
+    ) {
+      _probe.style.fontFamily = "Poppins, Roboto, sans-serif";
+    }
+    if (/condensed/i.test(fontStr)) {
+      _probe.style.letterSpacing = "-0.015em";
+    } else if (!font && host !== document.body) {
+      _probe.style.letterSpacing = "";
+    } else {
+      _probe.style.letterSpacing = "normal";
+    }
+    _probe.textContent = str;
+    var w = _probe.offsetWidth;
+    return w > 0 ? w : str.length * 10;
   }
 
-  function footerPriceClean(price) {
-    if (price == null || price === "") return "";
-    return String(price).replace(/^\+\s*/, "").replace(/^\$/, "").trim();
-  }
-
-  function typoModeClass(items) {
-    var list = items || [];
-    var best = null;
-    var bestScore = -1;
-    for (var i = 0; i < list.length; i++) {
-      var it = list[i];
-      if (!it || !it.name) continue;
-      var hasSub = !!(it.subtitle && String(it.subtitle).trim());
-      var hasPrice = !!footerPriceClean(it.price);
-      var score = 1 + (hasSub ? 1 : 0) + (hasPrice ? 1 : 0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = { hasSub: hasSub, hasPrice: hasPrice };
+  function packLptLines(items, lineCount, sepW) {
+    var lines = [];
+    var i;
+    for (i = 0; i < lineCount; i++) lines.push({ items: [], width: 0 });
+    var sorted = items.slice().sort(function (a, b) {
+      if (b.width !== a.width) return b.width - a.width;
+      return a.idx - b.idx;
+    });
+    for (var s = 0; s < sorted.length; s++) {
+      var it = sorted[s];
+      var best = lines[0];
+      for (i = 1; i < lines.length; i++) {
+        if (lines[i].width < best.width) best = lines[i];
       }
+      best.width += it.width + (best.items.length ? sepW : 0);
+      best.items.push(it);
     }
-    if (!best || bestScore <= 1) return "typo-name";
-    if (best.hasSub && best.hasPrice) return "typo-name-sub-price";
-    if (best.hasPrice) return "typo-name-price";
-    if (best.hasSub) return "typo-name-sub";
-    return "typo-name";
-  }
-
-  function appendItemParts(parent, it) {
-    var nameEl = document.createElement("span");
-    nameEl.className = "box-item-name";
-    nameEl.textContent = it.name || "";
-    parent.appendChild(nameEl);
-    if (it.subtitle) {
-      var sub = document.createElement("span");
-      sub.className = "item-paren-sub box-item-sub";
-      sub.textContent = " (" + it.subtitle + ")";
-      parent.appendChild(sub);
-    }
-    var cleaned = footerPriceClean(it.price);
-    if (cleaned) {
-      var price = document.createElement("span");
-      price.className = "box-item-price";
-      price.textContent = " + $" + cleaned;
-      parent.appendChild(price);
-    }
-  }
-
-  function paintWrapBody(body, kind, items, packed) {
-    body.innerHTML = "";
-    body.style.setProperty("--box-scale", "1");
-    body.classList.remove(
-      "lines-1",
-      "lines-2",
-      "lines-3",
-      "lines-4",
-      "lines-many",
-      "typo-name",
-      "typo-name-price",
-      "typo-name-sub",
-      "typo-name-sub-price"
-    );
-    body.classList.add("layout-wrap", "align-center", typoModeClass(items));
-    var lc = packed.lines.length || 1;
-    body.classList.add(lc >= 5 ? "lines-many" : "lines-" + lc);
-    body.dataset.lineCount = String(lc);
-    packed.lines.forEach(function (line, li) {
-      var row = document.createElement("span");
-      row.className = "wrap-line-row";
-      row.setAttribute("data-line", String(li));
-      line.forEach(function (it, i) {
-        var span = document.createElement("span");
-        span.className = kind.wrapItemClass + " wrap-item";
-        appendItemParts(span, it);
-        row.appendChild(span);
-        if (i < line.length - 1) {
-          var sep = document.createElement("span");
-          sep.className = kind.sepClass + " wrap-sep";
-          sep.textContent = " · ";
-          sep.setAttribute("aria-hidden", "true");
-          row.appendChild(sep);
-        }
+    lines.forEach(function (line) {
+      line.items.sort(function (a, b) {
+        return a.idx - b.idx;
       });
-      body.appendChild(row);
-      if (li < packed.lines.length - 1) {
-        var br = document.createElement("span");
-        br.className = kind.breakClass + " wrap-line-break";
-        br.setAttribute("aria-hidden", "true");
-        body.appendChild(br);
+      line.width = 0;
+      for (i = 0; i < line.items.length; i++) {
+        line.width += line.items[i].width + (i ? sepW : 0);
       }
     });
+    sortPackedLinesFullestFirst(lines);
+    return lines.filter(function (ln) {
+      return ln.items.length > 0;
+    });
+  }
+
+  function sortPackedLinesFullestFirst(lines) {
+    lines.sort(function (a, b) {
+      if (!a.items.length) return 1;
+      if (!b.items.length) return -1;
+      if (Math.abs(b.width - a.width) > 0.5) return b.width - a.width;
+      return a.items[0].idx - b.items[0].idx;
+    });
+    return lines;
+  }
+
+  function packGreedyByWidth(items, sepW, boxW) {
+    var lines = [];
+    var cur = { items: [], width: 0 };
+    var limit = Math.max(1, boxW);
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var add = it.width + (cur.items.length ? sepW : 0);
+      if (cur.items.length && cur.width + add > limit) {
+        lines.push(cur);
+        cur = { items: [], width: 0 };
+      }
+      cur.width += (cur.items.length ? sepW : 0) + it.width;
+      cur.items.push(it);
+    }
+    if (cur.items.length) lines.push(cur);
+    sortPackedLinesFullestFirst(lines);
+    return lines;
+  }
+
+  function balanceItemsIntoLines(rawItems, opts) {
+    var list = rawItems || [];
+    var n = list.length;
+    if (!n) return { lines: [], meta: {}, candidates: [] };
+    if (n === 1) {
+      return {
+        lines: [list.slice()],
+        meta: { tag: "single", L: 1, fill: 1, typeScore: 1 },
+        candidates: [],
+      };
+    }
+    var o = opts || {};
+    var font = o.font || "700 29.44px Poppins, Roboto, sans-serif";
+    var sepText = o.sepText != null ? o.sepText : " · ";
+    var sepW = measureTextPx(sepText, font);
+    var boxW = Math.max(1, o.containerWidth || 280);
+    var boxH = Math.max(1, o.containerHeight || 119);
+    var lineH = Math.max(8, o.lineHeight || 37);
+    var maxLines = Math.min(n, Math.max(1, o.maxLines || 8));
+    var WIDTH_PAD = 1.0;
+    var items = list.map(function (it, idx) {
+      var label = it.label || it.name || "";
+      if (!it.label && it.subtitle) label += " (" + it.subtitle + ")";
+      var w =
+        typeof o.measureLabel === "function"
+          ? o.measureLabel(it)
+          : measureTextPx(label, font);
+      return {
+        idx: idx,
+        width: Math.max(1, w * WIDTH_PAD),
+        raw: it,
+      };
+    });
+    var bestLines = null;
+    var bestScore = -Infinity;
+    var bestType = -Infinity;
+    var bestTag = "";
+    var bestFill = 0;
+    var candidates = [];
+    var forceL =
+      o.forceLines > 0
+        ? Math.min(maxLines, Math.max(1, Math.round(Number(o.forceLines))))
+        : 0;
+
+    function considerPacked(packed, tag) {
+      if (!packed || !packed.length) return;
+      var maxW = 0;
+      var minW = Infinity;
+      var sumW = 0;
+      var i;
+      for (i = 0; i < packed.length; i++) {
+        if (packed[i].width > maxW) maxW = packed[i].width;
+        if (packed[i].width < minW) minW = packed[i].width;
+        sumW += packed[i].width;
+      }
+      if (maxW < 1) maxW = 1;
+      if (minW === Infinity) minW = maxW;
+      var scaleW = boxW / maxW;
+      var scaleH = boxH / (packed.length * lineH);
+      var balance = minW / maxW;
+      var fill = Math.min(1, maxW / boxW);
+      var avgFill = Math.min(1, sumW / (packed.length * boxW));
+      var typeScore = Math.min(scaleW, scaleH);
+      var L = packed.length;
+      var score =
+        typeScore * (0.58 + 0.12 * balance + 0.3 * fill) - L * 0.008;
+      var lines = packed.map(function (ln) {
+        return ln.items.map(function (it) {
+          return it.raw;
+        });
+      });
+      candidates.push({
+        tag: tag,
+        L: L,
+        score: score,
+        typeScore: typeScore,
+        fill: fill,
+        avgFill: avgFill,
+        balance: balance,
+        maxW: maxW,
+        minW: minW,
+        lines: lines,
+      });
+      if (score > bestScore) {
+        bestScore = score;
+        bestType = typeScore;
+        bestLines = lines;
+        bestTag = tag;
+        bestFill = fill;
+      }
+    }
+
+    if (forceL) {
+      considerPacked(packLptLines(items, forceL, sepW), "lpt-" + forceL);
+    } else {
+      for (var L = 1; L <= maxLines; L++) {
+        considerPacked(packLptLines(items, L, sepW), "lpt-" + L);
+      }
+      considerPacked(packGreedyByWidth(items, sepW, boxW * 0.96), "greedy");
+      considerPacked(packGreedyByWidth(items, sepW, boxW * 0.88), "greedy-tight");
+      if (candidates.length && bestType > 0) {
+        var pick = null;
+        for (var i = 0; i < candidates.length; i++) {
+          var c = candidates[i];
+          if (c.typeScore < bestType * 0.92) continue;
+          if (
+            !pick ||
+            c.fill > pick.fill + 0.03 ||
+            (Math.abs(c.fill - pick.fill) <= 0.03 && c.L < pick.L) ||
+            (Math.abs(c.fill - pick.fill) <= 0.03 &&
+              c.L === pick.L &&
+              c.score > pick.score)
+          ) {
+            pick = c;
+          }
+        }
+        if (pick) {
+          bestLines = pick.lines;
+          bestScore = pick.score;
+          bestTag = (pick.tag || "?") + "*";
+          bestFill = pick.fill;
+          bestType = pick.typeScore;
+        }
+      }
+    }
+
+    if (!bestLines) bestLines = [list.slice()];
+    return {
+      lines: bestLines,
+      meta: {
+        tag: bestTag,
+        L: bestLines.length,
+        fill: bestFill,
+        typeScore: bestType,
+        score: bestScore,
+        boxW: Math.round(boxW),
+      },
+      candidates: candidates,
+    };
+  }
+
+  function parsePadXY(cs) {
+    return {
+      x: (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0),
+      y: (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0),
+    };
+  }
+
+  function fitBoxScale(el, minS, maxS) {
+    function fits(scale) {
+      el.style.setProperty("--box-scale", String(scale));
+      void el.offsetHeight;
+      if (el.scrollHeight > el.clientHeight + 1) return false;
+      var pad = parsePadXY(getComputedStyle(el));
+      var contentW = Math.max(1, el.clientWidth - pad.x);
+      for (var i = 0; i < el.children.length; i++) {
+        var child = el.children[i];
+        if (child.classList.contains("box-pack-lab-waste")) continue;
+        if (child.classList.contains("wrap-line-break")) continue;
+        if (child.classList.contains("wrap-line-row")) {
+          var natural = 0;
+          var k;
+          for (k = 0; k < child.children.length; k++) {
+            natural += child.children[k].offsetWidth;
+          }
+          if (natural > contentW + 1) return false;
+          continue;
+        }
+        if (child.offsetWidth > contentW + 1) return false;
+      }
+      return true;
+    }
+    var lo = minS;
+    var hi = maxS;
+    var best = minS;
+    if (!fits(lo)) {
+      var s = lo;
+      while (s > 0.3 && !fits(s)) s -= 0.02;
+      best = Math.max(0.3, s);
+      el.style.setProperty("--box-scale", String(best));
+      return best;
+    }
+    for (var i = 0; i < 24; i++) {
+      var mid = (lo + hi) / 2;
+      if (fits(mid)) {
+        best = mid;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    best = Math.max(minS, best * 0.97);
+    var guard = 0;
+    while (!fits(best) && best > minS && guard < 40) {
+      best -= 0.015;
+      guard++;
+    }
+    fits(best);
+    return best;
   }
 
   function paintWaste(body) {
@@ -276,7 +379,8 @@
       var bottom = -Infinity;
       elsLine.forEach(function (el) {
         if (el.classList.contains("wrap-line-row")) {
-          for (var k = 0; k < el.children.length; k++) {
+          var k;
+          for (k = 0; k < el.children.length; k++) {
             lineW += el.children[k].offsetWidth;
           }
         } else {
@@ -313,314 +417,205 @@
     });
   }
 
-  function syncMeasureShell(widthPx) {
-    var strip = document.getElementById("footer-boxes");
-    var keys = Object.keys(KINDS);
-    keys.forEach(function (id) {
-      var conf = KINDS[id];
-      var box = document.getElementById(conf.boxId);
-      if (!box) return;
-      var svg = box.querySelector(".info-box-shell");
-      if (svg) {
-        svg.setAttribute("viewBox", "0 0 " + widthPx + " 197");
-        var outer = svg.querySelector(".shell-outer");
-        var inner = svg.querySelector(".shell-body");
-        if (outer) outer.setAttribute("width", String(widthPx));
-        if (inner) inner.setAttribute("width", String(Math.max(1, widthPx - 8)));
+  function renderBox(slot, items, packed) {
+    var body = slot.querySelector(".info-box-body");
+    body.innerHTML = "";
+    body.style.setProperty("--box-scale", "1");
+    body.classList.remove("lines-1", "lines-2", "lines-3", "lines-4", "lines-many");
+    var lc = packed.lines.length || 1;
+    body.classList.add(lc >= 5 ? "lines-many" : "lines-" + lc);
+    packed.lines.forEach(function (line, li) {
+      var row = document.createElement("span");
+      row.className = "wrap-line-row";
+      row.setAttribute("data-line", String(li));
+      line.forEach(function (it, i) {
+        var span = document.createElement("span");
+        span.className = "veggie-item wrap-item";
+        var name = document.createElement("span");
+        name.className = "box-item-name";
+        name.textContent = it.name || "";
+        span.appendChild(name);
+        if (it.subtitle) {
+          var sub = document.createElement("span");
+          sub.className = "item-paren-sub box-item-sub";
+          sub.textContent = " (" + it.subtitle + ")";
+          span.appendChild(sub);
+        }
+        row.appendChild(span);
+        if (i < line.length - 1) {
+          var sep = document.createElement("span");
+          sep.className = "veggie-sep wrap-sep";
+          sep.textContent = " · ";
+          sep.setAttribute("aria-hidden", "true");
+          row.appendChild(sep);
+        }
+      });
+      body.appendChild(row);
+      if (li < packed.lines.length - 1) {
+        var br = document.createElement("span");
+        br.className = "veggie-line-break wrap-line-break";
+        br.setAttribute("aria-hidden", "true");
+        body.appendChild(br);
       }
     });
-    strip.style.width = widthPx + "px";
-    strip.style.minWidth = widthPx + "px";
-    strip.style.maxWidth = "none";
-    strip.className = "footer-one";
-    void strip.offsetWidth;
-  }
-
-  function showMeasureKind(kindId) {
-    Object.keys(KINDS).forEach(function (id) {
-      var box = document.getElementById(KINDS[id].boxId);
-      if (box) box.hidden = id !== kindId;
-    });
-  }
-
-  function buildDisplayBox(kind, widthPx, title) {
-    var wrap = document.createElement("div");
-    wrap.className = "info-box";
-    wrap.setAttribute("data-box-kind", kind.id);
-    if (widthPx === 768) wrap.classList.add("footer-major");
-    if (widthPx === 299) wrap.classList.add("footer-minor");
-    wrap.innerHTML =
-      '<svg class="info-box-shell" viewBox="0 0 ' +
-      widthPx +
-      ' 197" preserveAspectRatio="none" aria-hidden="true">' +
-      '<rect class="shell-outer" width="' +
-      widthPx +
-      '" height="197" />' +
-      '<rect class="shell-body" x="4" y="64" width="' +
-      (widthPx - 8) +
-      '" height="129" /></svg>' +
-      '<div class="info-box-header"><span class="info-box-title"></span></div>' +
-      '<div class="info-box-body layout-wrap align-center"></div>';
-    wrap.querySelector(".info-box-title").textContent = title || kind.label;
-    return wrap;
-  }
-
-  function packKindAtWidth(kindId, widthPx, items) {
-    var kind = KINDS[kindId];
-    var liveBox = document.getElementById(kind.boxId);
-    var liveBody = document.getElementById(kind.bodyId);
-    showMeasureKind(kindId);
-    syncMeasureShell(widthPx);
-    liveBody.style.setProperty("--box-scale", "1");
-    void liveBody.offsetWidth;
-    var measured = items.map(function (it) {
-      return Object.assign({ label: Pack.itemMeasureLabel(it) }, it);
-    });
-    Pack.setMeasureHost(liveBody);
-    var packed;
-    try {
-      var opts = Pack.balanceOptsFromBox(liveBody, {
-        sepText: " · ",
-        maxLines: 8,
-        forceLines: _mode === "3" ? 3 : _mode === "4" ? 4 : 0,
-      });
-      var lines = Pack.balanceItemsIntoLines(measured, opts);
-      packed = {
-        lines: lines,
-        meta: Pack.balanceItemsIntoLines.lastMeta || {},
-        candidates: [],
-      };
-    } finally {
-      Pack.setMeasureHost(null);
-      Pack.detachProbe();
-    }
-    paintWrapBody(liveBody, kind, items, packed);
-    var isDense = kindId === "sauces" || kindId === "drinks";
-    var scale = Pack.fitBoxScale(liveBody, isDense ? 0.45 : 0.5, isDense ? 2.4 : 2.2, {
-      checkChildWidth: true,
-      shrinkFactor: isDense ? 0.995 : 0.97,
-      returnScale: true,
-    });
-    packed.scale = scale;
-    packed.liveBox = liveBox;
-    packed.liveBody = liveBody;
-    return packed;
-  }
-
-  function copyPackedToSlot(slot, packed, kind, widthPx, title) {
-    var strip = slot.querySelector(".lab-strip");
-    strip.innerHTML = "";
-    var display = buildDisplayBox(kind, widthPx, title);
-    var displayBody = display.querySelector(".info-box-body");
-    displayBody.className = packed.liveBody.className;
-    displayBody.style.cssText = packed.liveBody.style.cssText;
-    displayBody.innerHTML = packed.liveBody.innerHTML;
-    strip.appendChild(display);
-    paintWaste(displayBody);
+    var scale = fitBoxScale(body, 0.5, 2.2);
+    paintWaste(body);
     var meta = packed.meta || {};
     var cap = slot.querySelector(".lab-meta");
     cap.textContent =
-      (meta.L || packed.lines.length) +
+      meta.L +
       " lines · " +
       (meta.tag || "?") +
       " · scale " +
-      (packed.scale != null ? Number(packed.scale).toFixed(3) : "?") +
+      scale.toFixed(3) +
       " · longest-row fill " +
       (meta.fill ? Math.round(meta.fill * 100) + "%" : "?") +
       " · boxW " +
-      (meta.boxW || widthPx);
+      (meta.boxW || "?");
+    return packed.candidates;
+  }
+
+  function balanceOptsFromBody(el) {
+    el.style.setProperty("--box-scale", "1");
+    void el.offsetWidth;
+    var cs = getComputedStyle(el);
+    var pad = parsePadXY(cs);
+    var fontSize = parseFloat(cs.fontSize) || 30;
+    var lineHeight =
+      cs.lineHeight && cs.lineHeight !== "normal"
+        ? parseFloat(cs.lineHeight)
+        : fontSize * 1.25;
+    var rowGap = parseFloat(cs.rowGap) || 0;
+    var innerW = Math.max(1, (el.clientWidth || 0) - pad.x);
+    var innerH = Math.max(1, (el.clientHeight || 0) - pad.y);
+    return {
+      font:
+        (cs.fontStyle !== "normal" ? cs.fontStyle + " " : "") +
+        (cs.fontWeight || "700") +
+        " " +
+        cs.fontSize +
+        " " +
+        cs.fontFamily,
+      sepText: " · ",
+      containerWidth: Math.max(1, innerW * 0.98),
+      containerHeight: innerH,
+      lineHeight: lineHeight + rowGap,
+      maxLines: 8,
+    };
+  }
+
+  function packForSlot(slot, items, widthPx) {
+    var strip = slot.querySelector(".lab-strip");
+    var body = slot.querySelector(".info-box-body");
+    var liveBody = document.getElementById("veggies-body");
+    strip.style.width = widthPx + "px";
+    strip.style.minWidth = widthPx + "px";
+    strip.style.maxWidth = "none";
+    body.style.setProperty("--box-scale", "1");
+    void strip.offsetWidth;
+    if (liveBody) {
+      liveBody.style.setProperty("--box-scale", "1");
+      void liveBody.offsetWidth;
+    }
+    if (widthPx === 768 && liveBody) body = liveBody;
+    var opts = balanceOptsFromBody(body);
+    opts.forceLines = _mode === "3" ? 3 : _mode === "4" ? 4 : 0;
+    opts.measureLabel = function (it) {
+      var label = it.name || "";
+      if (it.subtitle) label += " (" + it.subtitle + ")";
+      return measureTextPx(label, null);
+    };
+    _measureHost = body;
+    var packed = balanceItemsIntoLines(items, opts);
+    _measureHost = null;
+    if (_probe && _probe.parentNode) _probe.parentNode.removeChild(_probe);
     return packed;
   }
 
-  function renderTable(host, packed, kindLabel, widthPx) {
-    if (!host) return;
-    var kind = currentKind();
-    var liveBody = document.getElementById(kind.bodyId);
-    var items = currentItems(_kind === "all" ? "veggies" : _kind);
-    showMeasureKind(kind.id);
-    syncMeasureShell(widthPx);
-    liveBody.style.setProperty("--box-scale", "1");
-    void liveBody.offsetWidth;
-    var measured = items.map(function (it) {
-      return Object.assign({ label: Pack.itemMeasureLabel(it) }, it);
-    });
-    var candidates = [];
-    Pack.setMeasureHost(liveBody);
-    try {
-      var opts = Pack.balanceOptsFromBox(liveBody, {
-        sepText: " · ",
-        maxLines: 8,
-        forceLines: 0,
-      });
-      Pack.balanceItemsIntoLines(measured, opts);
-      // Re-run consider list: packer doesn't export candidates. Rebuild via force L.
-      var L;
-      for (L = 1; L <= Math.min(8, items.length); L++) {
-        var forced = Pack.balanceOptsFromBox(liveBody, {
-          sepText: " · ",
-          maxLines: 8,
-          forceLines: L,
-        });
-        Pack.balanceItemsIntoLines(measured, forced);
-        var m = Pack.balanceItemsIntoLines.lastMeta || {};
-        candidates.push({
-          tag: "lpt-" + L,
-          L: m.L,
-          typeScore: m.typeScore || 0,
-          fill: m.fill || 0,
-          score: m.score || 0,
-        });
+  function renderAll() {
+    var items = _items.slice(0, _count);
+    var tableHost = document.getElementById("lab-table");
+    WIDTHS.forEach(function (w) {
+      var slot = document.getElementById("slot-" + w.id);
+      var packed = packForSlot(slot, items, w.width);
+      var cands = renderBox(slot, items, packed);
+      if (w.id === "major") {
+        renderTable(tableHost, cands, packed.meta);
       }
-    } finally {
-      Pack.setMeasureHost(null);
-      Pack.detachProbe();
-    }
-    var picked = packed.meta || {};
-    var rows = candidates
+    });
+    document.getElementById("lab-count-n").textContent = String(_count);
+  }
+
+  function renderTable(host, candidates, picked) {
+    if (!host) return;
+    var rows = (candidates || [])
       .slice()
       .sort(function (a, b) {
         return b.score - a.score;
       })
       .map(function (c) {
-        var on =
-          c.tag === String(picked.tag || "").replace(/\*$/, "") ||
+        var on = c.tag === String(picked.tag || "").replace(/\*$/, "") ||
           c.tag + "*" === picked.tag;
         return (
-          '<tr class="' +
+          "<tr class=\"" +
           (on ? "is-pick" : "") +
-          '"><td>' +
+          "\"><td>" +
           c.tag +
           "</td><td>" +
           c.L +
           "</td><td>" +
-          Number(c.typeScore).toFixed(3) +
+          c.typeScore.toFixed(3) +
           "</td><td>" +
           Math.round(c.fill * 100) +
           "%</td><td>" +
-          Number(c.score).toFixed(3) +
+          Math.round(c.avgFill * 100) +
+          "%</td><td>" +
+          Math.round(c.balance * 100) +
+          "%</td><td>" +
+          c.score.toFixed(3) +
           "</td></tr>"
         );
       });
     host.innerHTML =
-      "<table><thead><tr><th>pack</th><th>L</th><th>type</th><th>longest fill</th><th>score</th></tr></thead><tbody>" +
+      "<table><thead><tr><th>pack</th><th>L</th><th>type</th><th>longest fill</th><th>avg fill</th><th>even</th><th>score</th></tr></thead><tbody>" +
       rows.join("") +
       "</tbody></table>" +
-      '<p class="note">Table is LPT line-counts for ' +
-      kindLabel +
-      " at " +
-      widthPx +
-      "px, using js/box-pack.js (same as the boards). Starred Auto pick may be greedy*. type = min(width scale, height scale).</p>";
+      "<p class=\"note\">Table is the 768 major slot (Handhelds Veggies today). Starred tag = live 8% re-pick. type = min(width scale, height scale). even = shortest/longest row.</p>";
   }
 
-  function renderAll() {
-    document.getElementById("lab-count-n").textContent = String(_count);
-    var widths = document.getElementById("view-widths");
-    var kinds = document.getElementById("view-kinds");
-    if (_kind === "all") {
-      widths.hidden = true;
-      kinds.hidden = false;
-      ["protein", "sauces", "drinks", "veggies"].forEach(function (id) {
-        var slot = document.getElementById("slot-kind-" + id);
-        var packed = packKindAtWidth(id, 768, currentItems(id));
-        copyPackedToSlot(slot, packed, KINDS[id], 768, _catalog[id].title);
-      });
-      var vegPacked = packKindAtWidth("veggies", 768, currentItems("veggies"));
-      renderTable(document.getElementById("lab-table"), vegPacked, "Veggies", 768);
-      return;
-    }
-    widths.hidden = false;
-    kinds.hidden = true;
-    var kind = currentKind();
-    var items = currentItems(kind.id);
-    var tablePacked = null;
-    WIDTHS.forEach(function (w) {
-      var slot = document.getElementById("slot-" + w.id);
-      var packed = packKindAtWidth(kind.id, w.width, items);
-      copyPackedToSlot(slot, packed, kind, w.width, _catalog[kind.id].title);
-      if (w.id === "major") tablePacked = packed;
-    });
-    renderTable(
-      document.getElementById("lab-table"),
-      tablePacked || { meta: {} },
-      kind.label,
-      768
-    );
-  }
-
-  function parseRevisedBoxCsv(text) {
+  function parseVeggiesCsv(text) {
     var lines = String(text || "").split(/\r?\n/);
-    var title = "";
-    var items = [];
+    var start = -1;
     var i;
-    var mode = "";
     for (i = 0; i < lines.length; i++) {
+      if (/^item,/i.test(lines[i]) || /^item\t/i.test(lines[i])) {
+        start = i + 1;
+        break;
+      }
+    }
+    if (start < 0) return null;
+    var out = [];
+    for (i = start; i < lines.length; i++) {
       var raw = lines[i];
-      if (!raw) continue;
-      if (/^settings$/i.test(raw)) {
-        mode = "settings-h";
-        continue;
-      }
-      if (/^inventory$/i.test(raw)) {
-        mode = "inv-h";
-        continue;
-      }
+      if (!raw || /^settings$/i.test(raw) || /^inventory$/i.test(raw)) continue;
       var cols = raw.split(",");
-      if (mode === "settings-h") {
-        mode = "settings";
-        continue;
-      }
-      if (mode === "settings") {
-        title = String(cols[0] || "").trim();
-        mode = "";
-        continue;
-      }
-      if (mode === "inv-h") {
-        mode = "inv";
-        continue;
-      }
-      if (mode !== "inv") continue;
       var name = String(cols[0] || "").trim();
       if (!name) continue;
-      var include = String(cols[5] != null ? cols[5] : "1").trim();
+      var include = String(cols[5] != null ? cols[5] : cols[cols.length - 1] || "1").trim();
       if (include === "0" || /^false$/i.test(include)) continue;
       var sub = String(cols[1] || "").trim();
-      var price = String(cols[2] || "").trim();
-      items.push({
-        name: name,
-        subtitle: sub || undefined,
-        price: price || undefined,
-      });
+      out.push(sub ? { name: name, subtitle: sub } : { name: name });
     }
-    return items.length ? { title: title, items: items } : null;
+    return out.length ? out : null;
   }
 
   function bind() {
     var slider = document.getElementById("lab-count");
+    slider.max = String(_items.length);
+    slider.value = String(_count);
     slider.addEventListener("input", function () {
       _count = Number(slider.value) || 1;
       renderAll();
-    });
-    document.querySelectorAll("[data-kind]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        _kind = b.getAttribute("data-kind") || "veggies";
-        document.querySelectorAll("[data-kind]").forEach(function (x) {
-          x.classList.toggle("on", x === b);
-        });
-        var sliderEl = document.getElementById("lab-count");
-        sliderEl.max = String(sliderMax());
-        if (_count > sliderMax()) _count = sliderMax();
-        sliderEl.value = String(_count);
-        renderAll();
-      });
-    });
-    document.querySelectorAll("[data-font]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        applyFont(b.getAttribute("data-font") || "poppins");
-        document.querySelectorAll("[data-font]").forEach(function (x) {
-          x.classList.toggle("on", x === b);
-        });
-        renderAll();
-      });
     });
     document.querySelectorAll("[data-mode]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -647,77 +642,30 @@
       }
       nQ = Number(q.get("n") || 0);
       scrollTo = String(q.get("scroll") || "").trim().toLowerCase();
-      var boxQ = String(q.get("box") || "").toLowerCase();
-      if (boxQ === "protein" || boxQ === "proteins") _kind = "protein";
-      else if (boxQ === "sauces" || boxQ === "sauce") _kind = "sauces";
-      else if (boxQ === "drinks" || boxQ === "drink") _kind = "drinks";
-      else if (boxQ === "veggies" || boxQ === "veggie") _kind = "veggies";
-      else if (boxQ === "all" || boxQ === "four") _kind = "all";
-      var fontQ = String(q.get("font") || "").toLowerCase();
-      if (fontQ === "roboto" || fontQ === "poppins") applyFont(fontQ);
     } catch (err) {}
     bind();
-    document.querySelectorAll("[data-kind]").forEach(function (x) {
-      x.classList.toggle("on", x.getAttribute("data-kind") === _kind);
-    });
     document.querySelectorAll("[data-mode]").forEach(function (x) {
       x.classList.toggle("on", x.getAttribute("data-mode") === _mode);
     });
-    document.querySelectorAll("[data-font]").forEach(function (x) {
-      x.classList.toggle("on", x.getAttribute("data-font") === _font);
-    });
-
     try {
-      var settings = await fetch("/api/settings");
-      if (settings.ok) {
-        var sj = await settings.json();
-        var liveFont = String((sj && sj.systemFont) || "").toLowerCase();
-        if (!_font || !new URLSearchParams(location.search || "").get("font")) {
-          applyFont(liveFont.indexOf("poppin") !== -1 ? "poppins" : "roboto");
-          document.querySelectorAll("[data-font]").forEach(function (x) {
-            x.classList.toggle("on", x.getAttribute("data-font") === _font);
-          });
+      var res = await fetch("/api/sheets/csv?gid=640368705");
+      if (res.ok) {
+        var parsed = parseVeggiesCsv(await res.text());
+        if (parsed && parsed.length) {
+          _items = parsed;
+          document.getElementById("lab-source").textContent =
+            "Live Veggies sheet · " + parsed.length + " items";
         }
       }
-    } catch (e) {}
-
-    var notes = [];
-    await Promise.all(
-      Object.keys(KINDS).map(function (id) {
-        var conf = KINDS[id];
-        return fetch("/api/sheets/csv?gid=" + conf.gid)
-          .then(function (res) {
-            if (!res.ok) throw new Error(String(res.status));
-            return res.text();
-          })
-          .then(function (text) {
-            var parsed = parseRevisedBoxCsv(text);
-            if (parsed && parsed.items.length) {
-              _catalog[id] = {
-                items: parsed.items,
-                title: parsed.title || conf.label,
-                source: "sheet",
-              };
-              notes.push(conf.label + " " + parsed.items.length);
-            }
-          })
-          .catch(function () {
-            notes.push(conf.label + " fallback");
-          });
-      })
-    );
-    var src = document.getElementById("lab-source");
-    src.textContent =
-      notes.length
-        ? "Live sheets · " + notes.join(" · ") + " · packer js/box-pack.js"
-        : "Sheets unreachable — using ticket fallbacks · packer js/box-pack.js";
-
-    _count = nQ > 0 ? Math.max(1, nQ) : sliderMax();
+    } catch (e) {
+      document.getElementById("lab-source").textContent =
+        "Sheet unreachable — using the 11-item fallback from the ticket";
+    }
+    _count =
+      nQ > 0 ? Math.min(_items.length, Math.max(1, nQ)) : _items.length;
     var slider = document.getElementById("lab-count");
-    slider.max = String(sliderMax());
-    if (_count > sliderMax()) _count = sliderMax();
+    slider.max = String(_items.length);
     slider.value = String(_count);
-
     if (document.fonts && document.fonts.ready) {
       await document.fonts.ready;
     }

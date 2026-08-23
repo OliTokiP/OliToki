@@ -8,8 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&amp;family=Roboto+Condensed:wght@300;700&amp;family=Poppins:wght@300;400;700;900&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/system-font.css?v=20260814font3" />
-  <link rel="stylesheet" href="css/menu.css?v=20260823boxpack7" />
+  <link rel="stylesheet" href="css/menu.css?v=20260822boxpack6" />
   <style>
+    /* menu.css locks the TV boards to overflow:hidden + height:100%. */
     html.box-pack-lab,
     html.box-pack-lab body {
       margin: 0;
@@ -61,7 +62,6 @@
     }
     .controls button.on { background: #26bbcb; color: #082026; font-weight: 700; }
     .slots { display: flex; flex-direction: column; gap: 28px; }
-    .slots[hidden] { display: none !important; }
     .slot-wrap {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
@@ -95,7 +95,36 @@
       --main-color: #0b1c2c;
     }
     .lab-strip .info-box-body.layout-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: space-evenly;
+      align-items: baseline;
+      justify-content: center;
+      column-gap: 0;
+      row-gap: calc(2px * var(--box-scale, 1));
+      font-family: var(--toki-font);
+      font-size: calc(32px * var(--box-scale, 1) * var(--toki-font-scale, 1));
+      line-height: 1.1;
+      padding: 6px 10px 8px;
+      letter-spacing: -0.015em;
+      color: var(--secondary-color);
       position: relative;
+    }
+    .lab-strip .wrap-line-break {
+      flex: 1 0 100%;
+      width: 100%;
+      height: 0;
+    }
+    .lab-strip .veggie-item,
+    .lab-strip .wrap-item {
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .lab-strip .veggie-sep,
+    .lab-strip .wrap-sep {
+      display: inline-block;
+      white-space: pre;
+      font-weight: 400;
     }
     #lab-table { margin-top: 36px; overflow-x: auto; }
     #lab-table table {
@@ -121,37 +150,23 @@
       pointer-events: none;
       overflow: hidden;
     }
-    #measure-board #footer-boxes {
-      position: absolute !important;
-      left: 0 !important;
-      top: 0 !important;
-      height: 197px !important;
-    }
   </style>
 </head>
 <body class="board-handhelds" data-system-font="poppins">
   <main>
     <h1>Footer box pack lab</h1>
     <p class="lede">
-      Same wrap packer as the live boards (<code>js/box-pack.js</code>). Pick a Footer Box
-      (Proteins, Sauces, Drinks, Veggies) or all four at the 768 major width.
-      Font is System Font (Roboto / Poppins). Red overlay = leftover black in the Box Body.
+      Same Veggies inventory as the live boards. Slide how many items get through,
+      then compare the four Footer Box widths: one box (1082), two-box major (768),
+      three-box third (351), two-box minor (299). Red overlay = leftover black in the Box Body.
+      Live scorer is unchanged unless you Force 3 / Force 4.
     </p>
-    <p id="lab-source">Loading sheets…</p>
+    <p id="lab-source">Loading Veggies sheet…</p>
     <p>
       On the real Handhelds board:
       <a href="index2.html?boxPackLab=1&amp;pause=1&amp;w=1920&amp;dpr=1">index2.html?boxPackLab=1&amp;pause=1</a>
     </p>
     <div class="controls">
-      <span>Box</span>
-      <button type="button" data-kind="protein">Proteins</button>
-      <button type="button" data-kind="sauces">Sauces</button>
-      <button type="button" data-kind="drinks">Drinks</button>
-      <button type="button" data-kind="veggies" class="on">Veggies</button>
-      <button type="button" data-kind="all">All four · 768</button>
-      <span>Font</span>
-      <button type="button" data-font="poppins" class="on">Poppins</button>
-      <button type="button" data-font="roboto">Roboto</button>
       <label>Items
         <input id="lab-count" type="range" min="1" max="11" value="11" />
         <span id="lab-count-n">11</span>
@@ -161,97 +176,90 @@
       <button type="button" data-mode="4">Force 4 rows</button>
       <label><input id="lab-overlay" type="checkbox" checked /> leftover overlay</label>
     </div>
-    <div class="slots" id="view-widths">
+    <div class="slots">
       <div class="slot-wrap" id="slot-one">
         <h2>One box · 1082</h2>
-        <div class="lab-strip footer-one"></div>
+        <div class="lab-strip footer-one">
+          <div class="info-box">
+            <svg class="info-box-shell" viewBox="0 0 1082 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="1082" height="197" />
+              <rect class="shell-body" x="4" y="64" width="1074" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
         <p class="lab-meta"></p>
       </div>
       <div class="slot-wrap" id="slot-major">
-        <h2>Two-box major · 768</h2>
-        <div class="lab-strip footer-two-major"></div>
+        <h2>Two-box major · 768 (Handhelds Veggies today)</h2>
+        <div class="lab-strip footer-two-major">
+          <div class="info-box footer-major">
+            <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="768" height="197" />
+              <rect class="shell-body" x="4" y="64" width="760" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
         <p class="lab-meta"></p>
       </div>
       <div class="slot-wrap" id="slot-third">
         <h2>Three-box third · 351</h2>
-        <div class="lab-strip footer-three"></div>
+        <div class="lab-strip footer-three">
+          <div class="info-box">
+            <svg class="info-box-shell" viewBox="0 0 351 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="351" height="197" />
+              <rect class="shell-body" x="4" y="64" width="343" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
         <p class="lab-meta"></p>
       </div>
       <div class="slot-wrap" id="slot-minor">
         <h2>Two-box minor · 299</h2>
-        <div class="lab-strip footer-two-minor"></div>
-        <p class="lab-meta"></p>
-      </div>
-    </div>
-    <div class="slots" id="view-kinds" hidden>
-      <div class="slot-wrap" id="slot-kind-protein">
-        <h2>Proteins · 768</h2>
-        <div class="lab-strip footer-two-major"></div>
-        <p class="lab-meta"></p>
-      </div>
-      <div class="slot-wrap" id="slot-kind-sauces">
-        <h2>Sauces · 768</h2>
-        <div class="lab-strip footer-two-major"></div>
-        <p class="lab-meta"></p>
-      </div>
-      <div class="slot-wrap" id="slot-kind-drinks">
-        <h2>Drinks · 768</h2>
-        <div class="lab-strip footer-two-major"></div>
-        <p class="lab-meta"></p>
-      </div>
-      <div class="slot-wrap" id="slot-kind-veggies">
-        <h2>Veggies · 768</h2>
-        <div class="lab-strip footer-two-major"></div>
+        <div class="lab-strip footer-two-minor">
+          <div class="info-box footer-minor">
+            <svg class="info-box-shell" viewBox="0 0 299 197" preserveAspectRatio="none" aria-hidden="true">
+              <rect class="shell-outer" width="299" height="197" />
+              <rect class="shell-body" x="4" y="64" width="291" height="129" />
+            </svg>
+            <div class="info-box-header">
+              <span class="info-box-title">Veggies</span>
+            </div>
+            <div class="info-box-body layout-wrap align-center typo-name-sub"></div>
+          </div>
+        </div>
         <p class="lab-meta"></p>
       </div>
     </div>
     <div id="lab-table"></div>
   </main>
+  <!-- Off-stage clone of live Handhelds Veggies (768 major) so packing
+       uses the same #veggies-box CSS + metrics as index2.html. -->
   <div id="measure-board" aria-hidden="true">
-    <div id="footer-boxes" class="footer-one">
-      <div id="protein-box" class="info-box" hidden>
+    <div id="footer-boxes" class="footer-two">
+      <div id="veggies-box" class="info-box footer-major">
         <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
           <rect class="shell-outer" width="768" height="197" />
           <rect class="shell-body" x="4" y="64" width="760" height="129" />
         </svg>
         <div class="info-box-header">
-          <span class="info-box-title" id="protein-title">Proteins</span>
-        </div>
-        <div class="info-box-body layout-wrap align-center typo-name-price" id="protein-body"></div>
-      </div>
-      <div id="sauces-box" class="info-box" hidden>
-        <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
-          <rect class="shell-outer" width="768" height="197" />
-          <rect class="shell-body" x="4" y="64" width="760" height="129" />
-        </svg>
-        <div class="info-box-header">
-          <span class="info-box-title" id="sauces-title">Sauces</span>
-        </div>
-        <div class="info-box-body layout-wrap align-center typo-name" id="sauces-body"></div>
-      </div>
-      <div id="footer-drinks-box" class="info-box" hidden>
-        <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
-          <rect class="shell-outer" width="768" height="197" />
-          <rect class="shell-body" x="4" y="64" width="760" height="129" />
-        </svg>
-        <div class="info-box-header">
-          <span class="info-box-title" id="footer-drinks-title">Drinks</span>
-        </div>
-        <div class="info-box-body layout-wrap align-center typo-name" id="footer-drinks-body"></div>
-      </div>
-      <div id="veggies-box" class="info-box">
-        <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
-          <rect class="shell-outer" width="768" height="197" />
-          <rect class="shell-body" x="4" y="64" width="760" height="129" />
-        </svg>
-        <div class="info-box-header">
-          <span class="info-box-title" id="veggies-title">Veggies</span>
+          <span class="info-box-title">Veggies</span>
         </div>
         <div class="info-box-body layout-wrap align-center typo-name-sub" id="veggies-body"></div>
       </div>
     </div>
   </div>
-  <script src="js/box-pack.js?v=20260823boxpack7"></script>
-  <script src="js/box-pack-lab.js?v=20260823boxpack7"></script>
+  <script src="js/box-pack-lab.js?v=20260822boxpack6"></script>
 </body>
 </html>

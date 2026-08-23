@@ -1,26 +1,9 @@
 # What’s New
 
-**Last updated:** 2026-08-23 12:00  
+**Last updated:** 2026-08-23 00:20  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
-
----
-
-## 2026-08-23 12:00 — Footer wrap pyramid on all four boxes
-
-**Boards / surface:** Menu Screens — boards 1–3 Footer Boxes (`index.html`–`index3.html`)  
-**Sheet:** none (wrap packing only; Create Columns? still honored)  
-**Summary:** Wrap-mode Proteins, Sauces, Drinks, and Veggies all use the same packer: LPT + greedy, then **fullest row on top**. The inquiry lab loads that same module, System Font (Poppins / Roboto), and all four inventories.
-
-### Details
-- Scorer lives in `js/box-pack.js` so the lab cannot drift from the TV boards.
-- Lab: box picker (Proteins / Sauces / Drinks / Veggies / all four at 768), font toggle, four widths. [box-pack-lab.html](../box-pack-lab.html)
-- Live HUD `?boxPackLab=1` can switch which Footer Box the slider slices.
-
-### Docs updated
-- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
-- [URL_PARAMS.md](./URL_PARAMS.md)
 
 ---
 

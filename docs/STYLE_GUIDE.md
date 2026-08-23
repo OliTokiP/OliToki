@@ -228,7 +228,7 @@ Controlled by sheet columns **Create Columns?** and **Text Align**.
 
 ### Create Columns? = No → `.layout-wrap`
 
-- Flex wrap with **balanced rows** (character/pixel budgeting so rows look even — reference `screenshots/footer-verify.png` / sauces packing). After the pack is chosen, rows stack **fullest on top** on every wrap-mode Footer Box (Proteins, Sauces, Drinks, Veggies). Shared packer: `js/box-pack.js`. Each packed line is a nowrap `.wrap-line-row` so a planned row never splits into a visual extra line.
+- Flex wrap with **balanced rows** (character/pixel budgeting so rows look even — reference `screenshots/footer-verify.png` / sauces packing). After the pack is chosen, rows stack **fullest on top**. Each packed line is a nowrap `.wrap-line-row` so a planned row never splits into a visual extra line.
 - Sauces / drinks legacy default: **No**, align **center**, Condensed weight for sauces.
 - Separators between items (· or thin rules); force-breaks for manual line control when present in data.
 

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "44c1486",
-  "hashFull": "44c148676a69fc472129a43509afc5bef9d0d3d9",
-  "subject": "QA: 2026-08-20 Ticket Ready For Review badge should navigate to ticket page when clicked (pass 6)"
+  "hash": "5c48c62",
+  "hashFull": "5c48c6237be9540e9f95c1505f691b2b928da4ea",
+  "subject": "QA: keep pass 6 notify-only; restore unrelated WIP from that commit"
 };

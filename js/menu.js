@@ -9999,7 +9999,7 @@
         _boxItemIndex: idx,
       };
     });
-    boxPack().setMeasureHost(bodyEl);
+    _measureHost = bodyEl;
     let lines;
     try {
       lines = balanceItemsIntoLines(
@@ -10014,8 +10014,10 @@
         })
       );
     } finally {
-      boxPack().setMeasureHost(null);
-      boxPack().detachProbe();
+      _measureHost = null;
+      if (_measureProbe && _measureProbe.parentNode === bodyEl) {
+        _measureProbe.parentNode.removeChild(_measureProbe);
+      }
     }
     if (balanceItemsIntoLines.lastMeta) {
       const meta = balanceItemsIntoLines.lastMeta;
@@ -10180,44 +10182,360 @@
   }
 
   // ---------- balanced wrap packing (sauces, sodas, …) ----------
-  // Scorer lives in js/box-pack.js so the inquiry lab cannot drift.
 
-  function boxPack() {
-    const api = window.TOKI_BOX_PACK;
-    if (!api) {
-      throw new Error("TOKI_BOX_PACK missing — load js/box-pack.js before menu.js");
-    }
-    return api;
-  }
+  let _measureCanvas = null;
+  let _measureProbe = null;
+  /** When set, measure wrap labels inside this Box Body (inherit type + tracking). */
+  let _measureHost = null;
 
+  /**
+   * Measure text width for packing. Prefer a DOM probe (matches Roboto
+   * Condensed + letter-spacing); canvas is a fallback only.
+   * Canvas alone under/over-estimates seps and condensed glyphs enough to
+   * plan lines that flex-wrap, which crushes --box-scale via height.
+   */
   function measureTextPx(text, font) {
-    return boxPack().measureTextPx(text, font);
+    const str = String(text || "");
+    const face =
+      (document.documentElement.getAttribute("data-system-font") || "") ===
+      "poppins"
+        ? "Poppins, Roboto, sans-serif"
+        : "Roboto Condensed, Roboto, sans-serif";
+    const fontStr = font || "700 30px " + face;
+    try {
+      const host = _measureHost || document.body;
+      if (!_measureProbe) {
+        _measureProbe = document.createElement("span");
+        _measureProbe.setAttribute("aria-hidden", "true");
+        _measureProbe.style.cssText =
+          "position:absolute;left:-99999px;top:0;white-space:nowrap;" +
+          "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;";
+      }
+      if (_measureProbe.parentNode !== host) {
+        host.appendChild(_measureProbe);
+      }
+      if (_measureHost) {
+        _measureProbe.style.font = "";
+        _measureProbe.style.letterSpacing = "";
+        if (
+          (document.documentElement.getAttribute("data-system-font") || "") ===
+          "poppins"
+        ) {
+          _measureProbe.style.fontFamily = "Poppins, Roboto, sans-serif";
+        }
+      } else {
+        _measureProbe.style.font = fontStr;
+        // Match sauces wrap tracking when font mentions Condensed
+        if (/condensed/i.test(fontStr)) {
+          _measureProbe.style.letterSpacing = "-0.015em";
+        } else {
+          _measureProbe.style.letterSpacing = "normal";
+        }
+      }
+      _measureProbe.textContent = str;
+      const w = _measureProbe.offsetWidth;
+      if (w > 0) return w;
+    } catch (err) {
+      /* fall through to canvas */
+    }
+    if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
+    const ctx = _measureCanvas.getContext("2d");
+    if (!ctx) return str.length * 10;
+    ctx.font = fontStr;
+    return ctx.measureText(str).width;
   }
 
   function parsePadXY(cs) {
-    return boxPack().parsePadXY(cs);
+    const pl = parseFloat(cs.paddingLeft) || 0;
+    const pr = parseFloat(cs.paddingRight) || 0;
+    const pt = parseFloat(cs.paddingTop) || 0;
+    const pb = parseFloat(cs.paddingBottom) || 0;
+    return { x: pl + pr, y: pt + pb };
   }
 
+  /**
+   * Build measure/layout options from a flex wrap box (at current --box-scale).
+   */
   function balanceOptsFromBox(el, extra) {
-    return boxPack().balanceOptsFromBox(el, extra);
+    const cs = window.getComputedStyle(el);
+    const pad = parsePadXY(cs);
+    const fontSize = parseFloat(cs.fontSize) || 30;
+    const lineHeight =
+      cs.lineHeight && cs.lineHeight !== "normal"
+        ? parseFloat(cs.lineHeight)
+        : fontSize * 1.25;
+    const rowGap = parseFloat(cs.rowGap) || 0;
+    // Small safety so planned lines don't flex-wrap after seps/rounding
+    const innerW = Math.max(1, (el.clientWidth || 0) - pad.x);
+    return Object.assign(
+      {
+        font:
+          (cs.fontStyle !== "normal" ? cs.fontStyle + " " : "") +
+          (cs.fontWeight || "700") +
+          " " +
+          cs.fontSize +
+          " " +
+          cs.fontFamily,
+        containerWidth: Math.max(1, innerW * 0.98),
+        containerHeight: Math.max(1, (el.clientHeight || 0) - pad.y),
+        lineHeight: lineHeight + rowGap,
+        maxLines: 8,
+      },
+      extra || {}
+    );
   }
 
+  /**
+   * LPT multifit: assign each item (longest first) to the currently lightest
+   * line so line widths stay as even as possible.
+   */
   function packLptLines(items, lineCount, sepW) {
-    return boxPack().packLptLines(items, lineCount, sepW);
+    const lines = [];
+    for (let i = 0; i < lineCount; i++) {
+      lines.push({ items: [], width: 0 });
+    }
+    const sorted = items.slice().sort(function (a, b) {
+      if (b.width !== a.width) return b.width - a.width;
+      return a.idx - b.idx;
+    });
+    for (let s = 0; s < sorted.length; s++) {
+      const it = sorted[s];
+      let best = lines[0];
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].width < best.width) best = lines[i];
+      }
+      best.width += it.width + (best.items.length ? sepW : 0);
+      best.items.push(it);
+    }
+    // Stable order within each line (sheet / original index)
+    lines.forEach(function (line) {
+      line.items.sort(function (a, b) {
+        return a.idx - b.idx;
+      });
+      line.width = 0;
+      for (let i = 0; i < line.items.length; i++) {
+        line.width += line.items[i].width + (i ? sepW : 0);
+      }
+    });
+    sortPackedLinesFullestFirst(lines);
+    return lines.filter(function (ln) {
+      return ln.items.length > 0;
+    });
   }
 
+  /**
+   * Top-to-bottom: fullest wrap row first (visual pyramid). Tie → earlier sheet item.
+   * Which items share a row is unchanged; this only orders the already-packed rows.
+   */
   function sortPackedLinesFullestFirst(lines) {
-    return boxPack().sortPackedLinesFullestFirst(lines);
-  }
-
-  function packGreedyByWidth(items, sepW, boxW) {
-    return boxPack().packGreedyByWidth(items, sepW, boxW);
-  }
-
-  function balanceItemsIntoLines(rawItems, opts) {
-    const lines = boxPack().balanceItemsIntoLines(rawItems, opts);
-    balanceItemsIntoLines.lastMeta = boxPack().balanceItemsIntoLines.lastMeta;
+    lines.sort(function (a, b) {
+      if (!a.items.length) return 1;
+      if (!b.items.length) return -1;
+      if (Math.abs(b.width - a.width) > 0.5) return b.width - a.width;
+      return a.items[0].idx - b.items[0].idx;
+    });
     return lines;
+  }
+
+  /**
+   * Greedy pack in sheet order: fill each line up to boxW before wrapping.
+   * Better for wide footer-major boxes (full rows, reading order, no orphans).
+   */
+  function packGreedyByWidth(items, sepW, boxW) {
+    const lines = [];
+    let cur = { items: [], width: 0 };
+    const limit = Math.max(1, boxW);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const add = it.width + (cur.items.length ? sepW : 0);
+      if (cur.items.length && cur.width + add > limit) {
+        lines.push(cur);
+        cur = { items: [], width: 0 };
+      }
+      cur.width += (cur.items.length ? sepW : 0) + it.width;
+      cur.items.push(it);
+    }
+    if (cur.items.length) lines.push(cur);
+    sortPackedLinesFullestFirst(lines);
+    return lines;
+  }
+
+  /**
+   * Reorder wrap items into balanced flex lines.
+   * Picks line count that maximizes estimated type scale (width + height),
+   * with preference for even rows AND width fill.
+   *
+   * Width fill matters in the wide footer-major slot (~768px): a 3–4 line pack
+   * can be height-capped at ~same type size as a 2-line pack while each row only
+   * uses ~60% of the box — looks sparse. Reward packs that use the row width.
+   *
+   * rawItems: [{ label, ...payload }]
+   * opts: { font, sepText, containerWidth, containerHeight, lineHeight, maxLines,
+   *         measureLabel?(item, font) → px }
+   * Returns: array of lines, each line an array of original raw item objects
+   *          (with idx/width stripped — same references as input payloads).
+   */
+  function balanceItemsIntoLines(rawItems, opts) {
+    const list = Array.isArray(rawItems) ? rawItems : [];
+    const n = list.length;
+    if (n === 0) return [];
+    if (n === 1) return [list.slice()];
+
+    const o = opts || {};
+    const font = o.font || "700 30px sans-serif";
+    const sepText = o.sepText != null ? o.sepText : " · ";
+    const sepW = measureTextPx(sepText, font);
+    const boxW = Math.max(1, o.containerWidth || 280);
+    const boxH = Math.max(1, o.containerHeight || 120);
+    const lineH = Math.max(8, o.lineHeight || 36);
+    const maxLines = Math.min(n, Math.max(1, o.maxLines || 8));
+    const measureLabel =
+      typeof o.measureLabel === "function"
+        ? o.measureLabel
+        : function (it, f) {
+            return measureTextPx(it.label, f);
+          };
+
+    // Inflate measured widths slightly — canvas/DOM probe is still a hair
+    // narrower than live flex+middot layout, which caused mid-line wraps
+    // (e.g. lone "Spicy Toki") in the wide sauces slot.
+    const WIDTH_PAD = _measureHost ? 1.02 : 1.08;
+    const items = list.map(function (it, idx) {
+      return {
+        idx: idx,
+        width: Math.max(1, measureLabel(it, font) * WIDTH_PAD),
+        raw: it,
+      };
+    });
+
+    // If box isn't laid out yet, fall back to single balanced guess by chars
+    const unmeasured = boxW < 8 || boxH < 8;
+
+    let bestLines = null;
+    let bestScore = -Infinity;
+    let bestType = -Infinity;
+    let bestTag = "";
+    let bestFill = 0;
+    const candidates = [];
+    const forceL =
+      o.forceLines > 0
+        ? Math.min(maxLines, Math.max(1, Math.round(Number(o.forceLines))))
+        : 0;
+
+    function considerPacked(packed, tag) {
+      if (!packed || !packed.length) return;
+      let maxW = 0;
+      let minW = Infinity;
+      for (let i = 0; i < packed.length; i++) {
+        if (packed[i].width > maxW) maxW = packed[i].width;
+        if (packed[i].width < minW) minW = packed[i].width;
+      }
+      if (maxW < 1) maxW = 1;
+      if (minW === Infinity) minW = maxW;
+
+      const scaleW = unmeasured ? 1 / maxW : boxW / maxW;
+      const scaleH = unmeasured
+        ? 1 / packed.length
+        : boxH / (packed.length * lineH);
+      const balance = minW / maxW;
+      const fill = unmeasured ? 0.85 : Math.min(1, maxW / boxW);
+      const typeScore = Math.min(scaleW, scaleH);
+      const L = packed.length;
+      // Type size primary; width fill heavy (wide major slot); even rows; fewer lines
+      const score =
+        typeScore * (0.58 + 0.12 * balance + 0.3 * fill) - L * 0.008;
+
+      const lines = packed.map(function (ln) {
+        return ln.items.map(function (it) {
+          return it.raw;
+        });
+      });
+      candidates.push({
+        tag: tag,
+        L: L,
+        score: score,
+        typeScore: typeScore,
+        fill: fill,
+        lines: lines,
+      });
+      if (score > bestScore) {
+        bestScore = score;
+        bestType = typeScore;
+        bestLines = lines;
+        bestTag = tag;
+        bestFill = fill;
+      }
+    }
+
+    if (forceL) {
+      considerPacked(packLptLines(items, forceL, sepW), "lpt-" + forceL);
+    } else {
+      for (let L = 1; L <= maxLines; L++) {
+        considerPacked(packLptLines(items, L, sepW), "lpt-" + L);
+      }
+      // Sheet-order greedy: fills wide boxes without single-item orphan rows
+      if (!unmeasured) {
+        considerPacked(packGreedyByWidth(items, sepW, boxW * 0.96), "greedy");
+        considerPacked(
+          packGreedyByWidth(items, sepW, boxW * 0.88),
+          "greedy-tight"
+        );
+      }
+
+      // Among packs within 8% of best type size, pick fullest width (then fewer lines)
+      if (candidates.length && bestType > 0) {
+        let pick = null;
+        for (let i = 0; i < candidates.length; i++) {
+          const c = candidates[i];
+          if (c.typeScore < bestType * 0.92) continue;
+          if (
+            !pick ||
+            c.fill > pick.fill + 0.03 ||
+            (Math.abs(c.fill - pick.fill) <= 0.03 && c.L < pick.L) ||
+            (Math.abs(c.fill - pick.fill) <= 0.03 &&
+              c.L === pick.L &&
+              c.score > pick.score)
+          ) {
+            pick = c;
+          }
+        }
+        if (pick) {
+          bestLines = pick.lines;
+          bestScore = pick.score;
+          bestTag = (pick.tag || "?") + "*";
+          bestFill = pick.fill;
+          bestType = pick.typeScore;
+        }
+      }
+    }
+
+    if (!bestLines) return [list.slice()];
+
+    if (typeof console !== "undefined" && console.info) {
+      const summary = bestLines
+        .map(function (ln) {
+          return ln
+            .map(function (it) {
+              return it.label || it.name || "?";
+            })
+            .join(" · ");
+        })
+        .join(" || ");
+      console.info(
+        "Balanced wrap (" + bestLines.length + " lines, " + bestTag + "):",
+        summary,
+        "boxW=" + Math.round(boxW)
+      );
+    }
+    balanceItemsIntoLines.lastMeta = {
+      tag: bestTag,
+      L: bestLines.length,
+      fill: bestFill,
+      typeScore: bestType,
+      score: bestScore,
+      boxW: Math.round(boxW),
+    };
+    return bestLines;
   }
 
   function drinkItemMeasureLabel(it) {
@@ -10626,7 +10944,125 @@
   }
 
   function fitBoxScale(el, minS, maxS, opts) {
-    return boxPack().fitBoxScale(el, minS, maxS, opts);
+    opts = opts || {};
+    if (!el || !el.children || !el.children.length) return opts.returnScale ? minS : undefined;
+    if (el.clientHeight <= 0 || el.clientWidth <= 0) {
+      return opts.returnScale ? minS : undefined;
+    }
+
+    const fits = (scale) => {
+      el.style.setProperty("--box-scale", String(scale));
+      // space-evenly / space-between hide overflow: scrollHeight stays == clientHeight
+      // while rows are clipped. Pack from the top while measuring height.
+      if (opts.proteinRows) {
+        el.style.alignContent = "start";
+      }
+      void el.offsetHeight;
+
+      let heightOk = el.scrollHeight <= el.clientHeight + 1;
+      if (opts.proteinRows) {
+        // Column-mode rows (protein / sauces / drinks)
+        const rows = el.querySelectorAll(
+          ".protein-row, .box-col-item, .sauce-col-item, .drink-col-item"
+        );
+        if (rows.length) {
+          const last = rows[rows.length - 1];
+          const padBot =
+            parseFloat(window.getComputedStyle(el).paddingBottom) || 0;
+          // Prefer content box (name span) — row offsetHeight can still lie if
+          // overflow clipped the line box during an intermediate layout.
+          let contentH = last.offsetHeight;
+          Array.prototype.forEach.call(last.children, function (ch) {
+            if (ch.offsetHeight > contentH) contentH = ch.offsetHeight;
+          });
+          const bottom = last.offsetTop + contentH;
+          heightOk = bottom + padBot <= el.clientHeight + 1;
+        }
+      }
+      if (!heightOk) return false;
+
+      if (opts.checkChildWidth) {
+        const padXY = parsePadXY(window.getComputedStyle(el));
+        // Content box width (clientWidth includes padding)
+        const contentW = Math.max(1, el.clientWidth - padXY.x);
+        for (let i = 0; i < el.children.length; i++) {
+          const child = el.children[i];
+          const isColRow =
+            opts.proteinRows &&
+            (child.classList.contains("protein-row") ||
+              child.classList.contains("box-col-item") ||
+              child.classList.contains("sauce-col-item") ||
+              child.classList.contains("drink-col-item"));
+          if (isColRow) {
+            // Rows are width:100%; measure content (name+price), not the cell box.
+            let natural = 0;
+            Array.prototype.forEach.call(child.children, function (ch) {
+              natural += ch.offsetWidth;
+            });
+            // Single-text cell (sauces/drinks): use max-content width
+            if (natural < 1) {
+              const prev = child.style.width;
+              child.style.width = "max-content";
+              natural = child.offsetWidth;
+              child.style.width = prev;
+            }
+            if (natural > child.clientWidth + 1) return false;
+          } else if (child.classList.contains("wrap-line-row")) {
+            // Sum children — flex scrollWidth can lie when justify is end/center
+            let natural = 0;
+            Array.prototype.forEach.call(child.children, function (ch) {
+              natural += ch.offsetWidth;
+            });
+            if (natural < 1) {
+              natural = child.scrollWidth;
+            }
+            // 2px AA cushion so right-aligned glyphs are not clipped
+            if (natural > contentW - 2) return false;
+          } else if (child.offsetWidth > contentW + 1) {
+            return false;
+          }
+        }
+      }
+      return true;
+    };
+
+    let lo = minS;
+    let hi = maxS;
+    let best = minS;
+
+    if (!fits(lo)) {
+      let s = lo;
+      while (s > 0.3 && !fits(s)) s -= 0.02;
+      best = Math.max(0.3, s);
+      el.style.setProperty("--box-scale", String(best));
+      if (opts.proteinRows) el.style.alignContent = "";
+      return opts.returnScale ? best : undefined;
+    }
+
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) {
+        best = mid;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+
+    const shrink =
+      opts.shrinkFactor != null && isFinite(opts.shrinkFactor)
+        ? opts.shrinkFactor
+        : 0.97;
+    best = Math.max(minS, best * shrink);
+    let guard = 0;
+    while (!fits(best) && best > minS && guard < 40) {
+      best -= 0.015;
+      guard++;
+    }
+    fits(best);
+    // Restore CSS align-content (space-evenly) after measuring
+    if (opts.proteinRows) el.style.alignContent = "";
+    return opts.returnScale ? best : undefined;
   }
 
   function fitTitle() {
@@ -16589,24 +17025,6 @@
     });
   }
 
-  function boxPackLabKindRef(kind) {
-    if (kind === "protein") {
-      return { box: proteinBox, body: els.proteinBody, label: "Proteins", fullKey: "fullProtein" };
-    }
-    if (kind === "sauces") {
-      return { box: saucesBox, body: els.saucesBody, label: "Sauces", fullKey: "fullSauces" };
-    }
-    if (kind === "drinks") {
-      return {
-        box: footerDrinksBox,
-        body: els.footerDrinksBody,
-        label: "Drinks",
-        fullKey: "fullDrinks",
-      };
-    }
-    return { box: veggiesBox, body: els.veggiesBody, label: "Veggies", fullKey: "fullVeggies" };
-  }
-
   function boxPackLabAfterRender() {
     if (!_boxPackLab) return;
     const bodies = [
@@ -16620,71 +17038,57 @@
     });
     const stats = document.getElementById("box-pack-lab-stats");
     if (!stats) return;
-    const ref = boxPackLabKindRef(_boxPackLab.kind);
-    const body = ref.body;
+    const body = els.veggiesBody;
     const scale = body
       ? getComputedStyle(body).getPropertyValue("--box-scale").trim()
       : "";
-    const n = (ref.box.items || []).length;
+    const meta = balanceItemsIntoLines.lastMeta || {};
+    const n = (veggiesBox.items || []).length;
     stats.textContent =
-      ref.label +
-      " · " +
+      (veggiesBox.include ? "Veggies " : "") +
       n +
       " items · " +
-      ((body && body.dataset.lineCount) || "?") +
+      (meta.L || body && body.dataset.lineCount || "?") +
       " lines · " +
-      ((body && body.dataset.packTag) || "?") +
+      (meta.tag || body && body.dataset.packTag || "?") +
       " · scale " +
       (scale ? Number(scale).toFixed(3) : "?") +
       " · fill " +
-      ((body && body.dataset.packFill) ? body.dataset.packFill + "%" : "?") +
+      (meta.fill ? Math.round(meta.fill * 100) + "%" : "?") +
       " · boxW " +
-      ((body && body.dataset.packBoxw) || "?");
+      (meta.boxW || "?");
   }
 
   function boxPackLabApply() {
     if (!_boxPackLab) return;
     const lab = _boxPackLab;
-    proteinBox.items = boxPackLabCloneItems(lab.fullProtein);
-    saucesBox.items = boxPackLabCloneItems(lab.fullSauces);
-    footerDrinksBox.items = boxPackLabCloneItems(lab.fullDrinks);
-    veggiesBox.items = boxPackLabCloneItems(lab.fullVeggies);
-
-    const ref = boxPackLabKindRef(lab.kind);
-    const full = lab[ref.fullKey] || [];
-    const n = Math.max(1, Math.min(full.length || 1, lab.itemCount | 0));
+    const n = Math.max(
+      1,
+      Math.min(lab.fullVeggies.length || 1, lab.itemCount | 0)
+    );
     lab.itemCount = n;
-    if (full.length) {
-      ref.box.items = boxPackLabCloneItems(full.slice(0, n));
+    if (lab.fullVeggies.length) {
+      veggiesBox.items = boxPackLabCloneItems(lab.fullVeggies.slice(0, n));
+      veggiesBox.include = true;
     }
-
-    proteinBox.include = false;
-    saucesBox.include = false;
-    footerDrinksBox.include = false;
-    veggiesBox.include = false;
-    ref.box.include = true;
-
     const boxes = lab.boxCount | 0;
-    if (boxes >= 2) {
-      const partner =
-        lab.kind !== "sauces" && (lab.orig.sauces || lab.kind === "veggies")
-          ? saucesBox
-          : lab.kind !== "veggies"
-            ? veggiesBox
-            : proteinBox;
-      partner.include = true;
-    }
-    if (boxes >= 3) {
-      if (lab.kind === "drinks") {
-        proteinBox.include = true;
+    if (boxes === 1) {
+      proteinBox.include = false;
+      saucesBox.include = false;
+      footerDrinksBox.include = false;
+      veggiesBox.include = true;
+    } else if (boxes === 3) {
+      proteinBox.include = true;
+      saucesBox.include = true;
+      footerDrinksBox.include = false;
+      veggiesBox.include = true;
+    } else {
+      proteinBox.include = lab.orig.protein;
+      saucesBox.include = lab.orig.sauces;
+      footerDrinksBox.include = lab.orig.drinks;
+      veggiesBox.include = true;
+      if (!lab.orig.sauces && !lab.orig.protein && !lab.orig.drinks) {
         saucesBox.include = true;
-        footerDrinksBox.include = true;
-        veggiesBox.include = false;
-      } else {
-        proteinBox.include = true;
-        saucesBox.include = true;
-        veggiesBox.include = true;
-        footerDrinksBox.include = false;
       }
     }
     renderFooterBoxes();
@@ -16695,9 +17099,6 @@
     if (document.getElementById("box-pack-lab-hud")) return;
 
     _boxPackLab = {
-      fullProtein: boxPackLabCloneItems(proteinBox.items),
-      fullSauces: boxPackLabCloneItems(saucesBox.items),
-      fullDrinks: boxPackLabCloneItems(footerDrinksBox.items),
       fullVeggies: boxPackLabCloneItems(veggiesBox.items),
       orig: {
         protein: proteinBox.include !== false,
@@ -16705,22 +17106,15 @@
         drinks: !!footerDrinksBox.include,
         veggies: !!veggiesBox.include,
       },
-      kind: "veggies",
       itemCount: (veggiesBox.items || []).length || 1,
       boxCount: 2,
       packLines: 0,
       overlay: true,
     };
-    const qInit = new URLSearchParams(location.search || "");
-    const qLines = Number(qInit.get("packLines") || 0);
+    const qLines = Number(
+      new URLSearchParams(location.search || "").get("packLines") || 0
+    );
     if (qLines === 3 || qLines === 4) _boxPackLab.packLines = qLines;
-    const qBox = String(qInit.get("box") || "").toLowerCase();
-    if (qBox === "protein" || qBox === "proteins") _boxPackLab.kind = "protein";
-    else if (qBox === "sauces" || qBox === "sauce") _boxPackLab.kind = "sauces";
-    else if (qBox === "drinks" || qBox === "drink") _boxPackLab.kind = "drinks";
-    else if (qBox === "veggies" || qBox === "veggie") _boxPackLab.kind = "veggies";
-    const startRef = boxPackLabKindRef(_boxPackLab.kind);
-    _boxPackLab.itemCount = (_boxPackLab[startRef.fullKey] || []).length || 1;
 
     const nShow =
       document.body.classList.contains("footer-three")
@@ -16757,14 +17151,9 @@
     hud.innerHTML =
       "<h2>Box pack lab</h2>" +
       "<div>Dummy inquiry UI — does not write the sheet. " +
-      "<a href=\"box-pack-lab.html\">All four boxes + fonts</a></div>" +
-      "<div class=\"row\" data-lab=\"kind\">Box " +
-      "<button type=\"button\" data-kind=\"protein\">Proteins</button>" +
-      "<button type=\"button\" data-kind=\"sauces\">Sauces</button>" +
-      "<button type=\"button\" data-kind=\"drinks\">Drinks</button>" +
-      "<button type=\"button\" data-kind=\"veggies\">Veggies</button></div>" +
+      "<a href=\"box-pack-lab.html\">Side-by-side widths</a></div>" +
       "<label>Items <input id=\"box-pack-lab-count\" type=\"range\" min=\"1\" max=\"" +
-      Math.max(1, (_boxPackLab[startRef.fullKey] || []).length) +
+      Math.max(1, _boxPackLab.fullVeggies.length) +
       "\" value=\"" +
       _boxPackLab.itemCount +
       "\" /> <span id=\"box-pack-lab-count-n\">" +
@@ -16782,22 +17171,7 @@
       "<div id=\"box-pack-lab-stats\"></div>";
     document.body.appendChild(hud);
 
-    function syncSlider() {
-      const slider = document.getElementById("box-pack-lab-count");
-      const sliderN = document.getElementById("box-pack-lab-count-n");
-      const ref = boxPackLabKindRef(_boxPackLab.kind);
-      const max = Math.max(1, (_boxPackLab[ref.fullKey] || []).length);
-      slider.max = String(max);
-      if (_boxPackLab.itemCount > max) _boxPackLab.itemCount = max;
-      if (_boxPackLab.itemCount < 1) _boxPackLab.itemCount = 1;
-      slider.value = String(_boxPackLab.itemCount);
-      sliderN.textContent = String(_boxPackLab.itemCount);
-    }
-
     function markRows() {
-      hud.querySelectorAll("[data-kind]").forEach(function (b) {
-        b.classList.toggle("on", b.getAttribute("data-kind") === _boxPackLab.kind);
-      });
       hud.querySelectorAll("[data-boxes]").forEach(function (b) {
         b.classList.toggle("on", Number(b.getAttribute("data-boxes")) === _boxPackLab.boxCount);
       });
@@ -16813,16 +17187,6 @@
       _boxPackLab.itemCount = Number(slider.value) || 1;
       sliderN.textContent = String(_boxPackLab.itemCount);
       boxPackLabApply();
-    });
-    hud.querySelectorAll("[data-kind]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        _boxPackLab.kind = b.getAttribute("data-kind") || "veggies";
-        const ref = boxPackLabKindRef(_boxPackLab.kind);
-        _boxPackLab.itemCount = (_boxPackLab[ref.fullKey] || []).length || 1;
-        syncSlider();
-        markRows();
-        boxPackLabApply();
-      });
     });
     hud.querySelectorAll("[data-boxes]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -16843,9 +17207,12 @@
       boxPackLabAfterRender();
     });
 
-    boxPackLabApply();
+    if (!_boxPackLab.orig.veggies && _boxPackLab.fullVeggies.length) {
+      veggiesBox.include = true;
+    }
+    boxPackLabAfterRender();
     console.info(
-      "Box pack lab ON — Proteins/Sauces/Drinks/Veggies · slider / 1–2–3 widths / force 3–4 lines."
+      "Box pack lab ON — slider / 1–2–3 widths / force 3–4 lines. Live scorer unchanged unless you Force lines."
     );
   }
 

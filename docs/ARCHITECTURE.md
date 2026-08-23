@@ -130,7 +130,7 @@ js/
     normalize.js         # raw rows → domain model (legacy + v2 schemas)
   layout/
     menuScale.js         # fitMenuText, 2-col bake-off
-    boxPack.js           # columns bake-off + balanced wrap — live module is js/box-pack.js (wrap scorer shared with box-pack-lab.html)
+    boxPack.js           # columns bake-off + balanced wrap (port from menu.js)
     footerWidths.js      # 1 / 2⁄3–1⁄3 / thirds pure functions
   boxes/
     renderBox.js         # generic info-box shell + body

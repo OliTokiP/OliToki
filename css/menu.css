@@ -1604,7 +1604,6 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #sauces-box .box-item-name,
 #footer-drinks-box .box-item-name,
 #veggies-box .box-item-name,
-[data-box-kind] .box-item-name,
 #protein-box .protein-name {
   font-family: var(--toki-font);
   font-weight: 700; /* overridden by typo-name → Thin */
@@ -1694,7 +1693,6 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #sauces-box .box-item-price,
 #footer-drinks-box .box-item-price,
 #veggies-box .box-item-price,
-[data-box-kind] .box-item-price,
 #protein-box .protein-price {
   font-family: var(--toki-font);
   font-weight: 400; /* Regular */
@@ -1706,12 +1704,10 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #sauces-box .item-paren-sub,
 #footer-drinks-box .item-paren-sub,
 #veggies-box .item-paren-sub,
-[data-box-kind] .item-paren-sub,
 #protein-box .box-item-sub,
 #sauces-box .box-item-sub,
 #footer-drinks-box .box-item-sub,
-#veggies-box .box-item-sub,
-[data-box-kind] .box-item-sub {
+#veggies-box .box-item-sub {
   font-family: var(--toki-font);
   font-weight: 400; /* Regular */
   opacity: 0.8;
@@ -1724,8 +1720,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #protein-box .info-box-body.typo-name .box-item-name,
 #sauces-box .info-box-body.typo-name .box-item-name,
 #footer-drinks-box .info-box-body.typo-name .box-item-name,
-#veggies-box .info-box-body.typo-name .box-item-name,
-[data-box-kind] .info-box-body.typo-name .box-item-name {
+#veggies-box .info-box-body.typo-name .box-item-name {
   font-weight: 700;
 }
 
@@ -1741,10 +1736,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #protein-box .info-box-body.typo-name-sub-price .box-item-name,
 #sauces-box .info-box-body.typo-name-sub-price .box-item-name,
 #footer-drinks-box .info-box-body.typo-name-sub-price .box-item-name,
-#veggies-box .info-box-body.typo-name-sub-price .box-item-name,
-[data-box-kind] .info-box-body.typo-name-price .box-item-name,
-[data-box-kind] .info-box-body.typo-name-sub .box-item-name,
-[data-box-kind] .info-box-body.typo-name-sub-price .box-item-name {
+#veggies-box .info-box-body.typo-name-sub-price .box-item-name {
   font-weight: 700;
 }
 
@@ -1765,8 +1757,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #protein-box .info-box-body.layout-wrap,
 #sauces-box .info-box-body.layout-wrap,
 #footer-drinks-box .info-box-body.layout-wrap,
-#veggies-box .info-box-body.layout-wrap,
-[data-box-kind] .info-box-body.layout-wrap {
+#veggies-box .info-box-body.layout-wrap {
   display: flex;
   flex-wrap: wrap;
   align-content: space-evenly;
@@ -1803,7 +1794,6 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #sauces-box .info-box-body.align-center,
 #footer-drinks-box .info-box-body.align-center,
 #veggies-box .info-box-body.align-center,
-[data-box-kind] .info-box-body.align-center,
 #drink-options-box .drinks-box-body.align-center {
   text-align: center;
   justify-content: center;
@@ -1858,8 +1848,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   width: 100%;
 }
 
-#protein-box .info-box-body.layout-wrap,
-[data-box-kind="protein"] .info-box-body.layout-wrap {
+#protein-box .info-box-body.layout-wrap {
   font-family: var(--toki-font);
   font-weight: 700;
   font-size: calc(30px * var(--box-scale) * var(--toki-font-scale, 1));
@@ -1874,8 +1863,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #protein-box .info-box-body.lines-2.layout-wrap,
 #sauces-box .info-box-body.lines-2.layout-wrap,
 #footer-drinks-box .info-box-body.lines-2.layout-wrap,
-#veggies-box .info-box-body.lines-2.layout-wrap,
-[data-box-kind] .info-box-body.lines-2.layout-wrap {
+#veggies-box .info-box-body.lines-2.layout-wrap {
   row-gap: 0.18em;
   align-content: center;
   padding: calc(6px * var(--box-scale)) calc(10px * var(--box-scale)) calc(8px * var(--box-scale));
@@ -1893,10 +1881,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 */
 #sauces-box .info-box-body.layout-wrap,
 #footer-drinks-box .info-box-body.layout-wrap,
-#veggies-box .info-box-body.layout-wrap,
-[data-box-kind="sauces"] .info-box-body.layout-wrap,
-[data-box-kind="drinks"] .info-box-body.layout-wrap,
-[data-box-kind="veggies"] .info-box-body.layout-wrap {
+#veggies-box .info-box-body.layout-wrap {
   font-family: var(--toki-font);
   font-size: calc(32px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.1;
@@ -1909,8 +1894,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   Sauces in footer-major (~768px, protein off): modest base bump so 2-line
   packs land ~34–38px (not huge) with full row fill.
 */
-#sauces-box.footer-major .info-box-body.layout-wrap,
-[data-box-kind="sauces"].footer-major .info-box-body.layout-wrap {
+#sauces-box.footer-major .info-box-body.layout-wrap {
   font-size: calc(34px * var(--box-scale) * var(--toki-font-scale, 1));
   line-height: 1.1;
   padding: 8px 14px 10px;
@@ -1930,8 +1914,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #protein-box .protein-wrap-item,
 #sauces-box .sauce-item,
 #footer-drinks-box .footer-drink-item,
-#veggies-box .veggie-item,
-[data-box-kind] .wrap-item {
+#veggies-box .veggie-item {
   display: inline-block;
   white-space: nowrap;
   color: inherit;
@@ -1943,8 +1926,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 #protein-box .protein-wrap-sep,
 #sauces-box .sauce-sep,
 #footer-drinks-box .footer-drink-sep,
-#veggies-box .veggie-sep,
-[data-box-kind] .wrap-sep {
+#veggies-box .veggie-sep {
   display: inline-block;
   white-space: pre;
   color: inherit;
