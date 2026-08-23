@@ -308,12 +308,12 @@ def notify(
     subtitle: str = "",
     open_url: str = "",
     tag: str = "",
-    fallback: bool = True,
+    fallback: bool = False,
 ) -> bool:
     """Post a Suite-branded Notification Center banner. Darwin only.
 
-    `fallback=False` skips the Python NSUserNotification path (that is the
-    scripts / Script Editor cluster). Listener ticket-ready badges use that.
+    Never post NSUserNotification from this Python process (that is the
+    **Python** cluster in Notification Center). Suite.app delivers the banner.
     """
     if not _darwin():
         return False
@@ -326,9 +326,9 @@ def notify(
         title, body, subtitle=subtitle, open_url=open_url, tag=tag
     ):
         return True
-    if not fallback:
-        return False
-    return _fallback_ns(title, body, subtitle=subtitle, open_url=open_url)
+    if fallback:
+        return _fallback_ns(title, body, subtitle=subtitle, open_url=open_url)
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
