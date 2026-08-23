@@ -4793,6 +4793,7 @@
     writeHash(false);
     applyTheme();
     applyLastPaintOverlay(); // overlay last real paint immediately (CSS default is always Toki); do not write here
+    showManagerBetaBadge();
     watchFonts();
     fitDevice();
     renderAll();
