@@ -5969,6 +5969,8 @@
   let _sheetsApiProxy = null; // null = unknown, true/false after probe
   let _sheetsApiBase = ""; // "" = same-origin; else Cloud Run origin
   let _sheetsApiProxyAt = 0;
+  /** Proxy honors ?sheetId= for a catalog workbook (Beta) without flipping A2. */
+  let _sheetsCatalogSheetId = false;
 
   function tokiApiUrl(path) {
     const p = path.charAt(0) === "/" ? path : "/" + path;
@@ -6081,6 +6083,7 @@
           const j = await res.json();
           if (j && j.sheetsApi) {
             _sheetsApiProxy = true;
+            _sheetsCatalogSheetId = !!j.catalogSheetId;
             _sheetsApiBase =
               candidates[i].indexOf("http") === 0
                 ? candidates[i].replace(/\/api\/health$/, "")
@@ -6089,6 +6092,7 @@
               "sheets proxy: yes",
               j.email || "",
               j.dataSource ? "dataSource=" + j.dataSource : "",
+              _sheetsCatalogSheetId ? "catalogSheetId" : "live-sheet-only",
               _sheetsApiBase ? "via " + _sheetsApiBase : "same-origin"
             );
             return true;
@@ -6101,6 +6105,7 @@
       await sleep(400);
     }
     _sheetsApiProxy = false;
+    _sheetsCatalogSheetId = false;
     _sheetsApiProxyAt = Date.now();
     tokiInfo("sheets proxy: unreachable → public export");
     return false;
@@ -6123,10 +6128,89 @@
     return "";
   }
 
+  const SETTINGS_TIMER_RE =
+    /^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i;
+
+  function catalogSourceId(name) {
+    const n = String(name || "").trim().toLowerCase();
+    if (n.indexOf("beta") !== -1) return "beta";
+    if (n.indexOf("restaurant") !== -1) return "restaurant";
+    if (n.indexOf("alpha") !== -1) return "alpha";
+    return n.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "source";
+  }
+
+  function parseOneSettingsChromeRow(row, header, catalog) {
+    const name = String((row && row[0]) || "").trim();
+    if (!name) return null;
+    if (name.toLowerCase().indexOf("gsheet") !== -1) return null;
+    let requireRestart = parseYesNo(row && row[1], false);
+    let systemFont = "roboto";
+    let limitHeavyFilters = true;
+    let refreshTimer = "";
+    let debugMode = false;
+    for (let c = 0; c < (header || []).length; c++) {
+      const h = String(header[c] || "").trim().toLowerCase();
+      if (h.indexOf("require restart") !== -1) {
+        requireRestart = parseYesNo(row[c], false);
+      }
+      if (h.indexOf("system font") !== -1) {
+        systemFont = parseSystemFontName(row[c]);
+      }
+      if (isHeavyFilterHeader(h)) {
+        limitHeavyFilters = parseYesNo(row[c], true);
+      }
+      if (h.indexOf("refresh timer") !== -1) {
+        const cand = String((row && row[c]) || "").trim();
+        if (SETTINGS_TIMER_RE.test(cand)) refreshTimer = cand;
+      }
+      if (h.indexOf("debug") !== -1 && h.indexOf("mode") !== -1) {
+        debugMode = parseYesNo(row[c], false);
+      }
+    }
+    if (!refreshTimer) {
+      for (let c = 0; c < (row || []).length; c++) {
+        const cand = String(row[c] || "").trim();
+        if (SETTINGS_TIMER_RE.test(cand)) {
+          refreshTimer = cand;
+          break;
+        }
+      }
+    }
+    let match = null;
+    const key = name.toLowerCase();
+    for (let i = 0; i < (catalog || []).length; i++) {
+      if (String(catalog[i].name || "").trim().toLowerCase() === key) {
+        match = catalog[i];
+        break;
+      }
+    }
+    return {
+      id: catalogSourceId(name),
+      name: name,
+      requireRestart: requireRestart,
+      systemFont: systemFont,
+      limitHeavyFilters: limitHeavyFilters,
+      refreshTimer: refreshTimer,
+      debugMode: debugMode,
+      sheetId: (match && match.sheetId) || "",
+    };
+  }
+
+  function pickCatalogChrome(catalogSettings, wantId) {
+    const rows = catalogSettings || [];
+    const want = String(wantId || "").trim().toLowerCase();
+    if (!want) return null;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || {};
+      const id = String(row.id || catalogSourceId(row.name) || "").toLowerCase();
+      if (id === want || catalogSourceId(row.name) === want) return row;
+    }
+    return null;
+  }
+
   function parseSettingsRows(rows) {
-    let dataSource = "";
-    let requireRestart = false;
     const catalog = [];
+    const catalogSettings = [];
     let headerIdx = -1;
     let catalogIdx = -1;
     for (let i = 0; i < (rows || []).length; i++) {
@@ -6141,51 +6225,6 @@
         catalogIdx = i;
       }
     }
-    let systemFont = "roboto";
-    let limitHeavyFilters = true;
-    let refreshTimer = "";
-    if (headerIdx >= 0 && headerIdx + 1 < rows.length) {
-      dataSource = String((rows[headerIdx + 1] && rows[headerIdx + 1][0]) || "").trim();
-      requireRestart = parseYesNo(
-        rows[headerIdx + 1] && rows[headerIdx + 1][1],
-        false
-      );
-      const header = rows[headerIdx] || [];
-      const dataRow = rows[headerIdx + 1] || [];
-      for (let c = 0; c < header.length; c++) {
-        const h = String(header[c] || "").trim().toLowerCase();
-        if (h.indexOf("system font") !== -1) {
-          systemFont = parseSystemFontName(rows[headerIdx + 1] && rows[headerIdx + 1][c]);
-        }
-        if (isHeavyFilterHeader(h)) {
-          limitHeavyFilters = parseYesNo(
-            rows[headerIdx + 1] && rows[headerIdx + 1][c],
-            true
-          );
-        }
-        if (h.indexOf("refresh timer") !== -1) {
-          const cand = String(dataRow[c] || "").trim();
-          // Only accept if it matches timer syntax (number + optional unit); this
-          // excludes "TRUE", "FALSE" etc. even though parse may return 30 for them.
-          if (/^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i.test(cand)) {
-            refreshTimer = cand;
-          }
-        }
-      }
-      // Scan whole data row for a timer string. This connects the board soft refresh
-      // clock (getRefreshIntervalSeconds + armRefreshTimer) to the Refresh Timer
-      // value from the OliToki Menu Settings gsheet cell, even if the header cell
-      // text contains validation rules / ref instead of the selected increment.
-      if (!refreshTimer) {
-        for (let c = 0; c < dataRow.length; c++) {
-          const cand = String(dataRow[c] || "").trim();
-          if (/^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i.test(cand)) {
-            refreshTimer = cand;
-            break;
-          }
-        }
-      }
-    }
     if (catalogIdx >= 0) {
       for (let i = catalogIdx + 1; i < rows.length; i++) {
         const name = String((rows[i] && rows[i][0]) || "").trim();
@@ -6198,8 +6237,19 @@
         });
       }
     }
-    const key = dataSource.toLowerCase();
+    if (headerIdx >= 0) {
+      const header = rows[headerIdx] || [];
+      const end = catalogIdx >= 0 ? catalogIdx : rows.length;
+      for (let i = headerIdx + 1; i < end; i++) {
+        const parsed = parseOneSettingsChromeRow(rows[i], header, catalog);
+        if (parsed) catalogSettings.push(parsed);
+      }
+    }
+    let live = pickCatalogChrome(catalogSettings, "restaurant");
+    if (!live) live = catalogSettings[0] || null;
+    const dataSource = (live && live.name) || "";
     let match = null;
+    const key = dataSource.toLowerCase();
     if (key) {
       for (let i = 0; i < catalog.length; i++) {
         if (String(catalog[i].name || "").trim().toLowerCase() === key) {
@@ -6209,14 +6259,16 @@
       }
     }
     return {
-      dataSource: dataSource || "Alpha Copy",
-      requireRestart: requireRestart,
-      systemFont: systemFont,
-      limitHeavyFilters: limitHeavyFilters,
-      refreshTimer: refreshTimer || "",
-      sheetId: (match && match.sheetId) || "",
-      sourceName: (match && match.name) || "",
+      dataSource: dataSource || "Restaurant Copy",
+      requireRestart: live ? !!live.requireRestart : false,
+      systemFont: (live && live.systemFont) || "roboto",
+      limitHeavyFilters: live ? !!live.limitHeavyFilters : true,
+      refreshTimer: (live && live.refreshTimer) || "",
+      debugMode: live ? !!live.debugMode : false,
+      sheetId: (live && live.sheetId) || (match && match.sheetId) || "",
+      sourceName: (match && match.name) || dataSource || "",
       catalog: catalog,
+      catalogSettings: catalogSettings,
     };
   }
 
@@ -6364,31 +6416,52 @@
     const tvName = (pin && pin.dataSource) || j.dataSource || "";
     let dataSourceName = tvName;
     let sheetId = tvSheet;
+    // Dining-room TVs keep Restaurant A2–G2. ?beta overlays Beta A3–G3
+    // (Require restart, Refresh Timer, Debug Mode) plus the Beta workbook.
+    let chrome = null;
     if (urlWantsBeta()) {
       const beta = catalogBetaEntry(j.catalog);
       dataSourceName = beta.name;
       sheetId = beta.sheetId;
+      chrome = pickCatalogChrome(j.catalogSettings, "beta");
     }
     liveSettings = {
       dataSource: dataSourceName,
-      requireRestart: !!j.requireRestart,
-      systemFont: parseSystemFontName(j.systemFont),
-      limitHeavyFilters:
-        j.limitHeavyFilters == null ? true : !!j.limitHeavyFilters,
-      refreshTimer: j.refreshTimer || "",
+      requireRestart: chrome
+        ? parseYesNo(chrome.requireRestart, false)
+        : !!j.requireRestart,
+      systemFont: parseSystemFontName(
+        chrome && chrome.systemFont != null ? chrome.systemFont : j.systemFont
+      ),
+      limitHeavyFilters: chrome
+        ? chrome.limitHeavyFilters == null
+          ? true
+          : !!chrome.limitHeavyFilters
+        : j.limitHeavyFilters == null
+          ? true
+          : !!j.limitHeavyFilters,
+      refreshTimer:
+        (chrome && chrome.refreshTimer) || j.refreshTimer || "",
       debugMode: liveSettings.debugMode,
       debugFeatures: liveSettings.debugFeatures,
       sheetId: sheetId,
       tvSheetId: tvSheet,
       catalog: j.catalog || [],
+      catalogSettings: j.catalogSettings || [],
     };
     if (liveSettings.sheetId) {
       cfg.googleSheetId = liveSettings.sheetId;
     }
     applySystemFont(liveSettings.systemFont);
-    if (j && Object.prototype.hasOwnProperty.call(j, "debugMode")) {
+    const debugRaw =
+      chrome && Object.prototype.hasOwnProperty.call(chrome, "debugMode")
+        ? chrome.debugMode
+        : j && Object.prototype.hasOwnProperty.call(j, "debugMode")
+          ? j.debugMode
+          : null;
+    if (debugRaw != null) {
       applyDebugConfig({
-        debugMode: parseYesNo(j.debugMode, false),
+        debugMode: parseYesNo(debugRaw, false),
         features: j.debugFeatures || {},
       });
     }
@@ -6445,7 +6518,8 @@
     const parsed = parseSettingsRows(parseCsv(text));
     try {
       const dbg = await fetchSettingsDebuggerPublic();
-      parsed.debugMode = dbg.debugMode;
+      // Features stay on the Debugger tab. Debug Mode is Settings column G
+      // per catalog — do not let a leftover Debugger A2 overwrite it.
       parsed.debugFeatures = dbg.features;
     } catch (dbgErr) {
       tokiWarn(
@@ -6471,9 +6545,11 @@
             // Older toki_server omits systemFont / the FPS cap / refreshTimer — fill from public Settings.
             // Also patch refreshTimer if proxy gave a non-timer value (column layout in
             // Settings may put the child "Refresh Timer" value outside the matched header col).
-            const timerRe = /^\s*\d+\s*(second|seconds|sec|s|minute|minutes|min|m)?\s*$/i;
+            const timerRe = SETTINGS_TIMER_RE;
             const jHasGoodRefresh = !!(j && j.refreshTimer && timerRe.test(j.refreshTimer));
+            const betaUrl = urlWantsBeta();
             if (
+              (betaUrl && !(j.catalogSettings && j.catalogSettings.length)) ||
               !j.systemFont ||
               j.limitHeavyFilters == null ||
               !jHasGoodRefresh ||
@@ -6481,17 +6557,38 @@
             ) {
               try {
                 const pub = await fetchLiveSettingsFromPublicExport();
-                if (pub && pub.systemFont && !j.systemFont) {
+                if (
+                  betaUrl &&
+                  pub &&
+                  pub.catalogSettings &&
+                  pub.catalogSettings.length &&
+                  !(j.catalogSettings && j.catalogSettings.length)
+                ) {
+                  j.catalog = j.catalog && j.catalog.length ? j.catalog : pub.catalog;
+                  j.catalogSettings = pub.catalogSettings;
+                  if (pub.debugFeatures && !j.debugFeatures) {
+                    j.debugFeatures = pub.debugFeatures;
+                  }
+                  applyLiveSettingsPayload(j);
+                }
+                if (!betaUrl && pub && pub.systemFont && !j.systemFont) {
                   liveSettings.systemFont = pub.systemFont;
                   applySystemFont(pub.systemFont);
                 }
-                if (pub && pub.limitHeavyFilters != null && j.limitHeavyFilters == null) {
+                if (!betaUrl && pub && pub.limitHeavyFilters != null && j.limitHeavyFilters == null) {
                   liveSettings.limitHeavyFilters = !!pub.limitHeavyFilters;
                 }
-                if (pub && pub.refreshTimer && timerRe.test(pub.refreshTimer) && !jHasGoodRefresh) {
+                if (
+                  !betaUrl &&
+                  pub &&
+                  pub.refreshTimer &&
+                  timerRe.test(pub.refreshTimer) &&
+                  !jHasGoodRefresh
+                ) {
                   liveSettings.refreshTimer = pub.refreshTimer;
                 }
                 if (
+                  !betaUrl &&
                   pub &&
                   Object.prototype.hasOwnProperty.call(pub, "debugMode") &&
                   !Object.prototype.hasOwnProperty.call(j, "debugMode")
@@ -6584,7 +6681,11 @@
     opts = opts || {};
     const force = opts.force !== false; // default TRUE — live sheet is the CMS
     const foreign = sheetFetchIsForeign();
-    const useProxy = !foreign && (await detectSheetsApiProxy());
+    const proxyUp = await detectSheetsApiProxy();
+    // Older Cloud Run ignored sheetId and would serve Restaurant for Beta.
+    // Only send a foreign catalog through the proxy when health says it can.
+    const useProxy = proxyUp && (!foreign || _sheetsCatalogSheetId);
+    const sid = String((cfg && cfg.googleSheetId) || "").trim();
     let url;
     if (useProxy) {
       url =
@@ -6592,6 +6693,7 @@
         "?gid=" +
         encodeURIComponent(String(gid)) +
         (force ? "&force=1" : "") +
+        (sid ? "&sheetId=" + encodeURIComponent(sid) : "") +
         "&t=" +
         Date.now();
     } else {
@@ -8941,6 +9043,13 @@
     }
 
     // —— Fallbacks (cold load only) ——
+    // ?beta must not paint the Restaurant embedded/xlsx menu — that looked like
+    // a hard refresh that "dropped" the beta flag.
+    if (urlWantsBeta()) {
+      throw new Error(
+        "Could not load Beta sheet. " + errors.join(" | ")
+      );
+    }
     const fallbacks = cfg.fallbacks || ["xlsx", "embedded"];
     for (const fb of fallbacks) {
       try {
@@ -15457,6 +15566,7 @@
     tokiWarn("hang recovery: retry data load (attempt " + _hangAttempt + ")");
     try {
       _sheetsApiProxy = null;
+      _sheetsCatalogSheetId = false;
       if (_menuPainted) {
         const source = await loadMenu({ soft: true });
         if (source === "stale") return;
@@ -15964,7 +16074,12 @@
             const sid = (liveSettings && liveSettings.sheetId) || "";
             const font = (liveSettings && liveSettings.systemFont) || "roboto";
             const base = sid ? name + " · " + sid.slice(0, 8) : name;
-            return base + " · " + font;
+            return (
+              base +
+              " · " +
+              font +
+              (urlWantsBeta() ? " · ?beta" : "")
+            );
           }
           case "requireRestart":
             return liveSettings && liveSettings.requireRestart

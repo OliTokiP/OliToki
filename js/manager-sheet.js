@@ -587,6 +587,7 @@
 
   var _proxyBase = "";
   var _proxyAt = 0;
+  var _proxyCatalogSheetId = false;
 
   function apiUrl(path) {
     var p = path.charAt(0) === "/" ? path : "/" + path;
@@ -686,6 +687,7 @@
           var j = await res.json();
           if (j && j.sheetsApi) {
             _proxy = true;
+            _proxyCatalogSheetId = !!j.catalogSheetId;
             _proxyBase =
               candidates[i].indexOf("http") === 0
                 ? candidates[i].replace(/\/api\/health$/, "")
@@ -700,6 +702,7 @@
       await sleep(400);
     }
     _proxy = false;
+    _proxyCatalogSheetId = false;
     _proxyAt = Date.now();
     return false;
   }
@@ -736,9 +739,11 @@
     var extra = force ? "&force=1" : "";
     var id = String(sheetId || "").trim();
     var sidQ = id ? "&sheetId=" + encodeURIComponent(id) : "";
-    // Live A2 workbook can use the proxy. A different catalog (Beta) must
-    // not — older toki_server ignores sheetId and would return Restaurant.
-    if (useProxy && !isForeignCatalog(id)) {
+    // Live A2 workbook can use the proxy. A different catalog (Beta) only
+    // when health.catalogSheetId is true — older toki_server ignored sheetId
+    // and would return Restaurant.
+    var proxyOk = useProxy && (!isForeignCatalog(id) || _proxyCatalogSheetId);
+    if (proxyOk) {
       try {
         return parseCsv(
           await fetchText(

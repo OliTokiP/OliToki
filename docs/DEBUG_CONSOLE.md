@@ -2,7 +2,7 @@
 
 This document explains how the performance feature flag output works and how to read it.
 
-**Last updated:** 2026-08-22 23:31 (per-catalog Debug Mode)
+**Last updated:** 2026-08-23 (`?beta` uses Beta Settings chrome)
 
 **Primary reference:** [PERFORMANCE.md](./PERFORMANCE.md)  
 **Control source:** OliToki Menu Settings → **Settings** tab, column **Debug Mode** (Restaurant **G2**, Beta **G3**). Menu Manager **System Settings → Debug Mode** writes the cell for the catalog you are editing. **Debug Features** (Performance Console, Full View, Show Textbox Wireframes, …) stay on the **Debugger** tab (gid `195166367`). The catalog **Debug Menu** tab (gid `1793812854`) is leftover and is no longer read.
@@ -178,6 +178,7 @@ For now, **Performance Console** is the one that turns on the reporting stream.
 | Symptom | Likely cause |
 |---------|--------------|
 | No output at all | Debug Mode or Performance Console is FALSE in the sheet |
+| HUD missing on `?beta` | Debug Mode is **that catalog’s G cell** (Beta **G3**), not Restaurant G2. Open the board with `?beta` so it reads Beta chrome |
 | Output appears once then stops | Normal — it only reprints on load or when you call `set()` / changes are detected |
 | `active` says YES but I hid the element in DOM | The detector looks at config + classes + timers. Use `.set('xxx', false)` to force a hard kill |
 | Wall looks different | `source = wall-lean` is expected and intentional |

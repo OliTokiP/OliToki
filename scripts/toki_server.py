@@ -68,8 +68,11 @@ _BARE_SHEET_ID = re.compile(r"^[a-zA-Z0-9-_]{30,}$")
 # board fetches become 8 sequential Google round-trips (20–45s each when slow).
 _meta_lock = threading.Lock()
 _meta_cache = {"at": 0, "title_by_gid": {}, "gid_by_title": {}}
+# sid -> {at, title_by_gid, gid_by_title} for catalog workbooks that are not
+# the live TV pointer (Settings A2). ?beta boards read Beta Copy this way.
+_sid_meta_cache: dict[str, dict] = {}
 _csv_lock = threading.Lock()
-# gid -> {"at": float, "text": str}
+# gid or "sid:gid" -> {"at": float, "text": str}
 _csv_cache: dict[str, dict] = {}
 # Drive modifiedTime/version of the catalog workbook the CSV cache was built from.
 _csv_book_rev: str = ""
@@ -77,6 +80,9 @@ _csv_book_sid: str = ""
 # Single-flight for full-workbook batchGet (all tabs in one Google round-trip)
 _csv_batch_event: threading.Event | None = None
 _csv_batch_error: BaseException | None = None
+# Per-sid single-flight for foreign catalog batchGet (?beta / Manager Beta).
+_csv_sid_flight: dict[str, threading.Event] = {}
+_csv_sid_flight_error: dict[str, BaseException | None] = {}
 _rev_lock = threading.Lock()
 _rev_cache: dict = {"at": 0.0, "sid": "", "rev": None, "drive_ok": True}
 # Do not ask Drive more than once a second (all boards share this).
@@ -684,10 +690,13 @@ def _flush_data_caches() -> None:
         _csv_batch_error = None
         _csv_book_rev = ""
         _csv_book_sid = ""
+        _csv_sid_flight.clear()
+        _csv_sid_flight_error.clear()
     with _meta_lock:
         _meta_cache["at"] = 0
         _meta_cache["title_by_gid"] = {}
         _meta_cache["gid_by_title"] = {}
+        _sid_meta_cache.clear()
     with _rev_lock:
         _rev_cache["at"] = 0.0
         _rev_cache["sid"] = ""
@@ -1160,6 +1169,55 @@ class SheetsBackend:
                 "at": _meta_cache["at"],
             }
 
+    def refresh_meta_for(self, spreadsheet_id: str, force: bool = False) -> dict:
+        """Tab map for a catalog workbook that is not the live TV pointer."""
+        sid = (spreadsheet_id or "").strip()
+        if not sid or sid == self.sheet_id:
+            return self.refresh_meta(force=force)
+        now = time.time()
+        with _meta_lock:
+            hit = _sid_meta_cache.get(sid)
+            if (
+                not force
+                and hit
+                and hit.get("title_by_gid")
+                and now - float(hit.get("at") or 0) < META_TTL
+            ):
+                return {
+                    "title_by_gid": dict(hit["title_by_gid"]),
+                    "gid_by_title": dict(hit["gid_by_title"]),
+                    "at": hit["at"],
+                }
+        with self._api_lock:
+            meta = (
+                self.sheets.spreadsheets()
+                .get(
+                    spreadsheetId=sid,
+                    fields="sheets.properties(sheetId,title)",
+                )
+                .execute()
+            )
+        title_by_gid = {}
+        gid_by_title = {}
+        for sh in meta.get("sheets", []):
+            p = sh.get("properties", {})
+            gid = str(p.get("sheetId"))
+            title = p.get("title") or ""
+            title_by_gid[gid] = title
+            gid_by_title[title] = gid
+        packed = {
+            "at": time.time(),
+            "title_by_gid": title_by_gid,
+            "gid_by_title": gid_by_title,
+        }
+        with _meta_lock:
+            _sid_meta_cache[sid] = packed
+            return {
+                "title_by_gid": dict(title_by_gid),
+                "gid_by_title": dict(gid_by_title),
+                "at": packed["at"],
+            }
+
     def title_for_gid(self, gid: str) -> str:
         meta = self.refresh_meta()
         title = meta["title_by_gid"].get(str(gid))
@@ -1352,14 +1410,144 @@ class SheetsBackend:
             if ev is not None:
                 ev.set()
 
-    def csv_for_gid(self, gid: str, force: bool = False) -> str:
+    def warm_csv_cache_sid(self, sid: str, force: bool = False) -> None:
+        """batchGet every tab of a catalog workbook that is not the TV pointer.
+
+        Does not flip self.sheet_id (Settings A2 / dining-room). Cache keys are
+        "sid:gid". Concurrent ?beta boards share one in-flight batchGet.
+        """
+        sid = (sid or "").strip()
+        if not sid or sid == self.sheet_id:
+            self.warm_csv_cache(force=force)
+            return
+        now = time.time()
+        meta = self.refresh_meta_for(sid, force=False)
+        title_by_gid = meta["title_by_gid"]
+        prefix = sid + ":"
+
+        with _csv_lock:
+            if force:
+                ages = [
+                    now - v["at"]
+                    for k, v in _csv_cache.items()
+                    if str(k).startswith(prefix)
+                ]
+                flight = _csv_sid_flight.get(sid)
+                if ages and max(ages) < CSV_FORCE_COALESCE_S and flight is None:
+                    _log(
+                        f"csv batch: coalesce force sid={sid} "
+                        f"(cache max age {max(ages):.2f}s < {CSV_FORCE_COALESCE_S}s)"
+                    )
+                    return
+            need: list[tuple[str, str]] = []
+            for g, title in title_by_gid.items():
+                g = str(g)
+                hit = _csv_cache.get(prefix + g)
+                if force or not hit or now - hit["at"] >= CSV_TTL:
+                    need.append((g, title))
+            if not need:
+                return
+            wait_ev = _csv_sid_flight.get(sid)
+            if wait_ev is not None:
+                pass
+            else:
+                wait_ev = None
+                _csv_sid_flight[sid] = threading.Event()
+                _csv_sid_flight_error[sid] = None
+
+        if wait_ev is not None:
+            _log(f"csv batch: join in-flight batchGet sid={sid}")
+            wait_ev.wait(timeout=180.0)
+            err = _csv_sid_flight_error.get(sid)
+            if err is not None:
+                raise err
+            return
+
+        t0 = time.time()
+        try:
+            with _csv_lock:
+                need = []
+                now = time.time()
+                for g, title in title_by_gid.items():
+                    g = str(g)
+                    hit = _csv_cache.get(prefix + g)
+                    if force or not hit or now - hit["at"] >= CSV_TTL:
+                        need.append((g, title))
+            if not need:
+                return
+            ranges = [
+                "'" + str(title).replace("'", "''") + "'" for _g, title in need
+            ]
+            with self._api_lock:
+                result = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .batchGet(
+                        spreadsheetId=sid,
+                        ranges=ranges,
+                        majorDimension="ROWS",
+                        valueRenderOption="FORMATTED_VALUE",
+                    )
+                    .execute()
+                )
+            value_ranges = result.get("valueRanges") or []
+            filled = 0
+            now = time.time()
+            with _csv_lock:
+                for i, (g, title) in enumerate(need):
+                    vr = value_ranges[i] if i < len(value_ranges) else {}
+                    values = vr.get("values") or []
+                    text = self._values_to_csv(values)
+                    _csv_cache[prefix + g] = {"at": now, "text": text}
+                    filled += 1
+            _log(
+                f"csv batchGet sid={sid} force={force} tabs={filled}/{len(need)} "
+                f"fetch={time.time() - t0:.2f}s"
+            )
+        except Exception as e:
+            _csv_sid_flight_error[sid] = e
+            _log(f"csv batchGet sid={sid} failed after {time.time() - t0:.2f}s: {e}")
+            raise
+        finally:
+            with _csv_lock:
+                ev = _csv_sid_flight.pop(sid, None)
+            if ev is not None:
+                ev.set()
+
+    def csv_for_gid(self, gid: str, force: bool = False, sheet_id: str | None = None) -> str:
         """
         Fetch sheet values by gid.
         force=True (menu hard/soft refresh): re-batchGet unless coalesce window.
         force=False: serve CSV_TTL cache when warm.
+        Optional sheet_id reads that catalog workbook without flipping A2.
         """
         gid = str(gid)
         now = time.time()
+        want_sid = ""
+        if sheet_id:
+            want_sid, _name = self.resolve_catalog_sheet_id(sheet_id)
+        if want_sid and want_sid != self.sheet_id:
+            cache_key = want_sid + ":" + gid
+            if not force:
+                with _csv_lock:
+                    hit = _csv_cache.get(cache_key)
+                    if hit and now - hit["at"] < CSV_TTL:
+                        _log(
+                            f"csv gid={gid} sid={want_sid} cache hit "
+                            f"age={now - hit['at']:.1f}s"
+                        )
+                        return hit["text"]
+            self.warm_csv_cache_sid(want_sid, force=force)
+            with _csv_lock:
+                hit = _csv_cache.get(cache_key)
+                if hit:
+                    if force:
+                        _log(
+                            f"csv gid={gid} sid={want_sid} after force-batch "
+                            f"age={now - hit['at']:.2f}s"
+                        )
+                    return hit["text"]
+            return self.csv_for_gid_one(gid, force=True, sheet_id=want_sid)
         # Settings TTL already covers Data Source flips. Board force-refresh
         # must not spend a Settings read — that is how we hit 60/min.
         self.apply_live_sheet(force_settings=False)
@@ -2880,6 +3068,7 @@ def make_handler(
                     {
                         "ok": True,
                         "sheetsApi": backend is not None,
+                        "catalogSheetId": True,
                         "sheetId": backend.sheet_id if backend else None,
                         "dataSource": (live or {}).get("dataSource"),
                         "requireRestart": (live or {}).get("requireRestart"),
@@ -3116,7 +3305,9 @@ def make_handler(
                             str(gid), force=force, sheet_id=req_sid or None
                         )
                     else:
-                        text = backend.csv_for_gid(str(gid), force=force)
+                        text = backend.csv_for_gid(
+                            str(gid), force=force, sheet_id=req_sid or None
+                        )
                     self._send(
                         200,
                         text.encode("utf-8"),

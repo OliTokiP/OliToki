@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-08-23 (boxPackLab four boxes + font)
+**Last updated:** 2026-08-23 (beta Settings chrome + catalog CSV)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -33,7 +33,7 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`textBoxDebug=1`** | Draw text-box wireframes (Menu List, Footer Boxes, titles, prices, Board 4 announcement/drink boxes). Aliases: `textboxWireframes=1`, `drawTextBoxes=1`. Same overlay as Debugger **Show Textbox Wireframes**. |
 | **`imgScale=0.25`** | Debug only: smash images down (looks terrible on purpose). Bare `?imgScale` = 1/100. |
 | **`encore=old`** | Encore only: park the Spotlight Veil on the **camera rig** (nested `scale(--encore-zoom)`). Default (omit, or `encore=new`) keeps the veil as a stage sibling. |
-| **`beta`** | Load **Beta (Development) Copy** instead of Settings A2 (Restaurant). Dining-room TVs omit this. Also: `preview-all.html?beta` forwards it to each wall iframe. |
+| **`beta`** | Load **Beta (Development) Copy** instead of Settings A2 (Restaurant). Also uses Beta’s Settings row (Require restart, Refresh Timer, Debug Mode — A3–G3), not Restaurant A2–G2. Dining-room TVs omit this. Also: `preview-all.html?beta` forwards it to each wall iframe. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 

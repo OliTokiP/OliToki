@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2945d58",
-  "hashFull": "2945d58ad07329ad4d7305279d4dc6a3f5503b8a",
-  "subject": "QA: 2026-08-20 Ticket Ready For Review badge should navigate to ticket page when clicked (pass 7)"
+  "hash": "e8f815a",
+  "hashFull": "e8f815ac2db081508de7ced5a4787d7ad60580ae",
+  "subject": "QA: 2026-08-23 Soft refresh broken (Only testing on beta) (pass 1)"
 };
