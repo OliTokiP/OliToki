@@ -797,6 +797,11 @@
   }
   installBrokenImageWatch();
 
+  function isRemoteImagePath(path) {
+    const s = String(path || "").trim();
+    return /^https?:\/\//i.test(s) || /^\/?api\/media\//i.test(s);
+  }
+
   function attachWebpFallback(el) {
     if (!el || el.dataset.webpFbBound === "1") return;
     el.dataset.webpFbBound = "1";
@@ -805,6 +810,12 @@
       if (el.dataset.tokiParked === "1") return;
       const src = el.getAttribute("src") || "";
       if (!src) return;
+      // Drive / hosted uploads are already a full URL — do not rewrite .webp → .png.
+      if (isRemoteImagePath(src) && !/food-pics\//i.test(src)) {
+        el.removeEventListener("error", onRasterError);
+        markRasterBroken(el, src);
+        return;
+      }
       // food-pics/foo-sm.webp missing → full foo.webp
       if (/-sm\.webp$/i.test(src)) {
         el.src = src.replace(/-sm\.webp$/i, ".webp");
@@ -842,6 +853,7 @@
   function toFoodSmPath(path) {
     if (!path) return path;
     const s = String(path);
+    if (isRemoteImagePath(s)) return s;
     if (!/food-pics\//i.test(s)) return toWebpPath(s);
     return toSmWebpPath(s);
   }
@@ -861,7 +873,8 @@
   }
 
   function preferFoodPathForNeed(path, needW, needH) {
-    if (!path || !/food-pics\//i.test(path)) return toWebpPath(path);
+    if (!path || isRemoteImagePath(path)) return path;
+    if (!/food-pics\//i.test(path)) return toWebpPath(path);
     return preferSmPathForNeed(path, needW, needH, FOOD_SM_LONG_PX);
   }
 
@@ -1835,7 +1848,15 @@
     ) {
       return null;
     }
-    const s = String(imageName).replace(/^\/+/, "").trim();
+    const raw = String(imageName).trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^\/?api\/media\//i.test(raw)) {
+      const path = raw.charAt(0) === "/" ? raw : "/" + raw;
+      const base = String(window.TOKI_API_BASE || "").replace(/\/$/, "");
+      return base ? base + path : path;
+    }
+    const s = raw.replace(/^\/+/, "").trim();
     if (!s) return null;
     if (s.indexOf("food-pics/") === 0) return toWebpPath(s);
     const folder = String(
@@ -1878,6 +1899,10 @@
       if (x == null || x === "") return;
       const s = String(x).trim();
       if (!s || s.toLowerCase() === "null") return;
+      if (/^https?:\/\//i.test(s) || /^\/?api\/media\//i.test(s)) {
+        tokens.push(s);
+        return;
+      }
       if (s.indexOf("food-pics/") === 0) {
         tokens.push(s);
         return;

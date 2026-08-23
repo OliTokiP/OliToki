@@ -366,6 +366,7 @@ window.TOKI_SUITE = {
     { "name": "Deployer", "page": "deploy.html", "blurb": "Ship testing or restaurant." },
     { "name": "Tickets", "page": "tickets.html", "blurb": "Queues and new tickets on this Mac." },
     { "name": "Menu Manager", "page": "manager.html", "blurb": "Edit the menu on your phone." },
+    { "name": "Item Uploader", "page": "uploader.html", "blurb": "Add a menu item + photo without GitHub." },
     { "name": "Brightness", "page": "brightness.html", "blurb": "Screen + keyboard backlight (+/− buttons, hold to repeat)" }
   ],
   "nav": [
@@ -373,6 +374,7 @@ window.TOKI_SUITE = {
     { "name": "Deployer", "page": "deploy.html" },
     { "name": "Tickets", "page": "tickets.html" },
     { "name": "Menu Manager", "page": "manager.html" },
+    { "name": "Item Uploader", "page": "uploader.html" },
     { "name": "Brightness", "page": "brightness.html" }
   ]
 };

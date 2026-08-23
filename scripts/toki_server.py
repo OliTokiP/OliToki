@@ -27,12 +27,14 @@ Env:
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import io
 import json
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -54,8 +56,70 @@ SCOPES = [
     # Cheap "did the workbook change?" check. Sheets values.get every second
     # is the 60/min quota; Drive metadata is a different, larger pool.
     "https://www.googleapis.com/auth/drive.metadata.readonly",
+    # Item Uploader: files this robot creates (food photos), not the whole Drive.
+    "https://www.googleapis.com/auth/drive.file",
 ]
 STYLE_THEME_GID = "183083022"
+# Inventory targets for POST /api/manager/item (gids match js/config*.js).
+ITEM_MENUS = (
+    {
+        "id": "board1",
+        "label": "Board 1 · Bowls",
+        "gid": "1058015863",
+        "kind": "board",
+        "folder": "food-pics/bowls",
+        "page": "index.html",
+    },
+    {
+        "id": "board2",
+        "label": "Board 2 · Handhelds",
+        "gid": "314919644",
+        "kind": "board",
+        "folder": "food-pics/handhelds",
+        "page": "index2.html",
+    },
+    {
+        "id": "board3",
+        "label": "Board 3 · Munchies",
+        "gid": "1684494006",
+        "kind": "board",
+        "folder": "food-pics/munchies",
+        "page": "index3.html",
+    },
+    {
+        "id": "proteins",
+        "label": "Proteins",
+        "gid": "1420775786",
+        "kind": "box",
+        "folder": "food-pics/proteins",
+        "page": "index.html",
+    },
+    {
+        "id": "sauces",
+        "label": "Sauces",
+        "gid": "1630545949",
+        "kind": "box",
+        "folder": "food-pics/sauces",
+        "page": "index.html",
+    },
+    {
+        "id": "drinks",
+        "label": "Drinks · Sodas",
+        "gid": "1145721787",
+        "kind": "box",
+        "folder": "food-pics/drinks",
+        "page": "index4.html",
+    },
+    {
+        "id": "veggies",
+        "label": "Veggies",
+        "gid": "640368705",
+        "kind": "box",
+        "folder": "food-pics/veggies",
+        "page": "index.html",
+    },
+)
+_ITEM_MENUS_BY_ID = {m["id"]: m for m in ITEM_MENUS}
 # OliToki Menu Settings → Debugger tab (Debug Features only).
 # Master Debug Mode is Settings column G per catalog row (G2 Restaurant, G3 Beta).
 DEBUGGER_GID = "195166367"
@@ -397,6 +461,137 @@ def _cell(row: list, idx: int) -> str:
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
     return str(v).strip()
+
+
+def _item_bool01(raw, default: str = "1") -> str:
+    if raw is None or str(raw).strip() == "":
+        return default
+    s = str(raw).strip().lower()
+    if s in ("1", "yes", "y", "true", "on"):
+        return "1"
+    if s in ("0", "no", "n", "false", "off"):
+        return "0"
+    return default
+
+
+def _item_stem(item_name: str, filename: str = "") -> str:
+    base = Path(str(filename or "")).stem
+    raw = base or str(item_name or "Item")
+    parts = re.findall(r"[A-Za-z0-9]+", raw)
+    if not parts:
+        return "Item"
+    s = "".join(p[:1].upper() + p[1:] for p in parts)
+    return s[:80] or "Item"
+
+
+def _decode_image_payload(raw) -> tuple[bytes, str]:
+    s = str(raw or "").strip()
+    mime = "application/octet-stream"
+    if not s:
+        return b"", mime
+    if s.startswith("data:") and "," in s:
+        header, b64 = s.split(",", 1)
+        m = re.search(r"data:([^;]+)", header)
+        if m:
+            mime = (m.group(1) or mime).strip() or mime
+        s = b64
+    try:
+        data = base64.b64decode(s, validate=False)
+    except Exception as e:
+        raise ValueError("invalid image data") from e
+    if not data:
+        raise ValueError("empty image data")
+    if len(data) > 10_000_000:
+        raise ValueError("image too large (max 10MB)")
+    return data, mime
+
+
+def _ext_for_mime(mime: str, filename: str = "") -> str:
+    name = str(filename or "")
+    suf = Path(name).suffix.lower()
+    if suf in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".heic"):
+        return ".jpg" if suf == ".jpeg" else suf
+    m = str(mime or "").lower()
+    if "png" in m:
+        return ".png"
+    if "webp" in m:
+        return ".webp"
+    if "gif" in m:
+        return ".gif"
+    if "jpeg" in m or "jpg" in m:
+        return ".jpg"
+    return ".png"
+
+
+def _run_magick(args: list[str]) -> bool:
+    magick = shutil.which("magick") or shutil.which("convert")
+    if not magick:
+        return False
+    try:
+        subprocess.run(
+            [magick, *args],
+            check=True,
+            timeout=45,
+            capture_output=True,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _save_food_image(
+    data: bytes, folder_rel: str, stem: str, src_name: str, mime: str
+) -> dict:
+    """Write food-pics/{folder}/{stem}.webp (+ -sm.webp). Fallback = original ext."""
+    folder = ROOT / folder_rel
+    folder.mkdir(parents=True, exist_ok=True)
+    ext = _ext_for_mime(mime, src_name)
+    tmp = folder / f".{stem}.src{ext}"
+    tmp.write_bytes(data)
+    webp = folder / f"{stem}.webp"
+    sm = folder / f"{stem}-sm.webp"
+    wrote_webp = False
+    if ext == ".webp":
+        webp.write_bytes(data)
+        wrote_webp = True
+        _run_magick([str(tmp), "-resize", "50%", str(sm)])
+    elif _run_magick([str(tmp), str(webp)]):
+        wrote_webp = True
+        _run_magick([str(tmp), "-resize", "50%", str(sm)])
+    else:
+        try:
+            from PIL import Image
+
+            im = Image.open(io.BytesIO(data))
+            if im.mode in ("P", "RGBA", "LA"):
+                im = im.convert("RGBA")
+            else:
+                im = im.convert("RGB")
+            im.save(webp, "WEBP", quality=82)
+            w, h = im.size
+            im.resize((max(1, w // 2), max(1, h // 2))).save(
+                sm, "WEBP", quality=80
+            )
+            wrote_webp = True
+        except Exception:
+            wrote_webp = False
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    if wrote_webp and webp.is_file():
+        return {
+            "filename": webp.name,
+            "path": f"{folder_rel}/{webp.name}",
+            "smPath": f"{folder_rel}/{sm.name}" if sm.is_file() else "",
+        }
+    dest = folder / f"{stem}{ext}"
+    dest.write_bytes(data)
+    return {
+        "filename": dest.name,
+        "path": f"{folder_rel}/{dest.name}",
+        "smPath": "",
+    }
 
 
 def _is_heavy_filter_header(raw: str) -> bool:
@@ -2414,18 +2609,22 @@ class SheetsBackend:
             return "ken burns"
         raise ValueError("invalid presentation")
 
-    def _inventory_data(self, rows: list):
+    def _inventory_layout(self, rows: list) -> tuple[int, int, list]:
         inv_label = -1
         for i, row in enumerate(rows or []):
             a = _cell(row, 0).strip().lower()
             if a == "inventory" or a.startswith("inventory"):
                 inv_label = i
                 break
-        if inv_label < 0 or inv_label + 2 > len(rows or []):
+        if inv_label < 0 or inv_label + 1 >= len(rows or []):
             raise ValueError("no inventory block")
         header_idx = inv_label + 1
         data_start = header_idx + 1
         headers = list((rows[header_idx] if header_idx < len(rows) else []) or [])
+        return header_idx, data_start, headers
+
+    def _inventory_data(self, rows: list):
+        header_idx, data_start, headers = self._inventory_layout(rows)
         data = []
         for i in range(data_start, len(rows or [])):
             row = list(rows[i] or [])
@@ -2598,6 +2797,248 @@ class SheetsBackend:
             "range": ", ".join([r for r in ranges if r]),
             "sheetId": sid,
             "sourceName": source_name,
+        }
+
+    def list_item_menus(self) -> dict:
+        live = self.refresh_settings(force=False) or {}
+        catalogs = []
+        for c in live.get("catalog") or []:
+            if not isinstance(c, dict):
+                continue
+            sid = extract_spreadsheet_id(
+                c.get("sheetId") or c.get("url") or ""
+            )
+            if not sid:
+                continue
+            catalogs.append(
+                {
+                    "id": sid,
+                    "name": str(c.get("name") or "").strip(),
+                    "sheetId": sid,
+                }
+            )
+        return {
+            "ok": True,
+            "menus": [dict(m) for m in ITEM_MENUS],
+            "catalogs": catalogs,
+            "sheetId": live.get("sheetId") or self.sheet_id,
+            "sourceName": live.get("sourceName") or live.get("dataSource") or "",
+        }
+
+    def _drive_upload_folder_id(self) -> str:
+        """A user-owned folder shared with the robot. SA My Drive has no quota."""
+        return (os.environ.get("TOKI_UPLOAD_FOLDER_ID") or "").strip()
+
+    def upload_drive_image(
+        self, data: bytes, filename: str, mime: str
+    ) -> dict:
+        """Store a public-with-link photo in a shared Drive folder.
+
+        Google service accounts have no My Drive quota. Set
+        TOKI_UPLOAD_FOLDER_ID to a folder in your Drive that is shared
+        with the robot email, then TVs can load the URL with no git ship.
+        """
+        if not self.drive:
+            raise ValueError("Drive client not available")
+        from googleapiclient.http import MediaIoBaseUpload
+
+        folder_id = self._drive_upload_folder_id()
+        if not folder_id:
+            raise ValueError(
+                "Drive upload needs TOKI_UPLOAD_FOLDER_ID "
+                "(share a Drive folder with the service account; "
+                "the robot has no storage quota of its own)"
+            )
+        media = MediaIoBaseUpload(
+            io.BytesIO(data),
+            mimetype=mime or "application/octet-stream",
+            resumable=False,
+        )
+        body = {"name": filename}
+        if folder_id:
+            body["parents"] = [folder_id]
+        with self._drive_lock:
+            created = (
+                self.drive.files()
+                .create(body=body, media_body=media, fields="id,name")
+                .execute()
+            )
+            fid = str(created.get("id") or "")
+            if not fid:
+                raise ValueError("Drive create returned no id")
+            self.drive.permissions().create(
+                fileId=fid,
+                body={"type": "anyone", "role": "reader"},
+            ).execute()
+        url = "https://lh3.googleusercontent.com/d/" + fid
+        return {
+            "id": fid,
+            "name": created.get("name") or filename,
+            "url": url,
+            "mediaPath": "/api/media/" + fid,
+        }
+
+    def media_bytes(self, file_id: str) -> tuple[bytes, str]:
+        if not self.drive:
+            raise ValueError("Drive client not available")
+        from googleapiclient.http import MediaIoBaseDownload
+
+        fid = re.sub(r"[^a-zA-Z0-9_-]", "", str(file_id or ""))
+        if not fid or fid != str(file_id or ""):
+            raise ValueError("bad media id")
+        with self._drive_lock:
+            meta = (
+                self.drive.files()
+                .get(fileId=fid, fields="id,mimeType,name")
+                .execute()
+            )
+            req = self.drive.files().get_media(fileId=fid)
+            buf = io.BytesIO()
+            downloader = MediaIoBaseDownload(buf, req)
+            done = False
+            while not done:
+                _status, done = downloader.next_chunk()
+        mime = str(meta.get("mimeType") or "application/octet-stream")
+        return buf.getvalue(), mime
+
+    def write_item(self, body: dict, sheet_id: str | None = None) -> dict:
+        """Append one Inventory row on a board or footer-box tab."""
+        menu_id = str(body.get("menu") or body.get("menuId") or "").strip().lower()
+        spec = _ITEM_MENUS_BY_ID.get(menu_id)
+        if not spec:
+            raise ValueError("unknown menu")
+        name = str(body.get("item") or body.get("name") or "").strip()
+        if not name:
+            raise ValueError("missing item name")
+        sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
+        gid = spec["gid"]
+        title = self._tab_title_for_gid(sid, gid)
+        safe_title = "'" + title.replace("'", "''") + "'"
+        t0 = time.time()
+        with self._api_lock:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=sid,
+                    range=safe_title + "!A1:Z200",
+                    majorDimension="ROWS",
+                    valueRenderOption="FORMATTED_VALUE",
+                )
+                .execute()
+            )
+        rows = result.get("values") or []
+        _header_idx, data_start, headers = self._inventory_layout(rows)
+        cols: dict[str, int] = {}
+        for c, h in enumerate(headers):
+            fold = self._header_fold(str(h or ""))
+            if fold:
+                cols[fold] = c
+        kind = spec["kind"]
+        width = max(len(headers), 9 if kind == "board" else 6)
+        row = [""] * width
+
+        def put(value, *folds: str, default_col: int | None = None):
+            if value is None:
+                return
+            s = str(value)
+            for fold in folds:
+                if fold in cols:
+                    idx = cols[fold]
+                    while len(row) <= idx:
+                        row.append("")
+                    row[idx] = s
+                    return
+            if default_col is not None:
+                while len(row) <= default_col:
+                    row.append("")
+                row[default_col] = s
+
+        image_cell = str(body.get("image") or "").strip()
+        image_info: dict = {}
+        raw_image = body.get("imageData") or body.get("imageBase64") or ""
+        if raw_image:
+            data, mime = _decode_image_payload(raw_image)
+            stem = _item_stem(name, str(body.get("imageName") or ""))
+            src_name = str(body.get("imageName") or stem)
+            if not _hosted():
+                image_info.update(
+                    _save_food_image(data, spec["folder"], stem, src_name, mime)
+                )
+            drive_mime = mime if mime and mime != "application/octet-stream" else (
+                mimetypes.guess_type(src_name)[0] or "image/jpeg"
+            )
+            drive_name = (image_info.get("filename") or (stem + _ext_for_mime(mime, src_name)))
+            if self._drive_upload_folder_id():
+                try:
+                    uploaded = self.upload_drive_image(data, drive_name, drive_mime)
+                    image_info["driveId"] = uploaded.get("id") or ""
+                    image_info["driveUrl"] = uploaded.get("url") or ""
+                    image_info["mediaPath"] = uploaded.get("mediaPath") or ""
+                except Exception as e:
+                    image_info["driveError"] = str(e)
+                    _log(f"item image Drive upload skipped: {e}")
+                    traceback.print_exc()
+            else:
+                image_info["driveError"] = "no TOKI_UPLOAD_FOLDER_ID"
+            if image_info.get("driveUrl"):
+                image_cell = image_info["driveUrl"]
+            elif image_info.get("filename"):
+                image_cell = image_info["filename"]
+        if kind == "board":
+            put(name, "item", default_col=0)
+            put(str(body.get("price1") or body.get("price") or "").strip(), "price1", "price", default_col=1)
+            put(str(body.get("price2") or "").strip(), "price2", default_col=2)
+            put(str(body.get("price3") or "").strip(), "price3", default_col=3)
+            put(str(body.get("subtitle") or "").strip(), "subtitle", "itemsubtitle", default_col=4)
+            put(str(body.get("description") or "").strip(), "description", default_col=5)
+            put(_item_bool01(body.get("isNew") or body.get("new"), "0"), "new", default_col=6)
+            put(image_cell, "image", default_col=7)
+            put(_item_bool01(body.get("include"), "1"), "include", default_col=8)
+        else:
+            put(name, "item", default_col=0)
+            put(str(body.get("subtitle") or "").strip(), "itemsubtitle", "subtitle", default_col=1)
+            put(str(body.get("price1") or body.get("price") or "").strip(), "itemprice", "price", "price1", default_col=2)
+            put(_item_bool01(body.get("isNew") or body.get("new"), "0"), "new", default_col=3)
+            put(image_cell, "image", default_col=4)
+            put(_item_bool01(body.get("include"), "1"), "include", default_col=5)
+        append_range = f"{safe_title}!A{data_start + 1}"
+        with self._api_lock:
+            updated = (
+                self.sheets.spreadsheets()
+                .values()
+                .append(
+                    spreadsheetId=sid,
+                    range=append_range,
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": [row]},
+                )
+                .execute()
+            )
+        _flush_data_caches()
+        updates = updated.get("updates") or updated
+        wrote_range = str(updates.get("updatedRange") or "")
+        _log(
+            f"item write {source_name or sid} menu={menu_id} gid={gid} "
+            f"item={name!r} range={wrote_range} "
+            f"drive={bool(image_info.get('driveId'))} ({time.time() - t0:.2f}s)"
+        )
+        return {
+            "ok": True,
+            "menu": menu_id,
+            "label": spec["label"],
+            "gid": gid,
+            "tab": title,
+            "item": name,
+            "row": row,
+            "range": wrote_range,
+            "sheetId": sid,
+            "sourceName": source_name,
+            "image": image_info,
+            "imageCell": image_cell,
+            "page": spec.get("page") or "",
+            "folder": spec["folder"],
         }
 
 
@@ -2926,6 +3367,34 @@ def make_handler(
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return
+            if parsed.path == "/api/manager/item":
+                backend = self._backend()
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                body, err = self._read_json_body(12_000_000)
+                if err:
+                    self._json(400, err)
+                    return
+                sheet_id = str(body.get("sheetId") or "").strip()
+                try:
+                    result = backend.write_item(body, sheet_id or None)
+                    self._json(200, result)
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except KeyError as e:
+                    self._json(404, {"error": str(e)})
+                except Exception as e:
+                    _log(f"item write error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
+                return
             if parsed.path == "/api/deploy":
                 # Suite App / local Mac only. Cloud Run must not file ships.
                 # gh lives in Homebrew; toki_deploy resolves the binary.
@@ -3131,6 +3600,40 @@ def make_handler(
                     self._json(200, {"status": "ok"})
                 except Exception as e:
                     self._json(500, {"status": "error", "message": str(e)})
+                return
+
+            if path == "/api/manager/menus":
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                try:
+                    self._json(200, backend.list_item_menus())
+                except Exception as e:
+                    _log(f"item menus error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
+                return
+
+            media_m = re.match(r"^/api/media/([A-Za-z0-9_-]+)$", path)
+            if media_m:
+                if not backend:
+                    self._json(503, {"error": "Sheets API not configured"})
+                    return
+                try:
+                    blob, mime = backend.media_bytes(media_m.group(1))
+                    self._send(200, blob, mime or "application/octet-stream")
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except Exception as e:
+                    _log(f"media fetch error: {e}")
+                    traceback.print_exc()
+                    self._json(404, {"error": "media not found"})
                 return
 
             if path == "/api/settings":

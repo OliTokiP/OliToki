@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <link rel="icon" href="assets/suite-icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/suite-icon.png" />
+  <title>Item Uploader</title>
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260823upload1" />
+  <style>
+    form { margin: 0; }
+    label.lab {
+      display: block;
+      font-weight: 600;
+      margin: 1rem 0 .35rem;
+    }
+    .hint {
+      font-weight: 400;
+      color: var(--toki-muted);
+      font-size: .88rem;
+    }
+    input[type=text],
+    input[type=file],
+    select,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 16px;
+      padding: .55rem .65rem;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: var(--toki-bg);
+      color: inherit;
+    }
+    textarea { min-height: 4.5rem; resize: vertical; }
+    .picks { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .pick {
+      font-weight: 500;
+      margin: 0;
+      padding: .65rem .85rem;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      display: flex;
+      gap: .45rem;
+      align-items: center;
+      min-height: 44px;
+      box-sizing: border-box;
+    }
+    .preview {
+      margin: .6rem 0 0;
+      max-width: 220px;
+      max-height: 160px;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid #bbb;
+      background: #111;
+      display: none;
+    }
+    .preview.is-on { display: block; }
+    button[type=submit] {
+      display: block;
+      width: 100%;
+      margin: 1.25rem 0 0;
+      font: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: .85rem 1rem;
+      min-height: 48px;
+      border: 0;
+      border-radius: 10px;
+      background: #26BBCB;
+      color: #111;
+    }
+    button[type=submit]:disabled {
+      opacity: .55;
+    }
+    .status {
+      margin: .85rem 0 0;
+      padding: .65rem .85rem;
+      border-radius: 10px;
+      background: #eee;
+      font-weight: 500;
+    }
+    .status.ok { background: #d8f3d8; }
+    .status.bad { background: #f8d4d4; }
+    .status a { font-weight: 700; }
+    .board-only { }
+  </style>
+</head>
+<body class="suite-page">
+  <p class="suite-nav" id="nav">Suite · Deployer · Tickets · Menu Manager · Item Uploader</p>
+  <h1>Item Uploader</h1>
+  <p class="sub">Add one item to a catalog inventory — photo goes to Drive (and a local <code>food-pics/</code> copy). No GitHub commit required. Merge into Menu Manager later.</p>
+
+  <form id="form">
+    <label class="lab" for="catalog">Catalog</label>
+    <select id="catalog" name="sheetId" required></select>
+    <p class="tiny">Writes the selected workbook. Use Beta while testing.</p>
+
+    <label class="lab" for="item">Item</label>
+    <input type="text" id="item" name="item" required autocomplete="off" />
+
+    <label class="lab" for="price1">Price 1</label>
+    <input type="text" id="price1" name="price1" inputmode="decimal" autocomplete="off" />
+
+    <div class="board-only">
+      <label class="lab" for="price2">Price 2 <span class="hint">boards 1–3</span></label>
+      <input type="text" id="price2" name="price2" inputmode="decimal" autocomplete="off" />
+
+      <label class="lab" for="price3">Price 3 <span class="hint">boards 1–3</span></label>
+      <input type="text" id="price3" name="price3" inputmode="decimal" autocomplete="off" />
+    </div>
+
+    <label class="lab" for="subtitle">Subtitle</label>
+    <input type="text" id="subtitle" name="subtitle" autocomplete="off" />
+
+    <label class="lab" for="description">Description <span class="hint">boards 1–3</span></label>
+    <textarea id="description" name="description"></textarea>
+
+    <span class="lab">New</span>
+    <div class="picks">
+      <label class="pick"><input type="radio" name="isNew" value="0" checked /> No</label>
+      <label class="pick"><input type="radio" name="isNew" value="1" /> Yes</label>
+    </div>
+
+    <span class="lab">Include</span>
+    <div class="picks">
+      <label class="pick"><input type="radio" name="include" value="1" checked /> Yes</label>
+      <label class="pick"><input type="radio" name="include" value="0" /> No</label>
+    </div>
+
+    <label class="lab" for="photo">Image</label>
+    <input type="file" id="photo" name="photo" accept="image/*,.heic,.webp" />
+    <img class="preview" id="preview" alt="" />
+    <p class="tiny">PNG / JPEG / WebP. Saved under <code>food-pics/</code> for local boards. Optional Drive (TVs, no git) needs <code>TOKI_UPLOAD_FOLDER_ID</code> — a folder in your Drive shared with the robot.</p>
+
+    <label class="lab" for="menu">Menu</label>
+    <select id="menu" name="menu" required></select>
+    <p class="tiny">Boards 1–3 use Price 1–3, Subtitle, Description. Proteins / Sauces / Drinks / Veggies use Price 1 + Subtitle.</p>
+
+    <button type="submit" id="submit">Add to sheet</button>
+  </form>
+  <p class="status" id="status" hidden></p>
+
+  <script src="js/env.js?v=20260818dep1"></script>
+  <script src="js/data-source.js?v=20260817api1"></script>
+  <script src="js/surfaces.js?v=20260823upload1"></script>
+  <script src="js/uploader.js?v=20260823upload1"></script>
+</body>
+</html>

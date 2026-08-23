@@ -320,6 +320,7 @@ def git_commit(message: str, full: bool = False) -> bool:
             "tickets.html",
             "deploy.html",
             "suite.html",
+            "uploader.html",
             "push.html",
             ".github/",
             "docs/", "scripts/", "deprecated/",
