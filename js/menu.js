@@ -8977,8 +8977,7 @@
       if (stale()) return "stale";
       applyParsedMenu(parsed);
       if (isEncoreSegmentNow()) {
-        const g = document.getElementById("galaxy") || els.galaxy;
-        if (g) g.style.backgroundColor = encoreBackgroundHex();
+        setEncoreSolidBackground(true, { instant: true });
       }
       try {
         await applyBetaFooterBoxesOverride(parsed);
