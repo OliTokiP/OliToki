@@ -8976,7 +8976,7 @@
       if (parsed._fingerprint) delete parsed._fingerprint;
       if (stale()) return "stale";
       applyParsedMenu(parsed);
-      if (isEncoreSegmentNow()) {
+      if (_encoreSolidBg || isEncoreSegmentNow()) {
         setEncoreSolidBackground(true, { instant: true });
       }
       try {
