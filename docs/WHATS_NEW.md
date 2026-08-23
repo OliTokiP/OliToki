@@ -1,9 +1,25 @@
 # What’s New
 
-**Last updated:** 2026-08-22 19:50  
+**Last updated:** 2026-08-22 22:15  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-22 22:15 — Footer wrap: keep planned rows together
+
+**Boards / surface:** Menu Screens — boards 1–3 Footer Boxes (`index.html`–`index3.html`)  
+**Sheet:** none (wrap packing only)  
+**Summary:** Handhelds Veggies in the 768 major slot stays on **3 packed rows**. Wrap labels measure inside the live Box Body, then each planned line paints as a nowrap `.wrap-line-row` so a 3-line pack cannot flex-wrap into a 4th visual row. A fonts-ready re-pack avoids the fallback-glyph first paint that could pick 4 short rows.
+
+### Details
+- In-body measure + 2% width pad (was a blanket 8% pad that made 3-row type lose the 8% bake-off).
+- `.wrap-line-row` is `flex: 1 0 100%` + `flex-wrap: nowrap`; type shrinks instead of orphaning a name onto the next row.
+- Inquiry lab `box-pack-lab.html` paints the same row wrappers.
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
 
 ---
 

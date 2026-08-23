@@ -668,23 +668,6 @@
       if (els.go) els.go.disabled = !mac;
     }
 
-    function askNotifyPermission() {
-      try {
-        if (!("Notification" in window)) return;
-        if (Notification.permission === "default") {
-          Notification.requestPermission().catch(function () {});
-        }
-      } catch (e) {}
-    }
-
-    function pingNotificationCenter(title, body) {
-      try {
-        if (!("Notification" in window)) return;
-        if (Notification.permission !== "granted") return;
-        new Notification(title, { body: body, tag: "toki-local-restart" });
-      } catch (e) {}
-    }
-
     function armRestart() {
       if (restarting) return;
       const els = restartEls();
@@ -702,7 +685,6 @@
     async function restartLocalServer() {
       const els = restartEls();
       if (!els.btn || restarting) return;
-      askNotifyPermission();
       restarting = true;
       setRestartButtonBusy();
       setRestartNote("Waiting for the laptop API to come back.");
@@ -737,7 +719,6 @@
       setRestartButtonIdle();
       if (back) {
         setRestartNote("Server came back.");
-        pingNotificationCenter("Toki Menu", "Local server restarted.");
         await refreshSys();
         setTimeout(function () {
           const note = document.getElementById("sys-restart-note");

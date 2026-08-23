@@ -1771,7 +1771,7 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 .info-box-body.layout-wrap .wrap-line-row {
   display: flex;
   flex-wrap: nowrap;
-  flex: 0 1 auto;
+  flex: 1 0 100%;
   align-items: baseline;
   justify-content: inherit;
   max-width: 100%;

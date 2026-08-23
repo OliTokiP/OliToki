@@ -297,6 +297,15 @@
         var child = el.children[i];
         if (child.classList.contains("box-pack-lab-waste")) continue;
         if (child.classList.contains("wrap-line-break")) continue;
+        if (child.classList.contains("wrap-line-row")) {
+          var natural = 0;
+          var k;
+          for (k = 0; k < child.children.length; k++) {
+            natural += child.children[k].offsetWidth;
+          }
+          if (natural > contentW + 1) return false;
+          continue;
+        }
         if (child.offsetWidth > contentW + 1) return false;
       }
       return true;
@@ -353,6 +362,12 @@
         flush();
         return;
       }
+      if (el.classList.contains("wrap-line-row")) {
+        flush();
+        line.push(el);
+        flush();
+        return;
+      }
       line.push(el);
     });
     flush();
@@ -363,7 +378,14 @@
       var top = Infinity;
       var bottom = -Infinity;
       elsLine.forEach(function (el) {
-        lineW += el.offsetWidth;
+        if (el.classList.contains("wrap-line-row")) {
+          var k;
+          for (k = 0; k < el.children.length; k++) {
+            lineW += el.children[k].offsetWidth;
+          }
+        } else {
+          lineW += el.offsetWidth;
+        }
         var r = el.getBoundingClientRect();
         if (r.top < top) top = r.top;
         if (r.bottom > bottom) bottom = r.bottom;
@@ -403,6 +425,9 @@
     var lc = packed.lines.length || 1;
     body.classList.add(lc >= 5 ? "lines-many" : "lines-" + lc);
     packed.lines.forEach(function (line, li) {
+      var row = document.createElement("span");
+      row.className = "wrap-line-row";
+      row.setAttribute("data-line", String(li));
       line.forEach(function (it, i) {
         var span = document.createElement("span");
         span.className = "veggie-item wrap-item";
@@ -416,15 +441,16 @@
           sub.textContent = " (" + it.subtitle + ")";
           span.appendChild(sub);
         }
-        body.appendChild(span);
+        row.appendChild(span);
         if (i < line.length - 1) {
           var sep = document.createElement("span");
           sep.className = "veggie-sep wrap-sep";
           sep.textContent = " · ";
           sep.setAttribute("aria-hidden", "true");
-          body.appendChild(sep);
+          row.appendChild(sep);
         }
       });
+      body.appendChild(row);
       if (li < packed.lines.length - 1) {
         var br = document.createElement("span");
         br.className = "veggie-line-break wrap-line-break";

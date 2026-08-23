@@ -147,30 +147,143 @@ def _log(msg: str) -> None:
     print(f"[toki_server] {msg}", flush=True)
 
 
-def _mac_notify(title: str, message: str) -> None:
-    """Local Notification Center ping. No-op on Cloud Run."""
+def _mac_notify(
+    title: str,
+    message: str = "",
+    *,
+    subtitle: str = "",
+    open_url: str = "",
+    tag: str = "",
+) -> None:
+    """Local Notification Center ping, branded as Suite. No-op on Cloud Run."""
     if _hosted():
         return
 
     def go() -> None:
         try:
-            def esc(s: str) -> str:
-                return s.replace("\\", "\\\\").replace('"', '\\"')
+            scripts = str(ROOT / "scripts")
+            if scripts not in sys.path:
+                sys.path.insert(0, scripts)
+            import suite_notify
 
-            subprocess.run(
-                [
-                    "osascript",
-                    "-e",
-                    f'display notification "{esc(message)}" with title "{esc(title)}"',
-                ],
-                check=False,
-                capture_output=True,
-                timeout=5,
+            suite_notify.notify(
+                title,
+                message,
+                subtitle=subtitle,
+                open_url=open_url,
+                tag=tag,
             )
         except Exception:
             pass
 
     threading.Thread(target=go, name="mac-notify", daemon=True).start()
+
+
+def _watch_deploy_and_notify(
+    target: str,
+    issue_number,
+    issue_url: str,
+    dry: bool,
+) -> None:
+    """After a local File deploy, ping when GitHub Actions finishes."""
+    if _hosted():
+        return
+    label = "Restaurant" if str(target).strip().lower() == "restaurant" else "Testing"
+    n = str(issue_number or "").strip()
+    open_url = (issue_url or "").strip() or "http://127.0.0.1:8765/deploy.html"
+    filed_body = ("#" + n) if n else "GitHub Actions is running"
+    if dry:
+        filed_body = (filed_body + " — dry run").strip(" —")
+    _mac_notify(
+        f"{label} ship filed",
+        filed_body,
+        subtitle="Deployer",
+        open_url=open_url,
+        tag="suite.deploy.filed",
+    )
+    if dry:
+        return
+
+    def go() -> None:
+        try:
+            import toki_deploy
+
+            gh = toki_deploy._gh_bin()
+            env = toki_deploy._gh_env()
+            run_id = ""
+            run_url = open_url
+            deadline_find = time.time() + 90
+            while time.time() < deadline_find and not run_id:
+                r = subprocess.run(
+                    [
+                        gh,
+                        "run",
+                        "list",
+                        "--workflow",
+                        "deploy.yml",
+                        "--limit",
+                        "8",
+                        "--json",
+                        "databaseId,status,conclusion,url,createdAt",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    env=env,
+                )
+                if r.returncode == 0 and (r.stdout or "").strip():
+                    rows = json.loads(r.stdout)
+                    if isinstance(rows, list):
+                        for it in rows:
+                            st = str((it or {}).get("status") or "")
+                            if st in ("queued", "in_progress", "waiting", "pending"):
+                                run_id = str((it or {}).get("databaseId") or "")
+                                run_url = str((it or {}).get("url") or run_url)
+                                break
+                        if not run_id and rows:
+                            it = rows[0] or {}
+                            run_id = str(it.get("databaseId") or "")
+                            run_url = str(it.get("url") or run_url)
+                if not run_id:
+                    time.sleep(3)
+            if not run_id:
+                return
+            deadline = time.time() + 20 * 60
+            while time.time() < deadline:
+                r = subprocess.run(
+                    [
+                        gh,
+                        "run",
+                        "view",
+                        str(run_id),
+                        "--json",
+                        "status,conclusion,url",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    env=env,
+                )
+                if r.returncode == 0 and (r.stdout or "").strip():
+                    info = json.loads(r.stdout) or {}
+                    st = str(info.get("status") or "")
+                    run_url = str(info.get("url") or run_url)
+                    if st == "completed":
+                        conc = str(info.get("conclusion") or "").strip() or "done"
+                        ok = conc == "success"
+                        _mac_notify(
+                            f"{label} ship " + ("finished" if ok else "failed"),
+                            conc + (f" · #{n}" if n else ""),
+                            subtitle="Deployer",
+                            open_url=run_url,
+                            tag="suite.deploy.done",
+                        )
+                        return
+                time.sleep(8)
+        except Exception as e:
+            _log(f"deploy watch notify: {e}")
+
+    threading.Thread(target=go, name="deploy-watch", daemon=True).start()
 
 
 def _reexec_self(reason: str) -> None:
@@ -2653,6 +2766,16 @@ def make_handler(
                         result["dispatched"] = True
                     except Exception as _de:
                         _log(f"deploy dispatch warning (push may rely on issue event): {_de}")
+                    try:
+                        f = body or {}
+                        _watch_deploy_and_notify(
+                            f.get("target") or "testing",
+                            result.get("issueNumber"),
+                            str(result.get("issueUrl") or ""),
+                            bool(f.get("dry") or f.get("dry-run")),
+                        )
+                    except Exception as _ne:
+                        _log(f"deploy notify: {_ne}")
                     self._json(200, result)
                 except ValueError as e:
                     self._json(400, {"error": str(e)})
@@ -3229,7 +3352,13 @@ def main():
         "true",
         "yes",
     ):
-        _mac_notify("Toki Menu", "Local server restarted.")
+        _mac_notify(
+            "Local server restarted.",
+            "",
+            subtitle="Health",
+            open_url="http://127.0.0.1:8765/suite.html",
+            tag="suite.health.restart",
+        )
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

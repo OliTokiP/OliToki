@@ -9999,17 +9999,26 @@
         _boxItemIndex: idx,
       };
     });
-    const lines = balanceItemsIntoLines(
-      measured,
-      balanceOptsFromBox(bodyEl, {
-        sepText: " · ",
-        maxLines: 8,
-        forceLines:
-          _boxPackLab && _boxPackLab.packLines > 0
-            ? _boxPackLab.packLines
-            : 0,
-      })
-    );
+    _measureHost = bodyEl;
+    let lines;
+    try {
+      lines = balanceItemsIntoLines(
+        measured,
+        balanceOptsFromBox(bodyEl, {
+          sepText: " · ",
+          maxLines: 8,
+          forceLines:
+            _boxPackLab && _boxPackLab.packLines > 0
+              ? _boxPackLab.packLines
+              : 0,
+        })
+      );
+    } finally {
+      _measureHost = null;
+      if (_measureProbe && _measureProbe.parentNode === bodyEl) {
+        _measureProbe.parentNode.removeChild(_measureProbe);
+      }
+    }
     if (balanceItemsIntoLines.lastMeta) {
       const meta = balanceItemsIntoLines.lastMeta;
       bodyEl.dataset.packTag = String(meta.tag || "");
@@ -10025,6 +10034,9 @@
     bodyEl.dataset.lineCount = String(lc);
 
     lines.forEach(function (line, li) {
+      const row = document.createElement("span");
+      row.className = "wrap-line-row";
+      row.setAttribute("data-line", String(li));
       line.forEach(function (it, i) {
         const span = document.createElement("span");
         span.className =
@@ -10033,15 +10045,16 @@
         setBoxItemIndexAttr(span, invIdx);
         if (invIdx >= 0) box.displayOrder.push(invIdx);
         appendFooterItemParts(span, it, partOpts);
-        bodyEl.appendChild(span);
+        row.appendChild(span);
         if (i < line.length - 1) {
           const sep = document.createElement("span");
           sep.className = (conf.sepClass || "wrap-sep") + " wrap-sep";
           sep.textContent = " · ";
           sep.setAttribute("aria-hidden", "true");
-          bodyEl.appendChild(sep);
+          row.appendChild(sep);
         }
       });
+      bodyEl.appendChild(row);
       if (li < lines.length - 1) {
         const br = document.createElement("span");
         br.className =
@@ -10172,6 +10185,8 @@
 
   let _measureCanvas = null;
   let _measureProbe = null;
+  /** When set, measure wrap labels inside this Box Body (inherit type + tracking). */
+  let _measureHost = null;
 
   /**
    * Measure text width for packing. Prefer a DOM probe (matches Roboto
@@ -10188,20 +10203,34 @@
         : "Roboto Condensed, Roboto, sans-serif";
     const fontStr = font || "700 30px " + face;
     try {
+      const host = _measureHost || document.body;
       if (!_measureProbe) {
         _measureProbe = document.createElement("span");
         _measureProbe.setAttribute("aria-hidden", "true");
         _measureProbe.style.cssText =
           "position:absolute;left:-99999px;top:0;white-space:nowrap;" +
           "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;";
-        document.body.appendChild(_measureProbe);
       }
-      _measureProbe.style.font = fontStr;
-      // Match sauces wrap tracking when font mentions Condensed
-      if (/condensed/i.test(fontStr)) {
-        _measureProbe.style.letterSpacing = "-0.015em";
+      if (_measureProbe.parentNode !== host) {
+        host.appendChild(_measureProbe);
+      }
+      if (_measureHost) {
+        _measureProbe.style.font = "";
+        _measureProbe.style.letterSpacing = "";
+        if (
+          (document.documentElement.getAttribute("data-system-font") || "") ===
+          "poppins"
+        ) {
+          _measureProbe.style.fontFamily = "Poppins, Roboto, sans-serif";
+        }
       } else {
-        _measureProbe.style.letterSpacing = "normal";
+        _measureProbe.style.font = fontStr;
+        // Match sauces wrap tracking when font mentions Condensed
+        if (/condensed/i.test(fontStr)) {
+          _measureProbe.style.letterSpacing = "-0.015em";
+        } else {
+          _measureProbe.style.letterSpacing = "normal";
+        }
       }
       _measureProbe.textContent = str;
       const w = _measureProbe.offsetWidth;
@@ -10370,7 +10399,7 @@
     // Inflate measured widths slightly — canvas/DOM probe is still a hair
     // narrower than live flex+middot layout, which caused mid-line wraps
     // (e.g. lone "Spicy Toki") in the wide sauces slot.
-    const WIDTH_PAD = 1.08;
+    const WIDTH_PAD = _measureHost ? 1.02 : 1.08;
     const items = list.map(function (it, idx) {
       return {
         idx: idx,
@@ -15290,6 +15319,13 @@
       // Double rAF: styles + first paint committed
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
+          // Re-pack wrap footers now that the typeface is real (first paint
+          // can use fallback glyphs → 4 short rows in a 768 box).
+          try {
+            if (!isDrinks) renderFooterBoxes();
+          } catch (err) {
+            console.warn("Footer wrap re-pack after fonts failed", err);
+          }
           if (typeof done === "function") done();
         });
       });
@@ -16934,6 +16970,12 @@
         return;
       }
       if (el.classList.contains("box-pack-lab-waste")) return;
+      if (el.classList.contains("wrap-line-row")) {
+        flush();
+        line.push(el);
+        flush();
+        return;
+      }
       line.push(el);
     });
     flush();
@@ -16944,7 +16986,13 @@
       let top = Infinity;
       let bottom = -Infinity;
       elsLine.forEach(function (el) {
-        lineW += el.offsetWidth;
+        if (el.classList.contains("wrap-line-row")) {
+          Array.prototype.forEach.call(el.children, function (ch) {
+            lineW += ch.offsetWidth;
+          });
+        } else {
+          lineW += el.offsetWidth;
+        }
         const r = el.getBoundingClientRect();
         if (r.top < top) top = r.top;
         if (r.bottom > bottom) bottom = r.bottom;
