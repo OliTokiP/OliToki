@@ -81,12 +81,12 @@
       display: flex !important;
       pointer-events: auto !important;
       z-index: 1;
-      max-width: 100%;
+      max-width: none;
     }
-    .lab-strip.footer-one { width: 1082px !important; }
-    .lab-strip.footer-two-major { width: 768px !important; }
-    .lab-strip.footer-three { width: 351px !important; }
-    .lab-strip.footer-two-minor { width: 299px !important; }
+    .lab-strip.footer-one { width: 1082px !important; min-width: 1082px !important; }
+    .lab-strip.footer-two-major { width: 768px !important; min-width: 768px !important; }
+    .lab-strip.footer-three { width: 351px !important; min-width: 351px !important; }
+    .lab-strip.footer-two-minor { width: 299px !important; min-width: 299px !important; }
     .lab-strip .info-box {
       flex: 1 1 auto !important;
       width: 100% !important;
@@ -141,6 +141,15 @@
     #lab-table tr.is-pick td { color: #26bbcb; font-weight: 700; }
     .note { color: rgba(244,247,251,0.55); font-size: 0.9rem; }
     #lab-source { color: rgba(244,247,251,0.55); font-size: 0.9rem; margin: 0 0 8px; }
+    #measure-board {
+      position: absolute;
+      left: -99999px;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      pointer-events: none;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body class="board-handhelds" data-system-font="poppins">
@@ -235,6 +244,22 @@
     </div>
     <div id="lab-table"></div>
   </main>
-  <script src="js/box-pack-lab.js?v=20260822boxpack3"></script>
+  <!-- Off-stage clone of live Handhelds Veggies (768 major) so packing
+       uses the same #veggies-box CSS + metrics as index2.html. -->
+  <div id="measure-board" aria-hidden="true">
+    <div id="footer-boxes" class="footer-two">
+      <div id="veggies-box" class="info-box footer-major">
+        <svg class="info-box-shell" viewBox="0 0 768 197" preserveAspectRatio="none" aria-hidden="true">
+          <rect class="shell-outer" width="768" height="197" />
+          <rect class="shell-body" x="4" y="64" width="760" height="129" />
+        </svg>
+        <div class="info-box-header">
+          <span class="info-box-title">Veggies</span>
+        </div>
+        <div class="info-box-body layout-wrap align-center typo-name-sub" id="veggies-body"></div>
+      </div>
+    </div>
+  </div>
+  <script src="js/box-pack-lab.js?v=20260822boxpack5"></script>
 </body>
 </html>

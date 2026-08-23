@@ -10011,9 +10011,11 @@
       })
     );
     if (balanceItemsIntoLines.lastMeta) {
-      bodyEl.dataset.packTag = String(
-        balanceItemsIntoLines.lastMeta.tag || ""
-      );
+      const meta = balanceItemsIntoLines.lastMeta;
+      bodyEl.dataset.packTag = String(meta.tag || "");
+      if (meta.boxW) bodyEl.dataset.packBoxw = String(meta.boxW);
+      if (meta.typeScore) bodyEl.dataset.packType = String(Number(meta.typeScore).toFixed(3));
+      if (meta.fill) bodyEl.dataset.packFill = String(Math.round(meta.fill * 100));
     }
 
     // Conditional formatting for line count (used for tighter 2-line spacing)

@@ -28,6 +28,7 @@
   ];
 
   var _probe = null;
+  var _measureHost = null;
   var _items = VEGGIES_FALLBACK.slice();
   var _count = VEGGIES_FALLBACK.length;
   var _mode = "auto";
@@ -35,17 +36,42 @@
 
   function measureTextPx(text, font) {
     var str = String(text || "");
-    var fontStr = font || "700 32px Poppins, Roboto, sans-serif";
+    var host = _measureHost || document.body;
     if (!_probe) {
       _probe = document.createElement("span");
       _probe.setAttribute("aria-hidden", "true");
+      _probe.className = "veggie-item wrap-item";
       _probe.style.cssText =
         "position:absolute;left:-99999px;top:0;white-space:nowrap;" +
-        "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;" +
-        "letter-spacing:-0.015em;";
-      document.body.appendChild(_probe);
+        "visibility:hidden;pointer-events:none;margin:0;padding:0;border:0;";
     }
-    _probe.style.font = fontStr;
+    if (_probe.parentNode !== host) {
+      host.appendChild(_probe);
+    }
+    var face =
+      (document.documentElement.getAttribute("data-system-font") || "") ===
+      "poppins"
+        ? "Poppins, Roboto, sans-serif"
+        : "Roboto Condensed, Roboto, sans-serif";
+    var fontStr = font || "700 30px " + face;
+    if (font) {
+      _probe.style.font = fontStr;
+    } else {
+      _probe.style.font = "";
+    }
+    if (
+      (document.documentElement.getAttribute("data-system-font") || "") ===
+      "poppins"
+    ) {
+      _probe.style.fontFamily = "Poppins, Roboto, sans-serif";
+    }
+    if (/condensed/i.test(fontStr)) {
+      _probe.style.letterSpacing = "-0.015em";
+    } else if (!font && host !== document.body) {
+      _probe.style.letterSpacing = "";
+    } else {
+      _probe.style.letterSpacing = "normal";
+    }
     _probe.textContent = str;
     var w = _probe.offsetWidth;
     return w > 0 ? w : str.length * 10;
@@ -131,13 +157,17 @@
     var boxH = Math.max(1, o.containerHeight || 119);
     var lineH = Math.max(8, o.lineHeight || 37);
     var maxLines = Math.min(n, Math.max(1, o.maxLines || 8));
-    var WIDTH_PAD = 1.08;
+    var WIDTH_PAD = 1.0;
     var items = list.map(function (it, idx) {
-      var label = it.name || "";
-      if (it.subtitle) label += " (" + it.subtitle + ")";
+      var label = it.label || it.name || "";
+      if (!it.label && it.subtitle) label += " (" + it.subtitle + ")";
+      var w =
+        typeof o.measureLabel === "function"
+          ? o.measureLabel(it)
+          : measureTextPx(label, font);
       return {
         idx: idx,
-        width: Math.max(1, measureTextPx(label, font) * WIDTH_PAD),
+        width: Math.max(1, w * WIDTH_PAD),
         raw: it,
       };
     });
@@ -413,28 +443,67 @@
       " · scale " +
       scale.toFixed(3) +
       " · longest-row fill " +
-      (meta.fill ? Math.round(meta.fill * 100) + "%" : "?");
+      (meta.fill ? Math.round(meta.fill * 100) + "%" : "?") +
+      " · boxW " +
+      (meta.boxW || "?");
     return packed.candidates;
   }
 
-  function currentFont() {
-    return "700 29.44px Poppins, Roboto, sans-serif";
+  function balanceOptsFromBody(el) {
+    el.style.setProperty("--box-scale", "1");
+    void el.offsetWidth;
+    var cs = getComputedStyle(el);
+    var pad = parsePadXY(cs);
+    var fontSize = parseFloat(cs.fontSize) || 30;
+    var lineHeight =
+      cs.lineHeight && cs.lineHeight !== "normal"
+        ? parseFloat(cs.lineHeight)
+        : fontSize * 1.25;
+    var rowGap = parseFloat(cs.rowGap) || 0;
+    var innerW = Math.max(1, (el.clientWidth || 0) - pad.x);
+    var innerH = Math.max(1, (el.clientHeight || 0) - pad.y);
+    return {
+      font:
+        (cs.fontStyle !== "normal" ? cs.fontStyle + " " : "") +
+        (cs.fontWeight || "700") +
+        " " +
+        cs.fontSize +
+        " " +
+        cs.fontFamily,
+      sepText: " · ",
+      containerWidth: Math.max(1, innerW * 0.98),
+      containerHeight: innerH,
+      lineHeight: lineHeight + rowGap,
+      maxLines: 8,
+    };
   }
 
-  function packForWidth(items, widthPx) {
-    var padX = 20; // wrap padding 6/10/8 → 10+10
-    var boxW = Math.max(1, (widthPx - padX) * 0.98);
-    var force =
-      _mode === "3" ? 3 : _mode === "4" ? 4 : 0;
-    return balanceItemsIntoLines(items, {
-      font: currentFont(),
-      sepText: " · ",
-      containerWidth: boxW,
-      containerHeight: 119,
-      lineHeight: 32 * 0.92 * 1.1 + 2,
-      maxLines: 8,
-      forceLines: force,
-    });
+  function packForSlot(slot, items, widthPx) {
+    var strip = slot.querySelector(".lab-strip");
+    var body = slot.querySelector(".info-box-body");
+    var liveBody = document.getElementById("veggies-body");
+    strip.style.width = widthPx + "px";
+    strip.style.minWidth = widthPx + "px";
+    strip.style.maxWidth = "none";
+    body.style.setProperty("--box-scale", "1");
+    void strip.offsetWidth;
+    if (liveBody) {
+      liveBody.style.setProperty("--box-scale", "1");
+      void liveBody.offsetWidth;
+    }
+    if (widthPx === 768 && liveBody) body = liveBody;
+    var opts = balanceOptsFromBody(body);
+    opts.forceLines = _mode === "3" ? 3 : _mode === "4" ? 4 : 0;
+    opts.measureLabel = function (it) {
+      var label = it.name || "";
+      if (it.subtitle) label += " (" + it.subtitle + ")";
+      return measureTextPx(label, null);
+    };
+    _measureHost = body;
+    var packed = balanceItemsIntoLines(items, opts);
+    _measureHost = null;
+    if (_probe && _probe.parentNode) _probe.parentNode.removeChild(_probe);
+    return packed;
   }
 
   function renderAll() {
@@ -442,7 +511,7 @@
     var tableHost = document.getElementById("lab-table");
     WIDTHS.forEach(function (w) {
       var slot = document.getElementById("slot-" + w.id);
-      var packed = packForWidth(items, w.width);
+      var packed = packForSlot(slot, items, w.width);
       var cands = renderBox(slot, items, packed);
       if (w.id === "major") {
         renderTable(tableHost, cands, packed.meta);
