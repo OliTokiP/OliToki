@@ -1,9 +1,25 @@
 # What’s New
 
-**Last updated:** 2026-08-22 23:31  
+**Last updated:** 2026-08-23 00:20  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-23 00:20 — Suite notifications stay under Suite
+
+**Boards / surface:** Suite · Listener · Deployer (native Suite.app)  
+**Sheet:** none  
+**Summary:** Notification Center no longer grows a second **Script Editor** pile. Health, Listener, and Deployer banners are posted by Suite.app itself. `osascript display notification` is gone — even `tell application "Suite"` was still Script Editor.
+
+### Details
+- Suite observes `local.toki.suite.notify` and `suite://notify` and delivers the banner from its own process (Suite icon + Suite grouping).
+- If Suite was quit, the Mac launches it in the background and then posts.
+- Click still opens the matching hub page.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
 
 ---
 

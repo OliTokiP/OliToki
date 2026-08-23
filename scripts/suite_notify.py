@@ -17,7 +17,9 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
+from urllib.parse import urlencode
 
 SUITE_BUNDLE_NATIVE = "local.toki.suite.app"
 SUITE_BUNDLE_WRAPPER = "local.toki.suite"
@@ -126,23 +128,65 @@ function run(argv) {
         return False
 
 
-def _applescript_escape(s: str) -> str:
-    return (s or "").replace("\\", "\\\\").replace('"', '\\"')
+def native_suite_app() -> Path | None:
+    if NATIVE_SUITE.is_dir():
+        return NATIVE_SUITE
+    home = Path.home() / "Applications" / "Suite.app"
+    if home.exists():
+        try:
+            return home.resolve()
+        except OSError:
+            return home
+    repo = ROOT / "Suite.app"
+    if (repo / "Contents").is_dir():
+        return repo
+    return None
 
 
-def _notify_via_suite_applescript(title: str, body: str, subtitle: str) -> bool:
-    """Banner attributed to Suite.app — Suite icon, not Script Editor."""
-    title = _applescript_escape((title or "").strip() or "Suite")
-    body = _applescript_escape((body or "").strip() or " ")
-    subtitle = _applescript_escape((subtitle or "").strip())
-    extra = f' subtitle "{subtitle}"' if subtitle else ""
-    script = (
-        f'tell application id "{SUITE_BUNDLE_NATIVE}" to '
-        f'display notification "{body}" with title "{title}"{extra}'
-    )
+def _launch_suite() -> bool:
+    app = native_suite_app()
+    if not app:
+        return False
+    try:
+        subprocess.Popen(
+            ["open", "-g", "-a", str(app)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True
+    except OSError:
+        return False
+
+
+def _wait_suite(seconds: float = 4.0) -> bool:
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if suite_app_running():
+            return True
+        time.sleep(0.15)
+    return suite_app_running()
+
+
+def _open_suite_notify_url(info: dict[str, str]) -> bool:
+    app = native_suite_app()
+    if not app:
+        return False
+    q = {
+        k: v
+        for k, v in {
+            "title": info.get("title") or "",
+            "subtitle": info.get("subtitle") or "",
+            "body": info.get("body") or "",
+            "open": info.get("url") or "",
+            "tag": info.get("tag") or "",
+        }.items()
+        if v
+    }
+    url = "suite://notify?" + urlencode(q)
     try:
         r = subprocess.run(
-            ["osascript", "-e", script],
+            ["open", "-g", "-a", str(app), url],
             capture_output=True,
             text=True,
             timeout=8,
@@ -160,8 +204,13 @@ def post_to_suite_app(
     open_url: str = "",
     tag: str = "",
 ) -> bool:
-    """Ask the running native Suite.app to own the banner. No-op if it is down."""
-    if not _darwin() or not suite_app_running():
+    """Ask native Suite.app to deliver the banner. Never osascript display notification.
+
+    Script Editor grouping is what `display notification` does — even
+    `tell application id "local.toki.suite.app"`. Suite's own process
+    must post, via distributed notification (or suite://notify).
+    """
+    if not _darwin():
         return False
     title = (title or "").strip() or "Suite"
     body = (body or "").strip()
@@ -173,9 +222,13 @@ def post_to_suite_app(
         "url": (open_url or "").strip(),
         "tag": (tag or "").strip(),
     }
-    posted = _post_distributed(info)
-    shown = _notify_via_suite_applescript(title, body, subtitle)
-    return posted or shown
+    if not suite_app_running():
+        _launch_suite()
+        if not _wait_suite():
+            return _open_suite_notify_url(info)
+    if _post_distributed(info):
+        return True
+    return _open_suite_notify_url(info)
 
 
 def _fallback_ns(

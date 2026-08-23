@@ -156,7 +156,11 @@ def _mac_notify(
     open_url: str = "",
     tag: str = "",
 ) -> None:
-    """Local Notification Center ping, branded as Suite. No-op on Cloud Run."""
+    """Local Notification Center ping, branded as Suite. No-op on Cloud Run.
+
+    Suite.app posts the banner. Never osascript display notification
+    (that groups as Script Editor).
+    """
     if _hosted():
         return
 

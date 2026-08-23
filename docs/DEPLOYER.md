@@ -1,10 +1,10 @@
 # Deployer
 
-**Last updated:** 2026-08-22 23:20
+**Last updated:** 2026-08-23 00:20
 
 Phone hub: [`suite.html`](../suite.html) — Suite, Deployer, Tickets, Menu Manager, boards.
 
-**Health** on Suite: Restaurant TVs vs last restaurant ship vs `main`, Testing vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Local Suite also has **Restart local server** — in-page confirm, then it POSTs `/api/sys/restart` so this Mac bounces `toki_server` and **Suite** pings Notification Center when it is back (Suite icon, not Script Editor). That does not touch Cloud Run or the TVs. The button stays off on Pages / Testing. Deployer uses the same TV verdict. Filing a ship from this Mac also pings Suite — once when the GitHub issue is filed, again when Actions finishes.
+**Health** on Suite: Restaurant TVs vs last restaurant ship vs `main`, Testing vs `main`, plus a grid for network, load, swap, Grok agents, open / leftover sockets, Sheets, and how many `toki_server` processes are up. Mac meters need the laptop API (`/api/sys`). Local Suite also has **Restart local server** — in-page confirm, then it POSTs `/api/sys/restart` so this Mac bounces `toki_server` and **Suite** pings Notification Center when it is back (Suite icon, not Script Editor). That does not touch Cloud Run or the TVs. The button stays off on Pages / Testing. Deployer uses the same TV verdict. Filing a ship from this Mac also pings Suite — once when the GitHub issue is filed, again when Actions finishes. Those banners are posted by Suite.app (never Script Editor / osascript).
 
 **Open a copy** is one matrix: Hub (Suite, Deployer, Tickets, Menu Manager, Brightness) then Boards. Columns are **Local** (this Mac), **Test** (beta / Alpha sheet), **TVs** (Restaurant / GitHub Pages). Boards are not listed twice. The column you are on is marked. Brightness is Mac-only.
 
