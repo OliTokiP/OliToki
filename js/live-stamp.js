@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5c48c62",
-  "hashFull": "5c48c6237be9540e9f95c1505f691b2b928da4ea",
-  "subject": "QA: keep pass 6 notify-only; restore unrelated WIP from that commit"
+  "hash": "398eee7",
+  "hashFull": "398eee76138df66352c41052215b72546bdc4179",
+  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 7)"
 };
