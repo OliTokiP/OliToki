@@ -759,14 +759,120 @@
     return parseCsv(await fetchText(publicCsvUrl(id, gid)));
   }
 
-  function parseSettingsRows(rows) {
-    var dataSource = "";
-    var requireRestart = "no";
+  function matchCatalogEntry(name, catalog) {
+    var key = String(name || "").trim().toLowerCase();
+    var i;
+    var n;
+    if (!key) return null;
+    for (i = 0; i < (catalog || []).length; i++) {
+      n = String((catalog[i] && catalog[i].name) || "").trim().toLowerCase();
+      if (n === key) return catalog[i];
+    }
+    var want = sourceId(name);
+    for (i = 0; i < (catalog || []).length; i++) {
+      if (sourceId((catalog[i] && catalog[i].name) || "") === want) {
+        return catalog[i];
+      }
+    }
+    for (i = 0; i < (catalog || []).length; i++) {
+      n = String((catalog[i] && catalog[i].name) || "").trim().toLowerCase();
+      if (n && (key.indexOf(n) !== -1 || n.indexOf(key) !== -1)) return catalog[i];
+    }
+    return null;
+  }
+
+  function normalizeCatalogChrome(row) {
+    if (!row) return null;
+    var name = String(row.name || "").trim();
+    if (!name) return null;
+    return {
+      id: row.id || sourceId(name),
+      name: name,
+      requireRestart: parseYesNo(row.requireRestart, false),
+      systemFont: parseSystemFont(row.systemFont),
+      limitHeavyFilters: parseYesNo(row.limitHeavyFilters, true),
+      confirmSave: parseYesNo(row.confirmSave, true),
+      refreshTimer: String(row.refreshTimer || "").trim(),
+      sheetId: String(row.sheetId || "").trim(),
+      sourceUrl: String(row.sourceUrl || row.url || "").trim(),
+    };
+  }
+
+  function parseOneSettingsRow(row, header, catalog) {
+    var name = cell(row, 0);
+    if (!name || name.toLowerCase().indexOf("gsheet") !== -1) return null;
     var systemFont = "roboto";
     var limitHeavyFilters = "yes";
     var confirmSave = "yes";
     var refreshTimer = "";
+    var requireRestart = parseYesNo(cell(row, 1), false);
+    var c;
+    for (c = 0; c < (header || []).length; c++) {
+      var h = String(header[c] || "").toLowerCase();
+      if (h.indexOf("require restart") !== -1) {
+        requireRestart = parseYesNo(cell(row, c), false);
+      }
+      if (h.indexOf("system font") !== -1) {
+        systemFont = parseSystemFont(cell(row, c));
+      }
+      if (isHeavyFilterHeader(h)) {
+        limitHeavyFilters = parseYesNo(cell(row, c), true);
+      }
+      if (h.indexOf("confirm") !== -1 && h.indexOf("save") !== -1) {
+        confirmSave = parseYesNo(cell(row, c), true);
+      }
+      if (h.indexOf("refresh timer") !== -1) {
+        refreshTimer = cell(row, c) || refreshTimer;
+      }
+    }
+    var match = matchCatalogEntry(name, catalog);
+    return normalizeCatalogChrome({
+      name: name,
+      requireRestart: requireRestart,
+      systemFont: systemFont,
+      limitHeavyFilters: limitHeavyFilters,
+      confirmSave: confirmSave,
+      refreshTimer: refreshTimer,
+      sheetId: (match && match.sheetId) || "",
+      sourceUrl: (match && match.url) || "",
+    });
+  }
+
+  function pickLiveCatalogChrome(catalogSettings) {
+    var i;
+    for (i = 0; i < (catalogSettings || []).length; i++) {
+      if (catalogSettings[i] && catalogSettings[i].id === "restaurant") {
+        return catalogSettings[i];
+      }
+    }
+    return (catalogSettings && catalogSettings[0]) || null;
+  }
+
+  function overlayCatalogChrome(settings, wantId) {
+    if (!settings) return settings;
+    var rows = settings.catalogSettings || [];
+    var want = sourceId(wantId || settings.dataSource || settings.sourceName);
+    var match = null;
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (!rows[i]) continue;
+      if (rows[i].id === want || sourceId(rows[i].name) === want) {
+        match = rows[i];
+        break;
+      }
+    }
+    if (!match) return settings;
+    settings.requireRestart = match.requireRestart;
+    settings.systemFont = match.systemFont;
+    settings.limitHeavyFilters = match.limitHeavyFilters;
+    settings.confirmSave = match.confirmSave;
+    settings.refreshTimer = match.refreshTimer || settings.refreshTimer;
+    return settings;
+  }
+
+  function parseSettingsRows(rows) {
     var catalog = [];
+    var catalogSettings = [];
     var headerIdx = -1;
     var catalogIdx = -1;
     var i;
@@ -782,26 +888,6 @@
         catalogIdx = i;
       }
     }
-    if (headerIdx >= 0 && headerIdx + 1 < rows.length) {
-      dataSource = cell(rows[headerIdx + 1], 0);
-      requireRestart = parseYesNo(cell(rows[headerIdx + 1], 1), false);
-      var header = rows[headerIdx] || [];
-      for (var c = 0; c < header.length; c++) {
-        var h = String(header[c] || "").toLowerCase();
-        if (h.indexOf("system font") !== -1) {
-          systemFont = parseSystemFont(cell(rows[headerIdx + 1], c));
-        }
-        if (isHeavyFilterHeader(h)) {
-          limitHeavyFilters = parseYesNo(cell(rows[headerIdx + 1], c), true);
-        }
-        if (h.indexOf("confirm") !== -1 && h.indexOf("save") !== -1) {
-          confirmSave = parseYesNo(cell(rows[headerIdx + 1], c), true);
-        }
-        if (h.indexOf("refresh timer") !== -1) {
-          refreshTimer = cell(rows[headerIdx + 1], c) || refreshTimer;
-        }
-      }
-    }
     if (catalogIdx >= 0) {
       for (i = catalogIdx + 1; i < rows.length; i++) {
         var name = cell(rows[i], 0);
@@ -814,26 +900,28 @@
         });
       }
     }
-    var match = null;
-    var key = dataSource.toLowerCase();
-    if (key) {
-      for (i = 0; i < catalog.length; i++) {
-        if (String(catalog[i].name || "").trim().toLowerCase() === key) {
-          match = catalog[i];
-          break;
-        }
+    if (headerIdx >= 0) {
+      var header = rows[headerIdx] || [];
+      var end = catalogIdx >= 0 ? catalogIdx : rows.length;
+      for (i = headerIdx + 1; i < end; i++) {
+        var parsed = parseOneSettingsRow(rows[i], header, catalog);
+        if (parsed) catalogSettings.push(parsed);
       }
     }
+    var live = pickLiveCatalogChrome(catalogSettings);
+    var dataSource = (live && live.name) || "";
+    var match = matchCatalogEntry(dataSource, catalog);
     return {
-      dataSource: dataSource || "Alpha Copy",
-      requireRestart: requireRestart,
-      systemFont: systemFont,
-      limitHeavyFilters: limitHeavyFilters,
-      confirmSave: confirmSave,
-      refreshTimer: refreshTimer || "",
-      sheetId: (match && match.sheetId) || "",
+      dataSource: dataSource || "Restaurant Copy",
+      requireRestart: (live && live.requireRestart) || "no",
+      systemFont: (live && live.systemFont) || "roboto",
+      limitHeavyFilters: (live && live.limitHeavyFilters) || "yes",
+      confirmSave: (live && live.confirmSave) || "yes",
+      refreshTimer: (live && live.refreshTimer) || "",
+      sheetId: (live && live.sheetId) || (match && match.sheetId) || "",
       sourceName: (match && match.name) || dataSource || "",
       catalog: catalog,
+      catalogSettings: catalogSettings,
     };
   }
 
@@ -983,12 +1071,12 @@
         break;
       }
     }
-    if (!match) return settings;
+    if (!match) return overlayCatalogChrome(settings, want);
     settings.dataSource = match.name || settings.dataSource;
     settings.sourceName = match.name || settings.sourceName;
     if (match.sheetId) settings.sheetId = match.sheetId;
     settings.editorSource = match.id;
-    return settings;
+    return overlayCatalogChrome(settings, match.id || want);
   }
 
   async function fetchSettings(force) {
@@ -1008,6 +1096,28 @@
               if (pub.catalog && pub.catalog.length) catalog = pub.catalog;
             } catch (e) {}
           }
+          var catalogSettings = [];
+          var cs = j.catalogSettings || [];
+          var ci;
+          for (ci = 0; ci < cs.length; ci++) {
+            var chrome = normalizeCatalogChrome(cs[ci]);
+            if (chrome) catalogSettings.push(chrome);
+          }
+          if (!catalogSettings.length) {
+            catalogSettings.push(
+              normalizeCatalogChrome({
+                name: j.sourceName || j.dataSource || "",
+                requireRestart: j.requireRestart,
+                systemFont: j.systemFont,
+                limitHeavyFilters: j.limitHeavyFilters,
+                confirmSave: j.confirmSave,
+                refreshTimer: j.refreshTimer,
+                sheetId: j.sheetId,
+                sourceUrl: j.sourceUrl,
+              })
+            );
+            catalogSettings = catalogSettings.filter(Boolean);
+          }
           var settings = applyPinnedSource({
             dataSource: j.dataSource || "",
             requireRestart: parseYesNo(j.requireRestart, false),
@@ -1020,6 +1130,7 @@
             sheetId: j.sheetId || "",
             sourceName: j.sourceName || j.dataSource || "",
             catalog: catalog,
+            catalogSettings: catalogSettings,
           });
           if (j.debugMode == null) {
             try {
@@ -1369,6 +1480,7 @@
       ok: true,
       sourceName: settings.sourceName || settings.dataSource || "",
       sheetId: settings.sheetId || "",
+      catalogSettings: settings.catalogSettings || [],
       dataSources: sources,
       themes: themes,
       colorRoles: colorRoles,
@@ -1584,6 +1696,7 @@
       fromFallback: true,
       sourceName: entry.sourceName || "",
       sheetId: entry.sheetId || "",
+      catalogSettings: entry.catalogSettings || [],
       dataSources: entry.dataSources || [],
       themes: entry.themes || [],
       colorRoles: entry.colorRoles || null,
@@ -1695,8 +1808,9 @@
   async function writeSystem(payload) {
     // Persists Require restart / System Font / Limit Heavy Filters /
     // Confirm Save / Refresh Timer / Debug Mode into the OliToki Menu Settings workbook.
-    // Data Source is Manager editor state only — never write Settings A2 (TVs
-    // stay on Restaurant unless a board URL has ?beta).
+    // Each catalog has its own Settings row (Restaurant A2–F2, Beta A3–F3).
+    // sourceId selects that row. Column A is the row's catalog name — never
+    // overwrite it as a TV pointer. TVs keep reading the Restaurant row.
     // Debug Mode writes Debugger!A2 (gid 195166367), not a Settings-tab column.
     // See scripts/toki_server.py for the full "all new settings must be in the sheet" contract.
     // Server maps to the correct cells under the matching header. This makes e.g.

@@ -306,6 +306,106 @@ def extract_spreadsheet_id(raw: str) -> str | None:
     return None
 
 
+def settings_source_id(name: str) -> str:
+    """Fold a Settings Data Source label to restaurant / beta / alpha / slug."""
+    n = str(name or "").strip().lower()
+    if "beta" in n:
+        return "beta"
+    if "restaurant" in n:
+        return "restaurant"
+    if "alpha" in n:
+        return "alpha"
+    slug = re.sub(r"[^a-z0-9]+", "-", n).strip("-")
+    return slug or "source"
+
+
+def match_catalog_entry(name: str, catalog: list) -> dict | None:
+    key = (name or "").strip().lower()
+    if not key:
+        return None
+    for c in catalog or []:
+        if (c.get("name") or "").strip().lower() == key:
+            return c
+    want = settings_source_id(name)
+    for c in catalog or []:
+        if settings_source_id(c.get("name")) == want:
+            return c
+    for c in catalog or []:
+        n = (c.get("name") or "").strip().lower()
+        if n and (key in n or n in key):
+            return c
+    return None
+
+
+def _settings_header_cols(header: list) -> dict[str, int]:
+    cols: dict[str, int] = {"dataSource": 0, "requireRestart": 1}
+    for c, cell in enumerate(header or []):
+        label = str(cell or "").strip().lower()
+        if label == "data source" or label.startswith("data source"):
+            cols["dataSource"] = c
+        if "require restart" in label:
+            cols["requireRestart"] = c
+        if "system font" in label:
+            cols["systemFont"] = c
+        if _is_heavy_filter_header(label):
+            cols["limitHeavyFilters"] = c
+        if "confirm" in label and "save" in label:
+            cols["confirmSave"] = c
+        if "refresh timer" in label:
+            cols["refreshTimer"] = c
+    return cols
+
+
+def _parse_one_settings_row(
+    row: list, cols: dict[str, int], catalog: list
+) -> dict | None:
+    name = _cell(row, cols.get("dataSource", 0))
+    if not name:
+        return None
+    if "gsheet" in name.lower():
+        return None
+    system_font = "roboto"
+    if "systemFont" in cols:
+        raw = _cell(row, cols["systemFont"]).lower()
+        if "poppin" in raw:
+            system_font = "poppins"
+        elif "roboto" in raw:
+            system_font = "roboto"
+    refresh_timer = ""
+    if "refreshTimer" in cols:
+        cand = _cell(row, cols["refreshTimer"])
+        if _is_timer_value(cand):
+            refresh_timer = cand
+    if not refresh_timer:
+        for c in range(len(row or [])):
+            cand = _cell(row, c)
+            if _is_timer_value(cand):
+                refresh_timer = cand
+                break
+    match = match_catalog_entry(name, catalog)
+    return {
+        "id": settings_source_id(name),
+        "name": name,
+        "requireRestart": _parse_yes(
+            _cell(row, cols.get("requireRestart", 1)), False
+        ),
+        "systemFont": system_font,
+        "limitHeavyFilters": _parse_yes(
+            _cell(row, cols.get("limitHeavyFilters", 3)), True
+        )
+        if "limitHeavyFilters" in cols
+        else True,
+        "confirmSave": _parse_yes(
+            _cell(row, cols.get("confirmSave", 4)), True
+        )
+        if "confirmSave" in cols
+        else True,
+        "refreshTimer": clamp_refresh_timer(refresh_timer),
+        "sheetId": (match or {}).get("sheetId") or "",
+        "sourceUrl": (match or {}).get("url") or "",
+    }
+
+
 def parse_debug_menu_rows(rows: list) -> dict:
     """
     Settings workbook → Debugger (gid 195166367):
@@ -336,19 +436,20 @@ def parse_debug_menu_rows(rows: list) -> dict:
 
 def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     """
-    Settings tab:
-      A1 Data Source | B1 Require restart to update?
-      A2 Alpha Copy / Restaurant Copy | B2 checkbox
+    Settings tab — one chrome row per catalog:
+
+      A1 Data Source | B1 Require restart | C1 System Font | … F1 Confirm save?
+      A2 Restaurant Copy | B2–F2  (TV default)
+      A3 Beta (Development) Copy | B3–F3
       A6 Gsheet name | B6 Gsheet URL
-      A7+ catalog rows
+      A7+ catalog workbook rows
+
+    Top-level requireRestart / font / timer / confirmSave stay on the
+    Restaurant row so dining-room TVs do not pick up Beta chrome.
+    Manager reads catalogSettings and writes the matching row.
     """
-    data_source = ""
-    require_restart = False
-    system_font = "roboto"
-    limit_heavy_filters = True
-    confirm_save = True
-    refresh_timer = ""
     catalog: list[dict] = []
+    catalog_settings: list[dict] = []
 
     header_idx = None
     catalog_idx = None
@@ -359,36 +460,6 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
             header_idx = i
         if catalog_idx is None and "gsheet" in (a + " " + b) and "url" in (a + " " + b):
             catalog_idx = i
-
-    if header_idx is not None and header_idx + 1 < len(rows):
-        data_source = _cell(rows[header_idx + 1], 0)
-        require_restart = _parse_yes(_cell(rows[header_idx + 1], 1), False)
-        header = rows[header_idx] or []
-        for c, cell in enumerate(header):
-            label = str(cell or "").strip().lower()
-            if "system font" in label:
-                raw = _cell(rows[header_idx + 1], c).lower()
-                if "poppin" in raw:
-                    system_font = "poppins"
-                elif "roboto" in raw:
-                    system_font = "roboto"
-            if _is_heavy_filter_header(label):
-                limit_heavy_filters = _parse_yes(
-                    _cell(rows[header_idx + 1], c), True
-                )
-            if "confirm" in label and "save" in label:
-                confirm_save = _parse_yes(_cell(rows[header_idx + 1], c), True)
-            if "refresh timer" in label:
-                cand = _cell(rows[header_idx + 1], c)
-                if _is_timer_value(cand):
-                    refresh_timer = cand
-        if not refresh_timer and header_idx is not None:
-            data_row = rows[header_idx + 1] if header_idx + 1 < len(rows) else []
-            for c in range(len(data_row or [])):
-                cand = _cell(data_row, c)
-                if _is_timer_value(cand):
-                    refresh_timer = cand
-                    break
 
     if catalog_idx is not None:
         for row in rows[catalog_idx + 1 :]:
@@ -404,33 +475,46 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
                 }
             )
 
-    key = data_source.lower()
-    match = None
-    if key:
-        for c in catalog:
-            if (c.get("name") or "").strip().lower() == key:
-                match = c
-                break
-        if match is None:
-            for c in catalog:
-                n = (c.get("name") or "").strip().lower()
-                if n and (key in n or n in key):
-                    match = c
-                    break
+    if header_idx is not None:
+        header = rows[header_idx] or []
+        cols = _settings_header_cols(header)
+        end = catalog_idx if catalog_idx is not None else len(rows)
+        for row in rows[header_idx + 1 : end]:
+            parsed = _parse_one_settings_row(row, cols, catalog)
+            if parsed:
+                catalog_settings.append(parsed)
 
-    sheet_id = (match and match.get("sheetId")) or fallback_sheet_id
+    live = None
+    for row in catalog_settings:
+        if row.get("id") == "restaurant":
+            live = row
+            break
+    if live is None and catalog_settings:
+        live = catalog_settings[0]
+
+    data_source = (live or {}).get("name") or ""
+    match = match_catalog_entry(data_source, catalog)
+    sheet_id = (
+        (live or {}).get("sheetId")
+        or (match and match.get("sheetId"))
+        or fallback_sheet_id
+    )
     data = {
-        "dataSource": data_source or "Alpha Copy",
-        "requireRestart": require_restart,
-        "systemFont": system_font,
-        "limitHeavyFilters": bool(limit_heavy_filters),
-        "confirmSave": bool(confirm_save),
-        "refreshTimer": clamp_refresh_timer(refresh_timer),
+        "dataSource": data_source or "Restaurant Copy",
+        "requireRestart": bool((live or {}).get("requireRestart", False)),
+        "systemFont": (live or {}).get("systemFont") or "roboto",
+        "limitHeavyFilters": bool((live or {}).get("limitHeavyFilters", True)),
+        "confirmSave": bool((live or {}).get("confirmSave", True)),
+        "refreshTimer": clamp_refresh_timer((live or {}).get("refreshTimer") or ""),
         "sheetId": sheet_id,
-        "sourceName": (match or {}).get("name") or "",
-        "sourceUrl": (match or {}).get("url") or "",
+        "sourceName": (match or live or {}).get("name") or data_source or "",
+        "sourceUrl": (live or {}).get("sourceUrl")
+        or (match or {}).get("url")
+        or "",
         "catalog": catalog,
-        "resolvedFromCatalog": bool(match and match.get("sheetId")),
+        "catalogSettings": catalog_settings,
+        "resolvedFromCatalog": bool(sheet_id and sheet_id != fallback_sheet_id)
+        or bool((live or {}).get("sheetId")),
     }
     return apply_force_source(data)
 
@@ -658,13 +742,16 @@ class SheetsBackend:
             raise ValueError("Settings workbook not configured")
         rows = self._settings_rows()
         header_idx = None
+        catalog_idx = None
         for i, row in enumerate(rows or []):
-            if _cell(row, 0).lower() == "data source":
+            a = _cell(row, 0).lower()
+            b = _cell(row, 1).lower()
+            if header_idx is None and a == "data source":
                 header_idx = i
-                break
+            if catalog_idx is None and "gsheet" in (a + " " + b) and "url" in (a + " " + b):
+                catalog_idx = i
         if header_idx is None:
             raise KeyError("Settings header row not found")
-        data_idx = header_idx + 1
         header = (rows[header_idx] if header_idx < len(rows) else []) or []
         cols: dict[str, int] = {}
         for c, raw in enumerate(header):
@@ -682,10 +769,9 @@ class SheetsBackend:
                 cols["refreshtimer"] = c
 
         # === System Settings contract (Menu Manager) ===
-        # All user-accessible settings toggles/options shown in Menu Manager
-        # (dataSource, requireRestart, systemFont, limitHeavyFilters, confirmSave,
-        # refreshTimer, debugMode, and future ones) live in the "OliToki Menu Settings"
-        # workbook. Most map to the Settings tab (first data row after the header).
+        # Each catalog has its own Settings row (Restaurant A2–F2, Beta A3–F3,
+        # and so on). Manager writes the row for the catalog being edited.
+        # TVs keep reading the Restaurant row via GET /api/settings.
         # Debug Mode is Debugger!A2 (gid 195166367) — not a Settings-tab column.
         #
         # - Client (manager-sheet.js) and server discover columns by fuzzy header match
@@ -697,6 +783,23 @@ class SheetsBackend:
         # - This keeps the "sheet is the database" model.
         # See also: docs/MENU_MANAGER.md, js/manager.js (systemSettingsDirty + confirmChoice),
         # and manager-sheet.js load path.
+
+        want_raw = str(
+            body.get("sourceId")
+            or body.get("sourceName")
+            or body.get("dataSource")
+            or "restaurant"
+        ).strip()
+        created_row = False
+        data_idx = self._find_settings_data_idx(
+            rows, header_idx, catalog_idx, want_raw
+        )
+        if data_idx < 0:
+            data_idx = self._ensure_settings_data_row(
+                sid, rows, header_idx, catalog_idx, want_raw, body
+            )
+            created_row = True
+            rows = self._settings_rows()
 
         def a1(*folds: str, default_col: int) -> str:
             for fold in folds:
@@ -713,18 +816,23 @@ class SheetsBackend:
             return "TRUE" if fallback else "FALSE"
 
         values: dict[str, tuple[str, str]] = {}
-        force = (os.environ.get("TOKI_FORCE_SOURCE") or "").strip().lower()
-        if not force:
-            env = (os.environ.get("TOKI_ENV") or "").strip().lower()
-            if env == "restaurant":
-                force = "restaurant"
-            elif env == "testing":
-                force = "alpha"
 
         if "dataSource" in body and body.get("dataSource") not in (None, ""):
-            # Manager Data Source is which catalog you are editing. TVs stay
-            # on Settings A2 (Restaurant) unless a board URL has ?beta.
-            _log("settings write: skip dataSource (A2 is TV pointer, not Manager editor)")
+            # Data Source is which catalog row you are editing. Never write
+            # column A as a TV pointer — A holds the row's catalog name.
+            _log(
+                "settings write: skip dataSource cell "
+                f"(target row {data_idx + 1} is {want_raw!r})"
+            )
+
+        if created_row:
+            display = str(body.get("sourceName") or "").strip() or self._settings_display_name(
+                want_raw, rows, header_idx, catalog_idx
+            )
+            values["datasource"] = (
+                f"{self._col_letters(0)}{data_idx + 1}",
+                display,
+            )
 
         if "requireRestart" in body and body.get("requireRestart") not in (None, ""):
             values["requirerestart"] = (
@@ -745,12 +853,12 @@ class SheetsBackend:
             )
         if "confirmSave" in body and body.get("confirmSave") not in (None, ""):
             values["confirmsave"] = (
-                a1("confirmsave", default_col=4),
+                a1("confirmsave", default_col=5),
                 yn(body.get("confirmSave"), True),
             )
         if "refreshTimer" in body and body.get("refreshTimer") not in (None, ""):
             values["refreshtimer"] = (
-                a1("refreshtimer", default_col=5),
+                a1("refreshtimer", default_col=4),
                 clamp_refresh_timer(str(body.get("refreshTimer")).strip()),
             )
         if "debugMode" in body and body.get("debugMode") not in (None, ""):
@@ -781,15 +889,94 @@ class SheetsBackend:
             _settings_cache["at"] = 0
             _settings_cache["data"] = None
         _log(
-            f"settings write {sid} { {k: v[1] for k, v in values.items()} } "
+            f"settings write {sid} row={data_idx + 1} "
+            f"{ {k: v[1] for k, v in values.items()} } "
             f"cells={updated.get('totalUpdatedCells')} ({time.time() - t0:.2f}s)"
         )
         return {
             "ok": True,
             "settingsSheetId": sid,
             "wrote": {k: v[1] for k, v in values.items()},
+            "wroteRow": data_idx + 1,
+            "sourceId": settings_source_id(want_raw),
             "skippedDataSource": bool("dataSource" in body),
         }
+
+    def _find_settings_data_idx(
+        self, rows: list, header_idx: int, catalog_idx: int | None, want: str
+    ) -> int:
+        want_id = settings_source_id(want)
+        want_name = str(want or "").strip().lower()
+        end = catalog_idx if catalog_idx is not None else len(rows or [])
+        for i in range(header_idx + 1, end):
+            name = _cell(rows[i], 0)
+            if not name:
+                continue
+            if settings_source_id(name) == want_id or name.strip().lower() == want_name:
+                return i
+        return -1
+
+    def _settings_display_name(
+        self, want: str, rows: list, header_idx: int, catalog_idx: int | None
+    ) -> str:
+        explicit = str(want or "").strip()
+        live = parse_settings_rows(rows, self.fallback_sheet_id)
+        want_id = settings_source_id(want)
+        for c in live.get("catalog") or []:
+            name = str(c.get("name") or "").strip()
+            if name and settings_source_id(name) == want_id:
+                return name
+        if want_id == "restaurant":
+            return "Restaurant Copy"
+        if want_id == "beta":
+            return "Beta (Development) Copy"
+        if want_id == "alpha":
+            return "Alpha Copy"
+        return explicit or want_id
+
+    def _ensure_settings_data_row(
+        self,
+        sid: str,
+        rows: list,
+        header_idx: int,
+        catalog_idx: int | None,
+        want: str,
+        body: dict,
+    ) -> int:
+        end = catalog_idx if catalog_idx is not None else len(rows or [])
+        last_named = header_idx
+        for i in range(header_idx + 1, end):
+            if _cell(rows[i], 0):
+                last_named = i
+        empty_idx = -1
+        for i in range(last_named + 1, end):
+            if not _cell(rows[i], 0):
+                empty_idx = i
+                break
+        if empty_idx >= 0:
+            return empty_idx
+        insert_at = end if catalog_idx is not None else last_named + 1
+        _log(f"settings write: insert catalog row at {insert_at + 1} for {want!r}")
+        with self._api_lock:
+            self.sheets.spreadsheets().batchUpdate(
+                spreadsheetId=sid,
+                body={
+                    "requests": [
+                        {
+                            "insertDimension": {
+                                "range": {
+                                    "sheetId": 0,
+                                    "dimension": "ROWS",
+                                    "startIndex": insert_at,
+                                    "endIndex": insert_at + 1,
+                                },
+                                "inheritFromBefore": True,
+                            }
+                        }
+                    ]
+                },
+            ).execute()
+        return insert_at
 
     def apply_live_sheet(self, force_settings: bool = False) -> dict:
         """Point CSV/meta at the workbook chosen in Settings → Data Source."""
@@ -2651,6 +2838,7 @@ def make_handler(
                                 live.get("resolvedFromCatalog")
                             ),
                             "catalog": live.get("catalog") or [],
+                            "catalogSettings": live.get("catalogSettings") or [],
                             "forcedSource": live.get("forcedSource") or "",
                             "env": os.environ.get("TOKI_ENV") or "local",
                         },

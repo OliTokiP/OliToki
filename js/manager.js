@@ -68,6 +68,7 @@
     persistInFlight: false,
     itemOrderTimer: null,
     pendingItemOrderSave: false,
+    catalogSettings: [],
   };
   state.draft.confirmSave = state.draft.confirmSave || "yes";
   state.committed.confirmSave = state.committed.confirmSave || "yes";
@@ -289,6 +290,96 @@
     return "restaurant";
   }
 
+  function catalogIdOf(name) {
+    var n = String(name || "").trim().toLowerCase();
+    if (n.indexOf("beta") !== -1) return "beta";
+    if (n.indexOf("restaurant") !== -1) return "restaurant";
+    if (n.indexOf("alpha") !== -1) return "alpha";
+    return n.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "";
+  }
+
+  function asYesNo(raw, fallbackYes) {
+    var s = String(raw == null ? "" : raw).trim().toLowerCase();
+    if (!s) return fallbackYes ? "yes" : "no";
+    if (s === "1" || s === "yes" || s === "y" || s === "true" || s === "on") {
+      return "yes";
+    }
+    if (s === "0" || s === "no" || s === "n" || s === "false" || s === "off") {
+      return "no";
+    }
+    return fallbackYes ? "yes" : "no";
+  }
+
+  function chromeSnapFrom(row) {
+    if (!row) return null;
+    var font = String(row.systemFont || "").trim().toLowerCase();
+    return {
+      requireRestart: asYesNo(row.requireRestart, false),
+      systemFont: font.indexOf("poppin") !== -1 ? "poppins" : font ? "roboto" : "",
+      limitHeavyFilters: asYesNo(row.limitHeavyFilters, true),
+      confirmSave: asYesNo(row.confirmSave, true),
+      refreshTimer: String(row.refreshTimer || "").trim(),
+    };
+  }
+
+  function findCatalogChrome(id) {
+    var want = catalogIdOf(id) || String(id || "").trim();
+    var rows = state.catalogSettings || [];
+    var i;
+    var row;
+    for (i = 0; i < rows.length; i++) {
+      row = rows[i];
+      if (!row) continue;
+      if (row.id === want || row.name === id) return row;
+      if (catalogIdOf(row.id) === want || catalogIdOf(row.name) === want) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function applyChromeToState(chrome, toCommitted) {
+    if (!chrome) return;
+    var snap = chromeSnapFrom(chrome);
+    if (!snap) return;
+    var keys = [
+      "requireRestart",
+      "systemFont",
+      "limitHeavyFilters",
+      "confirmSave",
+      "refreshTimer",
+    ];
+    var i;
+    var k;
+    for (i = 0; i < keys.length; i++) {
+      k = keys[i];
+      if (snap[k] == null || snap[k] === "") continue;
+      state.draft[k] = snap[k];
+      if (toCommitted && state.committed) state.committed[k] = snap[k];
+    }
+  }
+
+  function upsertCatalogChrome(id, chrome) {
+    if (!id || !chrome) return;
+    var rows = (state.catalogSettings || []).slice();
+    var i;
+    var found = false;
+    for (i = 0; i < rows.length; i++) {
+      if (!rows[i]) continue;
+      if (rows[i].id === id || rows[i].name === id) {
+        rows[i] = Object.assign({}, rows[i], chrome, { id: rows[i].id || id });
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      rows.push(
+        Object.assign({ id: id, name: (dataSource() && dataSource().name) || id }, chrome)
+      );
+    }
+    state.catalogSettings = rows;
+  }
+
   function adoptCatalog(id) {
     var src = null;
     var i;
@@ -303,6 +394,8 @@
     state.draft.dataSource = want;
     if (state.committed) state.committed.dataSource = want;
     persistCatalogChoice(want);
+    applyChromeToState(findCatalogChrome(want), true);
+    applyTheme();
     loadSheet({ force: true, sourceId: want });
   }
 
@@ -2783,6 +2876,7 @@
       wallpapers: D.wallpapers,
       fieldValidations: meta.fieldValidations || null,
       dataSources: D.dataSources,
+      catalogSettings: state.catalogSettings || [],
       motionStyles: D.motionStyles || {},
     };
     // skip write if identical to last we wrote (equals what is on disk from prior)
@@ -3029,6 +3123,8 @@
       });
     }
     var payload = {
+      sourceId: editorSourceId(),
+      sourceName: dataSource().name,
       requireRestart: state.draft.requireRestart,
       systemFont: state.draft.systemFont,
       limitHeavyFilters: state.draft.limitHeavyFilters,
@@ -3036,8 +3132,9 @@
       refreshTimer: state.draft.refreshTimer,
       debugMode: state.draft.debugMode,
     };
+    upsertCatalogChrome(payload.sourceId, chromeSnapFrom(state.draft));
     // Settings workbook id is known to server (different from catalog sheetId).
-    // Writing here makes e.g. System Font affect the menu boards.
+    // Writing here makes e.g. System Font affect the selected catalog's row.
     return sheet.writeSystem(payload).then(function (wrote) {
       return { needed: true, wrote: wrote };
     });
@@ -4250,6 +4347,15 @@
 
   function applySheetPayload(payload) {
     if (!payload || !payload.ok) return;
+    if (payload.catalogSettings && payload.catalogSettings.length) {
+      state.catalogSettings = payload.catalogSettings;
+    }
+    try {
+      document.documentElement.setAttribute(
+        "data-catalog-rows",
+        String((state.catalogSettings || []).length)
+      );
+    } catch (e) {}
     if (payload.dataSources && payload.dataSources.length) {
       D.dataSources = payload.dataSources;
     }
@@ -4362,6 +4468,9 @@
       persistCatalogChoice(state.draft.dataSource);
     }
     state.sheetSource = "sheet";
+    try {
+      document.documentElement.setAttribute("data-sheet-source", "sheet");
+    } catch (e2) {}
     applyTheme();
     if (payload && !payload.fromFallback) {
       hadLiveSheetData = true;
@@ -4404,6 +4513,7 @@
   var sheetHangTimer = 0;
   var sheetLiveOk = false;
   var sheetLoadInFlight = false;
+  var pendingSheetLoad = null;
   var hadLiveSheetData = false; // for manager-fallback.json: only write recovery snapshot after seeing real live data this session (avoid pre-sheet defaultDraft)
   var lastFallbackSnapshot = null; // memory of last sent to avoid re-POST identical to disk (skip if equals)
 
@@ -4440,6 +4550,7 @@
       return;
     }
     if (sheetLoadInFlight) {
+      pendingSheetLoad = opts;
       if (opts.hangRetry) armSheetHangRetry("load already in progress");
       return;
     }
@@ -4448,6 +4559,15 @@
     loader
       .load(opts)
       .then(function (payload) {
+        var incoming = payload && payload.draft && payload.draft.dataSource;
+        var stale =
+          pendingSheetLoad &&
+          pendingSheetLoad.sourceId &&
+          incoming &&
+          incoming !== pendingSheetLoad.sourceId;
+        if (stale) {
+          return;
+        }
         if (opts.force) state.sheetDirty = false;
         applySheetPayload(payload);
         sheetLiveOk = !(payload && payload.fromFallback);
@@ -4485,8 +4605,18 @@
       })
       .then(function () {
         sheetLoadInFlight = false;
+        if (pendingSheetLoad) {
+          var next = pendingSheetLoad;
+          pendingSheetLoad = null;
+          loadSheet(next);
+        }
       }, function () {
         sheetLoadInFlight = false;
+        if (pendingSheetLoad) {
+          var next = pendingSheetLoad;
+          pendingSheetLoad = null;
+          loadSheet(next);
+        }
       });
   }
 

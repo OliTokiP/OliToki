@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "11558d0",
-  "hashFull": "11558d0c4c3b1cbe8c35d74f7f90231382b54915",
-  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 5)"
+  "hash": "4bc28cd",
+  "hashFull": "4bc28cd3cb764c0b128de61b793e0114f5f079ec",
+  "subject": "QA: 2026-08-22 Support the Beta sheet (pass 2)"
 };
