@@ -56,7 +56,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.metadata.readonly",
 ]
 STYLE_THEME_GID = "183083022"
-# OliToki Menu Settings → Debugger tab (master Debug Mode in A2).
+# OliToki Menu Settings → Debugger tab (Debug Features only).
+# Master Debug Mode is Settings column G per catalog row (G2 Restaurant, G3 Beta).
 DEBUGGER_GID = "195166367"
 DEBUGGER_TAB = "Debugger"
 _SHEET_ID_IN_URL = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
@@ -466,6 +467,8 @@ def _settings_header_cols(header: list) -> dict[str, int]:
             cols["confirmSave"] = c
         if "refresh timer" in label:
             cols["refreshTimer"] = c
+        if "debug" in label and "mode" in label:
+            cols["debugMode"] = c
     return cols
 
 
@@ -514,6 +517,9 @@ def _parse_one_settings_row(
         if "confirmSave" in cols
         else True,
         "refreshTimer": clamp_refresh_timer(refresh_timer),
+        "debugMode": _parse_yes(_cell(row, cols.get("debugMode")), False)
+        if "debugMode" in cols
+        else False,
         "sheetId": (match or {}).get("sheetId") or "",
         "sourceUrl": (match or {}).get("url") or "",
     }
@@ -522,9 +528,11 @@ def _parse_one_settings_row(
 def parse_debug_menu_rows(rows: list) -> dict:
     """
     Settings workbook → Debugger (gid 195166367):
-      A1 Debug Mode
-      A2 TRUE/FALSE
-      then Debug Features header + values row
+      Debug Features header + values row.
+    Master Debug Mode no longer lives here — it is Settings column G
+    per catalog row. This parser still accepts a leftover A1/A2
+    "Debug Mode" block if someone puts it back, but refresh_settings
+    only uses debugFeatures from this tab.
     """
     debug_mode = False
     features: dict[str, bool] = {}
@@ -551,14 +559,14 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
     """
     Settings tab — one chrome row per catalog:
 
-      A1 Data Source | B1 Require restart | C1 System Font | … F1 Confirm save?
-      A2 Restaurant Copy | B2–F2  (TV default)
-      A3 Beta (Development) Copy | B3–F3
+      A1 Data Source | B1 Require restart | C1 System Font | … F1 Confirm save? | G1 Debug Mode
+      A2 Restaurant Copy | B2–G2  (TV default)
+      A3 Beta (Development) Copy | B3–G3
       A6 Gsheet name | B6 Gsheet URL
       A7+ catalog workbook rows
 
-    Top-level requireRestart / font / timer / confirmSave stay on the
-    Restaurant row so dining-room TVs do not pick up Beta chrome.
+    Top-level requireRestart / font / timer / confirmSave / debugMode stay
+    on the Restaurant row so dining-room TVs do not pick up Beta chrome.
     Manager reads catalogSettings and writes the matching row.
     """
     catalog: list[dict] = []
@@ -619,6 +627,7 @@ def parse_settings_rows(rows: list, fallback_sheet_id: str) -> dict:
         "limitHeavyFilters": bool((live or {}).get("limitHeavyFilters", True)),
         "confirmSave": bool((live or {}).get("confirmSave", True)),
         "refreshTimer": clamp_refresh_timer((live or {}).get("refreshTimer") or ""),
+        "debugMode": bool((live or {}).get("debugMode", False)),
         "sheetId": sheet_id,
         "sourceName": (match or live or {}).get("name") or data_source or "",
         "sourceUrl": (live or {}).get("sourceUrl")
@@ -838,11 +847,12 @@ class SheetsBackend:
         data = parse_settings_rows(rows, self.fallback_sheet_id)
         data["settingsSheetId"] = self.settings_sheet_id
         try:
-            data.update(parse_debug_menu_rows(self._debugger_rows()))
+            dbg = parse_debug_menu_rows(self._debugger_rows())
+            data["debugFeatures"] = dbg.get("debugFeatures") or {}
         except Exception as e:
             _log(f"Debugger tab read failed ({e})")
-            data.setdefault("debugMode", False)
             data.setdefault("debugFeatures", {})
+        data.setdefault("debugMode", False)
         with _settings_lock:
             _settings_cache["at"] = time.time()
             _settings_cache["data"] = data
@@ -880,12 +890,14 @@ class SheetsBackend:
                 cols["confirmsave"] = c
             if "refresh timer" in low:
                 cols["refreshtimer"] = c
+            if "debug" in low and "mode" in low:
+                cols["debugmode"] = c
 
         # === System Settings contract (Menu Manager) ===
-        # Each catalog has its own Settings row (Restaurant A2–F2, Beta A3–F3,
+        # Each catalog has its own Settings row (Restaurant A2–G2, Beta A3–G3,
         # and so on). Manager writes the row for the catalog being edited.
         # TVs keep reading the Restaurant row via GET /api/settings.
-        # Debug Mode is Debugger!A2 (gid 195166367) — not a Settings-tab column.
+        # Debug Mode is Settings column G (header "Debug Mode") — not Debugger!A2.
         #
         # - Client (manager-sheet.js) and server discover columns by fuzzy header match
         #   on the Settings row, with documented default_col fallbacks for writes.
@@ -975,10 +987,8 @@ class SheetsBackend:
                 clamp_refresh_timer(str(body.get("refreshTimer")).strip()),
             )
         if "debugMode" in body and body.get("debugMode") not in (None, ""):
-            tab = self._debugger_tab_title()
-            quoted = "'" + tab.replace("'", "''") + "'!A2"
             values["debugmode"] = (
-                quoted,
+                a1("debugmode", default_col=6),
                 yn(body.get("debugMode"), False),
             )
         if not values:

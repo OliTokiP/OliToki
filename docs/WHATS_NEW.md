@@ -1,9 +1,28 @@
 # What’s New
 
-**Last updated:** 2026-08-22 22:15  
+**Last updated:** 2026-08-22 23:20  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-08-22 23:20 — Suite-branded Notification Center
+
+**Boards / surface:** Suite · Listener · Deployer (native Suite.app + local Mac)  
+**Sheet:** none  
+**Summary:** Notification Center banners from Suite members now belong to **Suite** (Suite icon, Suite grouping). The old osascript “Toki Menu” / Script Editor banners are gone. Health restart, Listener Ready for review, and Deployer ship filed / finished all post through native Suite.app when it is open.
+
+### Details
+- Click a banner to open the matching Suite surface (Health, the ticket, or the GitHub run).
+- If Suite.app is not running, the Mac still stamps the Suite identity image so the banner is not a generic script icon.
+- Suite Health no longer also fires a Chrome web notification (that showed as the browser, not Suite).
+- Deployer: filing a ship from this Mac pings immediately, then again when GitHub Actions completes.
+
+### Docs updated
+- [DEPLOYER.md](./DEPLOYER.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [HOW_TO_SHIP.md](./HOW_TO_SHIP.md)
 
 ---
 

@@ -6,6 +6,8 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1a1a" />
+  <link rel="icon" href="assets/suite-icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/suite-icon.png" />
   <title>Deployer</title>
   <script>
     (function () {
@@ -463,7 +465,7 @@
           const n = res.j.issueNumber ? "#" + res.j.issueNumber : "the GitHub issue";
           const href = githubHref(res.j.issueUrl);
           showFiled(
-            "<p><strong>Filed + dispatched.</strong> Push is starting. Stay here — Suite App does not need GitHub.</p>" +
+            "<p><strong>Filed + dispatched.</strong> Push is starting. Stay here — Suite App does not need GitHub. Suite pings Notification Center when this ship is filed and when Actions finishes.</p>" +
               (href
                 ? "<p><a href=\"" +
                   href +

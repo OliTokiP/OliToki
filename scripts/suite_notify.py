@@ -126,6 +126,32 @@ function run(argv) {
         return False
 
 
+def _applescript_escape(s: str) -> str:
+    return (s or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _notify_via_suite_applescript(title: str, body: str, subtitle: str) -> bool:
+    """Banner attributed to Suite.app — Suite icon, not Script Editor."""
+    title = _applescript_escape((title or "").strip() or "Suite")
+    body = _applescript_escape((body or "").strip() or " ")
+    subtitle = _applescript_escape((subtitle or "").strip())
+    extra = f' subtitle "{subtitle}"' if subtitle else ""
+    script = (
+        f'tell application id "{SUITE_BUNDLE_NATIVE}" to '
+        f'display notification "{body}" with title "{title}"{extra}'
+    )
+    try:
+        r = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 def post_to_suite_app(
     title: str,
     body: str = "",
@@ -134,17 +160,22 @@ def post_to_suite_app(
     open_url: str = "",
     tag: str = "",
 ) -> bool:
-    """Ask the running native Suite.app to deliver the banner. No-op if it is down."""
+    """Ask the running native Suite.app to own the banner. No-op if it is down."""
     if not _darwin() or not suite_app_running():
         return False
+    title = (title or "").strip() or "Suite"
+    body = (body or "").strip()
+    subtitle = (subtitle or "").strip()
     info = {
-        "title": (title or "").strip() or "Suite",
-        "subtitle": (subtitle or "").strip(),
-        "body": (body or "").strip(),
+        "title": title,
+        "subtitle": subtitle,
+        "body": body,
         "url": (open_url or "").strip(),
         "tag": (tag or "").strip(),
     }
-    return _post_distributed(info)
+    posted = _post_distributed(info)
+    shown = _notify_via_suite_applescript(title, body, subtitle)
+    return posted or shown
 
 
 def _fallback_ns(

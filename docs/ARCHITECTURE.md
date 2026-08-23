@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-08-22 14:52 (Suite Health local server restart)
+**Last updated:** 2026-08-22 23:20 (Suite-branded Notification Center)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -273,7 +273,8 @@ Server:
 | static `/*` | HTML/CSS/JS/assets |
 | `/api/health` | API + SA readiness |
 | `GET /api/sys` | Local Mac meters for Suite Health (load, swap, sockets, `toki_server` count) |
-| `POST /api/sys/restart` | Local only: bounce `toki_server` (Suite Health). 404 on Cloud Run. |
+| `POST /api/sys/restart` | Local only: bounce `toki_server` (Suite Health). 404 on Cloud Run. Notification Center ping is Suite-branded (`scripts/suite_notify.py`). |
+| `POST /api/deploy` | Local only: file a Deployer GitHub issue + dispatch. Suite pings when filed and when the Actions run finishes. |
 | `/api/sheets/csv` | Tab values by gid/title |
 | `/api/sheets/xlsx` | **410 Gone** — Drive workbook export retired 2026-08-13 |
 | `/api/sheets/tabs` | gid ↔ title map |

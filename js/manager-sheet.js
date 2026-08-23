@@ -793,6 +793,7 @@
       limitHeavyFilters: parseYesNo(row.limitHeavyFilters, true),
       confirmSave: parseYesNo(row.confirmSave, true),
       refreshTimer: String(row.refreshTimer || "").trim(),
+      debugMode: parseYesNo(row.debugMode, false),
       sheetId: String(row.sheetId || "").trim(),
       sourceUrl: String(row.sourceUrl || row.url || "").trim(),
     };
@@ -805,6 +806,7 @@
     var limitHeavyFilters = "yes";
     var confirmSave = "yes";
     var refreshTimer = "";
+    var debugMode = "no";
     var requireRestart = parseYesNo(cell(row, 1), false);
     var c;
     for (c = 0; c < (header || []).length; c++) {
@@ -824,6 +826,9 @@
       if (h.indexOf("refresh timer") !== -1) {
         refreshTimer = cell(row, c) || refreshTimer;
       }
+      if (h.indexOf("debug") !== -1 && h.indexOf("mode") !== -1) {
+        debugMode = parseYesNo(cell(row, c), false);
+      }
     }
     var match = matchCatalogEntry(name, catalog);
     return normalizeCatalogChrome({
@@ -833,6 +838,7 @@
       limitHeavyFilters: limitHeavyFilters,
       confirmSave: confirmSave,
       refreshTimer: refreshTimer,
+      debugMode: debugMode,
       sheetId: (match && match.sheetId) || "",
       sourceUrl: (match && match.url) || "",
     });
@@ -867,6 +873,7 @@
     settings.limitHeavyFilters = match.limitHeavyFilters;
     settings.confirmSave = match.confirmSave;
     settings.refreshTimer = match.refreshTimer || settings.refreshTimer;
+    settings.debugMode = match.debugMode || "no";
     return settings;
   }
 
@@ -918,6 +925,7 @@
       limitHeavyFilters: (live && live.limitHeavyFilters) || "yes",
       confirmSave: (live && live.confirmSave) || "yes",
       refreshTimer: (live && live.refreshTimer) || "",
+      debugMode: (live && live.debugMode) || "no",
       sheetId: (live && live.sheetId) || (match && match.sheetId) || "",
       sourceName: (match && match.name) || dataSource || "",
       catalog: catalog,
@@ -953,7 +961,8 @@
   function attachDebugSettings(settings, dbg) {
     if (!settings) return settings;
     if (dbg) {
-      settings.debugMode = dbg.debugMode || "no";
+      // Features still live on the Debugger tab. Debug Mode is a Settings
+      // column per catalog — do not let a leftover Debugger A2 overwrite it.
       settings.debugFeatures = dbg.features || {};
     }
     if (!settings.debugMode) settings.debugMode = "no";
@@ -1112,6 +1121,7 @@
                 limitHeavyFilters: j.limitHeavyFilters,
                 confirmSave: j.confirmSave,
                 refreshTimer: j.refreshTimer,
+                debugMode: j.debugMode,
                 sheetId: j.sheetId,
                 sourceUrl: j.sourceUrl,
               })
@@ -1132,7 +1142,7 @@
             catalog: catalog,
             catalogSettings: catalogSettings,
           });
-          if (j.debugMode == null) {
+          if (!settings.debugFeatures || !Object.keys(settings.debugFeatures).length) {
             try {
               attachDebugSettings(settings, await fetchDebuggerPublic());
             } catch (dbgErr) {}
@@ -1808,10 +1818,10 @@
   async function writeSystem(payload) {
     // Persists Require restart / System Font / Limit Heavy Filters /
     // Confirm Save / Refresh Timer / Debug Mode into the OliToki Menu Settings workbook.
-    // Each catalog has its own Settings row (Restaurant A2–F2, Beta A3–F3).
+    // Each catalog has its own Settings row (Restaurant A2–G2, Beta A3–G3).
     // sourceId selects that row. Column A is the row's catalog name — never
     // overwrite it as a TV pointer. TVs keep reading the Restaurant row.
-    // Debug Mode writes Debugger!A2 (gid 195166367), not a Settings-tab column.
+    // Debug Mode writes Settings column G (header "Debug Mode") on that row.
     // See scripts/toki_server.py for the full "all new settings must be in the sheet" contract.
     // Server maps to the correct cells under the matching header. This makes e.g.
     // Refresh Timer and System Font affect the menu boards on their next settings load.

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "a4fb34d",
-  "hashFull": "a4fb34d2581d2a436d643231f2830e13798eba90",
-  "subject": "QA: 2026-08-22 Inquiry - are our menu boxes still algorithmically displaying as efficiently as possible (pass 6)"
+  "hash": "840990c",
+  "hashFull": "840990c4cffb6450ffd999c6d52bdd6729ca1afb",
+  "subject": "QA: 2026-08-22 Suite and all of its notification tabs should be Suite branded (pass 1)"
 };

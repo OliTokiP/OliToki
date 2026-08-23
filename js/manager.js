@@ -319,6 +319,7 @@
       limitHeavyFilters: asYesNo(row.limitHeavyFilters, true),
       confirmSave: asYesNo(row.confirmSave, true),
       refreshTimer: String(row.refreshTimer || "").trim(),
+      debugMode: asYesNo(row.debugMode, false),
     };
   }
 
@@ -348,6 +349,7 @@
       "limitHeavyFilters",
       "confirmSave",
       "refreshTimer",
+      "debugMode",
     ];
     var i;
     var k;

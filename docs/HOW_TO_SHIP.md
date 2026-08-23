@@ -126,7 +126,7 @@ Preview on testing, then promote to the TVs.
 7. Optional: type a note.
 8. Tap **File testing deploy**. Suite App stays on this page. (On Live without the Mac, GitHub opens in a new window — submit the issue there.)
 9. Optional: **Latest GitHub commit** opens that commit on GitHub in a new window. The label updates after you file.
-10. Wait until Actions comments on the issue (usually 1–3 minutes; first testing ship can be longer). Use **This ship · #…** if it appeared, still in a new window.
+10. Wait until Actions comments on the issue (usually 1–3 minutes; first testing ship can be longer). Use **This ship · #…** if it appeared, still in a new window. From this Mac, Suite also pings Notification Center when the ship is filed and when Actions finishes.
 11. Open https://toki-api-testing-3rx5m3qpzq-uc.a.run.app/ and click through the boards + Menu Manager. This is Alpha data. TVs are untouched.
 
 ### 2. If testing looks right, ship to the restaurant
