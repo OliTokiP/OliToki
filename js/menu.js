@@ -2999,11 +2999,10 @@
   }
 
   /**
-   * Encore plate is Style M Encore Background Color (fallback Secondary).
-   * Wallpaper fades out, then we park it (drop src + stop pan RAF) so Fire
-   * Stick is not compositing two invisible full-stage bitmaps under a solid
-   * veil. Pan X stays on the img transform so unpark resumes where it left
-   * off. Pattern is display:none while parked.
+   * Encore plate is Secondary Color. Wallpaper fades out, then we park it
+   * (drop src + stop pan RAF) so Fire Stick is not compositing two invisible
+   * full-stage bitmaps under a solid veil. Pan X stays on the img transform
+   * so unpark resumes where it left off. Pattern is display:none while parked.
    */
   function encoreBackgroundHex() {
     return (
@@ -3011,23 +3010,6 @@
       normalizeHex(config.secondaryColor) ||
       "#ffffff"
     );
-  }
-
-  /**
-   * Retint every Encore color plate from config.encoreBackgroundColor.
-   * #galaxy is parked/hidden under .encore-scaffold-bg; the color the viewer
-   * sees is .family-portrait-bg-plate, and ensureFamilyPortrait reuses that
-   * node across bows. Soft refresh must paint the plate — not only galaxy —
-   * or Style M changes from Menu Manager survive until a hard reload.
-   */
-  function syncEncoreBackgroundPaint() {
-    const hex = encoreBackgroundHex();
-    const galaxy = document.getElementById("galaxy") || els.galaxy;
-    if (galaxy) galaxy.style.backgroundColor = hex;
-    const plates = document.querySelectorAll(".family-portrait-bg-plate");
-    for (let i = 0; i < plates.length; i++) {
-      plates[i].style.backgroundColor = hex;
-    }
   }
 
   let _encoreSolidBg = false;
@@ -3140,7 +3122,7 @@
 
     if (galaxy) {
       if (want) {
-        syncEncoreBackgroundPaint();
+        galaxy.style.backgroundColor = encoreBackgroundHex();
         galaxy.classList.remove("is-solid");
         galaxy.classList.toggle("has-image", !!config.bgImage);
       } else {
@@ -3920,13 +3902,8 @@
       document.body.classList.remove("encore-solid-bg");
     }
 
-    // Color plate always under the image. Encore: also retint the reused
-    // Family Portrait plate (that is the visible Style M surface).
-    if (_encoreSolidBg) {
-      syncEncoreBackgroundPaint();
-    } else {
-      galaxy.style.backgroundColor = plate;
-    }
+    // Color plate always under the image
+    galaxy.style.backgroundColor = plate;
     galaxy.classList.toggle("has-image", !!imagePath);
     galaxy.classList.toggle("is-solid", !imagePath);
 
@@ -11977,10 +11954,7 @@
       els.familyPortrait &&
       els.familyPortrait.children.length
     ) {
-      // Cast unchanged — keep decoded bitmaps. Style M may still have
-      // changed on a soft refresh; retint the reused Encore plate.
-      if (isEncoreSegmentNow()) syncEncoreBackgroundPaint();
-      return;
+      return; // reuse DOM + decoded bitmaps (critical for Encore multi-item casts)
     }
     renderFamilyPortrait(portraitItems || []);
     _portraitRenderKey = key;
@@ -15609,6 +15583,10 @@
     renderList();
     renderFooterBoxes();
     applyStageBackground();
+    if (_encoreSolidBg) {
+      const g = document.getElementById("galaxy") || els.galaxy;
+      if (g) g.style.backgroundColor = encoreBackgroundHex();
+    }
     applyBgPattern();
     if (config.bgImage) startGalaxyScroll();
     const maxIdx =
@@ -15617,10 +15595,6 @@
         : Math.max(0, items.length - 1);
     const idx = Number.isFinite(prevIndex) ? prevIndex : 0;
     setActive(Math.min(idx, maxIdx), true);
-    // After setActive so a reused Family Portrait plate gets the new Style M hex.
-    if (_encoreSolidBg || isEncoreSegmentNow()) {
-      syncEncoreBackgroundPaint();
-    }
     if (!pause) {
       startSlideshow();
       if (isDrinks) startAnnouncementSlideshow();
