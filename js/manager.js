@@ -2991,6 +2991,8 @@
     return device.getBoundingClientRect().width / device.offsetWidth || 1;
   }
 
+  // Desktop studio `.device` keeps transform:scale (even at 1), so fixed
+  // positioning is relative to the phone frame, not the window.
   function clientToDevicePoint(clientX, clientY) {
     var originEl = els.app || els.device;
     if (!originEl) return { x: clientX, y: clientY, scale: 1 };
