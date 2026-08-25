@@ -7,18 +7,15 @@
   <link rel="icon" href="assets/suite-icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/suite-icon.png" />
   <title>Item Uploader</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260823upload1" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260825upload3" />
   <style>
     form { margin: 0; }
-    label.lab {
+    [hidden] { display: none !important; }
+    label.lab,
+    .lab {
       display: block;
       font-weight: 600;
       margin: 1rem 0 .35rem;
-    }
-    .hint {
-      font-weight: 400;
-      color: var(--toki-muted);
-      font-size: .88rem;
     }
     input[type=text],
     input[type=file],
@@ -48,6 +45,83 @@
       min-height: 44px;
       box-sizing: border-box;
     }
+    .pick:has(input:checked) {
+      border-color: #26BBCB;
+      box-shadow: 0 0 0 1px #26BBCB;
+    }
+    .model-picks .pick {
+      flex: 1 1 calc(50% - .6rem);
+    }
+    .money {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+    }
+    .money-sign {
+      display: flex;
+      align-items: center;
+      padding: 0 .65rem;
+      border: 1px solid #bbb;
+      border-right: 0;
+      border-radius: 8px 0 0 8px;
+      font-weight: 600;
+      background: var(--toki-bg);
+      color: var(--toki-muted);
+    }
+    .money input {
+      border-radius: 0 8px 8px 0;
+      flex: 1;
+      min-width: 0;
+    }
+    .tier-head {
+      display: grid;
+      grid-template-columns: 4.2rem minmax(0, 1fr) 44px;
+      gap: .45rem;
+      font-weight: 600;
+      font-size: .88rem;
+      color: var(--toki-muted);
+      margin: 0 0 .35rem;
+    }
+    .tier-row {
+      display: grid;
+      grid-template-columns: 4.2rem minmax(0, 1fr) 44px;
+      gap: .45rem;
+      align-items: center;
+      margin: 0 0 .45rem;
+    }
+    .tier-row .money { width: auto; }
+    .tier-remove {
+      width: 44px;
+      height: 44px;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .tier-remove.is-off {
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .add-tier {
+      width: 44px;
+      height: 44px;
+      margin: .55rem auto 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      background: transparent;
+      color: inherit;
+      font-size: 1.6rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .add-tier[hidden] { display: none; }
     .preview {
       margin: .6rem 0 0;
       max-width: 220px;
@@ -86,7 +160,6 @@
     .status.ok { background: #d8f3d8; }
     .status.bad { background: #f8d4d4; }
     .status a { font-weight: 700; }
-    .board-only { }
   </style>
 </head>
 <body class="suite-page">
@@ -99,30 +172,47 @@
     <select id="catalog" name="sheetId" required></select>
     <p class="tiny">Writes the selected workbook. Use Beta while testing.</p>
 
+    <label class="lab" for="menu">Menu</label>
+    <select id="menu" name="menu" required></select>
+
     <label class="lab" for="item">Item</label>
     <input type="text" id="item" name="item" required autocomplete="off" />
-
-    <label class="lab" for="price1">Price 1</label>
-    <input type="text" id="price1" name="price1" inputmode="decimal" autocomplete="off" />
-
-    <div class="board-only">
-      <label class="lab" for="price2">Price 2 <span class="hint">boards 1–3</span></label>
-      <input type="text" id="price2" name="price2" inputmode="decimal" autocomplete="off" />
-
-      <label class="lab" for="price3">Price 3 <span class="hint">boards 1–3</span></label>
-      <input type="text" id="price3" name="price3" inputmode="decimal" autocomplete="off" />
-    </div>
 
     <label class="lab" for="subtitle">Subtitle</label>
     <input type="text" id="subtitle" name="subtitle" autocomplete="off" />
 
-    <label class="lab" for="description">Description <span class="hint">boards 1–3</span></label>
-    <textarea id="description" name="description"></textarea>
+    <div id="description-wrap">
+      <label class="lab" for="description">Description</label>
+      <textarea id="description" name="description"></textarea>
+    </div>
+
+    <div id="pricing">
+      <span class="lab" id="model-lab">Pricing Model</span>
+      <div class="picks model-picks" id="model-picks">
+        <label class="pick"><input type="radio" name="priceModel" value="fixed" checked /> Fixed-Portion Pricing</label>
+        <label class="pick"><input type="radio" name="priceModel" value="ltp" /> Linear Tiered Pricing</label>
+        <label class="pick"><input type="radio" name="priceModel" value="vb" /> Volume Bundling</label>
+      </div>
+
+      <div id="price-fixed">
+        <label class="lab" for="price1">Price</label>
+        <div class="money">
+          <span class="money-sign">$</span>
+          <input type="text" id="price1" name="price1" inputmode="decimal" autocomplete="off" />
+        </div>
+      </div>
+
+      <div id="price-tiers" hidden>
+        <div class="tier-head"><span>Tier</span><span>Price</span><span></span></div>
+        <div id="tier-rows"></div>
+        <button type="button" class="add-tier" id="add-tier" aria-label="Add tier">+</button>
+      </div>
+    </div>
 
     <span class="lab">New</span>
     <div class="picks">
-      <label class="pick"><input type="radio" name="isNew" value="0" checked /> No</label>
       <label class="pick"><input type="radio" name="isNew" value="1" /> Yes</label>
+      <label class="pick"><input type="radio" name="isNew" value="0" checked /> No</label>
     </div>
 
     <span class="lab">Include</span>
@@ -136,10 +226,6 @@
     <img class="preview" id="preview" alt="" />
     <p class="tiny">PNG / JPEG / WebP. Saved under <code>food-pics/</code> for local boards. Optional Drive (TVs, no git) needs <code>TOKI_UPLOAD_FOLDER_ID</code> — a folder in your Drive shared with the robot.</p>
 
-    <label class="lab" for="menu">Menu</label>
-    <select id="menu" name="menu" required></select>
-    <p class="tiny">Boards 1–3 use Price 1–3, Subtitle, Description. Proteins / Sauces / Drinks / Veggies use Price 1 + Subtitle.</p>
-
     <button type="submit" id="submit">Add to sheet</button>
   </form>
   <p class="status" id="status" hidden></p>
@@ -147,6 +233,6 @@
   <script src="js/env.js?v=20260818dep1"></script>
   <script src="js/data-source.js?v=20260817api1"></script>
   <script src="js/surfaces.js?v=20260823upload1"></script>
-  <script src="js/uploader.js?v=20260823upload1"></script>
+  <script src="js/uploader.js?v=20260825upload3"></script>
 </body>
 </html>

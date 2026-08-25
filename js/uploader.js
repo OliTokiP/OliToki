@@ -5,14 +5,22 @@
 (function () {
   "use strict";
 
+  var LTP_DEFAULTS = ["S", "M", "L"];
+  var MAX_TIERS = 3;
+  var USD = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    useGrouping: false,
+  });
+
   var FALLBACK_MENUS = [
-    { id: "board1", label: "Board 1 · Bowls" },
-    { id: "board2", label: "Board 2 · Handhelds" },
-    { id: "board3", label: "Board 3 · Munchies" },
-    { id: "proteins", label: "Proteins" },
-    { id: "sauces", label: "Sauces" },
-    { id: "drinks", label: "Drinks · Sodas" },
-    { id: "veggies", label: "Veggies" },
+    { id: "board1", label: "Board 1 · Bowls", kind: "board", hasDescription: true, priceSlots: 3 },
+    { id: "board2", label: "Board 2 · Handhelds", kind: "board", hasDescription: true, priceSlots: 3 },
+    { id: "board3", label: "Board 3 · Munchies", kind: "board", hasDescription: true, priceSlots: 3 },
+    { id: "proteins", label: "Proteins", kind: "box", hasDescription: false, priceSlots: 1 },
+    { id: "sauces", label: "Sauces", kind: "box", hasDescription: false, priceSlots: 1 },
+    { id: "drinks", label: "Drinks · Sodas", kind: "box", hasDescription: false, priceSlots: 1 },
+    { id: "veggies", label: "Veggies", kind: "box", hasDescription: false, priceSlots: 1 },
   ];
   var FALLBACK_CATALOGS = [
     {
@@ -34,6 +42,14 @@
       return new URLSearchParams(location.search).has("beta");
     } catch (e) {
       return false;
+    }
+  }
+
+  function query() {
+    try {
+      return new URLSearchParams(location.search);
+    } catch (e) {
+      return new URLSearchParams();
     }
   }
 
@@ -147,6 +163,228 @@
     });
   }
 
+  function menuSpec(id) {
+    var i;
+    for (i = 0; i < _menus.length; i++) {
+      if (_menus[i].id === id) return _menus[i];
+    }
+    return { id: id, kind: "board", hasDescription: true, priceSlots: 3 };
+  }
+
+  function priceSlotsFor(spec) {
+    var n = Number(spec && spec.priceSlots);
+    if (n === 1 || n === 3) return n;
+    return (spec && spec.kind) === "box" ? 1 : 3;
+  }
+
+  function hasDescription(spec) {
+    if (spec && typeof spec.hasDescription === "boolean") return spec.hasDescription;
+    return (spec && spec.kind) !== "box";
+  }
+
+  function selectedModel() {
+    var el = document.querySelector('input[name="priceModel"]:checked');
+    return (el && el.value) || "fixed";
+  }
+
+  function setModel(value) {
+    var el = document.querySelector('input[name="priceModel"][value="' + value + '"]');
+    if (el) el.checked = true;
+  }
+
+  function parseMoney(raw) {
+    var s = String(raw || "").replace(/[^0-9.]/g, "");
+    if (!s) return null;
+    var first = s.indexOf(".");
+    if (first >= 0) {
+      s = s.slice(0, first + 1) + s.slice(first + 1).replace(/\./g, "");
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return null;
+    return n;
+  }
+
+  function formatUsd(n) {
+    return USD.format(n);
+  }
+
+  function moneyDigits(raw) {
+    var n = parseMoney(raw);
+    if (n == null) return "";
+    return n.toFixed(2);
+  }
+
+  function sanitizeMoneyTyping(raw) {
+    var s = String(raw || "").replace(/[^0-9.]/g, "");
+    var first = s.indexOf(".");
+    if (first >= 0) {
+      s = s.slice(0, first + 1) + s.slice(first + 1).replace(/\./g, "");
+    }
+    return s;
+  }
+
+  function bindMoneyInput(el) {
+    if (!el || el._tokiMoney) return;
+    el._tokiMoney = true;
+    el.addEventListener("input", function () {
+      var next = sanitizeMoneyTyping(el.value);
+      if (next !== el.value) el.value = next;
+    });
+    el.addEventListener("blur", function () {
+      var digits = moneyDigits(el.value);
+      if (digits) el.value = digits;
+    });
+    el.addEventListener("paste", function () {
+      setTimeout(function () {
+        var next = sanitizeMoneyTyping(el.value);
+        if (next !== el.value) el.value = next;
+      }, 0);
+    });
+  }
+
+  function tierCount() {
+    return document.querySelectorAll("#tier-rows .tier-row").length;
+  }
+
+  function syncTierChrome() {
+    var n = tierCount();
+    document.getElementById("add-tier").hidden = n >= MAX_TIERS;
+    document.querySelectorAll("#tier-rows .tier-remove").forEach(function (btn, i) {
+      btn.classList.toggle("is-off", n < 2 || i === 0);
+    });
+  }
+
+  function addTierRow(tierValue, priceValue) {
+    if (tierCount() >= MAX_TIERS) return;
+    var model = selectedModel();
+    var row = document.createElement("div");
+    row.className = "tier-row";
+    var tier = document.createElement("input");
+    tier.type = "text";
+    tier.className = "tier-name";
+    tier.setAttribute("aria-label", "Tier");
+    tier.autocomplete = "off";
+    if (model === "vb") {
+      tier.inputMode = "numeric";
+      tier.maxLength = 3;
+      tier.placeholder = "#";
+      tier.addEventListener("input", function () {
+        var next = String(tier.value || "").replace(/\D/g, "").slice(0, 3);
+        if (next !== tier.value) tier.value = next;
+      });
+    } else {
+      tier.maxLength = 8;
+      tier.placeholder = LTP_DEFAULTS[tierCount()] || "";
+    }
+    if (tierValue) tier.value = tierValue;
+    var money = document.createElement("div");
+    money.className = "money";
+    var sign = document.createElement("span");
+    sign.className = "money-sign";
+    sign.textContent = "$";
+    var price = document.createElement("input");
+    price.type = "text";
+    price.className = "tier-price";
+    price.inputMode = "decimal";
+    price.autocomplete = "off";
+    price.setAttribute("aria-label", "Price");
+    if (priceValue) price.value = priceValue;
+    bindMoneyInput(price);
+    money.appendChild(sign);
+    money.appendChild(price);
+    var remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "tier-remove";
+    remove.setAttribute("aria-label", "Remove tier");
+    remove.textContent = "×";
+    remove.addEventListener("click", function () {
+      row.remove();
+      syncTierChrome();
+    });
+    row.appendChild(tier);
+    row.appendChild(money);
+    row.appendChild(remove);
+    document.getElementById("tier-rows").appendChild(row);
+    syncTierChrome();
+  }
+
+  function resetTiers(keepFirstPrice) {
+    var firstPrice = keepFirstPrice || "";
+    document.getElementById("tier-rows").innerHTML = "";
+    var model = selectedModel();
+    if (model === "ltp") addTierRow(LTP_DEFAULTS[0], firstPrice);
+    else if (model === "vb") addTierRow("", firstPrice);
+  }
+
+  function nextLtpLabel() {
+    var used = {};
+    document.querySelectorAll("#tier-rows .tier-name").forEach(function (el) {
+      used[String(el.value || "").trim().toUpperCase()] = true;
+    });
+    var i;
+    for (i = 0; i < LTP_DEFAULTS.length; i++) {
+      if (!used[LTP_DEFAULTS[i]]) return LTP_DEFAULTS[i];
+    }
+    return "";
+  }
+
+  function firstFilledPrice() {
+    var fixed = document.getElementById("price1").value;
+    if (parseMoney(fixed) != null) return moneyDigits(fixed);
+    var el = document.querySelector("#tier-rows .tier-price");
+    if (el && parseMoney(el.value) != null) return moneyDigits(el.value);
+    return "";
+  }
+
+  function syncPricingUi() {
+    var spec = menuSpec(document.getElementById("menu").value);
+    var slots = priceSlotsFor(spec);
+    var multi = slots > 1;
+    var keep = firstFilledPrice();
+    document.getElementById("model-lab").hidden = !multi;
+    document.getElementById("model-picks").hidden = !multi;
+    if (!multi) {
+      setModel("fixed");
+      if (keep && !document.getElementById("price1").value) {
+        document.getElementById("price1").value = keep;
+      }
+    }
+    var model = selectedModel();
+    var showTiers = multi && model !== "fixed";
+    document.getElementById("price-fixed").hidden = showTiers;
+    document.getElementById("price-tiers").hidden = !showTiers;
+    if (showTiers && tierCount() === 0) resetTiers(keep);
+    document.getElementById("description-wrap").hidden = !hasDescription(spec);
+  }
+
+  function collectPrices(spec) {
+    var slots = priceSlotsFor(spec);
+    var out = ["", "", ""];
+    var model = slots > 1 ? selectedModel() : "fixed";
+    var tokens = [];
+    if (model === "fixed") {
+      var n = parseMoney(document.getElementById("price1").value);
+      if (n != null) tokens.push(formatUsd(n));
+    } else {
+      document.querySelectorAll("#tier-rows .tier-row").forEach(function (row) {
+        if (tokens.length >= slots) return;
+        var tier = String((row.querySelector(".tier-name") || {}).value || "").trim();
+        var n = parseMoney((row.querySelector(".tier-price") || {}).value);
+        if (n == null) return;
+        if (model === "vb") {
+          var qty = tier.replace(/\D/g, "").slice(0, 3);
+          if (!qty) return;
+          tokens.push(qty + "/" + formatUsd(n));
+        } else if (tier) {
+          tokens.push(tier + " " + formatUsd(n));
+        }
+      });
+    }
+    var i;
+    for (i = 0; i < Math.min(slots, tokens.length); i++) out[i] = tokens[i];
+    return out;
+  }
+
   async function loadMenus() {
     await detectProxy();
     var catalogs = FALLBACK_CATALOGS.slice();
@@ -166,7 +404,9 @@
       }
     } catch (e) {}
     _menus = menus;
-    fillSelect(document.getElementById("menu"), menus, "id", "label", "board2");
+    var q = query();
+    var wantMenu = q.get("menu") || "board2";
+    fillSelect(document.getElementById("menu"), menus, "id", "label", wantMenu);
     fillSelect(
       document.getElementById("catalog"),
       catalogs,
@@ -174,14 +414,23 @@
       "name",
       pickDefaultCatalog(catalogs)
     );
+    document.getElementById("menu").dispatchEvent(new Event("change"));
   }
 
-  function menuKind(id) {
-    var i;
-    for (i = 0; i < _menus.length; i++) {
-      if (_menus[i].id === id) return _menus[i].kind || "";
+  function applyQueryUi() {
+    var q = query();
+    var model = String(q.get("model") || "").toLowerCase();
+    if (model === "ltp" || model === "linear") setModel("ltp");
+    else if (model === "vb" || model === "bundle") setModel("vb");
+    else if (model === "fixed") setModel("fixed");
+    syncPricingUi();
+    var wantTiers = Number(q.get("tiers") || "0");
+    if ((selectedModel() === "ltp" || selectedModel() === "vb") && wantTiers > 1) {
+      while (tierCount() < Math.min(MAX_TIERS, wantTiers)) {
+        if (selectedModel() === "ltp") addTierRow(nextLtpLabel(), "");
+        else addTierRow("", "");
+      }
     }
-    return "";
   }
 
   function wirePreview() {
@@ -205,12 +454,25 @@
     });
   }
 
+  function resetItemFields() {
+    document.getElementById("item").value = "";
+    document.getElementById("subtitle").value = "";
+    document.getElementById("description").value = "";
+    document.getElementById("price1").value = "";
+    document.getElementById("photo").value = "";
+    document.getElementById("preview").classList.remove("is-on");
+    setModel("fixed");
+    resetTiers("");
+    syncPricingUi();
+  }
+
   async function onSubmit(ev) {
     ev.preventDefault();
     var btn = document.getElementById("submit");
     var item = document.getElementById("item").value.trim();
     var menu = document.getElementById("menu").value;
     var sheetId = document.getElementById("catalog").value;
+    var spec = menuSpec(menu);
     if (!item) {
       setStatus("bad", "Item name is required.");
       return;
@@ -219,6 +481,7 @@
       setStatus("bad", "Pick a menu.");
       return;
     }
+    var prices = collectPrices(spec);
     btn.disabled = true;
     setStatus("", "Saving…");
     try {
@@ -229,11 +492,13 @@
         sheetId: sheetId,
         menu: menu,
         item: item,
-        price1: document.getElementById("price1").value.trim(),
-        price2: document.getElementById("price2").value.trim(),
-        price3: document.getElementById("price3").value.trim(),
+        price1: prices[0],
+        price2: priceSlotsFor(spec) > 1 ? prices[1] : "",
+        price3: priceSlotsFor(spec) > 1 ? prices[2] : "",
         subtitle: document.getElementById("subtitle").value.trim(),
-        description: document.getElementById("description").value.trim(),
+        description: hasDescription(spec)
+          ? document.getElementById("description").value.trim()
+          : "",
         isNew: (document.querySelector('input[name="isNew"]:checked') || {}).value,
         include: (document.querySelector('input[name="include"]:checked') || {}).value,
         imageName: file ? file.name : "",
@@ -278,14 +543,7 @@
         bits.push('<a href="' + href + '">Open board</a>');
       }
       setStatus("ok", bits.join(" "));
-      document.getElementById("item").value = "";
-      document.getElementById("price1").value = "";
-      document.getElementById("price2").value = "";
-      document.getElementById("price3").value = "";
-      document.getElementById("subtitle").value = "";
-      document.getElementById("description").value = "";
-      document.getElementById("photo").value = "";
-      document.getElementById("preview").classList.remove("is-on");
+      resetItemFields();
     } catch (err) {
       setStatus("bad", "Could not add item: " + String((err && err.message) || err));
     }
@@ -295,16 +553,31 @@
   document.addEventListener("DOMContentLoaded", function () {
     var html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Item Uploader");
     if (html) document.getElementById("nav").innerHTML = html;
+    bindMoneyInput(document.getElementById("price1"));
     wirePreview();
     document.getElementById("form").addEventListener("submit", onSubmit);
     document.getElementById("menu").addEventListener("change", function () {
-      var box = menuKind(document.getElementById("menu").value) === "box";
-      document.querySelectorAll(".board-only").forEach(function (el) {
-        el.hidden = box;
+      syncPricingUi();
+    });
+    document.querySelectorAll('input[name="priceModel"]').forEach(function (el) {
+      el.addEventListener("change", function () {
+        var keep = firstFilledPrice();
+        if (selectedModel() === "fixed") {
+          if (keep && !document.getElementById("price1").value) {
+            document.getElementById("price1").value = keep;
+          }
+        } else {
+          resetTiers(keep);
+        }
+        syncPricingUi();
       });
     });
+    document.getElementById("add-tier").addEventListener("click", function () {
+      if (selectedModel() === "ltp") addTierRow(nextLtpLabel(), "");
+      else addTierRow("", "");
+    });
     loadMenus().then(function () {
-      document.getElementById("menu").dispatchEvent(new Event("change"));
+      applyQueryUi();
     });
   });
 })();

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9708e05",
-  "hashFull": "9708e058431c49f5dd341b474cd5e4997ae31bb4",
-  "subject": "QA: 2026-08-19 Encore Background Screen doesn't change when user updates from menu manager (require restart off) (pass 4)"
+  "hash": "f69eddb",
+  "hashFull": "f69eddbb0d9b3bae6ca109e76967593ade0446eb",
+  "subject": "QA: 2026-08-23 Image Item Uploader Request (pass 2)"
 };

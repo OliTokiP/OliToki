@@ -69,6 +69,8 @@ ITEM_MENUS = (
         "kind": "board",
         "folder": "food-pics/bowls",
         "page": "index.html",
+        "hasDescription": True,
+        "priceSlots": 3,
     },
     {
         "id": "board2",
@@ -77,6 +79,8 @@ ITEM_MENUS = (
         "kind": "board",
         "folder": "food-pics/handhelds",
         "page": "index2.html",
+        "hasDescription": True,
+        "priceSlots": 3,
     },
     {
         "id": "board3",
@@ -85,6 +89,8 @@ ITEM_MENUS = (
         "kind": "board",
         "folder": "food-pics/munchies",
         "page": "index3.html",
+        "hasDescription": True,
+        "priceSlots": 3,
     },
     {
         "id": "proteins",
@@ -93,6 +99,8 @@ ITEM_MENUS = (
         "kind": "box",
         "folder": "food-pics/proteins",
         "page": "index.html",
+        "hasDescription": False,
+        "priceSlots": 1,
     },
     {
         "id": "sauces",
@@ -101,6 +109,8 @@ ITEM_MENUS = (
         "kind": "box",
         "folder": "food-pics/sauces",
         "page": "index.html",
+        "hasDescription": False,
+        "priceSlots": 1,
     },
     {
         "id": "drinks",
@@ -109,6 +119,8 @@ ITEM_MENUS = (
         "kind": "box",
         "folder": "food-pics/drinks",
         "page": "index4.html",
+        "hasDescription": False,
+        "priceSlots": 1,
     },
     {
         "id": "veggies",
@@ -117,6 +129,8 @@ ITEM_MENUS = (
         "kind": "box",
         "folder": "food-pics/veggies",
         "page": "index.html",
+        "hasDescription": False,
+        "priceSlots": 1,
     },
 )
 _ITEM_MENUS_BY_ID = {m["id"]: m for m in ITEM_MENUS}
@@ -461,6 +475,18 @@ def _cell(row: list, idx: int) -> str:
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
     return str(v).strip()
+
+
+def _item_price_cell(raw) -> str:
+    """Keep volume-bundle tokens as text so Sheets does not parse 1/$2.00."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if s.startswith("'"):
+        return s
+    if re.match(r"^\d{1,3}/", s):
+        return "'" + s
+    return s
 
 
 def _item_bool01(raw, default: str = "1") -> str:
@@ -2987,9 +3013,14 @@ class SheetsBackend:
                 image_cell = image_info["filename"]
         if kind == "board":
             put(name, "item", default_col=0)
-            put(str(body.get("price1") or body.get("price") or "").strip(), "price1", "price", default_col=1)
-            put(str(body.get("price2") or "").strip(), "price2", default_col=2)
-            put(str(body.get("price3") or "").strip(), "price3", default_col=3)
+            put(
+                _item_price_cell(body.get("price1") or body.get("price") or ""),
+                "price1",
+                "price",
+                default_col=1,
+            )
+            put(_item_price_cell(body.get("price2") or ""), "price2", default_col=2)
+            put(_item_price_cell(body.get("price3") or ""), "price3", default_col=3)
             put(str(body.get("subtitle") or "").strip(), "subtitle", "itemsubtitle", default_col=4)
             put(str(body.get("description") or "").strip(), "description", default_col=5)
             put(_item_bool01(body.get("isNew") or body.get("new"), "0"), "new", default_col=6)
@@ -2998,7 +3029,13 @@ class SheetsBackend:
         else:
             put(name, "item", default_col=0)
             put(str(body.get("subtitle") or "").strip(), "itemsubtitle", "subtitle", default_col=1)
-            put(str(body.get("price1") or body.get("price") or "").strip(), "itemprice", "price", "price1", default_col=2)
+            put(
+                _item_price_cell(body.get("price1") or body.get("price") or ""),
+                "itemprice",
+                "price",
+                "price1",
+                default_col=2,
+            )
             put(_item_bool01(body.get("isNew") or body.get("new"), "0"), "new", default_col=3)
             put(image_cell, "image", default_col=4)
             put(_item_bool01(body.get("include"), "1"), "include", default_col=5)
