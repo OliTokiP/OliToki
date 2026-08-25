@@ -1434,6 +1434,43 @@
     return "";
   }
 
+  function formatItemPriceDisplay(d) {
+    return collectItemPrices(d)
+      .filter(function (s) {
+        return String(s || "").trim();
+      })
+      .join(" | ");
+  }
+
+  function itemMiniLineHtml(d) {
+    var name = String((d && d.name) || "").trim() || "Item name";
+    var sub = String((d && d.subtitle) || "").trim();
+    var prices = formatItemPriceDisplay(d);
+    var html = '<span class="item-mini-name">' + escapeHtml(name) + "</span>";
+    if (sub) {
+      html += '<span class="item-mini-sub"> (' + escapeHtml(sub) + ")</span>";
+    }
+    if (prices) {
+      html += '<span class="item-mini-prices"> - ' + escapeHtml(prices) + "</span>";
+    }
+    return html;
+  }
+
+  function itemMiniStickerHtml() {
+    return (
+      '<div class="item-mini-sticker" aria-hidden="true">' +
+      '<img class="preview-sticker-shadow" alt="" src="' +
+      PREVIEW_STICKER.shadow +
+      '">' +
+      '<div class="preview-sticker-body">' +
+      '<img class="preview-sticker-body-img" alt="" src="' +
+      PREVIEW_STICKER.body +
+      '">' +
+      '<span class="preview-sticker-tint"></span></div>' +
+      '<span class="preview-sticker-label">New!</span></div>'
+    );
+  }
+
   function itemMiniHtml() {
     var d = state.itemDraft || ensureItemDraft();
     var b = state.boardDraft || {};
@@ -1442,12 +1479,12 @@
       draft.background === "pattern" || draft.background === "wallpaper"
         ? roleHex(draft.bgColor || "main")
         : roleHex(draft.background);
-    var prices = collectItemPrices(d).filter(Boolean).join("  ");
     var src = itemImageSrc(d, b);
     var showDesc = b.includeDescriptions === "yes";
-    var name = String(d.name || "").trim() || "Item name";
+    var isNew = d.isNew === "yes";
     var wp = wallpaperSrc();
     var wpFb = wallpaperFallback();
+    var desc = String(d.description || "").trim();
     return (
       '<div class="item-mini" style="--preview-fill:' +
       fill +
@@ -1473,26 +1510,23 @@
         : "") +
       "</div></div>" +
       (d.include !== "yes" ? '<div class="item-mini-off">Not on board</div>' : "") +
-      '<div class="item-mini-body">' +
-      '<div class="item-mini-copy">' +
-      '<p class="item-mini-name' +
-      (d.isNew === "yes" ? " is-new" : "") +
-      '">' +
-      escapeHtml(name) +
-      "</p>" +
-      (prices ? '<p class="item-mini-prices">' + escapeHtml(prices) + "</p>" : "") +
-      (d.subtitle
-        ? '<p class="item-mini-sub">' + escapeHtml(d.subtitle) + "</p>"
-        : "") +
-      (showDesc && d.description
-        ? '<p class="item-mini-desc">' + escapeHtml(d.description) + "</p>"
-        : "") +
-      "</div>" +
       '<div class="item-mini-photo">' +
+      '<div class="item-mini-photo-wrap">' +
       (src
         ? '<img alt="" src="' + escapeHtml(src) + '" data-act="item-img-fallback">'
         : '<span class="item-mini-empty">No image</span>') +
-      "</div></div></div>"
+      (isNew && src ? itemMiniStickerHtml() : "") +
+      "</div></div>" +
+      '<div class="item-mini-footer">' +
+      '<p class="item-mini-line' +
+      (isNew ? " is-new" : "") +
+      '">' +
+      itemMiniLineHtml(d) +
+      "</p>" +
+      (showDesc && desc
+        ? '<p class="item-mini-desc">' + escapeHtml(desc) + "</p>"
+        : "") +
+      "</div></div>"
     );
   }
 
@@ -2737,19 +2771,12 @@
           inp.select();
         }
       }, 30);
-    } else if (state.dialog === "item-name" || state.dialog === "item-subtitle" || state.dialog === "item-tier") {
-      var title =
+    } else if (state.dialog === "item-name" || state.dialog === "item-subtitle") {
+      var title = state.dialog === "item-name" ? "Item Name" : "Subtitle";
+      var cur =
         state.dialog === "item-name"
-          ? "Item Name"
-          : state.dialog === "item-subtitle"
-            ? "Subtitle"
-            : "Tier";
-      var cur = "";
-      if (state.dialog === "item-name") cur = (state.itemDraft && state.itemDraft.name) || "";
-      else if (state.dialog === "item-subtitle") cur = (state.itemDraft && state.itemDraft.subtitle) || "";
-      else if (state.itemDraft && state.itemDraft.tiers && state.itemDraft.tiers[state.itemTierIndex]) {
-        cur = state.itemDraft.tiers[state.itemTierIndex].tier || "";
-      }
+          ? (state.itemDraft && state.itemDraft.name) || ""
+          : (state.itemDraft && state.itemDraft.subtitle) || "";
       var ph = state.dialog === "item-subtitle" ? "Optional" : "";
       els.dialog.innerHTML =
         '<div class="dialog-card" role="dialog">' +
@@ -2760,6 +2787,39 @@
         escapeHtml(ph) +
         '" value="' +
         escapeHtml(cur) +
+        '">' +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-field-save">Save</button>' +
+        '<button class="btn-primary" type="button" data-act="item-field-cancel">Cancel</button>' +
+        "</div></div>";
+      setTimeout(function () {
+        var inp = document.getElementById("item-field-input");
+        if (inp) {
+          inp.focus();
+          inp.select();
+        }
+      }, 30);
+    } else if (state.dialog === "item-tier") {
+      var model = (state.itemDraft && state.itemDraft.priceModel) || "";
+      var tierHint =
+        model === "vb"
+          ? "For items that come with multiple pieces (EG: 5, 10, 20)"
+          : "For items that come in fixed sizing (EG: S, M, L)";
+      var tierCur = "";
+      if (state.itemDraft && state.itemDraft.tiers && state.itemDraft.tiers[state.itemTierIndex]) {
+        tierCur = state.itemDraft.tiers[state.itemTierIndex].tier || "";
+      }
+      var tierPh = model === "vb" ? "5" : "S";
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Tier</h2>" +
+        '<p class="dialog-note">' +
+        escapeHtml(tierHint) +
+        "</p>" +
+        '<input class="dialog-input" id="item-field-input" type="text" maxlength="80" placeholder="' +
+        escapeHtml(tierPh) +
+        '" value="' +
+        escapeHtml(tierCur) +
         '">' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="item-field-save">Save</button>' +
@@ -2929,6 +2989,19 @@
     var device = els.device;
     if (!device || !device.offsetWidth) return 1;
     return device.getBoundingClientRect().width / device.offsetWidth || 1;
+  }
+
+  function clientToDevicePoint(clientX, clientY) {
+    var originEl = els.app || els.device;
+    if (!originEl) return { x: clientX, y: clientY, scale: 1 };
+    var d = originEl.getBoundingClientRect();
+    var scale = originEl.offsetWidth ? d.width / originEl.offsetWidth : deviceCssScale();
+    if (!scale) scale = 1;
+    return {
+      x: (clientX - d.left) / scale,
+      y: (clientY - d.top) / scale,
+      scale: scale
+    };
   }
 
   function rectInDevice(el) {
@@ -4956,6 +5029,7 @@
   }
 
   function onItemHandleDown(e) {
+    if (state.itemDragging) return;
     if (e.button != null && e.button !== 0) return;
     var handle = e.target.closest(".item-handle");
     if (!handle) return;
@@ -4968,29 +5042,53 @@
     startItemDrag(e, list, row, handle);
   }
 
+  function clearItemDragStyles(row) {
+    if (!row) return;
+    row.classList.remove("is-dragging");
+    row.style.position = "";
+    row.style.width = "";
+    row.style.height = "";
+    row.style.left = "";
+    row.style.top = "";
+    row.style.zIndex = "";
+    row.style.margin = "";
+    row.style.transformOrigin = "";
+  }
+
   function startItemDrag(e, list, row, handle) {
     var from = Number(row.getAttribute("data-item"));
     if (!isFinite(from)) return;
     var scroll = document.getElementById("board-scroll");
     var board = els.app.querySelector(".screen-board");
+    var host = els.app;
     var startRect = row.getBoundingClientRect();
+    var start = clientToDevicePoint(startRect.left, startRect.top);
+    var grab = clientToDevicePoint(e.clientX, e.clientY);
+    var offsetX = grab.x - start.x;
+    var offsetY = grab.y - start.y;
+    var scale = start.scale || 1;
     var y0 = e.clientY;
     var x0 = e.clientX;
-    var offsetY = e.clientY - startRect.top;
     var pid = e.pointerId;
     var dragging = false;
+    var ended = false;
     var placeholder = null;
+    var lastX = e.clientX;
     var lastY = e.clientY;
     var autoDir = 0;
     var raf = 0;
     var THRESH = 6;
+    state.itemDragging = true;
     try {
       handle.setPointerCapture(pid);
     } catch (err) {}
 
-    function placeAt(clientY) {
+    function placeAt(clientX, clientY) {
+      lastX = clientX;
       lastY = clientY;
-      row.style.top = clientY - offsetY + "px";
+      var p = clientToDevicePoint(clientX, clientY);
+      row.style.left = p.x - offsetX + "px";
+      row.style.top = p.y - offsetY + "px";
       if (!placeholder) return;
       var statics = [];
       var nodes = list.querySelectorAll(".item-row");
@@ -5030,33 +5128,40 @@
 
     function tick() {
       raf = 0;
-      if (!dragging) return;
+      if (!dragging || ended) return;
       if (autoDir && scroll) {
         scroll.scrollTop += autoDir;
-        placeAt(lastY);
+        placeAt(lastX, lastY);
       }
       if (autoDir) raf = requestAnimationFrame(tick);
     }
 
     function begin() {
+      if (dragging) return;
       dragging = true;
-      state.itemDragging = true;
+      document.documentElement.classList.add("is-item-dragging");
       if (board) board.classList.add("is-item-dragging");
       placeholder = document.createElement("div");
       placeholder.className = "item-row item-placeholder";
-      placeholder.style.height = startRect.height + "px";
+      placeholder.style.height = startRect.height / scale + "px";
       row.after(placeholder);
       row.classList.add("is-dragging");
-      row.style.position = "fixed";
-      row.style.width = startRect.width + "px";
-      row.style.height = startRect.height + "px";
-      row.style.left = startRect.left + "px";
-      row.style.top = startRect.top + "px";
-      row.style.zIndex = "8";
+      row.style.position = "absolute";
+      row.style.width = startRect.width / scale + "px";
+      row.style.height = startRect.height / scale + "px";
+      row.style.left = start.x + "px";
+      row.style.top = start.y + "px";
+      row.style.zIndex = "20";
+      row.style.margin = "0";
+      row.style.transformOrigin = offsetX + "px " + offsetY + "px";
+      if (host) host.appendChild(row);
+      try {
+        handle.setPointerCapture(pid);
+      } catch (err) {}
     }
 
     function move(ev) {
-      if (ev.pointerId !== pid) return;
+      if (ended || ev.pointerId !== pid) return;
       if (!dragging) {
         if (Math.abs(ev.clientY - y0) < THRESH && Math.abs(ev.clientX - x0) < THRESH) {
           return;
@@ -5064,20 +5169,35 @@
         begin();
       }
       ev.preventDefault();
-      placeAt(ev.clientY);
+      placeAt(ev.clientX, ev.clientY);
       edgeScroll(ev.clientY);
     }
 
-    function finish() {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", finish);
-      handle.removeEventListener("pointercancel", finish);
+    function onSelectStart(ev) {
+      ev.preventDefault();
+    }
+
+    function finish(commit, ev) {
+      if (ended) return;
+      if (ev && ev.pointerId != null && ev.pointerId !== pid) return;
+      ended = true;
+      document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", onUp, true);
+      document.removeEventListener("pointercancel", onCancel, true);
+      document.removeEventListener("selectstart", onSelectStart, true);
+      document.removeEventListener("mousemove", onMouseMove, true);
+      document.removeEventListener("mouseup", onMouseUp, true);
+      window.removeEventListener("mouseup", onMouseUp, true);
+      window.removeEventListener("blur", onBlur);
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
       try {
         handle.releasePointerCapture(pid);
       } catch (err) {}
-      if (dragging && placeholder && state.boardDraft && state.boardDraft.items) {
+      if (row.parentNode && row.parentNode !== list) {
+        row.parentNode.removeChild(row);
+      }
+      if (commit && dragging && placeholder && state.boardDraft && state.boardDraft.items) {
         var items = state.boardDraft.items.slice();
         var next = [];
         var kids = Array.prototype.slice.call(list.children);
@@ -5090,6 +5210,7 @@
           }
         }
         if (next.length === items.length) state.boardDraft.items = next;
+        if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
         list.innerHTML = itemListHtml(state.boardDraft.items);
         var orderChanged = itemsOrderChanged({ items: items }, { items: next });
         if (orderChanged && confirmSaveOff()) {
@@ -5097,23 +5218,57 @@
           scheduleItemOrderSave();
         }
       } else {
-        row.classList.remove("is-dragging");
-        row.style.position = "";
-        row.style.width = "";
-        row.style.height = "";
-        row.style.left = "";
-        row.style.top = "";
-        row.style.zIndex = "";
         if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        if (dragging && state.boardDraft) {
+          list.innerHTML = itemListHtml(state.boardDraft.items);
+        } else {
+          if (host && row.parentNode === host) list.appendChild(row);
+          clearItemDragStyles(row);
+        }
       }
+      document.documentElement.classList.remove("is-item-dragging");
       if (board) board.classList.remove("is-item-dragging");
       dragging = false;
       state.itemDragging = false;
     }
 
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", finish);
-    handle.addEventListener("pointercancel", finish);
+    function onUp(ev) {
+      finish(true, ev);
+    }
+    function onCancel(ev) {
+      finish(false, ev);
+    }
+    function onBlur() {
+      finish(false);
+    }
+    function onMouseMove(ev) {
+      if (ended) return;
+      if (dragging && ev.buttons != null && !(ev.buttons & 1)) {
+        finish(true, ev);
+        return;
+      }
+      if (!dragging) {
+        if (Math.abs(ev.clientY - y0) < THRESH && Math.abs(ev.clientX - x0) < THRESH) {
+          return;
+        }
+        begin();
+      }
+      placeAt(ev.clientX, ev.clientY);
+      edgeScroll(ev.clientY);
+    }
+    function onMouseUp(ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      finish(true, ev);
+    }
+
+    document.addEventListener("pointermove", move, { capture: true, passive: false });
+    document.addEventListener("pointerup", onUp, { capture: true });
+    document.addEventListener("pointercancel", onCancel, { capture: true });
+    document.addEventListener("selectstart", onSelectStart, { capture: true });
+    document.addEventListener("mousemove", onMouseMove, true);
+    document.addEventListener("mouseup", onMouseUp, true);
+    window.addEventListener("mouseup", onMouseUp, true);
+    window.addEventListener("blur", onBlur);
   }
 
   function renderAll() {
