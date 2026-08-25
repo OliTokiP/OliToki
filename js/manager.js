@@ -12,7 +12,8 @@
  * Beta item editor writes Inventory via TOKI_MANAGER_SHEET.writeItem.
  * System Settings persist via writeSystem + fallback. Confirm save? No skips the
  * confirm dialog and writes System, Style, and Board immediately. Menu-item
- * reorder waits 3s of idle before writing. Encore extras and item order get
+ * reorder waits 3s of idle before writing, as a background Inventory save that
+ * must not hijack Edit Item / Create Item. Encore extras and item order get
  * bespoke save cards in the tooltip stack (Board Saved on top).
  */
 (function () {
@@ -74,6 +75,7 @@
     persistInFlight: false,
     itemOrderTimer: null,
     pendingItemOrderSave: false,
+    itemOrderPersist: Promise.resolve(),
     catalogSettings: [],
   };
   state.draft.confirmSave = state.draft.confirmSave || "yes";
@@ -1826,23 +1828,26 @@
     renderDialog();
     state.persistInFlight = true;
     toast("Saving item…");
-    var writePromise = Promise.resolve();
+    var writePromise = Promise.resolve(state.itemOrderPersist);
     if (d.row) {
-      writePromise = fetch("/api/health", { cache: "no-store" })
-        .then(function (res) {
-          return res.ok ? res.json() : {};
-        })
-        .then(function (h) {
-          if (h && h.itemUpdate) return;
-          throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
-        })
-        .catch(function (err) {
-          if (err && /restart/.test(String(err.message || ""))) throw err;
-          throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
-        });
+      writePromise = writePromise.then(function () {
+        return fetch("/api/health", { cache: "no-store" })
+          .then(function (res) {
+            return res.ok ? res.json() : {};
+          })
+          .then(function (h) {
+            if (h && h.itemUpdate) return;
+            throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
+          })
+          .catch(function (err) {
+            if (err && /restart/.test(String(err.message || ""))) throw err;
+            throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
+          });
+      });
     }
     writePromise
       .then(function () {
+        if (state.itemDraft && state.itemDraft.row) payload.row = state.itemDraft.row;
         return sheet.writeItem(payload);
       })
       .then(function (wrote) {
@@ -1925,6 +1930,9 @@
 
   function openItemEditor(itemKey) {
     ensureBoardDraft();
+    if (confirmSaveOff() && (state.pendingItemOrderSave || boardDirty())) {
+      persistBoardOrderQuiet();
+    }
     state.itemKey = String(itemKey || "new");
     state.itemDraft = buildItemDraft(state.itemKey);
     state.itemCommitted = clone(state.itemDraft);
@@ -3408,6 +3416,87 @@
     }
   }
 
+  function applyInventoryRowNumbers(items, itemRows) {
+    if (!items || !itemRows || !itemRows.length) return;
+    var byName = {};
+    var i;
+    for (i = 0; i < itemRows.length; i++) {
+      var n = String((itemRows[i] && itemRows[i].name) || "");
+      if (n && byName[n] == null) byName[n] = itemRows[i];
+    }
+    for (i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it) continue;
+      var hit =
+        itemRows[i] && String(itemRows[i].name || "") === String(it.name || "")
+          ? itemRows[i]
+          : byName[String(it.name || "")];
+      if (hit && hit.row) it.row = hit.row;
+    }
+  }
+
+  function syncOpenItemRowFromBoard() {
+    if (!state.itemDraft || !state.boardDraft || !state.boardDraft.items) return;
+    var key = String(state.itemDraft.key || "");
+    if (key === "new") return;
+    var idx = parseInt(key, 10);
+    var items = state.boardDraft.items;
+    if (!isFinite(idx) || idx < 0 || !items[idx]) return;
+    var row = items[idx].row;
+    if (row) {
+      state.itemDraft.row = row;
+      if (state.itemCommitted) state.itemCommitted.row = row;
+    }
+  }
+
+  /* Confirm save? No: persist the Inventory order without Confirm-on-back
+     and without treating the item editor as the save target. */
+  function persistBoardOrderQuiet() {
+    clearItemOrderSaveTimer();
+    state.pendingItemOrderSave = false;
+    if (!state.boardDraft || state.boardDraft.kind === "announcements") {
+      return Promise.resolve(false);
+    }
+    if (!boardDirty()) return Promise.resolve(false);
+    var boardPrev =
+      state.lastBoardSnap[state.boardDraft.id] ||
+      boardSettingsSnap(state.boardCommitted);
+    var boardNext = boardSettingsSnap(state.boardDraft);
+    var orderDirty = itemsOrderChanged(boardPrev, boardNext);
+    var boardMetaDirty = boardMetaChanged(boardPrev, boardNext);
+    state.boardCommitted = clone(state.boardDraft);
+    applyBoardToCatalog(state.boardDraft);
+    rememberBoardSnap(state.boardDraft);
+    state.persistInFlight = true;
+    var p = persistBoardWrite(boardPrev, boardNext)
+      .then(function (result) {
+        state.persistInFlight = false;
+        syncOpenItemRowFromBoard();
+        if (result && result.wrote && result.wrote.ok) state.sheetDirty = false;
+        showSaveOutcome(result, {
+          onBoard: true,
+          confirmed: false,
+          encoreDirty: false,
+          orderDirty: orderDirty,
+          boardMetaDirty: boardMetaDirty,
+        });
+        return true;
+      })
+      .catch(function (err) {
+        state.persistInFlight = false;
+        console.warn("Menu Manager order save failed", err);
+        showSaveNotice(
+          "Could not write board to sheet — saved for this session"
+        );
+        return false;
+      });
+    state.itemOrderPersist = p.then(
+      function () {},
+      function () {}
+    );
+    return p;
+  }
+
   function scheduleItemOrderSave() {
     state.pendingItemOrderSave = true;
     clearItemOrderSaveTimer();
@@ -3420,7 +3509,8 @@
         return;
       }
       state.pendingLeave = null;
-      maybeAutoSave(true);
+      if (state.screen === "item") persistBoardOrderQuiet();
+      else maybeAutoSave(true);
     }, ITEM_ORDER_IDLE_MS);
   }
 
@@ -3589,9 +3679,15 @@
   /* Confirm save? No: every option writes now (System, Style, Board),
      except menu-item reorder which waits ITEM_ORDER_IDLE_MS of idle.
      The toggle itself is always-immediate via choose(). quiet skips a
-     remount when the caller already painted. */
+     remount when the caller already painted. On Edit Item / Create Item
+     a pending order write stays in the background — confirmChoice would
+     otherwise treat Yes as an item save and close the editor. */
   function maybeAutoSave(quiet) {
     if (!confirmSaveOff() || !anySaveDirty()) return false;
+    if (state.screen === "item") {
+      persistBoardOrderQuiet();
+      return true;
+    }
     confirmChoice("yes", quiet);
     return true;
   }
@@ -4155,10 +4251,11 @@
     return sheet.writeBoard(payload).then(function (wrote) {
       if (wrote && wrote.ok) {
         if (wrote.itemRows && wrote.itemRows.length && b.items) {
-          b.items = wrote.itemRows;
+          applyInventoryRowNumbers(b.items, wrote.itemRows);
           if (state.boardCommitted && state.boardCommitted.id === b.id) {
-            state.boardCommitted.items = clone(wrote.itemRows);
+            applyInventoryRowNumbers(state.boardCommitted.items, wrote.itemRows);
           }
+          syncOpenItemRowFromBoard();
         }
         rememberBoardSnap(b);
         applyBoardToCatalog(b);
@@ -4198,6 +4295,10 @@
   function confirmChoice(val, quiet) {
     if (state.screen === "item") {
       if (val === "yes") {
+        if (quiet) {
+          persistBoardOrderQuiet();
+          return;
+        }
         state.dialog = null;
         renderDialog();
         beginItemSave();

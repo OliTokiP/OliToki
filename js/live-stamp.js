@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "f29c17f",
-  "hashFull": "f29c17f797689d8282bdc040723de97bd49f91d9",
-  "subject": "QA: 2026-08-25 Drag and drop menu items works great on mobile, not great on desktop (pass 1)"
+  "hash": "0104f07",
+  "hashFull": "0104f07719ac16143c9f84942b2fd35969274bd5",
+  "subject": "QA: 2026-08-25 Menu Manager - menu item order save behavior in conflict with editing individual items (pass 1)"
 };
