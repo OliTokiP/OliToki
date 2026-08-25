@@ -385,6 +385,93 @@
     return out;
   }
 
+  function hasAnyPrice(prices) {
+    var i;
+    for (i = 0; i < prices.length; i++) {
+      if (String(prices[i] || "").trim()) return true;
+    }
+    return false;
+  }
+
+  function missingSoftFeatures(spec) {
+    var missing = [];
+    if (!document.getElementById("subtitle").value.trim()) missing.push("Subtitle");
+    if (hasDescription(spec) && !document.getElementById("description").value.trim()) {
+      missing.push("Description");
+    }
+    var file = (document.getElementById("photo").files || [])[0];
+    if (!file) missing.push("Image");
+    return missing;
+  }
+
+  function showDialog(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var root = document.getElementById("dlg");
+      var form = document.getElementById("form");
+      var title = document.getElementById("dlg-title");
+      var list = document.getElementById("dlg-list");
+      var actions = document.getElementById("dlg-actions");
+      title.textContent = opts.title || "";
+      list.innerHTML = "";
+      if (opts.list && opts.list.length) {
+        opts.list.forEach(function (label) {
+          var li = document.createElement("li");
+          li.textContent = label;
+          list.appendChild(li);
+        });
+        list.hidden = false;
+      } else {
+        list.hidden = true;
+      }
+      actions.innerHTML = "";
+      function finish(value) {
+        root.hidden = true;
+        form.removeAttribute("inert");
+        document.removeEventListener("keydown", onKey, true);
+        resolve(value);
+      }
+      function onKey(e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          finish(false);
+        }
+      }
+      document.addEventListener("keydown", onKey, true);
+      form.setAttribute("inert", "");
+      if (opts.confirm) {
+        var yes = document.createElement("button");
+        yes.type = "button";
+        yes.className = "dlg-btn dlg-btn-go";
+        yes.textContent = opts.confirm;
+        yes.addEventListener("click", function () {
+          finish(true);
+        });
+        var no = document.createElement("button");
+        no.type = "button";
+        no.className = "dlg-btn";
+        no.textContent = opts.cancel || "Keep editing";
+        no.addEventListener("click", function () {
+          finish(false);
+        });
+        actions.appendChild(yes);
+        actions.appendChild(no);
+      } else {
+        var ok = document.createElement("button");
+        ok.type = "button";
+        ok.className = "dlg-btn dlg-btn-go";
+        ok.textContent = opts.ok || "OK";
+        ok.addEventListener("click", function () {
+          finish(true);
+        });
+        actions.appendChild(ok);
+      }
+      root.hidden = false;
+      var first = actions.querySelector("button");
+      if (first) first.focus();
+    });
+  }
+
   async function loadMenus() {
     await detectProxy();
     var catalogs = FALLBACK_CATALOGS.slice();
@@ -467,21 +554,37 @@
   }
 
   async function onSubmit(ev) {
-    ev.preventDefault();
+    if (ev) ev.preventDefault();
     var btn = document.getElementById("submit");
+    if (btn.disabled) return;
     var item = document.getElementById("item").value.trim();
     var menu = document.getElementById("menu").value;
     var sheetId = document.getElementById("catalog").value;
     var spec = menuSpec(menu);
-    if (!item) {
-      setStatus("bad", "Item name is required.");
+    var prices = collectPrices(spec);
+    if (!item || !hasAnyPrice(prices)) {
+      await showDialog({
+        title: "New items must have a title and at least one price.",
+        ok: "OK",
+      });
+      if (!item) document.getElementById("item").focus();
+      else if (selectedModel() === "fixed") document.getElementById("price1").focus();
       return;
     }
     if (!menu) {
       setStatus("bad", "Pick a menu.");
       return;
     }
-    var prices = collectPrices(spec);
+    var missing = missingSoftFeatures(spec);
+    if (missing.length) {
+      var go = await showDialog({
+        title: "Are you sure you want to add this item without the following features?",
+        list: missing,
+        confirm: "Add anyway",
+        cancel: "Keep editing",
+      });
+      if (!go) return;
+    }
     btn.disabled = true;
     setStatus("", "Saving…");
     try {
@@ -525,11 +628,14 @@
       var bits = [];
       bits.push("Added <b>" + item.replace(/</g, "&lt;") + "</b> to " + (j.label || menu) + ".");
       if (j.sourceName) bits.push("Catalog: " + j.sourceName + ".");
-      if (j.image && j.image.driveUrl) bits.push("Photo is on Drive (TVs can load it without git).");
-      else if (j.image && j.image.path) {
+      if (j.image && j.image.driveUrl) {
+        bits.push("Photo is on Drive. TVs load it from the sheet — no git push for this item.");
+      } else if (j.image && j.image.path) {
         bits.push("Photo saved to " + j.image.path + " (local boards see it now).");
         if (j.image.driveError) {
-          bits.push("Drive skipped — share a folder and set TOKI_UPLOAD_FOLDER_ID for TVs without a git ship.");
+          bits.push(
+            "Drive is not set yet. Local boards already show the photo. Share a folder and set TOKI_UPLOAD_FOLDER_ID so TVs can load it without a git push."
+          );
         }
       }
       var page = j.page || "";
@@ -555,7 +661,17 @@
     if (html) document.getElementById("nav").innerHTML = html;
     bindMoneyInput(document.getElementById("price1"));
     wirePreview();
-    document.getElementById("form").addEventListener("submit", onSubmit);
+    var form = document.getElementById("form");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+    });
+    form.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter") return;
+      var tag = ((e.target && e.target.tagName) || "").toUpperCase();
+      if (tag === "TEXTAREA") return;
+      e.preventDefault();
+    });
+    document.getElementById("submit").addEventListener("click", onSubmit);
     document.getElementById("menu").addEventListener("change", function () {
       syncPricingUi();
     });

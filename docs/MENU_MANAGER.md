@@ -175,6 +175,6 @@ When adding new post-choice explanations, prefer this stack over new toast varia
 
 - Writes for OliToki Menu Settings Data Source (A2) — intentionally never; TVs must not follow the Manager picker
 - Toast import, blur / blend / opacity (called out in the mockup as later)
-- **Item / image upload in this chrome** — first ship is a separate Suite URL [`uploader.html`](../uploader.html) (`POST /api/manager/item`). It fills every Inventory field, last control is the menu dropdown (boards + Proteins / Sauces / Drinks / Veggies), writes the selected catalog, and stores the photo on Drive (plus a local `food-pics/` copy) so boards do not need a GitHub commit. Merge into the board editor later.
+- **Item / image upload in this chrome** — first ship is a separate Suite URL [`uploader.html`](../uploader.html) (`POST /api/manager/item`). It fills every Inventory field (menu under Catalog; boards + Proteins / Sauces / Drinks / Veggies), writes the selected catalog, and stores the photo on Drive (plus a local `food-pics/` copy) so a new item can show on boards without a git push. Merge into the board editor later.
 
 System Font (System Settings) applies to the Manager UI and the menu boards (`html[data-system-font]` + `css/system-font.css` + JS apply on the TV pages). The boards poll it live (watcher) regardless of Require restart. See also the board read path in `js/menu.js`.

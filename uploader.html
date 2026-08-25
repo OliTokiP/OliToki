@@ -7,7 +7,7 @@
   <link rel="icon" href="assets/suite-icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/suite-icon.png" />
   <title>Item Uploader</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260825upload3" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260825upload4" />
   <style>
     form { margin: 0; }
     [hidden] { display: none !important; }
@@ -160,14 +160,72 @@
     .status.ok { background: #d8f3d8; }
     .status.bad { background: #f8d4d4; }
     .status a { font-weight: 700; }
+    .req {
+      color: #c0392b;
+      font-weight: 700;
+      margin-left: .12em;
+    }
+    .dlg {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-items: center;
+      padding: 1.25rem;
+      background: rgba(0, 0, 0, .45);
+    }
+    .dlg[hidden] { display: none !important; }
+    .dlg-card {
+      width: 100%;
+      max-width: 22rem;
+      padding: 1.15rem 1rem 1rem;
+      border-radius: 14px;
+      background: var(--toki-bg);
+      color: inherit;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .28);
+    }
+    .dlg-title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .dlg-list {
+      margin: .75rem 0 0;
+      padding: 0 0 0 1.2rem;
+      font-weight: 500;
+    }
+    .dlg-list li { margin: .2rem 0; }
+    .dlg-actions {
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
+      margin: 1rem 0 0;
+    }
+    .dlg-btn {
+      width: 100%;
+      min-height: 44px;
+      font: inherit;
+      font-weight: 700;
+      border-radius: 10px;
+      border: 1px solid #bbb;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+    .dlg-btn-go {
+      border: 0;
+      background: #26BBCB;
+      color: #111;
+    }
   </style>
 </head>
 <body class="suite-page">
   <p class="suite-nav" id="nav">Suite · Deployer · Tickets · Menu Manager · Item Uploader</p>
   <h1>Item Uploader</h1>
-  <p class="sub">Add one item to a catalog inventory — photo goes to Drive (and a local <code>food-pics/</code> copy). No GitHub commit required. Merge into Menu Manager later.</p>
+  <p class="sub">Add one item to a catalog. The sheet updates now, and the photo is saved so boards can show it without a git push for that item. Merge into Menu Manager later.</p>
 
-  <form id="form">
+  <form id="form" novalidate>
     <label class="lab" for="catalog">Catalog</label>
     <select id="catalog" name="sheetId" required></select>
     <p class="tiny">Writes the selected workbook. Use Beta while testing.</p>
@@ -175,8 +233,8 @@
     <label class="lab" for="menu">Menu</label>
     <select id="menu" name="menu" required></select>
 
-    <label class="lab" for="item">Item</label>
-    <input type="text" id="item" name="item" required autocomplete="off" />
+    <label class="lab" for="item">Item<span class="req" aria-hidden="true">*</span></label>
+    <input type="text" id="item" name="item" autocomplete="off" aria-required="true" />
 
     <label class="lab" for="subtitle">Subtitle</label>
     <input type="text" id="subtitle" name="subtitle" autocomplete="off" />
@@ -195,7 +253,7 @@
       </div>
 
       <div id="price-fixed">
-        <label class="lab" for="price1">Price</label>
+        <label class="lab" for="price1">Price<span class="req" aria-hidden="true">*</span></label>
         <div class="money">
           <span class="money-sign">$</span>
           <input type="text" id="price1" name="price1" inputmode="decimal" autocomplete="off" />
@@ -203,7 +261,7 @@
       </div>
 
       <div id="price-tiers" hidden>
-        <div class="tier-head"><span>Tier</span><span>Price</span><span></span></div>
+        <div class="tier-head"><span>Tier</span><span>Price<span class="req" aria-hidden="true">*</span></span><span></span></div>
         <div id="tier-rows"></div>
         <button type="button" class="add-tier" id="add-tier" aria-label="Add tier">+</button>
       </div>
@@ -224,15 +282,22 @@
     <label class="lab" for="photo">Image</label>
     <input type="file" id="photo" name="photo" accept="image/*,.heic,.webp" />
     <img class="preview" id="preview" alt="" />
-    <p class="tiny">PNG / JPEG / WebP. Saved under <code>food-pics/</code> for local boards. Optional Drive (TVs, no git) needs <code>TOKI_UPLOAD_FOLDER_ID</code> — a folder in your Drive shared with the robot.</p>
+    <p class="tiny">PNG / JPEG / WebP. Saved under <code>food-pics/</code> on this Mac. When Drive is set, TVs load the photo from the Image cell — no git push per item. Needs a folder in your Drive shared with the robot (<code>TOKI_UPLOAD_FOLDER_ID</code>).</p>
 
-    <button type="submit" id="submit">Add to sheet</button>
+    <button type="button" id="submit">Add to sheet</button>
   </form>
   <p class="status" id="status" hidden></p>
+  <div class="dlg" id="dlg" hidden>
+    <div class="dlg-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <p class="dlg-title" id="dlg-title"></p>
+      <ul class="dlg-list" id="dlg-list" hidden></ul>
+      <div class="dlg-actions" id="dlg-actions"></div>
+    </div>
+  </div>
 
   <script src="js/env.js?v=20260818dep1"></script>
   <script src="js/data-source.js?v=20260817api1"></script>
-  <script src="js/surfaces.js?v=20260823upload1"></script>
-  <script src="js/uploader.js?v=20260825upload3"></script>
+  <script src="js/surfaces.js?v=20260825upload4"></script>
+  <script src="js/uploader.js?v=20260825upload4"></script>
 </body>
 </html>
