@@ -9,6 +9,7 @@
  * editors 1–3 when Presentation Style is Encore. Board Yes writes Menu Title,
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
+ * Beta item editor writes Inventory via TOKI_MANAGER_SHEET.writeItem.
  * System Settings persist via writeSystem + fallback. Confirm save? No skips the
  * confirm dialog and writes System, Style, and Board immediately. Menu-item
  * reorder waits 3s of idle before writing. Encore extras and item order get
@@ -63,6 +64,11 @@
     boardDraft: null,
     boardCommitted: null,
     lastBoardSnap: {},
+    itemKey: null,
+    itemDraft: null,
+    itemCommitted: null,
+    itemScroll: 0,
+    itemMissing: null,
     itemDragging: false,
     confirmLeave: false,
     persistInFlight: false,
@@ -691,7 +697,7 @@
   }
 
   function row(opts) {
-    var cls = "row" + (opts.child ? " is-child" : "");
+    var cls = "row" + (opts.child ? " is-child" : "") + (opts.optional ? " is-optional" : "");
     if (opts.control === "zeroOne") {
       var on = !!opts.on;
       return (
@@ -718,8 +724,11 @@
       '<span class="row-label">' +
       escapeHtml(opts.label) +
       "</span>" +
-      '<span class="row-value">' +
-      escapeHtml(opts.value) +
+      '<span class="row-value' +
+      (opts.clip ? " is-clip" : "") +
+      (opts.placeholder && !opts.value ? " is-placeholder" : "") +
+      '">' +
+      escapeHtml(opts.value || opts.placeholder || "") +
       "</span>" +
       "</button>"
     );
@@ -1060,19 +1069,36 @@
     var html = "";
     var i;
     var drag = !isAnnouncementsBoard(state.boardDraft);
+    var canEdit = managerBetaFeatures() && drag;
     for (i = 0; i < items.length; i++) {
+      var excluded = items[i] && items[i].include === "no";
       html +=
-        '<div class="item-row" data-item="' +
+        '<div class="item-row' +
+        (excluded ? " is-excluded" : "") +
+        '" data-item="' +
         i +
         '">' +
         (drag
           ? '<button class="item-handle" type="button" aria-label="Reorder ' +
             escapeHtml(items[i].name) +
             '"></button>'
-          : "") +
-        '<span class="item-name">' +
-        escapeHtml(items[i].name) +
-        "</span></div>";
+          : "");
+      if (canEdit) {
+        html +=
+          '<button class="item-name" type="button" data-act="edit-item" data-item="' +
+          i +
+          '">' +
+          escapeHtml(items[i].name) +
+          (excluded ? '<span class="item-name-bang"> (!)</span>' : "") +
+          "</button>";
+      } else {
+        html +=
+          '<span class="item-name">' +
+          escapeHtml(items[i].name) +
+          (excluded ? '<span class="item-name-bang"> (!)</span>' : "") +
+          "</span>";
+      }
+      html += "</div>";
     }
     return html;
   }
@@ -1110,7 +1136,9 @@
     var preview = isAnnouncementsBoard(b) ? "" : previewHtml();
     var foot = isAnnouncementsBoard(b)
       ? ""
-      : footerBar("Add Item From Toast", "toast-add");
+      : managerBetaFeatures()
+        ? footerBar("Add Item", "item-add")
+        : footerBar("Add Item From Toast", "toast-add");
     return (
       '<section class="screen screen-board" data-board-id="' +
       escapeHtml(String(b.id || "")) +
@@ -1124,6 +1152,750 @@
       foot +
       "</section>"
     );
+  }
+
+  var LTP_DEFAULTS = ["S", "M", "L"];
+  var MAX_TIERS = 3;
+  var ITEM_USD = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    useGrouping: false,
+  });
+  var MSG_ITEM_SAVED = "Item Saved to Menu";
+
+  function boardMenuId(b) {
+    var n = String((b && (b.number || b.id)) || "");
+    if (n === "1" || n === "2" || n === "3") return "board" + n;
+    return "";
+  }
+
+  function boardImageFolder(b) {
+    var n = String((b && (b.number || b.id)) || "");
+    if (n === "1") return "food-pics/bowls";
+    if (n === "2") return "food-pics/handhelds";
+    if (n === "3") return "food-pics/munchies";
+    return "food-pics";
+  }
+
+  function parseMoney(raw) {
+    var s = String(raw || "").replace(/[^0-9.]/g, "");
+    if (!s) return null;
+    var first = s.indexOf(".");
+    if (first >= 0) {
+      s = s.slice(0, first + 1) + s.slice(first + 1).replace(/\./g, "");
+    }
+    var n = Number(s);
+    if (!Number.isFinite(n)) return null;
+    return n;
+  }
+
+  function moneyDigits(raw) {
+    var n = parseMoney(raw);
+    if (n == null) return "";
+    return n.toFixed(2);
+  }
+
+  function sanitizeMoneyTyping(raw) {
+    var s = String(raw || "").replace(/[^0-9.]/g, "");
+    var first = s.indexOf(".");
+    if (first >= 0) {
+      s = s.slice(0, first + 1) + s.slice(first + 1).replace(/\./g, "");
+    }
+    return s;
+  }
+
+  function bindMoneyInput(el) {
+    if (!el || el._tokiMoney) return;
+    el._tokiMoney = true;
+    el.addEventListener("input", function () {
+      var next = sanitizeMoneyTyping(el.value);
+      if (next !== el.value) el.value = next;
+    });
+    el.addEventListener("blur", function () {
+      var digits = moneyDigits(el.value);
+      if (digits) el.value = digits;
+    });
+  }
+
+  function parsePriceToken(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return { tier: "", price: "" };
+    var vb = s.match(/^(\d{1,3})\s*\/\s*\$?\s*([0-9]+(?:\.[0-9]+)?)/);
+    if (vb) return { tier: vb[1], price: Number(vb[2]).toFixed(2) };
+    var ltp = s.match(/^(.+?)\s+\$?\s*([0-9]+(?:\.[0-9]+)?)\s*$/);
+    if (ltp && /[A-Za-z]/.test(ltp[1])) {
+      return { tier: ltp[1].trim(), price: Number(ltp[2]).toFixed(2) };
+    }
+    var n = parseMoney(s);
+    return { tier: "", price: n == null ? "" : n.toFixed(2) };
+  }
+
+  function detectPriceModel(it) {
+    var p = [it && it.price1, it && it.price2, it && it.price3].filter(function (s) {
+      return String(s || "").trim();
+    });
+    if (!p.length) return "fixed";
+    if (
+      p.some(function (s) {
+        return /^\d{1,3}\s*\//.test(String(s));
+      })
+    ) {
+      return "vb";
+    }
+    if (p.length > 1) return "ltp";
+    if (/[A-Za-z]/.test(p[0]) && !/^\$/.test(String(p[0]).trim())) return "ltp";
+    return "fixed";
+  }
+
+  function blankItemDraft(key) {
+    var b = state.boardDraft || {};
+    return {
+      key: String(key || "new"),
+      boardId: String(b.id || state.boardId || ""),
+      row: 0,
+      name: "",
+      subtitle: "",
+      description: "",
+      priceModel: "fixed",
+      price1: "",
+      tiers: [{ tier: "S", price: "" }],
+      isNew: "yes",
+      include: "no",
+      image: "",
+      imageName: "",
+      imageData: "",
+      imagePreview: "",
+    };
+  }
+
+  function itemFromBoard(it, key) {
+    var d = blankItemDraft(key);
+    if (!it) return d;
+    d.row = it.row || 0;
+    d.name = it.name || "";
+    d.subtitle = it.subtitle || "";
+    d.description = it.description || "";
+    d.isNew = it.isNew === "yes" ? "yes" : "no";
+    d.include = it.include === "no" ? "no" : "yes";
+    d.image = it.image || "";
+    d.priceModel = detectPriceModel(it);
+    var tokens = [it.price1, it.price2, it.price3];
+    if (d.priceModel === "fixed") {
+      var tok = parsePriceToken(tokens[0] || "");
+      d.price1 = tok.price;
+      d.tiers = [{ tier: "S", price: tok.price }];
+    } else {
+      d.tiers = [];
+      var i;
+      for (i = 0; i < tokens.length; i++) {
+        if (!String(tokens[i] || "").trim()) continue;
+        var t = parsePriceToken(tokens[i]);
+        if (d.priceModel === "ltp" && !t.tier) t.tier = LTP_DEFAULTS[d.tiers.length] || "";
+        d.tiers.push(t);
+      }
+      if (!d.tiers.length) {
+        d.tiers = [{ tier: d.priceModel === "ltp" ? "S" : "", price: "" }];
+      }
+      d.price1 = d.tiers[0].price;
+    }
+    return d;
+  }
+
+  function buildItemDraft(key) {
+    ensureBoardDraft();
+    var k = String(key || state.itemKey || "new");
+    if (k === "new") return blankItemDraft("new");
+    var idx = parseInt(k, 10);
+    var items = (state.boardDraft && state.boardDraft.items) || [];
+    if (!isFinite(idx) || idx < 0 || idx >= items.length) return blankItemDraft("new");
+    return itemFromBoard(items[idx], String(idx));
+  }
+
+  function ensureItemDraft() {
+    ensureBoardDraft();
+    var key = String(state.itemKey || "new");
+    if (
+      state.itemDraft &&
+      String(state.itemDraft.key) === key &&
+      String(state.itemDraft.boardId) === String(state.boardId || (state.boardDraft && state.boardDraft.id) || "")
+    ) {
+      return state.itemDraft;
+    }
+    state.itemDraft = buildItemDraft(key);
+    state.itemCommitted = clone(state.itemDraft);
+    return state.itemDraft;
+  }
+
+  function itemSnap(d) {
+    d = d || {};
+    return {
+      name: String(d.name || ""),
+      subtitle: String(d.subtitle || ""),
+      description: String(d.description || ""),
+      priceModel: d.priceModel || "fixed",
+      price1: String(d.price1 || ""),
+      tiers: (d.tiers || []).map(function (t) {
+        return { tier: String((t && t.tier) || ""), price: String((t && t.price) || "") };
+      }),
+      isNew: d.isNew === "yes" ? "yes" : "no",
+      include: d.include === "yes" ? "yes" : "no",
+      image: String(d.image || ""),
+      imageName: String(d.imageName || ""),
+      imageData: d.imageData ? "1" : "",
+    };
+  }
+
+  function itemDirty() {
+    return !!(
+      state.itemDraft &&
+      state.itemCommitted &&
+      !eq(itemSnap(state.itemDraft), itemSnap(state.itemCommitted))
+    );
+  }
+
+  function collectItemPrices(d) {
+    var out = ["", "", ""];
+    if (!d) return out;
+    if (d.priceModel === "fixed") {
+      var n = parseMoney(d.price1);
+      if (n != null) out[0] = ITEM_USD.format(n);
+      return out;
+    }
+    var tiers = d.tiers || [];
+    var i;
+    var k = 0;
+    for (i = 0; i < tiers.length && k < 3; i++) {
+      var n = parseMoney(tiers[i].price);
+      var tier = String(tiers[i].tier || "").trim();
+      if (n == null) continue;
+      if (d.priceModel === "vb") {
+        var qty = tier.replace(/\D/g, "").slice(0, 3);
+        if (!qty) continue;
+        out[k++] = qty + "/" + ITEM_USD.format(n);
+      } else if (tier) {
+        out[k++] = tier + " " + ITEM_USD.format(n);
+      }
+    }
+    return out;
+  }
+
+  function itemHasPrice(d) {
+    var prices = collectItemPrices(d);
+    var i;
+    for (i = 0; i < prices.length; i++) {
+      if (String(prices[i] || "").trim()) return true;
+    }
+    return false;
+  }
+
+  function itemRequiredOk(d) {
+    return !!(d && String(d.name || "").trim() && itemHasPrice(d));
+  }
+
+  function itemMissingSoft(d) {
+    var missing = [];
+    if (!String((d && d.subtitle) || "").trim()) missing.push("Subtitle");
+    if (!String((d && d.description) || "").trim()) missing.push("Description");
+    if (!(d && (d.imageData || String(d.image || "").trim()))) missing.push("Image");
+    return missing;
+  }
+
+  function itemImageSrc(item, board) {
+    if (item && item.imagePreview) return item.imagePreview;
+    var img = String((item && item.image) || "").trim();
+    if (!img) return "";
+    if (/^https?:/i.test(img) || img.indexOf("data:") === 0 || img.indexOf("/api/") === 0) {
+      return img;
+    }
+    var folder = boardImageFolder(board);
+    var file = img.replace(/^.*\//, "");
+    var base = file.replace(/\.[^.]+$/, "");
+    if (/-sm$/i.test(base)) return folder + "/" + base + ".webp";
+    return folder + "/" + base + "-sm.webp";
+  }
+
+  function itemImageLabel(d) {
+    if (d && d.imageName) return d.imageName;
+    var img = String((d && d.image) || "").trim();
+    if (!img) return "";
+    if (/^https?:/i.test(img)) return "Photo on Drive";
+    return img.replace(/^.*\//, "");
+  }
+
+  function nextLtpLabel(tiers) {
+    var used = {};
+    (tiers || []).forEach(function (t) {
+      used[String((t && t.tier) || "").trim().toUpperCase()] = true;
+    });
+    var i;
+    for (i = 0; i < LTP_DEFAULTS.length; i++) {
+      if (!used[LTP_DEFAULTS[i]]) return LTP_DEFAULTS[i];
+    }
+    return "";
+  }
+
+  function itemMiniHtml() {
+    var d = state.itemDraft || ensureItemDraft();
+    var b = state.boardDraft || {};
+    var draft = state.draft;
+    var fill =
+      draft.background === "pattern" || draft.background === "wallpaper"
+        ? roleHex(draft.bgColor || "main")
+        : roleHex(draft.background);
+    var prices = collectItemPrices(d).filter(Boolean).join("  ");
+    var src = itemImageSrc(d, b);
+    var showDesc = b.includeDescriptions === "yes";
+    var name = String(d.name || "").trim() || "Item name";
+    var wp = wallpaperSrc();
+    var wpFb = wallpaperFallback();
+    return (
+      '<div class="item-mini" style="--preview-fill:' +
+      fill +
+      ";--pattern-a:" +
+      bakePatternHex(roleHex(draft.patternColor1)) +
+      ";--pattern-b:" +
+      bakePatternHex(roleHex(draft.patternColor2)) +
+      '">' +
+      '<div class="item-mini-stage">' +
+      '<div class="item-mini-layer item-mini-solid"></div>' +
+      '<div class="item-mini-layer item-mini-pattern"' +
+      (draft.background !== "pattern" ? " hidden" : "") +
+      '><div class="item-mini-pattern-track" style="transform:rotate(-51.5deg);"></div></div>' +
+      '<div class="item-mini-layer"' +
+      (draft.background !== "wallpaper" ? " hidden" : "") +
+      ">" +
+      (wp
+        ? '<img class="preview-wp-img" alt="" src="' +
+          escapeHtml(wp) +
+          '"' +
+          (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
+          ' style="width:100%;height:100%;object-fit:cover;">'
+        : "") +
+      "</div></div>" +
+      (d.include !== "yes" ? '<div class="item-mini-off">Not on board</div>' : "") +
+      '<div class="item-mini-body">' +
+      '<div class="item-mini-copy">' +
+      '<p class="item-mini-name' +
+      (d.isNew === "yes" ? " is-new" : "") +
+      '">' +
+      escapeHtml(name) +
+      "</p>" +
+      (prices ? '<p class="item-mini-prices">' + escapeHtml(prices) + "</p>" : "") +
+      (d.subtitle
+        ? '<p class="item-mini-sub">' + escapeHtml(d.subtitle) + "</p>"
+        : "") +
+      (showDesc && d.description
+        ? '<p class="item-mini-desc">' + escapeHtml(d.description) + "</p>"
+        : "") +
+      "</div>" +
+      '<div class="item-mini-photo">' +
+      (src
+        ? '<img alt="" src="' + escapeHtml(src) + '" data-act="item-img-fallback">'
+        : '<span class="item-mini-empty">No image</span>') +
+      "</div></div></div>"
+    );
+  }
+
+  function itemPriceRowsHtml(d) {
+    var html = "";
+    if (d.priceModel === "fixed") {
+      html +=
+        '<div class="row">' +
+        '<span class="row-label">Price</span>' +
+        '<div class="price-field">' +
+        '<span class="price-sign">$</span>' +
+        '<input class="price-input" type="text" inputmode="decimal" autocomplete="off" data-price="fixed" aria-label="Price" value="' +
+        escapeHtml(d.price1 || "") +
+        '">' +
+        "</div></div>";
+      return html;
+    }
+    var i;
+    var tiers = d.tiers || [];
+    for (i = 0; i < tiers.length; i++) {
+      html +=
+        '<div class="row row-price">' +
+        '<button class="tier-chip" type="button" data-act="item-tier" data-tier="' +
+        i +
+        '">' +
+        escapeHtml(tiers[i].tier || (d.priceModel === "vb" ? "#" : LTP_DEFAULTS[i] || "")) +
+        "</button>" +
+        '<div class="price-field">' +
+        '<span class="price-sign">$</span>' +
+        '<input class="price-input" type="text" inputmode="decimal" autocomplete="off" data-price="tier" data-tier="' +
+        i +
+        '" aria-label="Price" value="' +
+        escapeHtml(tiers[i].price || "") +
+        '">' +
+        "</div></div>";
+    }
+    if (tiers.length < MAX_TIERS) {
+      html +=
+        '<button class="row is-add" type="button" data-act="item-add-tier">' +
+        '<span class="plus-circle" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>' +
+        "</span>" +
+        '<span class="footer-label">Add Tier</span></button>';
+    }
+    return html;
+  }
+
+  function itemRows() {
+    var d = state.itemDraft || ensureItemDraft();
+    var html = "";
+    html += row({
+      key: "itemName",
+      label: "Item Name",
+      value: d.name,
+      placeholder: "Required",
+    });
+    html += row({
+      key: "itemSubtitle",
+      label: "Subtitle",
+      value: d.subtitle,
+      optional: true,
+      placeholder: "Optional",
+    });
+    html += row({
+      key: "itemDescription",
+      label: "Description",
+      value: d.description,
+      clip: true,
+      placeholder: "Tap to edit",
+    });
+    html += row({
+      key: "itemPriceModel",
+      label: "Pricing Model",
+      value: labelOf(D.priceModels || [], d.priceModel),
+    });
+    html += itemPriceRowsHtml(d);
+    html += row({
+      key: "itemNew",
+      label: "Mark as new?",
+      value: labelOf(D.yesNo, d.isNew),
+    });
+    html += row({
+      key: "itemInclude",
+      label: "Include in board?",
+      value: labelOf(D.yesNo, d.include),
+    });
+    html += row({
+      key: "itemImage",
+      label: "Image",
+      value: itemImageLabel(d),
+      placeholder: "Tap to add",
+    });
+    html +=
+      '<input id="item-photo" type="file" accept="image/*,.heic,.webp" hidden>';
+    return html;
+  }
+
+  function screenItem() {
+    if (!managerBetaFeatures()) {
+      return (
+        '<section class="screen screen-soon">' +
+        header("Edit Item") +
+        '<div class="soon-body"><h2 class="soon-title">Beta only</h2>' +
+        '<p class="soon-sub">Item editor is on the Beta catalog (or ?beta).</p></div></section>'
+      );
+    }
+    var d = ensureItemDraft();
+    var creating = String(d.key) === "new";
+    return (
+      '<section class="screen screen-item" data-item-key="' +
+      escapeHtml(String(d.key || "new")) +
+      '">' +
+      header(creating ? "Create Item" : "Edit Item") +
+      itemMiniHtml() +
+      '<div class="style-scroll" id="item-scroll">' +
+      '<div class="rows bounce-inner">' +
+      itemRows() +
+      "</div></div>" +
+      footerBar("Fill from Toast", "toast-fill") +
+      "</section>"
+    );
+  }
+
+  function refreshItemScreen() {
+    var existing = els.app.querySelector(".screen-item");
+    if (!existing) return false;
+    var mini = existing.querySelector(".item-mini");
+    if (mini) mini.outerHTML = itemMiniHtml();
+    var wrap = existing.querySelector(".rows");
+    if (wrap) wrap.innerHTML = itemRows();
+    bindItemEditor();
+    bindWpFallback();
+    return true;
+  }
+
+  function bindItemEditor() {
+    var root = els.app && els.app.querySelector(".screen-item");
+    if (!root) return;
+    var inputs = root.querySelectorAll(".price-input");
+    var i;
+    for (i = 0; i < inputs.length; i++) {
+      bindMoneyInput(inputs[i]);
+      if (inputs[i]._tokiItemPrice) continue;
+      inputs[i]._tokiItemPrice = true;
+      inputs[i].addEventListener("input", onItemPriceInput);
+      inputs[i].addEventListener("blur", onItemPriceBlur);
+    }
+    var file = document.getElementById("item-photo");
+    if (file && !file._tokiBound) {
+      file._tokiBound = true;
+      file.addEventListener("change", onItemPhoto);
+    }
+    var photos = root.querySelectorAll(".item-mini-photo img");
+    var p;
+    for (p = 0; p < photos.length; p++) {
+      (function (img) {
+        if (img.getAttribute("data-fb")) return;
+        img.setAttribute("data-fb", "1");
+        img.addEventListener("error", function () {
+          var s = img.getAttribute("src") || "";
+          if (/-sm\./i.test(s)) {
+            img.src = s.replace(/-sm\./i, ".");
+            return;
+          }
+          img.removeAttribute("src");
+        });
+      })(photos[p]);
+    }
+  }
+
+  function onItemPriceInput(e) {
+    var el = e.target;
+    var d = state.itemDraft;
+    if (!d || !el) return;
+    var kind = el.getAttribute("data-price");
+    if (kind === "fixed") d.price1 = sanitizeMoneyTyping(el.value);
+    else {
+      var idx = parseInt(el.getAttribute("data-tier"), 10);
+      if (!d.tiers[idx]) d.tiers[idx] = { tier: "", price: "" };
+      d.tiers[idx].price = sanitizeMoneyTyping(el.value);
+    }
+    var mini = els.app.querySelector(".item-mini");
+    if (mini) mini.outerHTML = itemMiniHtml();
+  }
+
+  function onItemPriceBlur(e) {
+    var el = e.target;
+    var d = state.itemDraft;
+    if (!d || !el) return;
+    var digits = moneyDigits(el.value);
+    if (digits) el.value = digits;
+    var kind = el.getAttribute("data-price");
+    if (kind === "fixed") d.price1 = digits || sanitizeMoneyTyping(el.value);
+    else {
+      var idx = parseInt(el.getAttribute("data-tier"), 10);
+      if (d.tiers[idx]) d.tiers[idx].price = digits || sanitizeMoneyTyping(el.value);
+    }
+    var mini = els.app.querySelector(".item-mini");
+    if (mini) mini.outerHTML = itemMiniHtml();
+  }
+
+  function onItemPhoto(e) {
+    var file = (e.target && e.target.files && e.target.files[0]) || null;
+    var d = state.itemDraft;
+    if (!d) return;
+    if (!file) return;
+    d.imageName = file.name || "";
+    if (d.imagePreview && String(d.imagePreview).indexOf("blob:") === 0) {
+      try {
+        URL.revokeObjectURL(d.imagePreview);
+      } catch (err) {}
+    }
+    d.imagePreview = URL.createObjectURL(file);
+    var reader = new FileReader();
+    reader.onload = function () {
+      d.imageData = String(reader.result || "");
+      refreshItemScreen();
+    };
+    reader.readAsDataURL(file);
+    refreshItemScreen();
+  }
+
+  function addItemTier() {
+    var d = state.itemDraft;
+    if (!d || !d.tiers || d.tiers.length >= MAX_TIERS) return;
+    if (d.priceModel === "ltp") d.tiers.push({ tier: nextLtpLabel(d.tiers), price: "" });
+    else d.tiers.push({ tier: "", price: "" });
+    refreshItemScreen();
+  }
+
+  function catalogSheetId() {
+    var src = dataSource();
+    return String((src && src.sheetId) || "").trim();
+  }
+
+  function applyItemToBoard(d, excelRow) {
+    if (!d || !state.boardDraft) return;
+    var prices = collectItemPrices(d);
+    var entry = {
+      name: String(d.name || "").trim(),
+      row: excelRow || d.row || 0,
+      price1: prices[0] || "",
+      price2: prices[1] || "",
+      price3: prices[2] || "",
+      subtitle: String(d.subtitle || "").trim(),
+      description: String(d.description || "").trim(),
+      isNew: d.isNew === "yes" ? "yes" : "no",
+      image: d.image || "",
+      include: d.include === "yes" ? "yes" : "no",
+    };
+    var items = state.boardDraft.items || [];
+    if (String(d.key) === "new") {
+      items.push(entry);
+      state.boardDraft.items = items;
+    } else {
+      var idx = parseInt(d.key, 10);
+      if (isFinite(idx) && items[idx]) items[idx] = entry;
+    }
+    applyBoardToCatalog(state.boardDraft);
+    if (state.boardCommitted && state.boardCommitted.id === state.boardDraft.id) {
+      state.boardCommitted = clone(state.boardDraft);
+    }
+    rememberBoardSnap(state.boardDraft);
+    state.itemDraft = itemFromBoard(entry, String(d.key) === "new" ? String(items.length - 1) : d.key);
+    state.itemDraft.imagePreview = d.imagePreview || "";
+    state.itemCommitted = clone(state.itemDraft);
+  }
+
+  function persistItemWrite() {
+    var d = state.itemDraft;
+    var b = state.boardDraft || ensureBoardDraft();
+    if (!d || !b) return;
+    var sheet = window.TOKI_MANAGER_SHEET;
+    if (!sheet || typeof sheet.writeItem !== "function") {
+      toast("Item save needs the Menu Settings server");
+      return;
+    }
+    var prices = collectItemPrices(d);
+    var payload = {
+      sheetId: catalogSheetId(),
+      menu: boardMenuId(b),
+      gid: b.gid || "",
+      item: String(d.name || "").trim(),
+      price1: prices[0] || "",
+      price2: prices[1] || "",
+      price3: prices[2] || "",
+      subtitle: String(d.subtitle || "").trim(),
+      description: String(d.description || "").trim(),
+      isNew: d.isNew,
+      include: d.include,
+      image: d.image || "",
+      imageName: d.imageName || "",
+      imageData: d.imageData || "",
+    };
+    if (d.row) payload.row = d.row;
+    state.dialog = null;
+    renderDialog();
+    state.persistInFlight = true;
+    toast("Saving item…");
+    var writePromise = Promise.resolve();
+    if (d.row) {
+      writePromise = fetch("/api/health", { cache: "no-store" })
+        .then(function (res) {
+          return res.ok ? res.json() : {};
+        })
+        .then(function (h) {
+          if (h && h.itemUpdate) return;
+          throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
+        })
+        .catch(function (err) {
+          if (err && /restart/.test(String(err.message || ""))) throw err;
+          throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
+        });
+    }
+    writePromise
+      .then(function () {
+        return sheet.writeItem(payload);
+      })
+      .then(function (wrote) {
+        state.persistInFlight = false;
+        if (!wrote || !wrote.ok) {
+          throw new Error((wrote && wrote.error) || "write failed");
+        }
+        if (wrote.imageCell) d.image = wrote.imageCell;
+        applyItemToBoard(d, wrote.row);
+        showSaveNotice(MSG_ITEM_SAVED);
+        var next = state.pendingLeave;
+        state.pendingLeave = null;
+        state.confirmLeave = !!next;
+        if (next) next();
+        else performBackNav("board", state.boardId);
+      })
+      .catch(function (err) {
+        state.persistInFlight = false;
+        console.warn("Menu Manager item save failed", err);
+        var msg = String((err && err.message) || err);
+        if (/restart/.test(msg)) {
+          state.pendingLeave = null;
+          showSaveNotice(msg);
+          return;
+        }
+        showSaveNotice("Could not write item to sheet — saved for this session");
+        applyItemToBoard(d, d.row);
+        var next = state.pendingLeave;
+        state.pendingLeave = null;
+        state.confirmLeave = !!next;
+        if (next) next();
+        else performBackNav("board", state.boardId);
+      });
+  }
+
+  function beginItemSave() {
+    var d = state.itemDraft || ensureItemDraft();
+    if (!itemRequiredOk(d)) {
+      state.dialog = "item-required";
+      renderDialog();
+      return;
+    }
+    var missing = itemMissingSoft(d);
+    if (missing.length) {
+      state.itemMissing = missing;
+      state.dialog = "item-missing";
+      renderDialog();
+      return;
+    }
+    continueItemSaveAfterMissing();
+  }
+
+  function continueItemSaveAfterMissing() {
+    if (state.itemDraft && state.itemDraft.include !== "yes") {
+      state.dialog = "item-include";
+      renderDialog();
+      return;
+    }
+    persistItemWrite();
+  }
+
+  function discardItemDraft() {
+    if (state.itemCommitted) state.itemDraft = clone(state.itemCommitted);
+    else state.itemDraft = null;
+  }
+
+  function leaveItem(next) {
+    if (!itemDirty()) {
+      next();
+      return;
+    }
+    state.pendingLeave = next;
+    if (confirmSaveOff()) {
+      beginItemSave();
+      return;
+    }
+    state.dialog = "confirm";
+    renderDialog();
+  }
+
+  function openItemEditor(itemKey) {
+    ensureBoardDraft();
+    state.itemKey = String(itemKey || "new");
+    state.itemDraft = buildItemDraft(state.itemKey);
+    state.itemCommitted = clone(state.itemDraft);
+    state.itemScroll = 0;
+    go("item", state.boardId, state.itemKey);
   }
 
   function refreshBoardRows() {
@@ -1368,6 +2140,7 @@
     else if (state.screen === "menu") html = screenMenu();
     else if (state.screen === "style") html = screenStyle();
     else if (state.screen === "board") html = screenBoard();
+    else if (state.screen === "item") html = screenItem();
 
     if (state.screen === "board") {
       var existingBoard = els.app.querySelector(".screen-board");
@@ -1410,7 +2183,8 @@
       state.screen === "style" ||
       state.screen === "board" ||
       state.screen === "system" ||
-      state.screen === "menu"
+      state.screen === "menu" ||
+      state.screen === "item"
     ) {
       var sc =
         state.screen === "menu"
@@ -1420,18 +2194,23 @@
                 ? "board-scroll"
                 : state.screen === "style"
                 ? "style-scroll"
+                : state.screen === "item"
+                ? "item-scroll"
                 : "system-scroll"
             );
       if (sc) {
         if (state.screen === "style") sc.scrollTop = state.styleScroll;
         else if (state.screen === "board") sc.scrollTop = state.boardScroll;
+        else if (state.screen === "item") sc.scrollTop = state.itemScroll;
         else if (state.screen === "system") sc.scrollTop = state.systemScroll;
         else if (state.screen === "menu") sc.scrollTop = state.menuScroll;
       }
       restorePillScroll();
       bindWpFallback();
       if (state.screen === "board") bindItemReorder();
-      startPreviewCycle();
+      if (state.screen === "item") bindItemEditor();
+      if (state.screen === "item") stopPreviewCycle();
+      else startPreviewCycle();
     } else {
       stopPreviewCycle();
     }
@@ -1442,8 +2221,59 @@
   }
 
   function pickerSpec(key) {
-    if (key === "boardTitle") {
+    if (key === "boardTitle" || key === "itemName" || key === "itemSubtitle" || key === "itemDescription" || key === "itemImage") {
       return { kind: "text" };
+    }
+    if (key === "itemPriceModel") {
+      return {
+        title: "Pricing Model",
+        options: D.priceModels || [],
+        get: function () {
+          return (state.itemDraft || {}).priceModel || "fixed";
+        },
+        set: function (id) {
+          var d = state.itemDraft;
+          if (!d) return;
+          var keep = "";
+          if (d.priceModel === "fixed") keep = d.price1;
+          else if (d.tiers && d.tiers[0]) keep = d.tiers[0].price;
+          d.priceModel = id;
+          if (id === "fixed") {
+            d.price1 = keep || d.price1 || "";
+          } else {
+            d.tiers = [
+              {
+                tier: id === "ltp" ? LTP_DEFAULTS[0] : "",
+                price: keep || "",
+              },
+            ];
+          }
+        },
+      };
+    }
+    if (key === "itemNew") {
+      return {
+        title: "Mark as new?",
+        options: D.yesNo,
+        get: function () {
+          return (state.itemDraft || {}).isNew || "no";
+        },
+        set: function (id) {
+          if (state.itemDraft) state.itemDraft.isNew = id;
+        },
+      };
+    }
+    if (key === "itemInclude") {
+      return {
+        title: "Include in board?",
+        options: D.yesNo,
+        get: function () {
+          return (state.itemDraft || {}).include || "no";
+        },
+        set: function (id) {
+          if (state.itemDraft) state.itemDraft.include = id;
+        },
+      };
     }
     if (key === "boardFamily") {
       return {
@@ -1907,6 +2737,96 @@
           inp.select();
         }
       }, 30);
+    } else if (state.dialog === "item-name" || state.dialog === "item-subtitle" || state.dialog === "item-tier") {
+      var title =
+        state.dialog === "item-name"
+          ? "Item Name"
+          : state.dialog === "item-subtitle"
+            ? "Subtitle"
+            : "Tier";
+      var cur = "";
+      if (state.dialog === "item-name") cur = (state.itemDraft && state.itemDraft.name) || "";
+      else if (state.dialog === "item-subtitle") cur = (state.itemDraft && state.itemDraft.subtitle) || "";
+      else if (state.itemDraft && state.itemDraft.tiers && state.itemDraft.tiers[state.itemTierIndex]) {
+        cur = state.itemDraft.tiers[state.itemTierIndex].tier || "";
+      }
+      var ph = state.dialog === "item-subtitle" ? "Optional" : "";
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>" +
+        escapeHtml(title) +
+        "</h2>" +
+        '<input class="dialog-input" id="item-field-input" type="text" maxlength="80" placeholder="' +
+        escapeHtml(ph) +
+        '" value="' +
+        escapeHtml(cur) +
+        '">' +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-field-save">Save</button>' +
+        '<button class="btn-primary" type="button" data-act="item-field-cancel">Cancel</button>' +
+        "</div></div>";
+      setTimeout(function () {
+        var inp = document.getElementById("item-field-input");
+        if (inp) {
+          inp.focus();
+          inp.select();
+        }
+      }, 30);
+    } else if (state.dialog === "item-description") {
+      var desc = (state.itemDraft && state.itemDraft.description) || "";
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Description</h2>" +
+        '<textarea class="dialog-textarea" id="item-field-input" maxlength="600">' +
+        escapeHtml(desc) +
+        "</textarea>" +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-field-save">Save</button>' +
+        '<button class="btn-primary" type="button" data-act="item-field-cancel">Cancel</button>' +
+        "</div></div>";
+      setTimeout(function () {
+        var inp = document.getElementById("item-field-input");
+        if (inp) inp.focus();
+      }, 30);
+    } else if (state.dialog === "item-required") {
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Title and price required</h2>" +
+        '<p class="dialog-note">New items must have a title and at least one price.</p>' +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-required-ok">OK</button>' +
+        "</div></div>";
+    } else if (state.dialog === "item-missing") {
+      var lis = (state.itemMissing || [])
+        .map(function (label) {
+          return "<li>" + escapeHtml(label) + "</li>";
+        })
+        .join("");
+      var creating = state.itemDraft && String(state.itemDraft.key) === "new";
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Missing features</h2>" +
+        '<p class="dialog-note">Are you sure you want to ' +
+        (creating ? "add" : "save") +
+        " this item without the following features?</p>" +
+        '<ul class="dialog-list">' +
+        lis +
+        "</ul>" +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-missing-go">' +
+        (creating ? "Add anyway" : "Save anyway") +
+        "</button>" +
+        '<button class="btn-primary" type="button" data-act="item-missing-keep">Keep editing</button>' +
+        "</div></div>";
+    } else if (state.dialog === "item-include") {
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Not shown on the board</h2>" +
+        '<p class="dialog-note">This item will be saved but will not appear on the live board until Include in board is Yes.</p>' +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-include-go">Save anyway</button>' +
+        '<button class="btn-primary" type="button" data-act="item-include-keep">Keep editing</button>' +
+        "</div></div>";
     }
     applyTheme();
   }
@@ -2504,16 +3424,24 @@
     if (sysc) state.systemScroll = sysc.scrollTop;
     var nav = els.app && els.app.querySelector(".nav-wrap");
     if (nav) state.menuScroll = nav.scrollTop;
+    var ic = document.getElementById("item-scroll");
+    if (ic) state.itemScroll = ic.scrollTop;
   }
 
-  function go(screen, boardId) {
-    if (state.screen === "style") rememberStyleScroll();
+  function go(screen, boardId, itemKey) {
+    if (state.screen === "style" || state.screen === "item") rememberStyleScroll();
     state.picker = null;
     state.dialog = null;
     state.screen = screen;
     state.boardId = boardId || null;
+    if (screen === "item") {
+      state.itemKey = itemKey != null ? String(itemKey) : String(state.itemKey || "new");
+    } else if (screen !== "board") {
+      state.itemKey = null;
+    }
     if (screen !== "style") state.styleScroll = 0;
-    if (screen !== "board") state.boardScroll = 0;
+    if (screen !== "board" && screen !== "item") state.boardScroll = 0;
+    if (screen !== "item") state.itemScroll = 0;
     if (screen !== "system") state.systemScroll = 0;
     if (screen !== "menu") state.menuScroll = 0;
     writeHash(true);
@@ -2521,6 +3449,9 @@
   }
 
   function backTarget() {
+    if (state.screen === "item") {
+      return { screen: "board", boardId: state.boardId };
+    }
     if (state.screen === "style" || state.screen === "board") {
       return { screen: "menu", boardId: null };
     }
@@ -2531,11 +3462,15 @@
   }
 
   function performBackNav(screen, boardId) {
-    if (state.screen === "style") rememberStyleScroll();
+    if (state.screen === "style" || state.screen === "item") rememberStyleScroll();
     state.picker = null;
     state.dialog = null;
     state.screen = screen;
     state.boardId = boardId || null;
+    if (screen !== "item") {
+      state.itemKey = null;
+      state.itemScroll = 0;
+    }
     if (screen !== "style") state.styleScroll = 0;
     if (screen !== "system") state.systemScroll = 0;
     if (screen !== "menu") state.menuScroll = 0;
@@ -2658,6 +3593,12 @@
       });
       return;
     }
+    if (state.screen === "item") {
+      leaveItem(function () {
+        performBackNav(target.screen, target.boardId);
+      });
+      return;
+    }
     if (state.screen === "board") {
       leaveBoard(function () {
         performBackNav(target.screen, target.boardId);
@@ -2682,6 +3623,26 @@
     if (key === "boardTitle") {
       state.dialog = "board-title";
       renderDialog();
+      return;
+    }
+    if (key === "itemName") {
+      state.dialog = "item-name";
+      renderDialog();
+      return;
+    }
+    if (key === "itemSubtitle") {
+      state.dialog = "item-subtitle";
+      renderDialog();
+      return;
+    }
+    if (key === "itemDescription") {
+      state.dialog = "item-description";
+      renderDialog();
+      return;
+    }
+    if (key === "itemImage") {
+      var photo = document.getElementById("item-photo");
+      if (photo) photo.click();
       return;
     }
     if (spec.kind === "zeroOne") {
@@ -2727,6 +3688,12 @@
     }
     spec.set(id);
     state.picker = null;
+    if (state.screen === "item") {
+      rememberStyleScroll();
+      applyTheme();
+      renderAll();
+      return;
+    }
     if (state.screen !== "board") state.sheetDirty = true;
     else if (
       pickKey === "encoreStyle" ||
@@ -3154,6 +4121,28 @@
   }
 
   function confirmChoice(val, quiet) {
+    if (state.screen === "item") {
+      if (val === "yes") {
+        state.dialog = null;
+        renderDialog();
+        beginItemSave();
+        return;
+      }
+      if (val === "no") {
+        discardItemDraft();
+        state.dialog = null;
+        var nextItemNo = state.pendingLeave;
+        state.pendingLeave = null;
+        state.confirmLeave = !!nextItemNo;
+        if (nextItemNo) nextItemNo();
+        else renderAll();
+        return;
+      }
+      state.dialog = null;
+      state.pendingLeave = null;
+      renderDialog();
+      return;
+    }
     if (val === "yes") {
       var onBoard = state.screen === "board" && state.boardDraft;
       var boardPrev = null;
@@ -4138,6 +5127,13 @@
     if (state.screen === "system") hash = "#/system";
     else if (state.screen === "menu") hash = "#/menu";
     else if (state.screen === "style") hash = "#/menu/style";
+    else if (state.screen === "item") {
+      hash =
+        "#/menu/board/" +
+        state.boardId +
+        "/item/" +
+        encodeURIComponent(String(state.itemKey || "new"));
+    }
     else if (state.screen === "board") hash = "#/menu/board/" + state.boardId;
     var href = location.pathname + location.search + hash;
     if (location.hash !== hash) {
@@ -4165,8 +5161,14 @@
       return { screen: "system", boardId: null };
     } else if (parts[0] === "menu" && parts[1] === "style") {
       return { screen: "style", boardId: null };
+    } else if (parts[0] === "menu" && parts[1] === "board" && parts[3] === "item") {
+      return {
+        screen: "item",
+        boardId: parts[2] || "1",
+        itemKey: decodeURIComponent(parts[4] || "new"),
+      };
     } else if (parts[0] === "menu" && parts[1] === "board") {
-      return { screen: "board", boardId: parts[2] || "1" };
+      return { screen: "board", boardId: parts[2] || "1", itemKey: null };
     } else if (parts[0] === "menu") {
       return { screen: "menu", boardId: null };
     } else {
@@ -4261,6 +5263,7 @@
     state.dialog = null;
     state.screen = target.screen;
     state.boardId = target.boardId;
+    state.itemKey = target.itemKey || null;
     applyQueryParams();
   }
 
@@ -4268,6 +5271,7 @@
     var target = parseScreenFromHash();
     var prevScreen = state.screen;
     var prevBoard = state.boardId;
+    var prevItem = state.itemKey;
     if (state.confirmLeave) {
       state.confirmLeave = false;
       readHash();
@@ -4321,10 +5325,37 @@
       // When "Confirm save?" is No, allow the nav; draft change stays until
       // reload (internal back paths still auto-persist via leaveSystem).
     }
+    var leavingDirtyItem =
+      prevScreen === "item" &&
+      itemDirty() &&
+      (target.screen !== "item" ||
+        String(target.itemKey || "") !== String(state.itemKey || "") ||
+        (target.boardId || null) !== (prevBoard || null));
+    if (leavingDirtyItem) {
+      state.picker = null;
+      var itemHash =
+        "#/menu/board/" +
+        prevBoard +
+        "/item/" +
+        encodeURIComponent(String(state.itemKey || "new"));
+      if (location.hash !== itemHash) {
+        history.replaceState(null, "", itemHash);
+      }
+      state.pendingLeave = function () {
+        history.back();
+      };
+      if (confirmSaveOff()) {
+        beginItemSave();
+        return;
+      }
+      state.dialog = "confirm";
+      renderAll();
+      return;
+    }
     var leavingDirtyBoard =
       prevScreen === "board" &&
       (boardDirty() || styleDirty()) &&
-      (target.screen !== "board" ||
+      ((target.screen !== "board" && target.screen !== "item") ||
         (target.boardId || null) !== (prevBoard || null));
     if (leavingDirtyBoard) {
       state.picker = null;
@@ -4347,7 +5378,9 @@
     }
     readHash();
     var boardChanged = (target.boardId || null) !== (prevBoard || null);
-    if (target.screen !== prevScreen || boardChanged) {
+    var itemChanged =
+      String(target.itemKey || "") !== String(prevItem || "");
+    if (target.screen !== prevScreen || boardChanged || itemChanged) {
       renderAll();
     } else {
       // Same screen (hashchange/pop from our writeHash when entering Style,
@@ -4380,13 +5413,18 @@
       for (bi = 0; bi < payload.boards.length; bi++) {
         var pack = payload.boards[bi];
         var keepDirty =
-          state.screen === "board" &&
-          boardDirty() &&
+          ((state.screen === "board" && boardDirty()) ||
+            (state.screen === "item" && itemDirty())) &&
           state.boardDraft &&
           state.boardDraft.id === pack.id;
         if (!keepDirty) rememberBoardSnap(pack);
       }
-      if (state.screen === "board" && state.boardId && !boardDirty()) {
+      if (
+        (state.screen === "board" || state.screen === "item") &&
+        state.boardId &&
+        !boardDirty() &&
+        !(state.screen === "item" && itemDirty())
+      ) {
         var fresh = findBoard(resolveBoardId(state.boardId));
         if (fresh && fresh.id) {
           state.boardDraft = clone(fresh);
@@ -4698,8 +5736,57 @@
         state.pendingLeave = null;
         maybeAutoSave(true);
       }
-    } else if (act === "toast-add") {
+    } else if (act === "toast-add" || act === "toast-fill") {
       toast("Coming soon — add items from Toast.");
+    } else if (act === "item-add") {
+      openItemEditor("new");
+    } else if (act === "edit-item") {
+      openItemEditor(t.getAttribute("data-item"));
+    } else if (act === "item-add-tier") {
+      addItemTier();
+    } else if (act === "item-tier") {
+      state.itemTierIndex = parseInt(t.getAttribute("data-tier"), 10);
+      state.dialog = "item-tier";
+      renderDialog();
+    } else if (act === "item-field-cancel") {
+      state.dialog = null;
+      renderDialog();
+    } else if (act === "item-field-save") {
+      var field = document.getElementById("item-field-input");
+      var nextField = field ? String(field.value || "") : "";
+      if (state.dialog === "item-name") {
+        nextField = nextField.trim();
+        if (state.itemDraft && nextField) state.itemDraft.name = nextField;
+      } else if (state.dialog === "item-subtitle") {
+        if (state.itemDraft) state.itemDraft.subtitle = nextField.trim();
+      } else if (state.dialog === "item-description") {
+        if (state.itemDraft) state.itemDraft.description = nextField.trim();
+      } else if (state.dialog === "item-tier" && state.itemDraft) {
+        var ti = state.itemTierIndex;
+        if (!state.itemDraft.tiers[ti]) state.itemDraft.tiers[ti] = { tier: "", price: "" };
+        if (state.itemDraft.priceModel === "vb") {
+          state.itemDraft.tiers[ti].tier = nextField.replace(/\D/g, "").slice(0, 3);
+        } else {
+          state.itemDraft.tiers[ti].tier = nextField.trim().slice(0, 8);
+        }
+      }
+      state.dialog = null;
+      renderDialog();
+      refreshItemScreen();
+    } else if (act === "item-required-ok") {
+      state.dialog = null;
+      state.pendingLeave = null;
+      renderDialog();
+    } else if (act === "item-missing-keep" || act === "item-include-keep") {
+      state.dialog = null;
+      state.pendingLeave = null;
+      renderDialog();
+    } else if (act === "item-missing-go") {
+      state.dialog = null;
+      renderDialog();
+      continueItemSaveAfterMissing();
+    } else if (act === "item-include-go") {
+      persistItemWrite();
     } else if (act === "copy-hex") {
       copyHex(t.getAttribute("data-hex"));
     } else if (act === "reload-sheet") {

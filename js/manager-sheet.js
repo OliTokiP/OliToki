@@ -1563,12 +1563,31 @@
       var ih = rows[inv - 1] || [];
       var nameCol = headerIndex(ih, ["Item"]);
       if (nameCol < 0) nameCol = 0;
+      var price1Col = headerIndex(ih, ["Price 1", "Price"]);
+      var price2Col = headerIndex(ih, ["Price 2"]);
+      var price3Col = headerIndex(ih, ["Price 3"]);
+      var subCol = headerIndex(ih, ["Subtitle", "Item Subtitle"]);
+      var descCol = headerIndex(ih, ["Description"]);
+      var newCol = headerIndex(ih, ["New"]);
+      var imageCol = headerIndex(ih, ["Image"]);
+      var includeCol = headerIndex(ih, ["Include"]);
       var r;
       for (r = inv; r < rows.length; r++) {
         var name = cell(rows[r], nameCol);
         if (!name) continue;
         if (foldKey(name) === "item") continue;
-        items.push({ name: name, row: r + 1 });
+        items.push({
+          name: name,
+          row: r + 1,
+          price1: price1Col >= 0 ? cell(rows[r], price1Col) : "",
+          price2: price2Col >= 0 ? cell(rows[r], price2Col) : "",
+          price3: price3Col >= 0 ? cell(rows[r], price3Col) : "",
+          subtitle: subCol >= 0 ? cell(rows[r], subCol) : "",
+          description: descCol >= 0 ? cell(rows[r], descCol) : "",
+          isNew: parseYesNo(newCol >= 0 ? cell(rows[r], newCol) : "0", false),
+          image: imageCol >= 0 ? cell(rows[r], imageCol) : "",
+          include: parseYesNo(includeCol >= 0 ? cell(rows[r], includeCol) : "1", true),
+        });
       }
     } else if (kind === "announcements") {
       var ar = start + 2;
@@ -1753,7 +1772,7 @@
     }
   }
 
-  async function postManager(path, payload) {
+  async function postManager(path, payload, timeoutMs) {
     await detectProxy();
     var urls = [path];
     var via = apiUrl(path);
@@ -1779,7 +1798,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload || {}),
           },
-          WRITE_TIMEOUT_MS
+          timeoutMs || WRITE_TIMEOUT_MS
         );
         var j = {};
         try {
@@ -1820,6 +1839,12 @@
     return out;
   }
 
+  async function writeItem(payload) {
+    var out = await postManager("/api/manager/item", payload || {}, 60000);
+    if (!out.ok) console.warn("manager-sheet: item write failed", out.error);
+    return out;
+  }
+
   async function writeSystem(payload) {
     // Persists Require restart / System Font / Limit Heavy Filters /
     // Confirm Save / Refresh Timer / Debug Mode into the OliToki Menu Settings workbook.
@@ -1848,6 +1873,7 @@
     writeStyle: writeStyle,
     writeTheme: writeTheme,
     writeBoard: writeBoard,
+    writeItem: writeItem,
     writeSystem: writeSystem,
     styleGid: STYLE_GID,
   };

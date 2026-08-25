@@ -53,11 +53,12 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 | `#/menu` | Menu Settings index |
 | `#/menu/style` | Style and Theme |
 | `#/menu/board/1` … `/3` | Board editor (title, family portrait, presentation, descriptions, drag-reorder items) |
+| `#/menu/board/1/item/new` … `/item/0` | **Beta:** Create Item / Edit Item (Inventory fields + photo) |
 | `#/menu/board/4` | Announcements (title + permalink; schema differs) |
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 
-QA query extras on Style: `?pick=theme`, `?pick=background`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?encore=old`, `?theme=Halloween`, `?confirm=1`. **`?beta`** selects **Beta (Development) Copy** and gates unshipped Manager UI (Announcements editor). Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`. Splash overlay: `#/?tip=save` (home-hero shroud). Settings overlay: `#/system?tip=save` then Back to watch the stack box ease into splash.
+QA query extras on Style: `?pick=theme`, `?pick=background`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?encore=old`, `?theme=Halloween`, `?confirm=1`. **`?beta`** selects **Beta (Development) Copy** and gates unshipped Manager UI (Announcements editor, Item editor). Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`. Splash overlay: `#/?tip=save` (home-hero shroud). Settings overlay: `#/system?tip=save` then Back to watch the stack box ease into splash.
 
 ---
 
@@ -102,7 +103,9 @@ Preview (sticky under the header) is a **scaled crop of the live board**, not a 
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
-**Board editor (1–3):** hamburger handles drag-reorder Menu Items. Confirm-on-back Yes writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), **Include Descriptions?** (0/1), and — if the list moved — the **Inventory** block as whole rows in the new order (`POST /api/manager/board`). When Presentation Style is **Encore**, child rows appear for Spotlight Style, Spotlight Color, and Encore Background; those write the global Style **K3 / L3 / M3** cells (`POST /api/manager/style`) the same way as other dirty Style fields. When **Confirm save?** is No, those fields write on change; item reorder waits **3 seconds of idle** before the Inventory write (so a drag session is one API call). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item From Toast` / `New Theme`): plus stays left, label is centered on the bar. Toast add stays Coming Soon.
+**Board editor (1–3):** hamburger handles drag-reorder Menu Items. Confirm-on-back Yes writes **Menu Title**, **Family Portrait** (0/1), **Presentation Mode** (`slideshow` / `ken burns` / `encore`), **Include Descriptions?** (0/1), and — if the list moved — the **Inventory** block as whole rows in the new order (`POST /api/manager/board`). When Presentation Style is **Encore**, child rows appear for Spotlight Style, Spotlight Color, and Encore Background; those write the global Style **K3 / L3 / M3** cells (`POST /api/manager/style`) the same way as other dirty Style fields. When **Confirm save?** is No, those fields write on change; item reorder waits **3 seconds of idle** before the Inventory write (so a drag session is one API call). Permalink Yes saves those cells then opens the URL. Shared footer bar (`Add Item` / `New Theme`): plus stays left, label is centered on the bar. **Beta** (`?beta` or Beta catalog): tapping a Menu Item name opens **Edit Item**; **Add Item** opens **Create Item**. Items with Include off get a light red pill and `(!)` after the name. Non-beta keeps `Add Item From Toast` (Coming Soon) and names are not tappable.
+
+**Edit Item / Create Item (beta):** manager chrome (uniform rows, pickers, Confirm-on-back). Mini Display at the top slot shows the Menu Item as it will appear on the board (Item Name, Item Prices, Item Subtitle, Item Description when Include Descriptions is on, photo, New uses Highlight Special) and updates as fields change. Description taps open a larger textbox; the closed row truncates. Pricing Model is Fixed-Portion / Linear Tiered / Volume Bundling (max 3 tiers; Add Tier is its own row). New items default **Mark as new?** Yes and **Include in board?** No. Image taps the device photo picker (`POST /api/manager/item` uploads Drive + local `food-pics/` the same way as `uploader.html`). Fill from Toast stays Coming Soon. Back with missing Subtitle / Description / Image warns first; Include No warns that the row is saved but TVs will not show it until Include is Yes. Boards 1–3 pick the Inventory row up on the next sheet load.
 
 **Number pills (BG Scroll Speed / Presentation Speed):** read a validator in the Settings **header label** (same public CSV as themes). House style is the cute form already on Restaurant Copy:
 
@@ -126,7 +129,7 @@ Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and 
 | `js/manager-sheet.js` | Settings + Style and Theme + board tab read; Theme + Background write via `/api/manager/style`; board Settings via `/api/manager/board` |
 | `js/motion.js` + `css/motion.css` | Shared hero motion (live board + Style preview) |
 | `js/manager.js` | Router, draft/commit, preview; Yes writes Theme + Background or board Settings |
-| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board`, `POST /api/manager/settings` (Settings G = Debug Mode) |
+| `scripts/toki_server.py` | `/api/sheets/validations`, `POST /api/manager/fallback`, `POST /api/manager/style`, `POST /api/manager/board`, `POST /api/manager/item` (append or update Inventory + photo), `POST /api/manager/settings` (Settings G = Debug Mode) |
 | `data/manager-fallback.json` | Last Save snapshot (offline / Pages when the sheet is down) |
 
 Add a field: option list in `manager-data.js` → picker spec + `styleRows()` branch in `manager.js` → CSS only if the chrome changes. Sheet load maps **field names** into the draft. The UI does not send column indexes — Theme + Background use the server adapter (`Theme Selector` / A3, `BG Color` / B3, `BG Pattern` / C3, `BG Wallpaper` / D3). Number options should come from sheet dataValidation when present, not hard-coded spans.
@@ -164,6 +167,7 @@ Bespoke **save** cards (stack order matches the board menu: Board Saved on top, 
 | Board Confirm-on-back Yes (or an auto-save that wrote board fields) | Board Saved to Restaurant Settings |
 | Encore Spotlight / Color / Background wrote | Global Encore Style Settings updated |
 | Menu-item order wrote | Menu Items Order Saved. |
+| Item editor Confirm-on-back Yes (or auto-save) | Item Saved to Menu |
 
 Confirm save? No shows the Encore / Order cards immediately (Order after the 3s idle). Confirm save? Yes waits for Confirm-on-back, then stacks them under Board Saved.
 
@@ -175,6 +179,6 @@ When adding new post-choice explanations, prefer this stack over new toast varia
 
 - Writes for OliToki Menu Settings Data Source (A2) — intentionally never; TVs must not follow the Manager picker
 - Toast import, blur / blend / opacity (called out in the mockup as later)
-- **Item / image upload in this chrome** — first ship is a separate Suite URL [`uploader.html`](../uploader.html) (`POST /api/manager/item`). It fills every Inventory field (menu under Catalog; boards + Proteins / Sauces / Drinks / Veggies), writes the selected catalog, and stores the photo on Drive (plus a local `food-pics/` copy) so a new item can show on boards without a git push. Merge into the board editor later.
+- **Standalone** [`uploader.html`](../uploader.html) remains for Suite / operator use. **Beta Menu Manager** now hosts the same write (`POST /api/manager/item`) as Edit Item / Create Item on boards 1–3. Footer boxes (Proteins / Sauces / Drinks / Veggies) still use the Suite uploader.
 
 System Font (System Settings) applies to the Manager UI and the menu boards (`html[data-system-font]` + `css/system-font.css` + JS apply on the TV pages). The boards poll it live (watcher) regardless of Require restart. See also the board read path in `js/menu.js`.

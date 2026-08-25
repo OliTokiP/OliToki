@@ -2927,9 +2927,19 @@ class SheetsBackend:
         mime = str(meta.get("mimeType") or "application/octet-stream")
         return buf.getvalue(), mime
 
+    @staticmethod
+    def _a1_first_row(a1: str) -> int:
+        m = re.search(r"!\$?[A-Za-z]+\$?(\d+)", str(a1 or ""))
+        if m:
+            return int(m.group(1))
+        m = re.search(r"(\d+)", str(a1 or ""))
+        return int(m.group(1)) if m else 0
+
     def write_item(self, body: dict, sheet_id: str | None = None) -> dict:
-        """Append one Inventory row on a board or footer-box tab."""
+        """Append or update one Inventory row on a board or footer-box tab."""
         menu_id = str(body.get("menu") or body.get("menuId") or "").strip().lower()
+        if menu_id in ("1", "2", "3"):
+            menu_id = "board" + menu_id
         spec = _ITEM_MENUS_BY_ID.get(menu_id)
         if not spec:
             raise ValueError("unknown menu")
@@ -2937,7 +2947,7 @@ class SheetsBackend:
         if not name:
             raise ValueError("missing item name")
         sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
-        gid = spec["gid"]
+        gid = str(body.get("gid") or spec["gid"] or "").strip()
         title = self._tab_title_for_gid(sid, gid)
         safe_title = "'" + title.replace("'", "''") + "'"
         t0 = time.time()
@@ -2962,7 +2972,22 @@ class SheetsBackend:
                 cols[fold] = c
         kind = spec["kind"]
         width = max(len(headers), 9 if kind == "board" else 6)
-        row = [""] * width
+        target_row = None
+        raw_row = body.get("row") if "row" in body else body.get("rowIndex")
+        if raw_row not in (None, ""):
+            try:
+                n = int(raw_row)
+                if n >= data_start + 1:
+                    target_row = n
+            except (TypeError, ValueError):
+                target_row = None
+        if target_row:
+            existing = list(rows[target_row - 1] or []) if target_row - 1 < len(rows) else []
+            while len(existing) < width:
+                existing.append("")
+            row = existing
+        else:
+            row = [""] * width
 
         def put(value, *folds: str, default_col: int | None = None):
             if value is None:
@@ -3011,6 +3036,7 @@ class SheetsBackend:
                 image_cell = image_info["driveUrl"]
             elif image_info.get("filename"):
                 image_cell = image_info["filename"]
+        write_image = bool(raw_image) or ("image" in body)
         if kind == "board":
             put(name, "item", default_col=0)
             put(
@@ -3024,7 +3050,8 @@ class SheetsBackend:
             put(str(body.get("subtitle") or "").strip(), "subtitle", "itemsubtitle", default_col=4)
             put(str(body.get("description") or "").strip(), "description", default_col=5)
             put(_item_bool01(body.get("isNew") or body.get("new"), "0"), "new", default_col=6)
-            put(image_cell, "image", default_col=7)
+            if write_image:
+                put(image_cell, "image", default_col=7)
             put(_item_bool01(body.get("include"), "1"), "include", default_col=8)
         else:
             put(name, "item", default_col=0)
@@ -3037,28 +3064,54 @@ class SheetsBackend:
                 default_col=2,
             )
             put(_item_bool01(body.get("isNew") or body.get("new"), "0"), "new", default_col=3)
-            put(image_cell, "image", default_col=4)
+            if write_image:
+                put(image_cell, "image", default_col=4)
             put(_item_bool01(body.get("include"), "1"), "include", default_col=5)
-        append_range = f"{safe_title}!A{data_start + 1}"
-        with self._api_lock:
-            updated = (
-                self.sheets.spreadsheets()
-                .values()
-                .append(
-                    spreadsheetId=sid,
-                    range=append_range,
-                    valueInputOption="USER_ENTERED",
-                    insertDataOption="INSERT_ROWS",
-                    body={"values": [row]},
+        if not image_cell:
+            img_idx = cols.get("image")
+            if img_idx is not None and img_idx < len(row):
+                image_cell = str(row[img_idx] or "").strip()
+        if target_row:
+            end_col = self._col_letters(max(len(row) - 1, 0))
+            wrote_range = f"{safe_title}!A{target_row}:{end_col}{target_row}"
+            with self._api_lock:
+                updated = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .update(
+                        spreadsheetId=sid,
+                        range=f"{safe_title}!A{target_row}",
+                        valueInputOption="USER_ENTERED",
+                        body={"values": [row]},
+                    )
+                    .execute()
                 )
-                .execute()
-            )
+            wrote_range = str(updated.get("updatedRange") or wrote_range)
+            excel_row = target_row
+            action = "update"
+        else:
+            append_range = f"{safe_title}!A{data_start + 1}"
+            with self._api_lock:
+                updated = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .append(
+                        spreadsheetId=sid,
+                        range=append_range,
+                        valueInputOption="USER_ENTERED",
+                        insertDataOption="INSERT_ROWS",
+                        body={"values": [row]},
+                    )
+                    .execute()
+                )
+            updates = updated.get("updates") or updated
+            wrote_range = str(updates.get("updatedRange") or "")
+            excel_row = self._a1_first_row(wrote_range) or (data_start + 1)
+            action = "append"
         _flush_data_caches()
-        updates = updated.get("updates") or updated
-        wrote_range = str(updates.get("updatedRange") or "")
         _log(
             f"item write {source_name or sid} menu={menu_id} gid={gid} "
-            f"item={name!r} range={wrote_range} "
+            f"item={name!r} {action} row={excel_row} range={wrote_range} "
             f"drive={bool(image_info.get('driveId'))} ({time.time() - t0:.2f}s)"
         )
         return {
@@ -3068,7 +3121,8 @@ class SheetsBackend:
             "gid": gid,
             "tab": title,
             "item": name,
-            "row": row,
+            "row": excel_row,
+            "action": action,
             "range": wrote_range,
             "sheetId": sid,
             "sourceName": source_name,
@@ -3574,6 +3628,7 @@ def make_handler(
                     {
                         "ok": True,
                         "sheetsApi": backend is not None,
+                        "itemUpdate": True,
                         "catalogSheetId": True,
                         "sheetId": backend.sheet_id if backend else None,
                         "dataSource": (live or {}).get("dataSource"),

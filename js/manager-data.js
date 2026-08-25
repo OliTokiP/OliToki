@@ -102,6 +102,12 @@
     { id: "no", label: "No" },
   ];
 
+  var PRICE_MODELS = [
+    { id: "fixed", label: "Fixed-Portion Pricing" },
+    { id: "ltp", label: "Linear Tiered Pricing" },
+    { id: "vb", label: "Volume Bundling" },
+  ];
+
   var REFRESH_TIMERS = [
     { id: "30 seconds", label: "30 seconds" },
     { id: "1 minute", label: "1 minute" },
@@ -126,7 +132,6 @@
   var COMING_SOON_FEATURES = [
     "Toast Imports",
     "Live Price Updates",
-    "Image Uploader",
     "Sort by popularity",
     "… and more!",
   ];
@@ -217,6 +222,7 @@
     encoreSpotColors: ENCORE_SPOT_COLORS,
     fonts: FONTS,
     yesNo: YES_NO,
+    priceModels: PRICE_MODELS,
     refreshTimers: REFRESH_TIMERS,
     zeroOne: ZERO_ONE,
     boards: BOARDS,
