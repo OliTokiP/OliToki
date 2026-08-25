@@ -3012,6 +3012,27 @@
     );
   }
 
+  /**
+   * Encore's visible color is the Family Portrait plate, not free #galaxy
+   * (encore-scaffold-bg hides the wallpaper layers). Soft refresh reuses
+   * that node, so Style M must retint galaxy AND every .family-portrait-bg-plate.
+   */
+  function syncEncoreBackgroundPaint() {
+    const hex = encoreBackgroundHex();
+    try {
+      document.documentElement.style.setProperty("--encore-bg", hex);
+      if (document.body) document.body.style.setProperty("--encore-bg", hex);
+    } catch (e) {
+      /* ignore */
+    }
+    const galaxy = document.getElementById("galaxy") || els.galaxy;
+    if (galaxy) galaxy.style.backgroundColor = hex;
+    const plates = document.querySelectorAll(".family-portrait-bg-plate");
+    for (let i = 0; i < plates.length; i++) {
+      plates[i].style.backgroundColor = hex;
+    }
+  }
+
   let _encoreSolidBg = false;
   let _encoreBgFadeTimer = null;
 
@@ -3087,7 +3108,10 @@
     opts = opts || {};
     const want = !!on;
     const instant = !!opts.instant;
-    if (_encoreSolidBg === want && !instant) return;
+    if (_encoreSolidBg === want && !instant) {
+      if (want) syncEncoreBackgroundPaint();
+      return;
+    }
     _encoreSolidBg = want;
 
     if (_encoreBgFadeTimer) {
@@ -3122,7 +3146,7 @@
 
     if (galaxy) {
       if (want) {
-        galaxy.style.backgroundColor = encoreBackgroundHex();
+        syncEncoreBackgroundPaint();
         galaxy.classList.remove("is-solid");
         galaxy.classList.toggle("has-image", !!config.bgImage);
       } else {
@@ -3412,6 +3436,7 @@
    */
   async function maybeApplyImageAverageAsPlate(displayPath) {
     if (!displayPath) return;
+    if (_encoreSolidBg || isEncoreSegmentNow()) return;
     const opacity01 = bgImageOpacityPeak();
     let effBlend = parseBgBlendMode(config.bgBlendMode);
     if (isPreviewWall()) effBlend = "normal";
@@ -3902,8 +3927,13 @@
       document.body.classList.remove("encore-solid-bg");
     }
 
-    // Color plate always under the image
-    galaxy.style.backgroundColor = plate;
+    // Color plate always under the image. Encore also retints the portrait
+    // plate — that is what the hole actually shows after scaffold pin.
+    if (_encoreSolidBg) {
+      syncEncoreBackgroundPaint();
+    } else {
+      galaxy.style.backgroundColor = plate;
+    }
     galaxy.classList.toggle("has-image", !!imagePath);
     galaxy.classList.toggle("is-solid", !imagePath);
 
@@ -4001,7 +4031,7 @@
     // If wallpaper + 100% + Normal (the only case we override), compute the
     // full PNG average color once and set it as the galaxy plate. This is the
     // exact condition requested; the work is async and only on image load.
-    if (imagePath) {
+    if (imagePath && !_encoreSolidBg) {
       maybeApplyImageAverageAsPlate(imagePath);
     }
 
@@ -5117,6 +5147,14 @@
         config.secondaryColor ||
         "#ffffff",
     };
+    try {
+      document.documentElement.style.setProperty(
+        "--encore-bg",
+        encoreBackgroundHex()
+      );
+    } catch (e) {
+      /* ignore */
+    }
 
     if (parsed.proteinBox) {
       proteinBox = {
@@ -11954,6 +11992,9 @@
       els.familyPortrait &&
       els.familyPortrait.children.length
     ) {
+      if (isEncoreSegmentNow() || _encoreSolidBg) {
+        syncEncoreBackgroundPaint();
+      }
       return; // reuse DOM + decoded bitmaps (critical for Encore multi-item casts)
     }
     renderFamilyPortrait(portraitItems || []);
@@ -15583,10 +15624,6 @@
     renderList();
     renderFooterBoxes();
     applyStageBackground();
-    if (_encoreSolidBg) {
-      const g = document.getElementById("galaxy") || els.galaxy;
-      if (g) g.style.backgroundColor = encoreBackgroundHex();
-    }
     applyBgPattern();
     if (config.bgImage) startGalaxyScroll();
     const maxIdx =
@@ -15595,6 +15632,9 @@
         : Math.max(0, items.length - 1);
     const idx = Number.isFinite(prevIndex) ? prevIndex : 0;
     setActive(Math.min(idx, maxIdx), true);
+    if (_encoreSolidBg || isEncoreSegmentNow()) {
+      syncEncoreBackgroundPaint();
+    }
     if (!pause) {
       startSlideshow();
       if (isDrinks) startAnnouncementSlideshow();

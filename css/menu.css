@@ -816,7 +816,7 @@ body.board-drinks #family-portrait-stage.encore-veil-detached .family-portrait-r
   position: absolute;
   inset: 0;
   z-index: 0;
-  background-color: #000;
+  background-color: var(--encore-bg, #000);
 }
 
 /* Match .galaxy-layer cover (static — no pan; scroll overridden in Encore).
