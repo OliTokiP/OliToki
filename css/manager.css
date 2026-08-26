@@ -806,14 +806,60 @@ html.is-item-dragging * {
 }
 
 .row-slider {
-  gap: 10px;
+  gap: 6px;
+}
+
+.image-slider-hit {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 0;
 }
 
 .image-slider {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  height: 32px;
+  height: 48px;
   margin: 0;
+  background: transparent;
   accent-color: var(--main);
+  touch-action: pan-x;
+  cursor: pointer;
+}
+
+.image-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--main) 22%, var(--secondary));
+}
+
+.image-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  margin-top: -15px;
+  border-radius: 50%;
+  background: var(--main);
+  border: 2px solid var(--secondary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.image-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--main) 22%, var(--secondary));
+}
+
+.image-slider::-moz-range-thumb {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--secondary);
+  border-radius: 50%;
+  background: var(--main);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
 }
 
 .row-image-help {
@@ -2095,6 +2141,120 @@ html.is-item-dragging * {
   text-align: center;
   font-size: 1.15rem;
   font-weight: 700;
+}
+
+.dialog-card.tutorial-card {
+  max-width: 340px;
+  padding: 12px 12px 10px;
+  border: 1.5px solid var(--main);
+}
+
+.dialog-card.tutorial-card h2.tutorial-title {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.tutorial-video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tutorial-video-wrap video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.tutorial-pages {
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.tutorial-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.tutorial-page {
+  box-sizing: border-box;
+  flex: 0 0 100%;
+  width: 100%;
+  min-height: 9.5rem;
+  padding: 14px 6px 4px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.tutorial-page ul {
+  margin: 0;
+  padding: 0 0 0 1.15em;
+  text-align: left;
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.tutorial-page li + li {
+  margin-top: 0.35em;
+}
+
+.tutorial-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.tutorial-btn {
+  flex: 1 1 0;
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--main) 18%, var(--secondary));
+  color: var(--main);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.tutorial-btn:active {
+  filter: brightness(0.94);
+}
+
+.tutorial-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  min-height: 18px;
+}
+
+.tutorial-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--main) 22%, var(--secondary));
+}
+
+.tutorial-dot.is-on {
+  background: var(--main);
 }
 
 .dialog-actions {

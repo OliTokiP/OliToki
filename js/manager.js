@@ -39,6 +39,34 @@
     shadow: "assets/stickers/Sticker-Shadow-sm.webp",
   };
 
+  var IMAGE_TUTORIAL_VIDEO = "assets/tutorials/iphone_longpress_tutorial.mp4";
+  var IMAGE_TUTORIAL_SLIDES = [
+    {
+      title: "How to remove background on iOS",
+      lines: [
+        "Long-press on the subject",
+        "Tap Share... > Save Image",
+        "Upload the new image",
+      ],
+    },
+    {
+      title: "Tips for getting the perfect shot",
+      lines: [
+        "Take photo in a well lit area",
+        "Use a neutral background",
+        "Capture entire plate in frame",
+      ],
+    },
+    {
+      title: "Tips for multiple Subjects",
+      lines: [
+        "iOS can only isolate one subject at a time",
+        "Create multiple isolated images",
+        "They can be combined later in the editor",
+      ],
+    },
+  ];
+
   var state = {
     screen: "home",
     boardId: null,
@@ -78,6 +106,9 @@
     imageCommitted: null,
     imageScroll: 0,
     pendingImageDraft: null,
+    pendingImageOpts: null,
+    imagePickFrom: "item",
+    imageTutorialPage: 0,
     itemDragging: false,
     confirmLeave: false,
     persistInFlight: false,
@@ -1699,7 +1730,7 @@
       placeholder: "Upload New Image",
     });
     html +=
-      '<input id="item-photo" type="file" accept="image/*,.heic,.webp" hidden>';
+      '<input id="item-photo" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif" hidden>';
     return html;
   }
 
@@ -1754,9 +1785,12 @@
       inputs[i].addEventListener("blur", onItemPriceBlur);
     }
     var file = document.getElementById("item-photo");
-    if (file && !file._tokiBound) {
-      file._tokiBound = true;
-      file.addEventListener("change", onItemPhoto);
+    if (file) {
+      configurePhotoInput(file);
+      if (!file._tokiBound) {
+        file._tokiBound = true;
+        file.addEventListener("change", onItemPhoto);
+      }
     }
     var photos = root.querySelectorAll(".item-mini-photo img");
     var p;
@@ -1924,6 +1958,7 @@
       "</button></div>" +
       '<div class="row row-slider">' +
       '<span class="row-label">Image Size</span>' +
+      '<div class="image-slider-hit">' +
       '<input class="image-slider" type="range" min="' +
       (M.SIZE_MIN || 70) +
       '" max="' +
@@ -1931,9 +1966,10 @@
       '" step="1" value="' +
       escapeHtml(String(d.scale)) +
       '" data-image-field="scale" aria-label="Image Size">' +
-      "</div>" +
+      "</div></div>" +
       '<div class="row row-slider">' +
       '<span class="row-label">X Position</span>' +
+      '<div class="image-slider-hit">' +
       '<input class="image-slider" type="range" min="' +
       (M.X_MIN || -240) +
       '" max="' +
@@ -1941,9 +1977,10 @@
       '" step="2" value="' +
       escapeHtml(String(d.x)) +
       '" data-image-field="x" aria-label="X Position">' +
-      "</div>" +
+      "</div></div>" +
       '<div class="row row-slider">' +
       '<span class="row-label">Y Position</span>' +
+      '<div class="image-slider-hit">' +
       '<input class="image-slider" type="range" min="' +
       (M.Y_MIN || -160) +
       '" max="' +
@@ -1951,12 +1988,12 @@
       '" step="2" value="' +
       escapeHtml(String(d.y)) +
       '" data-image-field="y" aria-label="Y Position">' +
-      "</div>" +
+      "</div></div>" +
       '<div class="row row-image-help">' +
       '<span class="row-label">Instructions</span>' +
       '<p class="row-help">Use the sliders to adjust the size and position of the item. The item should be centered and extend just beyond the boundaries of the red shape.</p>' +
       "</div>" +
-      '<input id="image-photo" type="file" accept="image/*,.heic,.webp" hidden>'
+      '<input id="image-photo" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif" hidden>'
     );
   }
 
@@ -1993,9 +2030,12 @@
       sliders[i].addEventListener("input", onImageSlider);
     }
     var file = document.getElementById("image-photo");
-    if (file && !file._tokiBound) {
-      file._tokiBound = true;
-      file.addEventListener("change", onImagePhoto);
+    if (file) {
+      configurePhotoInput(file);
+      if (!file._tokiBound) {
+        file._tokiBound = true;
+        file.addEventListener("change", onImagePhoto);
+      }
     }
     var img = root.querySelector(".image-mini-src");
     if (img && !img.getAttribute("data-fb")) {
@@ -2268,16 +2308,173 @@
     renderDialog();
   }
 
-  function showImageHowTooltip() {
-    showTooltip({
-      title: "Remove the background",
-      lines: [
-        "Cut the food out before you upload so the Plate stays transparent.",
-        "iPhone: Photos → Edit, or a Remove Background shortcut.",
-        "Android: Google Photos / a cutout app.",
-        "Save as PNG or WebP with transparency, then upload here.",
-      ],
+  function isMobileDevice() {
+    var ua = navigator.userAgent || "";
+    if (/iPhone|iPod|Android.+Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+      return true;
+    }
+    if (/iPad/i.test(ua)) return true;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
+
+  function configurePhotoInput(input) {
+    if (!input) return;
+    input.removeAttribute("capture");
+    if (isMobileDevice()) {
+      // No Camera: iOS hides Take Photo when `multiple` is set; JPEG-less
+      // accept keeps camera apps from being the obvious pick.
+      input.setAttribute(
+        "accept",
+        "image/png,image/webp,image/heic,image/heif,.png,.webp,.heic,.heif"
+      );
+      input.multiple = true;
+    } else {
+      input.setAttribute(
+        "accept",
+        "image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif"
+      );
+      input.multiple = false;
+    }
+  }
+
+  function imageTutorialHtml() {
+    var pages = IMAGE_TUTORIAL_SLIDES.map(function (slide, i) {
+      var lis = slide.lines
+        .map(function (line) {
+          return "<li>" + escapeHtml(line) + "</li>";
+        })
+        .join("");
+      var actions =
+        i === IMAGE_TUTORIAL_SLIDES.length - 1
+          ? '<div class="tutorial-actions">' +
+            '<button class="tutorial-btn" type="button" data-act="image-tutorial-cancel">Cancel</button>' +
+            '<button class="tutorial-btn" type="button" data-act="image-tutorial-upload">Upload Image</button>' +
+            "</div>"
+          : "";
+      return (
+        '<div class="tutorial-page" data-page="' +
+        i +
+        '"><ul>' +
+        lis +
+        "</ul>" +
+        actions +
+        "</div>"
+      );
+    }).join("");
+    var dots = IMAGE_TUTORIAL_SLIDES.map(function (_slide, i) {
+      return (
+        '<button class="tutorial-dot' +
+        (i === 0 ? " is-on" : "") +
+        '" type="button" data-act="image-tutorial-page" data-page="' +
+        i +
+        '" aria-label="Tutorial page ' +
+        (i + 1) +
+        '"></button>'
+      );
+    }).join("");
+    return (
+      '<div class="dialog-card tutorial-card" role="dialog" aria-labelledby="tutorial-title">' +
+      '<h2 id="tutorial-title" class="tutorial-title">' +
+      escapeHtml(IMAGE_TUTORIAL_SLIDES[0].title) +
+      "</h2>" +
+      '<div class="tutorial-video-wrap">' +
+      "<video id=\"tutorial-video\" src=\"" +
+      IMAGE_TUTORIAL_VIDEO +
+      '" autoplay muted loop playsinline webkit-playsinline disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback noplaybackrate" tabindex="-1"></video>' +
+      "</div>" +
+      '<div class="tutorial-pages" id="tutorial-pages">' +
+      pages +
+      "</div>" +
+      '<div class="tutorial-dots">' +
+      dots +
+      "</div></div>"
+    );
+  }
+
+  function openImageTutorial(from) {
+    state.imagePickFrom = from || (state.screen === "image" ? "image" : "item");
+    state.imageTutorialPage = 0;
+    state.dialog = "image-tutorial";
+    renderDialog();
+  }
+
+  function closeImageTutorial() {
+    var video = document.getElementById("tutorial-video");
+    if (video) {
+      try {
+        video.pause();
+      } catch (err) {}
+    }
+    state.dialog = null;
+    state.imageTutorialPage = 0;
+    renderDialog();
+  }
+
+  function scrollTutorialPage(page) {
+    var scroller = document.getElementById("tutorial-pages");
+    var n = IMAGE_TUTORIAL_SLIDES.length;
+    if (!scroller || !n) return;
+    if (page < 0) page = 0;
+    if (page > n - 1) page = n - 1;
+    scroller.scrollTo({
+      left: page * scroller.clientWidth,
+      behavior: "smooth",
     });
+    syncTutorialPage(page);
+  }
+
+  function syncTutorialPage(page) {
+    var n = IMAGE_TUTORIAL_SLIDES.length;
+    if (page < 0) page = 0;
+    if (page > n - 1) page = n - 1;
+    state.imageTutorialPage = page;
+    var title = document.getElementById("tutorial-title");
+    if (title && IMAGE_TUTORIAL_SLIDES[page]) {
+      title.textContent = IMAGE_TUTORIAL_SLIDES[page].title;
+    }
+    var dots = els.dialog ? els.dialog.querySelectorAll(".tutorial-dot") : [];
+    var i;
+    for (i = 0; i < dots.length; i++) {
+      dots[i].classList.toggle("is-on", i === page);
+    }
+  }
+
+  function bindImageTutorial() {
+    var scroller = document.getElementById("tutorial-pages");
+    var video = document.getElementById("tutorial-video");
+    if (video) {
+      video.controls = false;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      video.disablePictureInPicture = true;
+      video.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+      });
+      var play = video.play();
+      if (play && play.catch) play.catch(function () {});
+    }
+    if (!scroller) return;
+    scroller.addEventListener(
+      "scroll",
+      function () {
+        var w = scroller.clientWidth || 1;
+        syncTutorialPage(Math.round(scroller.scrollLeft / w));
+      },
+      { passive: true }
+    );
+    syncTutorialPage(0);
+  }
+
+  function pickImageAfterTutorial() {
+    var from = state.imagePickFrom || (state.screen === "image" ? "image" : "item");
+    closeImageTutorial();
+    var id = from === "image" ? "image-photo" : "item-photo";
+    var input = document.getElementById(id);
+    if (input) input.click();
   }
 
   function addItemTier() {
@@ -3495,6 +3692,8 @@
         '<button class="btn-primary" type="button" data-act="image-opaque-ok">OK</button>' +
         '<button class="btn-primary" type="button" data-act="image-opaque-cancel">Cancel</button>' +
         "</div></div>";
+    } else if (state.dialog === "image-tutorial") {
+      els.dialog.innerHTML = imageTutorialHtml();
     } else if (state.dialog === "item-delete") {
       var delItems = (state.boardDraft && state.boardDraft.items) || [];
       var delIdx = state.pendingDeleteIndex;
@@ -3515,6 +3714,7 @@
         "</div></div>";
     }
     applyTheme();
+    if (state.dialog === "image-tutorial") bindImageTutorial();
   }
 
   function toast(msg) {
@@ -4385,6 +4585,10 @@
         cancelOpaqueImage();
         return;
       }
+      if (state.dialog === "image-tutorial") {
+        closeImageTutorial();
+        return;
+      }
       state.dialog = null;
       renderDialog();
       return;
@@ -4457,8 +4661,7 @@
         openImageEditor();
         return;
       }
-      var photo = document.getElementById("item-photo");
-      if (photo) photo.click();
+      openImageTutorial("item");
       return;
     }
     if (spec.kind === "zeroOne") {
@@ -6899,10 +7102,16 @@
       refreshBoardRows();
     } else if (act === "image-how") {
       e.preventDefault();
-      showImageHowTooltip();
+      openImageTutorial("image");
     } else if (act === "image-replace") {
-      var imagePhoto = document.getElementById("image-photo");
-      if (imagePhoto) imagePhoto.click();
+      openImageTutorial("image");
+    } else if (act === "image-tutorial-cancel") {
+      closeImageTutorial();
+    } else if (act === "image-tutorial-upload") {
+      pickImageAfterTutorial();
+    } else if (act === "image-tutorial-page") {
+      e.preventDefault();
+      scrollTutorialPage(parseInt(t.getAttribute("data-page"), 10) || 0);
     } else if (act === "image-opaque-ok") {
       continueOpaqueImage();
     } else if (act === "image-opaque-cancel") {
