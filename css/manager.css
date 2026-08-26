@@ -68,6 +68,7 @@ body {
   padding: 0;
   height: 100%;
   overflow: hidden;
+  overflow-x: hidden;
   overscroll-behavior: none;
   font-family: var(--font);
   font-size: calc(16px * var(--font-scale));
@@ -126,6 +127,7 @@ img {
   position: relative;
   width: 390px;
   height: 844px;
+  overflow: hidden;
 }
 
 .device {
@@ -147,14 +149,41 @@ img {
 }
 
 .device.is-native {
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  --device-w: 100vw;
+  width: 100%;
+  height: 100%;
+  --device-w: 100%;
   --top-slot-h: calc(var(--device-w) * 2 / 3);
   border-radius: 0;
   box-shadow: none;
-  transform: none !important;
+  /* Compact density uses transform:scale. Do not !important-none it. */
+  transform-origin: top left;
+}
+
+/* First paint for 100%-zoom phones (Chrome / Firefox iOS). 4/3 layout then
+   scale(0.75) matches Safari's compact aA density. JS refines on fitDevice. */
+html.is-phone-compact .studio {
+  padding: 0;
+  background: var(--main);
+}
+
+html.is-phone-compact .device-slot,
+html.is-phone-compact .device,
+html.is-phone-compact .device.is-native {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html.is-phone-compact .device,
+html.is-phone-compact .device.is-native {
+  width: calc(100vw * 4 / 3);
+  height: calc(100vh * 4 / 3);
+  height: calc(100dvh * 4 / 3);
+  --device-w: calc(100vw * 4 / 3);
+  transform: scale(0.75);
+  transform-origin: top left;
 }
 
 #app,
@@ -2494,8 +2523,9 @@ html.is-item-dragging * {
 }
 
 /* Native phone: fill the viewport, rely on safe-area instead of a tall fake island.
-   max-device-width catches Chrome/Firefox that use a wide layout viewport on a
-   phone (then auto-scale). Safari already matches max-width: 520px. */
+   max-device-width still matches when a phone's layout viewport is wider than
+   520 CSS px (Safari page zoom-out). Inline width/height/transform from
+   fitDevice() win when compact density is applied. */
 @media (max-width: 520px), (max-device-width: 520px) {
   .studio {
     padding: 0;
@@ -2505,11 +2535,16 @@ html.is-item-dragging * {
   .device-slot,
   .device,
   .device.is-native {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  html.is-phone-compact .device-slot {
     width: 100vw;
     height: 100vh;
     height: 100dvh;
-    border-radius: 0;
-    box-shadow: none;
   }
 }
 

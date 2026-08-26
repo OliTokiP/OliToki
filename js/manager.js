@@ -7218,11 +7218,13 @@
     }
   }
 
-  /* Chrome / Firefox on phones often pick a smaller CSS layout width than
-     Safari (browser zoom, text-size DPR, or a wide layout that is then
-     auto-scaled). Lock to the unzoomed screen CSS width so px-sized rows
-     match Safari. */
-  var viewportLock = { zoom: 1, width: 0 };
+  /* Safari on phones often lays out ~4/3 as many CSS pixels as the screen
+     (aA page zoom / a wider layout viewport), so 88px rows look compact.
+     Chrome and Firefox stay at width=device-width (375 on iPhone X), so the
+     same px chrome looks scaled up. Compact those 100% viewports to the
+     Safari density; leave an already-wide layout alone so Safari does not
+     shrink twice. */
+  var compactDensity = { scale: 1 };
 
   function deviceCssWidth() {
     var sw = window.screen && window.screen.width ? window.screen.width : 0;
@@ -7238,6 +7240,10 @@
     return landscape ? Math.max(sw, sh) : Math.min(sw, sh);
   }
 
+  function layoutCssWidth() {
+    return document.documentElement.clientWidth || window.innerWidth || 0;
+  }
+
   function isNativePhone() {
     var w = deviceCssWidth();
     if (w && w <= 520) return true;
@@ -7248,69 +7254,87 @@
     return false;
   }
 
-  function lockViewportScale() {
-    var meta = document.querySelector('meta[name="viewport"]');
-    var phone = isNativePhone();
-    var w = deviceCssWidth();
-    if (meta && phone && w && w <= 520) {
-      var next =
-        "width=" +
-        Math.round(w) +
-        ", initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no";
-      if (meta.getAttribute("content") !== next) meta.setAttribute("content", next);
-      viewportLock.width = w;
-    }
-    var html = document.documentElement;
-    if (!phone || !w || w > 520) {
-      if (viewportLock.zoom !== 1) {
-        html.style.zoom = "";
-        viewportLock.zoom = 1;
-      }
-      return;
-    }
-    var pinch = false;
+  function compactPhoneScale() {
+    if (!isNativePhone()) return 1;
     try {
-      pinch = !!(
+      if (
         window.visualViewport &&
         Math.abs(window.visualViewport.scale - 1) > 0.03
-      );
-    } catch (e3) {}
-    if (pinch) return;
-    var clientW = html.clientWidth || window.innerWidth || 0;
-    if (!clientW) return;
-    var comp = clientW / w;
-    if (comp > 0.98) {
-      if (viewportLock.zoom !== 1) {
-        html.style.zoom = "";
-        viewportLock.zoom = 1;
+      ) {
+        return compactDensity.scale || 1;
       }
-      return;
+    } catch (e3) {}
+    var lw = layoutCssWidth();
+    if (!lw) return 1;
+    var sw = deviceCssWidth();
+    var basis = sw && sw <= 520 ? sw : lw;
+    /* 4/3 matches the measured Safari-vs-Chrome screenshot ratio on iPhone X
+       (201px vs 268px rows). Skip when the layout is already that wide. */
+    var target = Math.round(basis * 4 / 3);
+    if (lw >= target * 0.97) return 1;
+    var s = lw / target;
+    if (s < 0.7) s = 0.7;
+    if (s > 1) s = 1;
+    return s;
+  }
+
+  function clearNativeCompact(device, slot) {
+    device.style.transform = "";
+    device.style.transformOrigin = "";
+    device.style.width = "";
+    device.style.height = "";
+    device.classList.remove("is-compact-density");
+    /* CSS .device.is-native uses --device-w: 100vw so a zoomed-out Safari
+       (layout wider than screen.width) keeps the top slot in layout pixels. */
+    device.style.removeProperty("--device-w");
+    if (slot) {
+      slot.style.width = "";
+      slot.style.height = "";
     }
-    if (comp < 0.7) comp = 0.7;
-    if (Math.abs(comp - viewportLock.zoom) < 0.005) return;
-    html.style.zoom = String(comp);
-    viewportLock.zoom = comp;
   }
 
   function fitDevice() {
-    lockViewportScale();
     var device = els.device;
     var slot = document.getElementById("device-slot");
     var native = isNativePhone();
     device.classList.toggle("is-native", native);
     if (native) {
-      device.style.transform = "";
-      var w = deviceCssWidth();
-      if (w && w <= 520) device.style.setProperty("--device-w", w + "px");
-      else device.style.removeProperty("--device-w");
-      if (slot) {
-        slot.style.width = "";
-        slot.style.height = "";
+      var scale = compactPhoneScale();
+      compactDensity.scale = scale;
+      var visW = layoutCssWidth();
+      var visH = window.innerHeight || visW;
+      try {
+        if (window.visualViewport && window.visualViewport.height) {
+          visH = window.visualViewport.height;
+        }
+      } catch (e4) {}
+      document.documentElement.classList.toggle("is-phone-compact", scale < 0.995);
+      if (scale < 0.995 && visW) {
+        var layoutW = visW / scale;
+        var layoutH = visH / scale;
+        device.style.transformOrigin = "top left";
+        device.style.transform = "scale(" + scale + ")";
+        device.style.width = layoutW + "px";
+        device.style.height = layoutH + "px";
+        device.style.setProperty("--device-w", layoutW + "px");
+        device.classList.add("is-compact-density");
+        if (slot) {
+          slot.style.width = visW + "px";
+          slot.style.height = visH + "px";
+          slot.style.overflow = "hidden";
+        }
+      } else {
+        clearNativeCompact(device, slot);
       }
       syncEncoreLayout();
       if (state.tooltipItems.length) layoutTooltipOverlay(false);
       return;
     }
+    compactDensity.scale = 1;
+    document.documentElement.classList.remove("is-phone-compact");
+    device.classList.remove("is-compact-density");
+    device.style.width = "";
+    device.style.height = "";
     device.style.removeProperty("--device-w");
     var pad = 32;
     var sx = (window.innerWidth - pad) / 390;

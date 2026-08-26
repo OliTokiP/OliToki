@@ -2,28 +2,18 @@
 <html lang="en" data-system-font="poppins">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" id="toki-viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <script>
-    /* Lock CSS pixels to the device's unzoomed screen width before first paint.
-       Safari already does this. Chrome / Firefox on phones often use a smaller
-       layout viewport (or a browser zoom / DPR scale) and then enlarge the page. */
+    /* Chrome / Firefox on iPhone keep layout = device-width (100% zoom), so
+       88px rows look huge. Safari is often already ~4/3 wider (aA zoom-out),
+       which is the compact look we want. Mark 100% phones before first paint
+       so they don't flash the large size. Leave an already-wide layout alone. */
     (function () {
-      var sw = screen.width || 0;
-      var sh = screen.height || 0;
-      if (!sw) return;
-      var landscape = false;
-      try { landscape = window.matchMedia("(orientation: landscape)").matches; } catch (e) {}
-      if (!landscape && window.innerWidth && window.innerHeight) {
-        landscape = window.innerWidth > window.innerHeight;
-      }
-      var w = landscape ? Math.max(sw, sh) : Math.min(sw, sh);
-      if (!(w > 0 && w <= 520)) return;
-      var m = document.getElementById("toki-viewport");
-      if (!m) return;
-      m.setAttribute(
-        "content",
-        "width=" + Math.round(w) + ", initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no"
-      );
+      var sw = Math.min(screen.width || 0, screen.height || 0);
+      var iw = window.innerWidth || 0;
+      if (!sw || sw > 520 || !iw || iw > 520) return;
+      if (iw > sw * 1.08) return;
+      document.documentElement.classList.add("is-phone-compact");
     })();
   </script>
   <meta name="theme-color" content="#26BBCB" />
@@ -35,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/motion.css?v=20260820veil12" />
-  <link rel="stylesheet" href="css/manager.css?v=20260826safari2" />
+  <link rel="stylesheet" href="css/manager.css?v=20260826safari3" />
 </head>
 <body>
   <div class="studio">
@@ -66,6 +56,6 @@
   <script src="js/menuimg.js?v=20260826menuimg4"></script>
   <script src="js/manager-data.js?v=20260825item1"></script>
   <script src="js/manager-sheet.js?v=20260825item1"></script>
-  <script src="js/manager.js?v=20260826safari2"></script>
+  <script src="js/manager.js?v=20260826safari3"></script>
 </body>
 </html>
