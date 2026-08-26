@@ -7,7 +7,7 @@
   <link rel="icon" href="assets/suite-icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/suite-icon.png" />
   <title>Tickets</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260819dot1" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260826navfix2" />
   <style>
     a.card {
       display: block;
@@ -20,22 +20,61 @@
       box-sizing: border-box;
       margin: .75rem 0 0;
     }
+    html.tickets-embed,
+    html.tickets-embed body {
+      height: 100%;
+    }
+    body.tickets-embed.suite-page {
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      max-width: none;
+      min-height: 100%;
+      height: 100%;
+    }
+    body.tickets-embed .suite-nav {
+      flex: 0 0 auto;
+      padding: 1.25rem 1.25rem .75rem;
+      margin: 0;
+      max-width: 36rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    body.tickets-embed #panel {
+      flex: 1 1 auto;
+      width: 100%;
+      border: 0;
+      min-height: 0;
+      background: var(--toki-bg);
+    }
   </style>
 </head>
 <body class="suite-page">
   <p class="suite-nav" id="nav">Suite · Deployer · Tickets · Menu Manager</p>
-  <h1>Tickets</h1>
-  <p class="sub">Tickets live on this Mac (Suite.app or Listener). GitHub Pages cannot write the vault — there is no second ticketer.</p>
-  <p class="tiny">On the laptop or Tailscale, Tickets is the Listener home: queues, search, and <b>New ticket</b>.</p>
-  <a class="card" id="open" href="http://127.0.0.1:18765/">Open Tickets on this Mac</a>
-  <script src="js/surfaces.js?v=20260823upload1"></script>
+  <div id="fallback">
+    <h1>Tickets</h1>
+    <p class="sub">Tickets live on this Mac (Suite.app or Listener). GitHub Pages cannot write the vault — there is no second ticketer.</p>
+    <p class="tiny">On the laptop or Tailscale, Tickets is the Listener home: queues, search, and <b>New ticket</b>.</p>
+    <a class="card" id="open" href="http://127.0.0.1:18765/">Open Tickets on this Mac</a>
+  </div>
+  <iframe id="panel" title="Tickets" hidden></iframe>
+  <script src="js/surfaces.js?v=20260826navfix2"></script>
   <script>
     (function () {
       var html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Tickets");
       if (html) document.getElementById("nav").innerHTML = html;
+      var live = /github\.io/i.test(location.host);
+      var panel = document.getElementById("panel");
+      var fallback = document.getElementById("fallback");
+      var src = window.tokiListenerPanelUrl && window.tokiListenerPanelUrl();
       var a = document.getElementById("open");
-      if (a && window.tokiGetTicketsUrl && !/github\.io/i.test(location.host)) {
-        a.href = window.tokiGetTicketsUrl();
+      if (a && src) a.href = src;
+      if (!live && panel && src) {
+        document.documentElement.classList.add("tickets-embed");
+        document.body.classList.add("tickets-embed");
+        panel.hidden = false;
+        panel.src = src;
+        if (fallback) fallback.hidden = true;
       }
     })();
   </script>

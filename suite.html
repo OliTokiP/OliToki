@@ -343,7 +343,7 @@
   <p class="tiny" id="hint"></p>
 
   <script src="js/env.js?v=20260822restart2"></script>
-  <script src="js/surfaces.js?v=20260826navfix"></script>
+  <script src="js/surfaces.js?v=20260826navfix2"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -849,33 +849,6 @@
     if (restartBtn) restartBtn.addEventListener("click", armRestart);
     if (restartCancel) restartCancel.addEventListener("click", cancelRestart);
     if (restartGo) restartGo.addEventListener("click", restartLocalServer);
-
-    // Enforce that inside-Suite links navigate in the current window (e.g. Suite app window)
-    // instead of spawning new Chrome windows. Outside links keep their target=_blank.
-    (function enforceSuiteNav() {
-      function isOutside(href) {
-        return !!(window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href));
-      }
-      function forceNavigate(a) {
-        var h = a.getAttribute("href");
-        if (!h) return false;
-        if (isOutside(h)) return false;
-        try { location.href = h; } catch (e) { location = h; }
-        return true;
-      }
-      function bind(container) {
-        if (!container) return;
-        container.addEventListener("click", function (e) {
-          var a = e.target && e.target.closest ? e.target.closest("a") : null;
-          if (a && forceNavigate(a)) {
-            e.preventDefault();
-          }
-        }, false);
-      }
-      bind(document.getElementById("nav"));
-      bind(document.getElementById("tools"));
-      bind(document.getElementById("table-wrap"));
-    })();
 
     refreshLive();
     refreshSys();

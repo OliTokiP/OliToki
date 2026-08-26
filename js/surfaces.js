@@ -56,13 +56,50 @@ window.tokiOpensOutsideSuite = function (href) {
   }
 };
 
+// Chrome --app (Suite.app) opens <a> clicks in a real Chrome window. Force
+// in-window navigation for the Suite bar, hub cards, and Open-a-copy table.
+(function tokiEnforceSuiteNav() {
+  if (window.__tokiSuiteNavBound) return;
+  window.__tokiSuiteNavBound = true;
+  document.addEventListener(
+    "click",
+    function (e) {
+      if (e.defaultPrevented) return;
+      if (e.button) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      var a = e.target && e.target.closest ? e.target.closest("a") : null;
+      if (!a) return;
+      if (a.getAttribute("download") != null) return;
+      var href = a.getAttribute("href");
+      if (!href || href.charAt(0) === "#") return;
+      if (/^(mailto:|tel:|javascript:)/i.test(href)) return;
+      var inBar =
+        (a.closest && a.closest(".suite-nav")) ||
+        (a.closest && a.closest("#tools")) ||
+        (a.closest && a.closest("#table-wrap"));
+      if (!inBar) return;
+      if (window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)) return;
+      e.preventDefault();
+      try {
+        location.href = href;
+      } catch (err) {
+        location = href;
+      }
+    },
+    true
+  );
+})();
+
 function isLiveHost() {
   try { return /github\.io/i.test(location.host); } catch (e) { return false; }
 }
 function tokiListenerHomeUrl() {
-  if (isLiveHost()) {
-    return "tickets.html";
-  }
+  // Same-origin Tickets page. Hopping Suite.app (:8765) to Listener (:18765)
+  // leaves Chrome --app and every later nav click opens a Chrome window.
+  return "tickets.html";
+}
+function tokiListenerPanelUrl() {
+  if (isLiveHost()) return "";
   try {
     var u = new URL(location.href);
     u.port = "18765";
@@ -75,6 +112,7 @@ function tokiListenerHomeUrl() {
   }
 }
 window.tokiGetTicketsUrl = tokiListenerHomeUrl;
+window.tokiListenerPanelUrl = tokiListenerPanelUrl;
 
 function tokiBustOperatorHref(href) {
   if (!href) return href;

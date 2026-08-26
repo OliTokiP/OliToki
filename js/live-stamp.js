@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "a6fa846",
-  "hashFull": "a6fa8461b8e2c1a7b51e641c749b3df1eef6c8ce",
-  "subject": "QA: 2026-08-26 Pasting images from mobile makes ticket unloggable! (pass 1)"
+  "hash": "a05a459",
+  "hashFull": "a05a459cdef082339c5f505015d0c2767ab4d75c",
+  "subject": "QA: 2026-08-26 Navigation opening in chrome windows (pass 2)"
 };
