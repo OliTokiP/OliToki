@@ -2,7 +2,30 @@
 <html lang="en" data-system-font="poppins">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" id="toki-viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no" />
+  <script>
+    /* Lock CSS pixels to the device's unzoomed screen width before first paint.
+       Safari already does this. Chrome / Firefox on phones often use a smaller
+       layout viewport (or a browser zoom / DPR scale) and then enlarge the page. */
+    (function () {
+      var sw = screen.width || 0;
+      var sh = screen.height || 0;
+      if (!sw) return;
+      var landscape = false;
+      try { landscape = window.matchMedia("(orientation: landscape)").matches; } catch (e) {}
+      if (!landscape && window.innerWidth && window.innerHeight) {
+        landscape = window.innerWidth > window.innerHeight;
+      }
+      var w = landscape ? Math.max(sw, sh) : Math.min(sw, sh);
+      if (!(w > 0 && w <= 520)) return;
+      var m = document.getElementById("toki-viewport");
+      if (!m) return;
+      m.setAttribute(
+        "content",
+        "width=" + Math.round(w) + ", initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no"
+      );
+    })();
+  </script>
   <meta name="theme-color" content="#26BBCB" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -12,7 +35,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/motion.css?v=20260820veil12" />
-  <link rel="stylesheet" href="css/manager.css?v=20260826safari1" />
+  <link rel="stylesheet" href="css/manager.css?v=20260826safari2" />
 </head>
 <body>
   <div class="studio">
@@ -43,6 +66,6 @@
   <script src="js/menuimg.js?v=20260826menuimg4"></script>
   <script src="js/manager-data.js?v=20260825item1"></script>
   <script src="js/manager-sheet.js?v=20260825item1"></script>
-  <script src="js/manager.js?v=20260826safari1"></script>
+  <script src="js/manager.js?v=20260826safari2"></script>
 </body>
 </html>

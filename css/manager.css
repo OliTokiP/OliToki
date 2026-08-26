@@ -74,8 +74,8 @@ body {
   background: var(--studio);
   color: var(--main);
   -webkit-font-smoothing: antialiased;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; /* suppress double-tap zoom */
 }
@@ -111,7 +111,9 @@ img {
 /* —— Studio / device —— */
 
 .studio {
+  min-height: 100vh;
   min-height: 100dvh;
+  height: 100vh;
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
@@ -146,6 +148,7 @@ img {
 
 .device.is-native {
   width: 100vw;
+  height: 100vh;
   height: 100dvh;
   --device-w: 100vw;
   --top-slot-h: calc(var(--device-w) * 2 / 3);
@@ -2490,8 +2493,10 @@ html.is-item-dragging * {
   }
 }
 
-/* Native phone: fill the viewport, rely on safe-area instead of a tall fake island. */
-@media (max-width: 520px) {
+/* Native phone: fill the viewport, rely on safe-area instead of a tall fake island.
+   max-device-width catches Chrome/Firefox that use a wide layout viewport on a
+   phone (then auto-scale). Safari already matches max-width: 520px. */
+@media (max-width: 520px), (max-device-width: 520px) {
   .studio {
     padding: 0;
     background: var(--main);
@@ -2501,6 +2506,7 @@ html.is-item-dragging * {
   .device,
   .device.is-native {
     width: 100vw;
+    height: 100vh;
     height: 100dvh;
     border-radius: 0;
     box-shadow: none;

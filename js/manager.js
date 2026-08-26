@@ -7218,13 +7218,91 @@
     }
   }
 
+  /* Chrome / Firefox on phones often pick a smaller CSS layout width than
+     Safari (browser zoom, text-size DPR, or a wide layout that is then
+     auto-scaled). Lock to the unzoomed screen CSS width so px-sized rows
+     match Safari. */
+  var viewportLock = { zoom: 1, width: 0 };
+
+  function deviceCssWidth() {
+    var sw = window.screen && window.screen.width ? window.screen.width : 0;
+    var sh = window.screen && window.screen.height ? window.screen.height : 0;
+    if (!sw) return window.innerWidth || 0;
+    var landscape = false;
+    try {
+      landscape = window.matchMedia("(orientation: landscape)").matches;
+    } catch (e1) {}
+    if (!landscape && window.innerWidth && window.innerHeight) {
+      landscape = window.innerWidth > window.innerHeight;
+    }
+    return landscape ? Math.max(sw, sh) : Math.min(sw, sh);
+  }
+
+  function isNativePhone() {
+    var w = deviceCssWidth();
+    if (w && w <= 520) return true;
+    try {
+      if (window.matchMedia("(max-width: 520px)").matches) return true;
+      if (window.matchMedia("(max-device-width: 520px)").matches) return true;
+    } catch (e2) {}
+    return false;
+  }
+
+  function lockViewportScale() {
+    var meta = document.querySelector('meta[name="viewport"]');
+    var phone = isNativePhone();
+    var w = deviceCssWidth();
+    if (meta && phone && w && w <= 520) {
+      var next =
+        "width=" +
+        Math.round(w) +
+        ", initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no";
+      if (meta.getAttribute("content") !== next) meta.setAttribute("content", next);
+      viewportLock.width = w;
+    }
+    var html = document.documentElement;
+    if (!phone || !w || w > 520) {
+      if (viewportLock.zoom !== 1) {
+        html.style.zoom = "";
+        viewportLock.zoom = 1;
+      }
+      return;
+    }
+    var pinch = false;
+    try {
+      pinch = !!(
+        window.visualViewport &&
+        Math.abs(window.visualViewport.scale - 1) > 0.03
+      );
+    } catch (e3) {}
+    if (pinch) return;
+    var clientW = html.clientWidth || window.innerWidth || 0;
+    if (!clientW) return;
+    var comp = clientW / w;
+    if (comp > 0.98) {
+      if (viewportLock.zoom !== 1) {
+        html.style.zoom = "";
+        viewportLock.zoom = 1;
+      }
+      return;
+    }
+    if (comp < 0.7) comp = 0.7;
+    if (Math.abs(comp - viewportLock.zoom) < 0.005) return;
+    html.style.zoom = String(comp);
+    viewportLock.zoom = comp;
+  }
+
   function fitDevice() {
+    lockViewportScale();
     var device = els.device;
     var slot = document.getElementById("device-slot");
-    var native = window.matchMedia("(max-width: 520px)").matches;
+    var native = isNativePhone();
     device.classList.toggle("is-native", native);
     if (native) {
       device.style.transform = "";
+      var w = deviceCssWidth();
+      if (w && w <= 520) device.style.setProperty("--device-w", w + "px");
+      else device.style.removeProperty("--device-w");
       if (slot) {
         slot.style.width = "";
         slot.style.height = "";
@@ -7233,6 +7311,7 @@
       if (state.tooltipItems.length) layoutTooltipOverlay(false);
       return;
     }
+    device.style.removeProperty("--device-w");
     var pad = 32;
     var sx = (window.innerWidth - pad) / 390;
     var sy = (window.innerHeight - pad) / 844;
@@ -7277,6 +7356,10 @@
     document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", fitDevice);
+    window.addEventListener("orientationchange", fitDevice);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fitDevice);
+    }
     window.addEventListener("hashchange", handleLocationChange);
     window.addEventListener("popstate", handleLocationChange);
     readHash();
