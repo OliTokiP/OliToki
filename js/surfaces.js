@@ -45,8 +45,9 @@ window.tokiOpensOutsideSuite = function (href) {
   if (!href) return false;
   try {
     var u = new URL(href, location.href);
-    // Listener is another port but still the Suite App surface.
-    if (String(u.port) === "18765") return false;
+    var p = String(u.port);
+    // Local operator ports (Suite app on 8765, Listener/portal on 18765) count as inside the Suite surface.
+    if (p === "8765" || p === "18765") return false;
     // Same-origin operator pages stay in Suite (Manager, boards, Deployer).
     // Only GitHub / Live / other hosts open a Chrome window.
     return u.origin !== location.origin;
