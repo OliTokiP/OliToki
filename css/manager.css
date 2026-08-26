@@ -529,6 +529,9 @@ html.is-item-dragging * {
 
 .item-mini {
   --item-mini-footer-h: 72px;
+  --stripe-width: 69.75px;
+  --stripe-period: 139.5px;
+  --stripe-angle: -51.5deg;
   position: relative;
   z-index: 1;
   flex: 0 0 var(--top-slot-h);
@@ -542,6 +545,8 @@ html.is-item-dragging * {
 .item-mini-stage {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  z-index: 0;
 }
 
 .item-mini-layer {
@@ -553,26 +558,9 @@ html.is-item-dragging * {
   background: var(--preview-fill, var(--main));
 }
 
-.item-mini-pattern {
-  overflow: hidden;
-}
-
-.item-mini-pattern-track {
-  position: absolute;
-  left: -80%;
-  top: -80%;
-  width: 260%;
-  height: 260%;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--pattern-a) 0 42px,
-    var(--pattern-b) 42px 84px
-  );
-}
-
 .item-mini-photo {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   left: 0;
   right: 0;
   top: 0;
@@ -582,6 +570,7 @@ html.is-item-dragging * {
   justify-content: center;
   padding: 8px 16px 4px;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .item-mini-photo-wrap {
@@ -591,6 +580,7 @@ html.is-item-dragging * {
   justify-content: center;
   max-width: 78%;
   max-height: 100%;
+  overflow: visible;
 }
 
 .item-mini-photo img {
@@ -617,14 +607,24 @@ html.is-item-dragging * {
 
 .item-mini-sticker {
   position: absolute;
-  z-index: 3;
-  right: -8%;
-  bottom: -4%;
-  width: calc(var(--top-slot-h) * 0.26);
-  height: calc(var(--top-slot-h) * 0.26);
-  font-size: calc(var(--top-slot-h) * 0.26);
+  z-index: 4;
+  right: 4px;
+  bottom: 0;
+  width: calc(var(--top-slot-h) * 0.44);
+  height: calc(var(--top-slot-h) * 0.44);
+  font-size: calc(var(--top-slot-h) * 0.44);
   pointer-events: none;
   user-select: none;
+  overflow: visible;
+}
+
+/* Shadow PNG is a square veil at this size — follow the gold body instead. */
+.item-mini-sticker .preview-sticker-shadow {
+  display: none;
+}
+
+.item-mini-sticker .preview-sticker-body {
+  filter: drop-shadow(2px 4px 5px rgba(0, 0, 0, 0.42));
 }
 
 .item-mini-empty {

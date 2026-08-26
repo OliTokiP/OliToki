@@ -128,6 +128,11 @@
   state.draft.debugMode = state.draft.debugMode || "no";
   state.committed.debugMode = state.committed.debugMode || "no";
 
+  /* Track web font load success via promise (more reliable cross-browser
+     than document.fonts.forEach status alone). Ensures Safari and other
+     mobile browsers apply the same .is-font-ready + Poppins 0.96 scale. */
+  var loadedWebFonts = {};
+
   var previewCtl = {
     gen: 0,
     timers: [],
@@ -477,6 +482,7 @@
 
   function fontsAreReady() {
     var want = systemFontFace().toLowerCase();
+    if (loadedWebFonts[want]) return true;
     if (!document.fonts || !document.fonts.forEach) {
       return !(document.fonts && document.fonts.status === "loading");
     }
@@ -488,7 +494,11 @@
       seen = true;
       if (face.status === "loaded") loaded = true;
     });
-    return seen && loaded;
+    if (seen && loaded) {
+      loadedWebFonts[want] = true;
+      return true;
+    }
+    return false;
   }
 
   function syncFontReadyClass() {
@@ -504,9 +514,15 @@
     //   driven by actual load timing from page start, not by first tap on the
     //   System Font selector (which was previously injecting the name and
     //   flipping the scale as a side-effect of renderPicker + applyTheme).
+    // Use resolved promise to mark loaded (more reliable than face.status
+    // across Safari vs Chrome/others on mobile).
     ["Poppins", "Roboto"].forEach(function (fam) {
       try {
-        document.fonts.load('16px "' + fam + '"').then(syncFontReadyClass).catch(syncFontReadyClass);
+        var p = document.fonts.load('16px "' + fam + '"');
+        p.then(function () {
+          loadedWebFonts[fam.toLowerCase()] = true;
+          syncFontReadyClass();
+        }).catch(syncFontReadyClass);
       } catch (e) {}
     });
   }
@@ -1268,31 +1284,38 @@
     return n;
   }
 
-  function moneyDigits(raw) {
-    var n = parseMoney(raw);
-    if (n == null) return "";
-    return n.toFixed(2);
-  }
-
-  function sanitizeMoneyTyping(raw) {
-    var s = String(raw || "").replace(/[^0-9.]/g, "");
-    var first = s.indexOf(".");
-    if (first >= 0) {
-      s = s.slice(0, first + 1) + s.slice(first + 1).replace(/\./g, "");
-    }
-    return s;
+  /* ATM / banking cents: 1 → 0.01, 10 → 0.10, 100 → 1.00. Digits only. */
+  function formatMoneyTyping(raw) {
+    var digits = String(raw || "").replace(/\D/g, "");
+    if (!digits) return "";
+    digits = digits.replace(/^0+/, "") || "0";
+    if (digits === "0") return "";
+    if (digits.length > 6) digits = digits.slice(0, 6);
+    var cents = parseInt(digits, 10);
+    if (!Number.isFinite(cents) || cents <= 0) return "";
+    return (cents / 100).toFixed(2);
   }
 
   function bindMoneyInput(el) {
     if (!el || el._tokiMoney) return;
     el._tokiMoney = true;
+    el.setAttribute("inputmode", "numeric");
+    el.addEventListener("focus", function () {
+      try {
+        el.select();
+      } catch (err) {}
+    });
     el.addEventListener("input", function () {
-      var next = sanitizeMoneyTyping(el.value);
+      var next = formatMoneyTyping(el.value);
       if (next !== el.value) el.value = next;
+      try {
+        var n = el.value.length;
+        el.setSelectionRange(n, n);
+      } catch (err) {}
     });
     el.addEventListener("blur", function () {
-      var digits = moneyDigits(el.value);
-      if (digits) el.value = digits;
+      var next = formatMoneyTyping(el.value);
+      if (next !== el.value) el.value = next;
     });
   }
 
@@ -1608,20 +1631,22 @@
       '">' +
       '<div class="item-mini-stage">' +
       '<div class="item-mini-layer item-mini-solid"></div>' +
-      '<div class="item-mini-layer item-mini-pattern"' +
+      '<div class="item-mini-layer preview-pattern"' +
       (draft.background !== "pattern" ? " hidden" : "") +
-      '><div class="item-mini-pattern-track" style="transform:rotate(-51.5deg);"></div></div>' +
-      '<div class="item-mini-layer"' +
+      '><div class="preview-pattern-track" style="transform:rotate(-51.5deg) translate3d(0,0px,0);"></div></div>' +
+      '<div class="item-mini-layer preview-wallpaper"' +
       (draft.background !== "wallpaper" ? " hidden" : "") +
       ">" +
-      (wp
-        ? '<img class="preview-wp-img" alt="" src="' +
-          escapeHtml(wp) +
-          '"' +
-          (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
-          ' style="width:100%;height:100%;object-fit:cover;">'
-        : "") +
-      "</div></div>" +
+      '<div class="preview-wp preview-wp-a is-on"><img class="preview-wp-img" alt="" src="' +
+      escapeHtml(wp) +
+      '"' +
+      (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
+      "></div>" +
+      '<div class="preview-wp preview-wp-b"><img class="preview-wp-img" alt="" src="' +
+      escapeHtml(wp) +
+      '"' +
+      (wpFb ? ' data-fallback="' + escapeHtml(wpFb) + '"' : "") +
+      "></div></div></div>" +
       (d.include !== "yes" ? '<div class="item-mini-off">Not on board</div>' : "") +
       '<div class="item-mini-photo">' +
       '<div class="item-mini-photo-wrap' +
@@ -1630,8 +1655,9 @@
       (src
         ? '<img alt="" src="' + escapeHtml(src) + '" data-act="item-img-fallback">'
         : '<span class="item-mini-empty">No image</span>') +
+      "</div>" +
       (isNew && src ? itemMiniStickerHtml() : "") +
-      "</div></div>" +
+      "</div>" +
       '<div class="item-mini-footer">' +
       '<p class="item-mini-line' +
       (isNew ? " is-new" : "") +
@@ -1653,7 +1679,7 @@
         '<span class="row-label">Price</span>' +
         '<div class="price-field">' +
         '<span class="price-sign">$</span>' +
-        '<input class="price-input" type="text" inputmode="decimal" autocomplete="off" data-price="fixed" aria-label="Price" value="' +
+        '<input class="price-input" type="text" inputmode="numeric" autocomplete="off" data-price="fixed" aria-label="Price" value="' +
         escapeHtml(d.price1 || "") +
         '">' +
         "</div></div>";
@@ -1671,7 +1697,7 @@
         "</button>" +
         '<div class="price-field">' +
         '<span class="price-sign">$</span>' +
-        '<input class="price-input" type="text" inputmode="decimal" autocomplete="off" data-price="tier" data-tier="' +
+        '<input class="price-input" type="text" inputmode="numeric" autocomplete="off" data-price="tier" data-tier="' +
         i +
         '" aria-label="Price" value="' +
         escapeHtml(tiers[i].price || "") +
@@ -1767,15 +1793,33 @@
     );
   }
 
+  function refreshItemMiniCopy() {
+    var d = state.itemDraft;
+    if (!d) return;
+    var line = els.app.querySelector(".item-mini-line");
+    if (line) {
+      line.classList.toggle("is-new", d.isNew === "yes");
+      line.innerHTML = itemMiniLineHtml(d);
+    }
+  }
+
+  function remountItemMini() {
+    var existing = els.app.querySelector(".item-mini");
+    if (!existing) return;
+    existing.outerHTML = itemMiniHtml();
+    previewCtl.wp = null;
+    bindWpFallback();
+  }
+
   function refreshItemScreen() {
     var existing = els.app.querySelector(".screen-item");
     if (!existing) return false;
-    var mini = existing.querySelector(".item-mini");
-    if (mini) mini.outerHTML = itemMiniHtml();
+    remountItemMini();
     var wrap = existing.querySelector(".rows");
     if (wrap) wrap.innerHTML = itemRows();
     bindItemEditor();
     bindWpFallback();
+    startItemMiniMotion();
     return true;
   }
 
@@ -1821,31 +1865,30 @@
     var el = e.target;
     var d = state.itemDraft;
     if (!d || !el) return;
+    var next = formatMoneyTyping(el.value);
     var kind = el.getAttribute("data-price");
-    if (kind === "fixed") d.price1 = sanitizeMoneyTyping(el.value);
+    if (kind === "fixed") d.price1 = next;
     else {
       var idx = parseInt(el.getAttribute("data-tier"), 10);
       if (!d.tiers[idx]) d.tiers[idx] = { tier: "", price: "" };
-      d.tiers[idx].price = sanitizeMoneyTyping(el.value);
+      d.tiers[idx].price = next;
     }
-    var mini = els.app.querySelector(".item-mini");
-    if (mini) mini.outerHTML = itemMiniHtml();
+    refreshItemMiniCopy();
   }
 
   function onItemPriceBlur(e) {
     var el = e.target;
     var d = state.itemDraft;
     if (!d || !el) return;
-    var digits = moneyDigits(el.value);
-    if (digits) el.value = digits;
+    var next = formatMoneyTyping(el.value);
+    if (next !== el.value) el.value = next;
     var kind = el.getAttribute("data-price");
-    if (kind === "fixed") d.price1 = digits || sanitizeMoneyTyping(el.value);
+    if (kind === "fixed") d.price1 = next;
     else {
       var idx = parseInt(el.getAttribute("data-tier"), 10);
-      if (d.tiers[idx]) d.tiers[idx].price = digits || sanitizeMoneyTyping(el.value);
+      if (d.tiers[idx]) d.tiers[idx].price = next;
     }
-    var mini = els.app.querySelector(".item-mini");
-    if (mini) mini.outerHTML = itemMiniHtml();
+    refreshItemMiniCopy();
   }
 
   function revokePreview(url) {
@@ -3055,7 +3098,8 @@
           });
         }
       }
-      if (state.screen === "item" || state.screen === "image") stopPreviewCycle();
+      if (state.screen === "item") startItemMiniMotion();
+      else if (state.screen === "image") stopPreviewCycle();
       else startPreviewCycle();
     } else {
       stopPreviewCycle();
@@ -6021,6 +6065,17 @@
     restorePillScroll();
     bindWpFallback();
     bindPillDrag();
+  }
+
+  function startItemMiniMotion() {
+    var bgOnly = !!previewCtl.raf && !previewCtl.phase;
+    if (!bgOnly) {
+      stopPreviewCycle();
+      previewCtl.wp = null;
+      startPreviewRaf();
+    } else {
+      previewCtl.wp = null;
+    }
   }
 
   function startPreviewCycle() {
