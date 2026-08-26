@@ -149,10 +149,14 @@ img {
 }
 
 .device.is-native {
-  width: 100%;
-  height: 100%;
-  --device-w: 100%;
-  --top-slot-h: calc(var(--device-w) * 2 / 3);
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  /* 100vw is a width. Never use 100% here: --top-slot-h is a height, and
+     calc(100% * 2/3) then becomes 2/3 of the screen height (Safari mini-
+     display eating the board editor). */
+  --device-w: 100vw;
+  --top-slot-h: calc(100vw * 2 / 3);
   border-radius: 0;
   box-shadow: none;
   /* Compact density uses transform:scale. Do not !important-none it. */
@@ -160,20 +164,21 @@ img {
 }
 
 /* First paint for 100%-zoom phones (Chrome / Firefox iOS). 4/3 layout then
-   scale(0.75) matches Safari's compact aA density. JS refines on fitDevice. */
+   scale(0.75) matches Safari's compact aA density. JS refines on fitDevice.
+   Safari aA-zoom-out already has a wide layout — leave compact off so the
+   mini-display stays 2/3 of 100vw, not a second shrink. */
 html.is-phone-compact .studio {
   padding: 0;
   background: var(--main);
 }
 
-html.is-phone-compact .device-slot,
-html.is-phone-compact .device,
-html.is-phone-compact .device.is-native {
+html.is-phone-compact .device-slot {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
   border-radius: 0;
   box-shadow: none;
+  overflow: hidden;
 }
 
 html.is-phone-compact .device,
@@ -182,8 +187,11 @@ html.is-phone-compact .device.is-native {
   height: calc(100vh * 4 / 3);
   height: calc(100dvh * 4 / 3);
   --device-w: calc(100vw * 4 / 3);
+  --top-slot-h: calc(100vw * 8 / 9);
   transform: scale(0.75);
   transform-origin: top left;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 #app,
@@ -2535,8 +2543,11 @@ html.is-item-dragging * {
   .device-slot,
   .device,
   .device.is-native {
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    --device-w: 100vw;
+    --top-slot-h: calc(100vw * 2 / 3);
     border-radius: 0;
     box-shadow: none;
   }
@@ -2545,6 +2556,15 @@ html.is-item-dragging * {
     width: 100vw;
     height: 100vh;
     height: 100dvh;
+  }
+
+  html.is-phone-compact .device,
+  html.is-phone-compact .device.is-native {
+    width: calc(100vw * 4 / 3);
+    height: calc(100vh * 4 / 3);
+    height: calc(100dvh * 4 / 3);
+    --device-w: calc(100vw * 4 / 3);
+    --top-slot-h: calc(100vw * 8 / 9);
   }
 }
 

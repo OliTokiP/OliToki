@@ -7284,9 +7284,10 @@
     device.style.width = "";
     device.style.height = "";
     device.classList.remove("is-compact-density");
-    /* CSS .device.is-native uses --device-w: 100vw so a zoomed-out Safari
-       (layout wider than screen.width) keeps the top slot in layout pixels. */
+    /* Fall back to CSS --device-w: 100vw (a width). Never leave 100% —
+       --top-slot-h would then be 2/3 of the screen height. */
     device.style.removeProperty("--device-w");
+    device.style.removeProperty("--top-slot-h");
     if (slot) {
       slot.style.width = "";
       slot.style.height = "";
@@ -7317,6 +7318,7 @@
         device.style.width = layoutW + "px";
         device.style.height = layoutH + "px";
         device.style.setProperty("--device-w", layoutW + "px");
+        device.style.setProperty("--top-slot-h", layoutW * 2 / 3 + "px");
         device.classList.add("is-compact-density");
         if (slot) {
           slot.style.width = visW + "px";
@@ -7336,6 +7338,7 @@
     device.style.width = "";
     device.style.height = "";
     device.style.removeProperty("--device-w");
+    device.style.removeProperty("--top-slot-h");
     var pad = 32;
     var sx = (window.innerWidth - pad) / 390;
     var sy = (window.innerHeight - pad) / 844;
