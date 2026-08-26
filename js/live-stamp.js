@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "a5e9560",
-  "hashFull": "a5e9560cedcdba1edb258408153ed9e5db9f7091",
-  "subject": "QA: 2026-08-26 Safari getting different visual than other browsers on mobile (pass 1)"
+  "hash": "a6fa846",
+  "hashFull": "a6fa8461b8e2c1a7b51e641c749b3df1eef6c8ce",
+  "subject": "QA: 2026-08-26 Pasting images from mobile makes ticket unloggable! (pass 1)"
 };
