@@ -2815,7 +2815,6 @@
         '<button class="btn-primary" type="button" data-act="confirm" data-val="yes">Yes</button>' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="no">No</button>' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="keep">Keep Editing</button>' +
-        '<button class="btn-primary" type="button" data-act="confirm" data-val="cancel">Cancel</button>' +
         "</div></div>";
     } else if (state.dialog === "board-title") {
       var cur = (state.boardDraft && (state.boardDraft.menuTitle || state.boardDraft.title)) || "";
@@ -2973,12 +2972,15 @@
       var delIdx = state.pendingDeleteIndex;
       var delName =
         delIdx != null && delItems[delIdx] ? delItems[delIdx].name : "this item";
+      var delWarn = confirmSaveOff() ? " This cannot be undone." : "";
       els.dialog.innerHTML =
         '<div class="dialog-card" role="dialog">' +
         "<h2>Delete this item?</h2>" +
         '<p class="dialog-note">Are you sure you want to delete ' +
         escapeHtml(delName) +
-        "? This cannot be undone.</p>" +
+        "?" +
+        delWarn +
+        "</p>" +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="item-delete-yes">Yes</button>' +
         '<button class="btn-primary" type="button" data-act="item-delete-no">No</button>' +
