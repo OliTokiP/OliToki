@@ -40,10 +40,15 @@
   };
 
   var IMAGE_TUTORIAL_VIDEO = "assets/tutorials/iphone_longpress_tutorial.mp4";
+  var PHOTO_ACCEPT_MOBILE =
+    "image/png,image/webp,image/heic,image/heif,.png,.webp,.heic,.heif";
+  var PHOTO_ACCEPT_DESKTOP =
+    "image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif";
   var IMAGE_TUTORIAL_SLIDES = [
     {
       title: "How to remove background on iOS",
       lines: [
+        "Navigate to your photo in the Photos app",
         "Long-press on the subject",
         "Tap Share... > Save Image",
         "Upload the new image",
@@ -1730,7 +1735,9 @@
       placeholder: "Upload New Image",
     });
     html +=
-      '<input id="item-photo" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif" hidden>';
+      '<input id="item-photo" type="file" accept="' +
+      PHOTO_ACCEPT_DESKTOP +
+      '" hidden>';
     return html;
   }
 
@@ -1993,7 +2000,9 @@
       '<span class="row-label">Instructions</span>' +
       '<p class="row-help">Use the sliders to adjust the size and position of the item. The item should be centered and extend just beyond the boundaries of the red shape.</p>' +
       "</div>" +
-      '<input id="image-photo" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif" hidden>'
+      '<input id="image-photo" type="file" accept="' +
+      PHOTO_ACCEPT_DESKTOP +
+      '" hidden>'
     );
   }
 
@@ -2073,11 +2082,22 @@
     beginImageFromFile(file, { fromItem: true });
   }
 
+  function isJpegFile(file) {
+    if (!file) return false;
+    var type = String(file.type || "").toLowerCase();
+    if (type === "image/jpeg" || type === "image/jpg") return true;
+    return /\.jpe?g$/i.test(String(file.name || ""));
+  }
+
   function beginImageFromFile(file, opts) {
     opts = opts || {};
     var M = window.TOKI_MENUIMG;
     if (!M) {
       toast("Image editor failed to load");
+      return;
+    }
+    if (isMobileDevice() && isJpegFile(file)) {
+      toast("Please upload the isolated image from Photos, not a camera shot.");
       return;
     }
     var preview = URL.createObjectURL(file);
@@ -2320,20 +2340,19 @@
 
   function configurePhotoInput(input) {
     if (!input) return;
+    // HTML has no "hide camera" switch. capture=user|environment *opens*
+    // the camera; omitting it is the most we can declare. iOS Safari hides
+    // Take Photo when `multiple` is set (single-shot camera UI cannot
+    // satisfy it). JPEG is omitted on phones so Camera is not an obvious
+    // type match; JPEG files that still sneak through are rejected in
+    // beginImageFromFile. Android still owns the intent sheet — some
+    // WebViews keep a Camera tile and there is no web API to remove it.
     input.removeAttribute("capture");
     if (isMobileDevice()) {
-      // No Camera: iOS hides Take Photo when `multiple` is set; JPEG-less
-      // accept keeps camera apps from being the obvious pick.
-      input.setAttribute(
-        "accept",
-        "image/png,image/webp,image/heic,image/heif,.png,.webp,.heic,.heif"
-      );
+      input.setAttribute("accept", PHOTO_ACCEPT_MOBILE);
       input.multiple = true;
     } else {
-      input.setAttribute(
-        "accept",
-        "image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,.heif"
-      );
+      input.setAttribute("accept", PHOTO_ACCEPT_DESKTOP);
       input.multiple = false;
     }
   }

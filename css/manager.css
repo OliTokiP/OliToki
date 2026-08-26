@@ -2196,7 +2196,7 @@ html.is-item-dragging * {
   box-sizing: border-box;
   flex: 0 0 100%;
   width: 100%;
-  min-height: 9.5rem;
+  min-height: 11rem;
   padding: 14px 6px 4px;
   scroll-snap-align: start;
   scroll-snap-stop: always;
