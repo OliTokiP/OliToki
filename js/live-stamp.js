@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "dd44c55",
-  "hashFull": "dd44c5583fc29bf3e8d4d5b6fdd7bed246aaf14b",
-  "subject": "QA: 2026-08-25 Item Uploader incorporated into beta version of menu manager (pass 5)"
+  "hash": "a5e9560",
+  "hashFull": "a5e9560cedcdba1edb258408153ed9e5db9f7091",
+  "subject": "QA: 2026-08-26 Safari getting different visual than other browsers on mobile (pass 1)"
 };
