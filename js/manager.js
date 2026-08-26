@@ -74,6 +74,10 @@
     itemCommitted: null,
     itemScroll: 0,
     itemMissing: null,
+    imageDraft: null,
+    imageCommitted: null,
+    imageScroll: 0,
+    pendingImageDraft: null,
     itemDragging: false,
     confirmLeave: false,
     persistInFlight: false,
@@ -1304,6 +1308,7 @@
       imageName: "",
       imageData: "",
       imagePreview: "",
+      menuimg: null,
     };
   }
 
@@ -1320,6 +1325,7 @@
     d.imageName = it.imageName || "";
     d.imageData = it.imageData || "";
     d.imagePreview = it.imagePreview || "";
+    d.menuimg = it.menuimg ? clone(it.menuimg) : null;
     d.priceModel = detectPriceModel(it);
     var tokens = [it.price1, it.price2, it.price3];
     if (d.priceModel === "fixed") {
@@ -1384,7 +1390,19 @@
       image: String(d.image || ""),
       imageName: String(d.imageName || ""),
       imageData: d.imageData ? "1" : "",
+      menuimg: menuimgSnap(d.menuimg),
     };
+  }
+
+  function menuimgSnap(m) {
+    if (!m) return "";
+    return [
+      String(m.fileName || m.filename_1 || ""),
+      String(m.scale != null ? m.scale : m.scale_1 || 100),
+      String(m.x != null ? m.x : m.x_1 || 0),
+      String(m.y != null ? m.y : m.y_1 || 0),
+      m.sourceData ? "1" : "",
+    ].join("|");
   }
 
   function itemDirty() {
@@ -1437,7 +1455,7 @@
   function itemMissingSoft(d) {
     var missing = [];
     if (!String((d && d.description) || "").trim()) missing.push("Description");
-    if (!(d && (d.imageData || String(d.image || "").trim()))) missing.push("Image");
+    if (!itemHasImage(d)) missing.push("Image");
     return missing;
   }
 
@@ -1449,6 +1467,11 @@
       return img;
     }
     var folder = boardImageFolder(board);
+    var M = window.TOKI_MENUIMG;
+    if (M && M.isMenuimgName(img)) {
+      var disp = M.resolveDisplayPath(img, folder);
+      return disp.replace(/display\.webp$/i, "display-sm.webp");
+    }
     var file = img.replace(/^.*\//, "");
     var base = file.replace(/\.[^.]+$/, "");
     if (/-sm$/i.test(base)) return folder + "/" + base + ".webp";
@@ -1456,11 +1479,24 @@
   }
 
   function itemImageLabel(d) {
+    if (d && d.menuimg && (d.menuimg.fileName || d.menuimg.filename_1)) {
+      return String(d.menuimg.fileName || d.menuimg.filename_1).replace(/^.*\//, "");
+    }
     if (d && d.imageName) return d.imageName;
     var img = String((d && d.image) || "").trim();
     if (!img) return "";
     if (/^https?:/i.test(img)) return "Photo on Drive";
     return img.replace(/^.*\//, "");
+  }
+
+  function itemHasImage(d) {
+    return !!(
+      d &&
+      (d.imageData ||
+        d.imagePreview ||
+        String(d.image || "").trim() ||
+        (d.menuimg && (d.menuimg.sourceData || d.menuimg.fileName)))
+    );
   }
 
   function nextLtpLabel(tiers) {
@@ -1552,7 +1588,9 @@
       "</div></div>" +
       (d.include !== "yes" ? '<div class="item-mini-off">Not on board</div>' : "") +
       '<div class="item-mini-photo">' +
-      '<div class="item-mini-photo-wrap">' +
+      '<div class="item-mini-photo-wrap' +
+      (d.menuimg && src ? " is-plate" : "") +
+      '">' +
       (src
         ? '<img alt="" src="' + escapeHtml(src) + '" data-act="item-img-fallback">'
         : '<span class="item-mini-empty">No image</span>') +
@@ -1658,7 +1696,7 @@
       key: "itemImage",
       label: "Image",
       value: itemImageLabel(d),
-      placeholder: "Tap to add",
+      placeholder: "Upload New Image",
     });
     html +=
       '<input id="item-photo" type="file" accept="image/*,.heic,.webp" hidden>';
@@ -1769,25 +1807,477 @@
     if (mini) mini.outerHTML = itemMiniHtml();
   }
 
-  function onItemPhoto(e) {
-    var file = (e.target && e.target.files && e.target.files[0]) || null;
-    var d = state.itemDraft;
-    if (!d) return;
-    if (!file) return;
-    d.imageName = file.name || "";
-    if (d.imagePreview && String(d.imagePreview).indexOf("blob:") === 0) {
+  function revokePreview(url) {
+    if (url && String(url).indexOf("blob:") === 0) {
       try {
-        URL.revokeObjectURL(d.imagePreview);
+        URL.revokeObjectURL(url);
       } catch (err) {}
     }
-    d.imagePreview = URL.createObjectURL(file);
-    var reader = new FileReader();
-    reader.onload = function () {
-      d.imageData = String(reader.result || "");
-      refreshItemScreen();
+  }
+
+  function menuimgPayload(d) {
+    var m = d && d.menuimg;
+    if (!m) return null;
+    var out = {
+      fileName: String(m.fileName || m.filename_1 || ""),
+      scale: m.scale != null ? m.scale : m.scale_1,
+      x: m.x != null ? m.x : m.x_1,
+      y: m.y != null ? m.y : m.y_1,
+      sourceData: m.sourceData || "",
+      displayData: m.displayData || (d && d.imageData) || "",
     };
-    reader.readAsDataURL(file);
-    refreshItemScreen();
+    if (!out.fileName && !out.sourceData && !out.displayData) return null;
+    return out;
+  }
+
+  function imageDraftSnap(d) {
+    d = d || {};
+    return {
+      fileName: String(d.fileName || ""),
+      scale: Number(d.scale) || 100,
+      x: Number(d.x) || 0,
+      y: Number(d.y) || 0,
+      source: d.sourceData ? "1" : "",
+    };
+  }
+
+  function imageDirty() {
+    if (!state.imageDraft) return false;
+    if (!state.imageCommitted) return true;
+    return !eq(imageDraftSnap(state.imageDraft), imageDraftSnap(state.imageCommitted));
+  }
+
+  function blankImageDraft() {
+    var d = state.itemDraft || ensureItemDraft();
+    return {
+      boardId: String((d && d.boardId) || state.boardId || ""),
+      itemKey: String((d && d.key) || state.itemKey || "new"),
+      fileName: "",
+      sourceData: "",
+      sourcePreview: "",
+      displayData: "",
+      analysis: null,
+      scale: 100,
+      x: 0,
+      y: 0,
+      hasTransparency: true,
+    };
+  }
+
+  function applyImageLayout() {
+    var root = els.app && els.app.querySelector(".screen-image");
+    if (!root) return;
+    var img = root.querySelector(".image-mini-src");
+    var d = state.imageDraft;
+    var M = window.TOKI_MENUIMG;
+    if (!img || !d || !d.analysis || !M) return;
+    var css = M.layoutCss(d.analysis, d.scale, d.x, d.y);
+    img.style.left = css.left;
+    img.style.top = css.top;
+    img.style.width = css.width;
+    img.style.height = css.height;
+  }
+
+  function imageMiniHtml() {
+    var d = state.imageDraft || blankImageDraft();
+    var src = d.sourcePreview || d.sourceData || "";
+    var M = window.TOKI_MENUIMG;
+    var css =
+      src && d.analysis && M
+        ? M.layoutCss(d.analysis, d.scale, d.x, d.y)
+        : { left: "0%", top: "0%", width: "100%", height: "100%" };
+    return (
+      '<div class="image-mini" aria-hidden="true">' +
+      '<div class="image-mini-frame">' +
+      '<div class="image-mini-canvas">' +
+      (src
+        ? '<img class="image-mini-src" alt="" src="' +
+          escapeHtml(src) +
+          '" style="left:' +
+          css.left +
+          ";top:" +
+          css.top +
+          ";width:" +
+          css.width +
+          ";height:" +
+          css.height +
+          '">'
+        : '<span class="image-mini-empty">No image</span>') +
+      '<div class="image-mini-guide"></div>' +
+      "</div></div></div>"
+    );
+  }
+
+  function imageRows() {
+    var d = state.imageDraft || blankImageDraft();
+    var M = window.TOKI_MENUIMG || {};
+    var name = String(d.fileName || "").replace(/^.*\//, "") || "My-Image";
+    return (
+      '<div class="row row-image-file">' +
+      '<div class="row-label-line">' +
+      '<span class="row-label">Image File</span>' +
+      '<span class="row-hint">(Remove background before uploading. ' +
+      '<button class="row-how" type="button" data-act="image-how">How?</button>)</span>' +
+      "</div>" +
+      '<button class="row-value" type="button" data-act="image-replace">' +
+      escapeHtml(name) +
+      "</button></div>" +
+      '<div class="row row-slider">' +
+      '<span class="row-label">Image Size</span>' +
+      '<input class="image-slider" type="range" min="' +
+      (M.SIZE_MIN || 70) +
+      '" max="' +
+      (M.SIZE_MAX || 130) +
+      '" step="1" value="' +
+      escapeHtml(String(d.scale)) +
+      '" data-image-field="scale" aria-label="Image Size">' +
+      "</div>" +
+      '<div class="row row-slider">' +
+      '<span class="row-label">X Position</span>' +
+      '<input class="image-slider" type="range" min="' +
+      (M.X_MIN || -240) +
+      '" max="' +
+      (M.X_MAX || 240) +
+      '" step="2" value="' +
+      escapeHtml(String(d.x)) +
+      '" data-image-field="x" aria-label="X Position">' +
+      "</div>" +
+      '<div class="row row-slider">' +
+      '<span class="row-label">Y Position</span>' +
+      '<input class="image-slider" type="range" min="' +
+      (M.Y_MIN || -160) +
+      '" max="' +
+      (M.Y_MAX || 160) +
+      '" step="2" value="' +
+      escapeHtml(String(d.y)) +
+      '" data-image-field="y" aria-label="Y Position">' +
+      "</div>" +
+      '<div class="row row-image-help">' +
+      '<span class="row-label">Instructions</span>' +
+      '<p class="row-help">Use the sliders to adjust the size and position of the item. The item should be centered and extend just beyond the boundaries of the red shape.</p>' +
+      "</div>" +
+      '<input id="image-photo" type="file" accept="image/*,.heic,.webp" hidden>'
+    );
+  }
+
+  function screenImage() {
+    if (!managerBetaFeatures()) {
+      return (
+        '<section class="screen screen-soon">' +
+        header("Edit Image") +
+        '<div class="soon-body"><h2 class="soon-title">Beta only</h2>' +
+        '<p class="soon-sub">Item editor is on the Beta catalog (or ?beta).</p></div></section>'
+      );
+    }
+    ensureItemDraft();
+    if (!state.imageDraft) state.imageDraft = blankImageDraft();
+    return (
+      '<section class="screen screen-image">' +
+      header("Edit Image") +
+      imageMiniHtml() +
+      '<div class="style-scroll" id="image-scroll">' +
+      '<div class="rows bounce-inner">' +
+      imageRows() +
+      "</div></div></section>"
+    );
+  }
+
+  function bindImageEditor() {
+    var root = els.app && els.app.querySelector(".screen-image");
+    if (!root) return;
+    var sliders = root.querySelectorAll(".image-slider");
+    var i;
+    for (i = 0; i < sliders.length; i++) {
+      if (sliders[i]._tokiBound) continue;
+      sliders[i]._tokiBound = true;
+      sliders[i].addEventListener("input", onImageSlider);
+    }
+    var file = document.getElementById("image-photo");
+    if (file && !file._tokiBound) {
+      file._tokiBound = true;
+      file.addEventListener("change", onImagePhoto);
+    }
+    var img = root.querySelector(".image-mini-src");
+    if (img && !img.getAttribute("data-fb")) {
+      img.setAttribute("data-fb", "1");
+      img.addEventListener("error", function () {
+        img.removeAttribute("src");
+      });
+    }
+  }
+
+  function onImageSlider(e) {
+    var el = e.target;
+    var d = state.imageDraft;
+    if (!d || !el) return;
+    var field = el.getAttribute("data-image-field");
+    var n = parseInt(el.value, 10);
+    if (!isFinite(n)) return;
+    if (field === "scale") d.scale = n;
+    else if (field === "x") d.x = n;
+    else if (field === "y") d.y = n;
+    applyImageLayout();
+  }
+
+  function onImagePhoto(e) {
+    var file = (e.target && e.target.files && e.target.files[0]) || null;
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    beginImageFromFile(file, { replace: true });
+  }
+
+  function onItemPhoto(e) {
+    var file = (e.target && e.target.files && e.target.files[0]) || null;
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    beginImageFromFile(file, { fromItem: true });
+  }
+
+  function beginImageFromFile(file, opts) {
+    opts = opts || {};
+    var M = window.TOKI_MENUIMG;
+    if (!M) {
+      toast("Image editor failed to load");
+      return;
+    }
+    var preview = URL.createObjectURL(file);
+    M.loadImage(preview)
+      .then(function (img) {
+        var analysis = M.analyzeImage(img);
+        var draft = blankImageDraft();
+        draft.fileName = file.name || "image.webp";
+        draft.sourcePreview = preview;
+        draft.analysis = analysis;
+        draft.scale = 100;
+        draft.x = 0;
+        draft.y = 0;
+        draft.hasTransparency = !!analysis.hasTransparency;
+        var reader = new FileReader();
+        reader.onload = function () {
+          draft.sourceData = String(reader.result || "");
+          afterImageAnalyzed(draft, opts);
+        };
+        reader.onerror = function () {
+          afterImageAnalyzed(draft, opts);
+        };
+        reader.readAsDataURL(file);
+      })
+      .catch(function () {
+        revokePreview(preview);
+        toast("Could not read that image");
+      });
+  }
+
+  function afterImageAnalyzed(draft, opts) {
+    opts = opts || {};
+    if (!draft.hasTransparency) {
+      state.pendingImageDraft = draft;
+      state.pendingImageOpts = opts;
+      state.dialog = "image-opaque";
+      renderDialog();
+      return;
+    }
+    openImageEditor({ draft: draft, fromFile: true, replace: opts.replace });
+  }
+
+  function continueOpaqueImage() {
+    var draft = state.pendingImageDraft;
+    var opts = state.pendingImageOpts || {};
+    state.pendingImageDraft = null;
+    state.pendingImageOpts = null;
+    state.dialog = null;
+    renderDialog();
+    if (!draft) return;
+    openImageEditor({ draft: draft, fromFile: true, replace: opts.replace });
+  }
+
+  function cancelOpaqueImage() {
+    var draft = state.pendingImageDraft;
+    state.pendingImageDraft = null;
+    state.pendingImageOpts = null;
+    if (draft) revokePreview(draft.sourcePreview);
+    state.dialog = null;
+    renderDialog();
+  }
+
+  function fetchMenuimgPackage(d, board) {
+    var M = window.TOKI_MENUIMG;
+    var folder = boardImageFolder(board);
+    var stem = M
+      ? M.itemStem((d && d.name) || "", (d && (d.imageName || d.image)) || "")
+      : "";
+    var img = String((d && d.image) || "");
+    if (M && M.isMenuimgName(img)) stem = M.packageStem(img) || stem;
+    if (!stem) return Promise.resolve(null);
+    return fetch(
+      "/api/manager/menuimg?folder=" +
+        encodeURIComponent(folder) +
+        "&stem=" +
+        encodeURIComponent(stem),
+      { cache: "no-store" }
+    )
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function fillImageDraftFromItem() {
+    var d = ensureItemDraft();
+    var b = state.boardDraft || {};
+    var M = window.TOKI_MENUIMG;
+    var draft = blankImageDraft();
+    var m = d.menuimg || {};
+    draft.fileName = m.fileName || m.filename_1 || d.imageName || itemImageLabel(d);
+    draft.scale = m.scale != null ? Number(m.scale) : m.scale_1 != null ? Number(m.scale_1) : 100;
+    draft.x = m.x != null ? Number(m.x) : m.x_1 != null ? Number(m.x_1) : 0;
+    draft.y = m.y != null ? Number(m.y) : m.y_1 != null ? Number(m.y_1) : 0;
+    draft.sourceData = m.sourceData || "";
+    draft.sourcePreview = draft.sourceData || "";
+    var src =
+      draft.sourceData ||
+      (M ? M.canvasSrcFor(itemImageSrc(d, b)) : itemImageSrc(d, b));
+    if (!src) {
+      state.imageDraft = draft;
+      state.imageCommitted = clone(draft);
+      return Promise.resolve(draft);
+    }
+    return M.loadImage(src)
+      .then(function (img) {
+        draft.analysis = M.analyzeImage(img);
+        if (!m.sourceData && M.looksLikePlate(img)) draft.analysis.fit = "canvas";
+        draft.hasTransparency = !!draft.analysis.hasTransparency;
+        if (!draft.sourcePreview) draft.sourcePreview = src;
+        if (!draft.sourceData && /^data:/i.test(src)) draft.sourceData = src;
+        state.imageDraft = draft;
+        state.imageCommitted = clone(draft);
+        applyImageLayout();
+        return draft;
+      })
+      .catch(function () {
+        state.imageDraft = draft;
+        state.imageCommitted = clone(draft);
+        return draft;
+      });
+  }
+
+  function openImageEditor(opts) {
+    opts = opts || {};
+    ensureItemDraft();
+    if (opts.draft) {
+      if (state.imageDraft && state.imageDraft.sourcePreview !== opts.draft.sourcePreview) {
+        revokePreview(state.imageDraft.sourcePreview);
+      }
+      state.imageDraft = opts.draft;
+      state.imageCommitted = opts.fromFile ? null : clone(opts.draft);
+    }
+    state.imageScroll = 0;
+    go("image", state.boardId, state.itemKey);
+    if (!opts.draft) {
+      fillImageDraftFromItem().then(function () {
+        var existing = els.app.querySelector(".screen-image");
+        if (existing) {
+          var mini = existing.querySelector(".image-mini");
+          if (mini) mini.outerHTML = imageMiniHtml();
+          var wrap = existing.querySelector(".rows");
+          if (wrap) wrap.innerHTML = imageRows();
+          bindImageEditor();
+        }
+      });
+      fetchMenuimgPackage(state.itemDraft, state.boardDraft).then(function (pkg) {
+        if (!pkg || !pkg.config || !state.imageDraft) return;
+        if (state.imageDraft.sourceData) return;
+        var cfg = pkg.config;
+        state.imageDraft.scale = cfg.scale_1;
+        state.imageDraft.x = cfg.x_1;
+        state.imageDraft.y = cfg.y_1;
+        if (cfg.filename_1) state.imageDraft.fileName = cfg.filename_1;
+        var src = pkg.sourcePath || pkg.displayPath;
+        if (!src) return;
+        var M = window.TOKI_MENUIMG;
+        M.loadImage(src)
+          .then(function (img) {
+            if (!state.imageDraft) return;
+            state.imageDraft.sourcePreview = src;
+            state.imageDraft.analysis = M.analyzeImage(img);
+            if (src === pkg.displayPath && M.looksLikePlate(img)) {
+              state.imageDraft.analysis.fit = "canvas";
+            }
+            state.imageDraft.hasTransparency = !!state.imageDraft.analysis.hasTransparency;
+            state.imageCommitted = clone(state.imageDraft);
+            var existing = els.app.querySelector(".screen-image");
+            if (existing) {
+              var mini = existing.querySelector(".image-mini");
+              if (mini) mini.outerHTML = imageMiniHtml();
+              var wrap = existing.querySelector(".rows");
+              if (wrap) wrap.innerHTML = imageRows();
+              bindImageEditor();
+            }
+          })
+          .catch(function () {});
+      });
+    }
+  }
+
+  function commitImageToItem() {
+    var draft = state.imageDraft;
+    var item = state.itemDraft || ensureItemDraft();
+    var M = window.TOKI_MENUIMG;
+    if (!draft || !item || !M) return Promise.resolve();
+    var src = draft.sourcePreview || draft.sourceData;
+    if (!src) return Promise.resolve();
+    return M.loadImage(src).then(function (img) {
+      var analysis = draft.analysis || M.analyzeImage(img);
+      var display = M.compositeDataURL(img, analysis, draft.scale, draft.x, draft.y);
+      if (!display) throw new Error("Could not flatten image");
+      revokePreview(item.imagePreview);
+      var blob = M.blobFromDataURL(display);
+      item.imagePreview = blob ? URL.createObjectURL(blob) : display;
+      item.imageData = display;
+      item.imageName = draft.fileName || item.imageName || "image.webp";
+      item.menuimg = {
+        fileName: draft.fileName,
+        scale: draft.scale,
+        x: draft.x,
+        y: draft.y,
+        sourceData: draft.sourceData || "",
+        displayData: display,
+        hasTransparency: !!draft.hasTransparency,
+      };
+      draft.displayData = display;
+      state.imageDraft = draft;
+      state.imageCommitted = clone(draft);
+    });
+  }
+
+  function discardImageDraft() {
+    if (state.imageDraft) revokePreview(state.imageDraft.sourcePreview);
+    if (state.imageCommitted) state.imageDraft = clone(state.imageCommitted);
+    else state.imageDraft = null;
+  }
+
+  function leaveImage(next) {
+    if (!imageDirty()) {
+      next();
+      return;
+    }
+    state.pendingLeave = next;
+    state.dialog = "confirm";
+    renderDialog();
+  }
+
+  function showImageHowTooltip() {
+    showTooltip({
+      title: "Remove the background",
+      lines: [
+        "Cut the food out before you upload so the Plate stays transparent.",
+        "iPhone: Photos → Edit, or a Remove Background shortcut.",
+        "Android: Google Photos / a cutout app.",
+        "Save as PNG or WebP with transparency, then upload here.",
+      ],
+    });
   }
 
   function addItemTier() {
@@ -1821,6 +2311,7 @@
       imageName: d.imageName || "",
       imageData: d.imageData || "",
       imagePreview: d.imagePreview || "",
+      menuimg: d.menuimg ? clone(d.menuimg) : null,
     };
     var items = state.boardDraft.items || [];
     if (String(d.key) === "new") {
@@ -1841,6 +2332,7 @@
     state.itemDraft.imagePreview = d.imagePreview || "";
     state.itemDraft.imageData = d.imageData || "";
     state.itemDraft.imageName = d.imageName || "";
+    state.itemDraft.menuimg = d.menuimg ? clone(d.menuimg) : null;
     state.itemCommitted = clone(state.itemDraft);
   }
 
@@ -1878,6 +2370,7 @@
       image: d.image || "",
       imageName: d.imageName || "",
       imageData: d.imageData || "",
+      menuimg: menuimgPayload(d),
     };
     if (d.row) payload.row = d.row;
     state.dialog = null;
@@ -2255,6 +2748,7 @@
     else if (state.screen === "style") html = screenStyle();
     else if (state.screen === "board") html = screenBoard();
     else if (state.screen === "item") html = screenItem();
+    else if (state.screen === "image") html = screenImage();
 
     if (state.screen === "board") {
       var existingBoard = els.app.querySelector(".screen-board");
@@ -2298,7 +2792,8 @@
       state.screen === "board" ||
       state.screen === "system" ||
       state.screen === "menu" ||
-      state.screen === "item"
+      state.screen === "item" ||
+      state.screen === "image"
     ) {
       var sc =
         state.screen === "menu"
@@ -2310,12 +2805,15 @@
                 ? "style-scroll"
                 : state.screen === "item"
                 ? "item-scroll"
+                : state.screen === "image"
+                ? "image-scroll"
                 : "system-scroll"
             );
       if (sc) {
         if (state.screen === "style") sc.scrollTop = state.styleScroll;
         else if (state.screen === "board") sc.scrollTop = state.boardScroll;
         else if (state.screen === "item") sc.scrollTop = state.itemScroll;
+        else if (state.screen === "image") sc.scrollTop = state.imageScroll;
         else if (state.screen === "system") sc.scrollTop = state.systemScroll;
         else if (state.screen === "menu") sc.scrollTop = state.menuScroll;
       }
@@ -2323,7 +2821,25 @@
       bindWpFallback();
       if (state.screen === "board") bindItemReorder();
       if (state.screen === "item") bindItemEditor();
-      if (state.screen === "item") stopPreviewCycle();
+      if (state.screen === "image") {
+        bindImageEditor();
+        if (
+          state.imageDraft &&
+          !state.imageDraft.analysis &&
+          !state.imageDraft.sourcePreview
+        ) {
+          fillImageDraftFromItem().then(function () {
+            var existing = els.app.querySelector(".screen-image");
+            if (!existing || state.screen !== "image") return;
+            var mini = existing.querySelector(".image-mini");
+            if (mini) mini.outerHTML = imageMiniHtml();
+            var wrap = existing.querySelector(".rows");
+            if (wrap) wrap.innerHTML = imageRows();
+            bindImageEditor();
+          });
+        }
+      }
+      if (state.screen === "item" || state.screen === "image") stopPreviewCycle();
       else startPreviewCycle();
     } else {
       stopPreviewCycle();
@@ -2808,9 +3324,12 @@
     }
     els.dialog.hidden = false;
     if (state.dialog === "confirm") {
+      var confirmTitle = state.screen === "image" ? "Save changes?" : "Confirm Changes?";
       els.dialog.innerHTML =
         '<div class="dialog-card" role="dialog" aria-labelledby="dlg-title">' +
-        '<h2 id="dlg-title">Confirm Changes?</h2>' +
+        '<h2 id="dlg-title">' +
+        confirmTitle +
+        "</h2>" +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="yes">Yes</button>' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="no">No</button>' +
@@ -2966,6 +3485,15 @@
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="item-include-go">Save anyway</button>' +
         '<button class="btn-primary" type="button" data-act="item-include-keep">Keep editing</button>' +
+        "</div></div>";
+    } else if (state.dialog === "image-opaque") {
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Warning</h2>" +
+        '<p class="dialog-note">Your item may not appear correctly because you haven\'t removed the background yet.</p>' +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="image-opaque-ok">OK</button>' +
+        '<button class="btn-primary" type="button" data-act="image-opaque-cancel">Cancel</button>' +
         "</div></div>";
     } else if (state.dialog === "item-delete") {
       var delItems = (state.boardDraft && state.boardDraft.items) || [];
@@ -3681,22 +4209,27 @@
     if (nav) state.menuScroll = nav.scrollTop;
     var ic = document.getElementById("item-scroll");
     if (ic) state.itemScroll = ic.scrollTop;
+    var imc = document.getElementById("image-scroll");
+    if (imc) state.imageScroll = imc.scrollTop;
   }
 
   function go(screen, boardId, itemKey) {
-    if (state.screen === "style" || state.screen === "item") rememberStyleScroll();
+    if (state.screen === "style" || state.screen === "item" || state.screen === "image") {
+      rememberStyleScroll();
+    }
     state.picker = null;
     state.dialog = null;
     state.screen = screen;
     state.boardId = boardId || null;
-    if (screen === "item") {
+    if (screen === "item" || screen === "image") {
       state.itemKey = itemKey != null ? String(itemKey) : String(state.itemKey || "new");
     } else if (screen !== "board") {
       state.itemKey = null;
     }
     if (screen !== "style") state.styleScroll = 0;
-    if (screen !== "board" && screen !== "item") state.boardScroll = 0;
-    if (screen !== "item") state.itemScroll = 0;
+    if (screen !== "board" && screen !== "item" && screen !== "image") state.boardScroll = 0;
+    if (screen !== "item" && screen !== "image") state.itemScroll = 0;
+    if (screen !== "image") state.imageScroll = 0;
     if (screen !== "system") state.systemScroll = 0;
     if (screen !== "menu") state.menuScroll = 0;
     writeHash(true);
@@ -3704,6 +4237,9 @@
   }
 
   function backTarget() {
+    if (state.screen === "image") {
+      return { screen: "item", boardId: state.boardId, itemKey: state.itemKey };
+    }
     if (state.screen === "item") {
       return { screen: "board", boardId: state.boardId };
     }
@@ -3717,15 +4253,20 @@
   }
 
   function performBackNav(screen, boardId) {
-    if (state.screen === "style" || state.screen === "item") rememberStyleScroll();
+    if (state.screen === "style" || state.screen === "item" || state.screen === "image") {
+      rememberStyleScroll();
+    }
     state.picker = null;
     state.dialog = null;
     state.screen = screen;
     state.boardId = boardId || null;
-    if (screen !== "item") {
+    if (screen !== "item" && screen !== "image") {
       state.itemKey = null;
       state.itemScroll = 0;
+      state.imageDraft = null;
+      state.imageCommitted = null;
     }
+    if (screen !== "image") state.imageScroll = 0;
     if (screen !== "style") state.styleScroll = 0;
     if (screen !== "system") state.systemScroll = 0;
     if (screen !== "menu") state.menuScroll = 0;
@@ -3840,6 +4381,10 @@
       return;
     }
     if (state.dialog) {
+      if (state.dialog === "image-opaque") {
+        cancelOpaqueImage();
+        return;
+      }
       state.dialog = null;
       renderDialog();
       return;
@@ -3850,6 +4395,12 @@
     }
     if (state.screen === "style") {
       leaveStyle(function () {
+        performBackNav(target.screen, target.boardId);
+      });
+      return;
+    }
+    if (state.screen === "image") {
+      leaveImage(function () {
         performBackNav(target.screen, target.boardId);
       });
       return;
@@ -3902,6 +4453,10 @@
       return;
     }
     if (key === "itemImage") {
+      if (itemHasImage(state.itemDraft)) {
+        openImageEditor();
+        return;
+      }
       var photo = document.getElementById("item-photo");
       if (photo) photo.click();
       return;
@@ -4333,6 +4888,7 @@
         image: it.image || "",
         imageName: it.imageName || "",
         imageData: it.imageData || "",
+        menuimg: menuimgPayload(it),
       };
       if (it.row) payload.row = it.row;
       var req = Promise.resolve();
@@ -4459,6 +5015,40 @@
   }
 
   function confirmChoice(val, quiet) {
+    if (state.screen === "image") {
+      if (val === "yes") {
+        state.dialog = null;
+        renderDialog();
+        toast("Saving image…");
+        commitImageToItem()
+          .then(function () {
+            var nextImg = state.pendingLeave;
+            state.pendingLeave = null;
+            state.confirmLeave = !!nextImg;
+            if (nextImg) nextImg();
+            else performBackNav("item", state.boardId);
+          })
+          .catch(function (err) {
+            console.warn("Edit Image save failed", err);
+            toast("Could not save image");
+          });
+        return;
+      }
+      if (val === "no") {
+        discardImageDraft();
+        state.dialog = null;
+        var nextImgNo = state.pendingLeave;
+        state.pendingLeave = null;
+        state.confirmLeave = !!nextImgNo;
+        if (nextImgNo) nextImgNo();
+        else performBackNav("item", state.boardId);
+        return;
+      }
+      state.dialog = null;
+      state.pendingLeave = null;
+      renderDialog();
+      return;
+    }
     if (state.screen === "item") {
       if (val === "yes") {
         if (quiet) {
@@ -5594,6 +6184,14 @@
     if (state.screen === "system") hash = "#/system";
     else if (state.screen === "menu") hash = "#/menu";
     else if (state.screen === "style") hash = "#/menu/style";
+    else if (state.screen === "image") {
+      hash =
+        "#/menu/board/" +
+        state.boardId +
+        "/item/" +
+        encodeURIComponent(String(state.itemKey || "new")) +
+        "/image";
+    }
     else if (state.screen === "item") {
       hash =
         "#/menu/board/" +
@@ -5628,6 +6226,17 @@
       return { screen: "system", boardId: null };
     } else if (parts[0] === "menu" && parts[1] === "style") {
       return { screen: "style", boardId: null };
+    } else if (
+      parts[0] === "menu" &&
+      parts[1] === "board" &&
+      parts[3] === "item" &&
+      parts[5] === "image"
+    ) {
+      return {
+        screen: "image",
+        boardId: parts[2] || "1",
+        itemKey: decodeURIComponent(parts[4] || "new"),
+      };
     } else if (parts[0] === "menu" && parts[1] === "board" && parts[3] === "item") {
       return {
         screen: "item",
@@ -5796,12 +6405,32 @@
       // When "Confirm save?" is No, allow the nav; draft change stays until
       // reload (internal back paths still auto-persist via leaveSystem).
     }
+    var sameItemEditor =
+      (target.screen === "item" || target.screen === "image") &&
+      String(target.itemKey || "") === String(prevItem || "") &&
+      (target.boardId || null) === (prevBoard || null);
+    var leavingDirtyImage =
+      prevScreen === "image" && imageDirty() && target.screen !== "image";
+    if (leavingDirtyImage) {
+      state.picker = null;
+      var imageHash =
+        "#/menu/board/" +
+        prevBoard +
+        "/item/" +
+        encodeURIComponent(String(prevItem || "new")) +
+        "/image";
+      if (location.hash !== imageHash) {
+        history.replaceState(null, "", imageHash);
+      }
+      state.pendingLeave = function () {
+        history.back();
+      };
+      state.dialog = "confirm";
+      renderAll();
+      return;
+    }
     var leavingDirtyItem =
-      prevScreen === "item" &&
-      itemDirty() &&
-      (target.screen !== "item" ||
-        String(target.itemKey || "") !== String(state.itemKey || "") ||
-        (target.boardId || null) !== (prevBoard || null));
+      prevScreen === "item" && itemDirty() && !sameItemEditor;
     if (leavingDirtyItem) {
       state.picker = null;
       var itemHash =
@@ -5822,7 +6451,9 @@
     var leavingDirtyBoard =
       prevScreen === "board" &&
       (boardDirty() || styleDirty()) &&
-      ((target.screen !== "board" && target.screen !== "item") ||
+      ((target.screen !== "board" &&
+        target.screen !== "item" &&
+        target.screen !== "image") ||
         (target.boardId || null) !== (prevBoard || null));
     if (leavingDirtyBoard) {
       state.picker = null;
@@ -5881,16 +6512,18 @@
         var pack = payload.boards[bi];
         var keepDirty =
           ((state.screen === "board" && boardDirty()) ||
-            (state.screen === "item" && itemDirty())) &&
+            (state.screen === "item" && itemDirty()) ||
+            (state.screen === "image" && (itemDirty() || imageDirty()))) &&
           state.boardDraft &&
           state.boardDraft.id === pack.id;
         if (!keepDirty) rememberBoardSnap(pack);
       }
       if (
-        (state.screen === "board" || state.screen === "item") &&
+        (state.screen === "board" || state.screen === "item" || state.screen === "image") &&
         state.boardId &&
         !boardDirty() &&
-        !(state.screen === "item" && itemDirty())
+        !((state.screen === "item" || state.screen === "image") && itemDirty()) &&
+        !(state.screen === "image" && imageDirty())
       ) {
         var fresh = findBoard(resolveBoardId(state.boardId));
         if (fresh && fresh.id) {
@@ -6264,6 +6897,16 @@
       state.dialog = null;
       renderDialog();
       refreshBoardRows();
+    } else if (act === "image-how") {
+      e.preventDefault();
+      showImageHowTooltip();
+    } else if (act === "image-replace") {
+      var imagePhoto = document.getElementById("image-photo");
+      if (imagePhoto) imagePhoto.click();
+    } else if (act === "image-opaque-ok") {
+      continueOpaqueImage();
+    } else if (act === "image-opaque-cancel") {
+      cancelOpaqueImage();
     } else if (act === "copy-hex") {
       copyHex(t.getAttribute("data-hex"));
     } else if (act === "reload-sheet") {

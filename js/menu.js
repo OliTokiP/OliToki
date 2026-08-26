@@ -1858,10 +1858,24 @@
     }
     const s = raw.replace(/^\/+/, "").trim();
     if (!s) return null;
-    if (s.indexOf("food-pics/") === 0) return toWebpPath(s);
     const folder = String(
       folderOverride || cfg.imageFolder || "food-pics"
     ).replace(/\/+$/, "");
+    if (/\.menuimg(?:\/|$)/i.test(s)) {
+      const M = window.TOKI_MENUIMG;
+      if (M && typeof M.resolveDisplayPath === "function") {
+        return M.resolveDisplayPath(s, folder);
+      }
+      if (/\.menuimg\/.+/i.test(s)) {
+        return s.indexOf("food-pics/") === 0 ? s : folder + "/" + s.replace(/^.*\//, "");
+      }
+      const stem = s.replace(/^.*\//, "").replace(/\.menuimg$/i, "");
+      const dir = s.indexOf("food-pics/") === 0
+        ? s.replace(/\.menuimg(?:\/.*)?$/i, ".menuimg")
+        : folder + "/" + stem + ".menuimg";
+      return dir + "/display.webp";
+    }
+    if (s.indexOf("food-pics/") === 0) return toWebpPath(s);
     // Sheet may list "foo.png" or "foo" — attach folder then prefer .webp
     let path = folder + "/" + s;
     if (!/\.(png|jpe?g|gif|webp)$/i.test(s)) {

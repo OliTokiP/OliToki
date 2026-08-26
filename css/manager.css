@@ -601,6 +601,20 @@ html.is-item-dragging * {
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.35));
 }
 
+.item-mini-photo-wrap.is-plate {
+  width: 82%;
+  max-width: 82%;
+  aspect-ratio: 3 / 2;
+  max-height: calc(var(--top-slot-h) - var(--item-mini-footer-h, 72px) - 16px);
+}
+
+.item-mini-photo-wrap.is-plate img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: fill;
+}
+
 .item-mini-sticker {
   position: absolute;
   z-index: 3;
@@ -687,6 +701,134 @@ html.is-item-dragging * {
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+/* Edit Image — 3:2 mini-display is the 1500×1000 Plate Image canvas. */
+.image-mini {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 var(--top-slot-h);
+  height: var(--top-slot-h);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+}
+
+.image-mini-frame {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--main) 18%, var(--secondary));
+  background: #f3f3f3;
+  overflow: hidden;
+}
+
+.image-mini-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, #d8d8d8 25%, transparent 25%) 0 0 / 16px 16px,
+    linear-gradient(-45deg, #d8d8d8 25%, transparent 25%) 0 8px / 16px 16px,
+    linear-gradient(45deg, transparent 75%, #d8d8d8 75%) 8px -8px / 16px 16px,
+    linear-gradient(-45deg, transparent 75%, #d8d8d8 75%) -8px 0 / 16px 16px,
+    #eee;
+}
+
+.image-mini-src {
+  position: absolute;
+  display: block;
+  max-width: none;
+  max-height: none;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
+.image-mini-guide {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: 52%; /* 780 / 1500 */
+  height: 78%; /* 780 / 1000 */
+  transform: translate(-50%, -50%);
+  border: 2px solid #e10600;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.image-mini-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--main);
+  opacity: 0.45;
+}
+
+.row-image-file .row-label-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+
+.row-image-file .row-label {
+  white-space: nowrap;
+}
+
+.row-hint {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--main) 62%, var(--secondary));
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.row-how {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--main);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.row-slider {
+  gap: 10px;
+}
+
+.image-slider {
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  accent-color: var(--main);
+}
+
+.row-image-help {
+  min-height: calc(var(--row-min-h) * 2);
+  justify-content: flex-start;
+  padding-top: 16px;
+  padding-bottom: 18px;
+}
+
+.row-help {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--main);
 }
 
 .row.row-price {

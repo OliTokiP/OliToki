@@ -620,6 +620,152 @@ def _save_food_image(
     }
 
 
+def _menuimg_folder_ok(folder_rel: str) -> str:
+    s = str(folder_rel or "").replace("\\", "/").strip().strip("/")
+    if not re.match(r"^food-pics/[A-Za-z0-9_-]+$", s):
+        return ""
+    return s
+
+
+def _menuimg_stem_ok(stem: str) -> str:
+    s = re.sub(r"[^A-Za-z0-9]", "", str(stem or ""))
+    return s[:80]
+
+
+def _parse_menuimg_config(text: str) -> dict:
+    out = {"filename_1": "", "scale_1": 100, "x_1": 0, "y_1": 0}
+    for line in str(text or "").splitlines():
+        m = re.match(r"^\s*([A-Za-z0-9_]+)\s*:\s*(.*?)\s*$", line)
+        if not m:
+            continue
+        key = m.group(1).lower()
+        val = m.group(2)
+        if key == "filename_1":
+            out["filename_1"] = val
+        elif key == "scale_1":
+            try:
+                out["scale_1"] = int(val)
+            except ValueError:
+                pass
+        elif key == "x_1":
+            try:
+                out["x_1"] = int(val)
+            except ValueError:
+                pass
+        elif key == "y_1":
+            try:
+                out["y_1"] = int(val)
+            except ValueError:
+                pass
+    return out
+
+
+def _serialize_menuimg_config(cfg: dict, filename: str = "") -> str:
+    name = str((cfg or {}).get("filename_1") or filename or "image.webp")
+    name = Path(name).name
+    if not name.lower().endswith(".webp"):
+        name = Path(name).stem + ".webp"
+    try:
+        scale = int((cfg or {}).get("scale_1") if cfg else 100)
+    except (TypeError, ValueError):
+        scale = 100
+    try:
+        x = int((cfg or {}).get("x_1") if cfg else 0)
+    except (TypeError, ValueError):
+        x = 0
+    try:
+        y = int((cfg or {}).get("y_1") if cfg else 0)
+    except (TypeError, ValueError):
+        y = 0
+    scale = max(70, min(130, scale or 100))
+    x = max(-240, min(240, x))
+    y = max(-160, min(160, y))
+    return f"Filename_1: {name}\nScale_1: {scale}\nX_1: {x}\nY_1: {y}\n"
+
+
+def _read_menuimg_package(folder_rel: str, stem: str) -> dict | None:
+    folder = _menuimg_folder_ok(folder_rel)
+    name = _menuimg_stem_ok(stem)
+    if not folder or not name:
+        return None
+    pkg = ROOT / folder / f"{name}.menuimg"
+    cfg_path = pkg / "config.txt"
+    if not cfg_path.is_file():
+        return None
+    cfg = _parse_menuimg_config(cfg_path.read_text(encoding="utf-8"))
+    src_name = Path(str(cfg.get("filename_1") or "")).name
+    source = ""
+    if src_name:
+        cand = pkg / src_name
+        if cand.is_file():
+            source = f"{folder}/{name}.menuimg/{src_name}"
+    if not source:
+        for p in sorted(pkg.glob("*.webp")):
+            if p.name.lower() in ("display.webp", "display-sm.webp"):
+                continue
+            source = f"{folder}/{name}.menuimg/{p.name}"
+            if not cfg.get("filename_1"):
+                cfg["filename_1"] = p.name
+            break
+    display = pkg / "display.webp"
+    sm = pkg / "display-sm.webp"
+    return {
+        "ok": True,
+        "stem": name,
+        "folder": folder,
+        "package": f"{folder}/{name}.menuimg",
+        "config": cfg,
+        "sourcePath": source,
+        "displayPath": f"{folder}/{name}.menuimg/display.webp" if display.is_file() else "",
+        "smPath": f"{folder}/{name}.menuimg/display-sm.webp" if sm.is_file() else "",
+    }
+
+
+def _save_menuimg_package(
+    folder_rel: str,
+    stem: str,
+    source_data: bytes,
+    source_name: str,
+    source_mime: str,
+    display_data: bytes,
+    config: dict,
+) -> dict:
+    """Write food-pics/{folder}/{stem}.menuimg/ (source + config + display)."""
+    folder = _menuimg_folder_ok(folder_rel)
+    name = _menuimg_stem_ok(stem)
+    if not folder or not name:
+        raise ValueError("bad menuimg path")
+    pkg_rel = f"{folder}/{name}.menuimg"
+    pkg = ROOT / pkg_rel
+    if pkg.is_file():
+        pkg.unlink()
+    pkg.mkdir(parents=True, exist_ok=True)
+    src_stem = _item_stem("", source_name) or name
+    src_info: dict = {}
+    if source_data:
+        src_info = _save_food_image(
+            source_data, pkg_rel, src_stem, source_name or (src_stem + ".webp"), source_mime
+        )
+    src_file = src_info.get("filename") or (src_stem + ".webp")
+    cfg_text = _serialize_menuimg_config(config or {}, src_file)
+    (pkg / "config.txt").write_text(cfg_text, encoding="utf-8")
+    display_info: dict = {}
+    if display_data:
+        display_info = _save_food_image(
+            display_data, pkg_rel, "display", "display.webp", "image/webp"
+        )
+        _save_food_image(display_data, folder, name, name + ".webp", "image/webp")
+    return {
+        "package": pkg_rel,
+        "filename": f"{name}.menuimg",
+        "source": src_info,
+        "display": display_info,
+        "config": _parse_menuimg_config(cfg_text),
+        "path": pkg_rel,
+        "smPath": f"{pkg_rel}/display-sm.webp",
+    }
+
+
 def _is_heavy_filter_header(raw: str) -> bool:
     h = str(raw or "").strip().lower()
     if "heavy" not in h:
@@ -3088,20 +3234,68 @@ class SheetsBackend:
 
         image_cell = str(body.get("image") or "").strip()
         image_info: dict = {}
-        raw_image = body.get("imageData") or body.get("imageBase64") or ""
-        if raw_image:
-            data, mime = _decode_image_payload(raw_image)
-            stem = _item_stem(name, str(body.get("imageName") or ""))
-            src_name = str(body.get("imageName") or stem)
-            if not _hosted():
+        menuimg_body = body.get("menuimg") if isinstance(body.get("menuimg"), dict) else {}
+        raw_image = (
+            body.get("imageData")
+            or body.get("imageBase64")
+            or menuimg_body.get("displayData")
+            or ""
+        )
+        raw_source = menuimg_body.get("sourceData") or ""
+        if raw_image or raw_source:
+            data, mime = _decode_image_payload(raw_image or raw_source)
+            stem = _item_stem(name, str(body.get("imageName") or menuimg_body.get("fileName") or ""))
+            src_name = str(
+                body.get("imageName") or menuimg_body.get("fileName") or stem
+            )
+            if not _hosted() and (raw_source or menuimg_body):
+                try:
+                    src_bytes, src_mime = (
+                        _decode_image_payload(raw_source)
+                        if raw_source
+                        else (data, mime)
+                    )
+                    pkg = _save_menuimg_package(
+                        spec["folder"],
+                        stem,
+                        src_bytes,
+                        src_name,
+                        src_mime,
+                        data if raw_image else b"",
+                        {
+                            "filename_1": src_name,
+                            "scale_1": menuimg_body.get("scale")
+                            if menuimg_body.get("scale") is not None
+                            else menuimg_body.get("scale_1"),
+                            "x_1": menuimg_body.get("x")
+                            if menuimg_body.get("x") is not None
+                            else menuimg_body.get("x_1"),
+                            "y_1": menuimg_body.get("y")
+                            if menuimg_body.get("y") is not None
+                            else menuimg_body.get("y_1"),
+                        },
+                    )
+                    image_info.update(pkg)
+                    image_info["menuimg"] = pkg.get("filename") or f"{stem}.menuimg"
+                except Exception as e:
+                    image_info["menuimgError"] = str(e)
+                    _log(f"menuimg package write skipped: {e}")
+                    traceback.print_exc()
+            if not _hosted() and not image_info.get("menuimg") and data:
                 image_info.update(
                     _save_food_image(data, spec["folder"], stem, src_name, mime)
                 )
             drive_mime = mime if mime and mime != "application/octet-stream" else (
                 mimetypes.guess_type(src_name)[0] or "image/jpeg"
             )
-            drive_name = (image_info.get("filename") or (stem + _ext_for_mime(mime, src_name)))
-            if self._drive_upload_folder_id():
+            drive_name = (
+                image_info.get("display", {}).get("filename")
+                if isinstance(image_info.get("display"), dict)
+                else None
+            ) or (image_info.get("filename") if not str(image_info.get("filename") or "").endswith(".menuimg") else None) or (
+                stem + ".webp"
+            )
+            if data and self._drive_upload_folder_id():
                 try:
                     uploaded = self.upload_drive_image(data, drive_name, drive_mime)
                     image_info["driveId"] = uploaded.get("id") or ""
@@ -3111,13 +3305,15 @@ class SheetsBackend:
                     image_info["driveError"] = str(e)
                     _log(f"item image Drive upload skipped: {e}")
                     traceback.print_exc()
-            else:
+            elif data:
                 image_info["driveError"] = "no TOKI_UPLOAD_FOLDER_ID"
             if image_info.get("driveUrl"):
                 image_cell = image_info["driveUrl"]
+            elif image_info.get("menuimg"):
+                image_cell = image_info["menuimg"]
             elif image_info.get("filename"):
                 image_cell = image_info["filename"]
-        write_image = bool(raw_image) or ("image" in body)
+        write_image = bool(raw_image) or bool(raw_source) or ("image" in body)
         if kind == "board":
             put(name, "item", default_col=0)
             put(
@@ -4062,6 +4258,17 @@ def make_handler(
                     _log(f"validations gid={gid} error: {e}")
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
+                return
+
+            if path == "/api/manager/menuimg":
+                qs = parse_qs(parsed.query)
+                folder = (qs.get("folder") or [""])[0]
+                stem = (qs.get("stem") or qs.get("name") or [""])[0]
+                pkg = _read_menuimg_package(folder, stem)
+                if not pkg:
+                    self._json(404, {"ok": False, "error": "menuimg not found"})
+                    return
+                self._json(200, pkg)
                 return
 
             # Static files — never on the hosted API (would leak the tree).
