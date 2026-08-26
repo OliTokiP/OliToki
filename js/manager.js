@@ -1757,8 +1757,8 @@
     html += row({
       key: "itemImage",
       label: "Image",
-      value: itemImageLabel(d),
-      placeholder: "Upload New Image",
+      value: itemHasImage(d) ? "Edit" : "",
+      placeholder: "Add",
     });
     html +=
       '<input id="item-photo" type="file" accept="' +
