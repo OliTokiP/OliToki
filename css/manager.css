@@ -127,7 +127,11 @@ img {
   position: relative;
   width: 390px;
   height: 844px;
-  overflow: hidden;
+  /* Desktop: the 10px / 12px bezel is a box-shadow on .device. Hidden
+     overflow here clips that ring to the slot's square, so the outer
+     window gets hard corners while the inner chrome stays 42px.
+     Compact-phone density still clips below / in fitDevice(). */
+  overflow: visible;
 }
 
 .device {

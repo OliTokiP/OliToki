@@ -7291,6 +7291,7 @@
     if (slot) {
       slot.style.width = "";
       slot.style.height = "";
+      slot.style.overflow = "";
     }
   }
 
@@ -7348,6 +7349,7 @@
     if (slot) {
       slot.style.width = 390 * s + "px";
       slot.style.height = 844 * s + "px";
+      slot.style.overflow = "";
     }
     syncEncoreLayout();
     if (state.tooltipItems.length) layoutTooltipOverlay(false);

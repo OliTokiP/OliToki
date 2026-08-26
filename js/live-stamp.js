@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "21a4bde",
-  "hashFull": "21a4bde52b56b290c4f9668f52d89fcbb8df3bbd",
-  "subject": "QA: 2026-08-25 Item Uploader incorporated into beta version of menu manager (pass 6)"
+  "hash": "6cb679d",
+  "hashFull": "6cb679dc3022a02e96f52a59b263082fae91998b",
+  "subject": "QA: 2026-08-26 Desktop view has broken rounded corners (pass 1)"
 };
