@@ -470,6 +470,12 @@ html.is-item-dragging * {
   opacity: 0.7;
 }
 
+.item-row.is-delete-candidate {
+  background: color-mix(in srgb, #c41e3a 34%, var(--highlight));
+  box-shadow: 0 14px 32px rgba(140, 20, 40, 0.4);
+  outline: 2px solid #c41e3a;
+}
+
 .item-placeholder {
   min-height: var(--row-min-h);
   background: color-mix(in srgb, var(--highlight) 40%, var(--secondary));
@@ -507,8 +513,7 @@ html.is-item-dragging * {
 }
 
 .row.is-optional .row-label {
-  color: color-mix(in srgb, var(--main) 48%, var(--highlight));
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .row-value.is-clip {
@@ -787,15 +792,21 @@ html.is-item-dragging * {
 
 .dialog-textarea {
   width: 100%;
-  min-height: 8.5rem;
+  min-height: 14.5rem;
+  height: 16rem;
+  max-height: 18rem;
   margin: 0 0 14px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1.5px solid var(--highlight-line);
   background: var(--secondary);
   color: var(--main);
-  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  resize: none;
   outline: none;
+  overflow-y: auto;
 }
 
 .dialog-textarea:focus {
@@ -1650,6 +1661,58 @@ html.is-item-dragging * {
   height: 18px;
 }
 
+.footer-add-item .footer-label-delete,
+.footer-add-item .trash-icon {
+  display: none;
+}
+
+.trash-icon {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  margin-block: auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+}
+
+.trash-icon svg {
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+}
+
+.trash-lid {
+  transform-origin: 5px 7px;
+  transition: transform 0.18s ease;
+}
+
+.screen-board.is-item-dragging .footer-add-item {
+  pointer-events: none;
+  background: #c41e3a;
+  color: #fff;
+  border-top-color: color-mix(in srgb, #000 14%, #c41e3a);
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.screen-board.is-item-dragging .footer-add-item .plus-circle,
+.screen-board.is-item-dragging .footer-add-item .footer-label-add {
+  display: none;
+}
+
+.screen-board.is-item-dragging .footer-add-item .trash-icon {
+  display: grid;
+}
+
+.screen-board.is-item-dragging .footer-add-item .footer-label-delete {
+  display: block;
+}
+
+.screen-board.is-delete-armed .trash-lid {
+  transform: rotate(-32deg);
+}
+
 /* —— Coming soon —— */
 
 .screen-soon {
@@ -1869,6 +1932,20 @@ html.is-item-dragging * {
   background: var(--secondary);
   color: var(--main);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.dialog-card.is-tall {
+  display: flex;
+  flex-direction: column;
+  max-width: 320px;
+  max-height: 86%;
+}
+
+.dialog-card.is-tall .dialog-textarea {
+  flex: 1 1 auto;
+  min-height: 14.5rem;
+  height: auto;
+  max-height: none;
 }
 
 .dialog-card h2 {

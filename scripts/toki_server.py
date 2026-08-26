@@ -2661,58 +2661,121 @@ class SheetsBackend:
             if fold in ("settings", "inventory"):
                 break
             data.append((i, row))
-        if not data:
-            raise ValueError("inventory is empty")
         return header_idx, data_start, headers, data
 
-    def _reorder_inventory(self, rows: list, items: list) -> tuple[list, int, list]:
+    def _apply_item_fields(self, row: list, headers: list, item: dict) -> None:
+        """Overlay Inventory cells from a Manager item payload when present."""
+        cols: dict[str, int] = {}
+        for c, h in enumerate(headers or []):
+            fold = self._header_fold(str(h or ""))
+            if fold:
+                cols[fold] = c
+
+        def put(value, *folds: str, default_col: int | None = None):
+            if value is None:
+                return
+            s = str(value)
+            for fold in folds:
+                if fold in cols:
+                    idx = cols[fold]
+                    while len(row) <= idx:
+                        row.append("")
+                    row[idx] = s
+                    return
+            if default_col is not None:
+                while len(row) <= default_col:
+                    row.append("")
+                row[default_col] = s
+
+        if "name" in item or "item" in item:
+            put(str(item.get("name") or item.get("item") or "").strip(), "item", default_col=0)
+        if "price1" in item or "price" in item:
+            put(
+                _item_price_cell(item.get("price1") or item.get("price") or ""),
+                "price1",
+                "price",
+                default_col=1,
+            )
+        if "price2" in item:
+            put(_item_price_cell(item.get("price2") or ""), "price2", default_col=2)
+        if "price3" in item:
+            put(_item_price_cell(item.get("price3") or ""), "price3", default_col=3)
+        if "subtitle" in item:
+            put(str(item.get("subtitle") or "").strip(), "subtitle", "itemsubtitle", default_col=4)
+        if "description" in item:
+            put(str(item.get("description") or "").strip(), "description", default_col=5)
+        if "isNew" in item or "new" in item:
+            put(_item_bool01(item.get("isNew") or item.get("new"), "0"), "new", default_col=6)
+        if "image" in item:
+            put(str(item.get("image") or "").strip(), "image", default_col=7)
+        if "include" in item:
+            put(_item_bool01(item.get("include"), "1"), "include", default_col=8)
+
+    def _reorder_inventory(
+        self, rows: list, items: list, prune: bool = False
+    ) -> tuple[list, int, list, int]:
         _header_idx, data_start, headers, data = self._inventory_data(rows)
-        by_excel = {idx + 1: vals for idx, vals in data}
-        by_name: dict[str, list] = {}
+        width = max(len(headers), 9)
         for _idx, vals in data:
+            if len(vals) > width:
+                width = len(vals)
+        by_excel = {idx + 1: list(vals) for idx, vals in data}
+        by_name: dict[str, list] = {}
+        for idx, vals in data:
             n = _cell(vals, 0)
             if n and n not in by_name:
-                by_name[n] = vals
-        used: set[int] = set()
+                by_name[n] = by_excel[idx + 1]
+        used_excel: set[int] = set()
+        used_names: set[str] = set()
         ordered: list[list] = []
-        item_rows: list[dict] = []
         for it in items:
             if not isinstance(it, dict):
                 continue
-            name = str(it.get("name") or "").strip()
+            name = str(it.get("name") or it.get("item") or "").strip()
             vals = None
+            excel = None
             raw_row = it.get("row")
             if raw_row not in (None, ""):
                 try:
-                    vals = by_excel.get(int(raw_row))
+                    excel = int(raw_row)
                 except (TypeError, ValueError):
-                    vals = None
-            if vals is None and name:
-                vals = by_name.get(name)
-            if vals is None:
+                    excel = None
+            if excel is not None and excel in by_excel and excel not in used_excel:
+                vals = list(by_excel[excel])
+                used_excel.add(excel)
+            elif name and name not in used_names and name in by_name:
+                vals = list(by_name[name])
+                used_names.add(name)
+                for er, ev in by_excel.items():
+                    if ev is by_name[name] or _cell(ev, 0) == name:
+                        used_excel.add(er)
+                        break
+            else:
+                vals = [""] * width
+            self._apply_item_fields(vals, headers, it)
+            if not _cell(vals, 0):
                 continue
-            key = id(vals)
-            if key in used:
-                continue
-            used.add(key)
+            if name:
+                used_names.add(name)
             ordered.append(vals)
-        leftovers = [vals for _idx, vals in data if id(vals) not in used]
+        leftovers: list[list] = []
+        if not prune:
+            for idx, vals in data:
+                if (idx + 1) in used_excel:
+                    continue
+                leftovers.append(list(vals))
         block = ordered + leftovers
-        width = 1
-        for r in [headers] + block:
-            if len(r) > width:
-                width = len(r)
         padded = []
         for r in block:
             row = list(r)
             if len(row) < width:
                 row.extend([""] * (width - len(row)))
             padded.append(row)
-        for i, vals in enumerate(padded):
-            item_rows.append(
-                {"name": _cell(vals, 0), "row": data_start + i + 1}
-            )
-        return padded, data_start, item_rows
+        item_rows = [
+            {"name": _cell(vals, 0), "row": data_start + i + 1}
+            for i, vals in enumerate(padded)
+        ]
+        return padded, data_start, item_rows, len(data)
 
     def write_board(self, body: dict, sheet_id: str | None = None) -> dict:
         """Write Board 1–3 Settings cells and/or inventory row order."""
@@ -2721,7 +2784,8 @@ class SheetsBackend:
         title = self._tab_title_for_gid(sid, gid)
         safe_title = "'" + title.replace("'", "''") + "'"
         items = body.get("items")
-        want_inv = isinstance(items, list) and len(items) > 0
+        want_inv = isinstance(items, list)
+        prune_inv = bool(body.get("pruneItems") or body.get("prune"))
         t0 = time.time()
         with self._api_lock:
             result = (
@@ -2777,15 +2841,32 @@ class SheetsBackend:
         item_rows = None
         wrote_inv = False
         if want_inv:
-            padded, data_start, item_rows = self._reorder_inventory(rows, items)
-            end_col = self._col_letters(max(len(padded[0]) - 1, 0))
-            end_row = data_start + len(padded)
-            data.append(
-                {
-                    "range": f"{safe_title}!A{data_start + 1}:{end_col}{end_row}",
-                    "values": padded,
-                }
+            padded, data_start, item_rows, old_count = self._reorder_inventory(
+                rows, items, prune_inv
             )
+            width = 9
+            if padded:
+                width = max(len(r) for r in padded)
+            end_col = self._col_letters(max(width - 1, 0))
+            if padded:
+                end_row = data_start + len(padded)
+                data.append(
+                    {
+                        "range": f"{safe_title}!A{data_start + 1}:{end_col}{end_row}",
+                        "values": padded,
+                    }
+                )
+            if prune_inv and old_count > len(padded):
+                blanks = [[""] * width for _ in range(old_count - len(padded))]
+                data.append(
+                    {
+                        "range": (
+                            f"{safe_title}!A{data_start + len(padded) + 1}:"
+                            f"{end_col}{data_start + old_count}"
+                        ),
+                        "values": blanks,
+                    }
+                )
             wrote_inv = True
         if not data:
             raise ValueError("nothing to write")
@@ -3441,7 +3522,7 @@ def make_handler(
                         },
                     )
                     return
-                body, err = self._read_json_body(16_384)
+                body, err = self._read_json_body(65_536)
                 if err:
                     self._json(400, err)
                     return

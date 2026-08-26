@@ -10,11 +10,15 @@
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
  * Beta item editor writes Inventory via TOKI_MANAGER_SHEET.writeItem.
- * System Settings persist via writeSystem + fallback. Confirm save? No skips the
- * confirm dialog and writes System, Style, and Board immediately. Menu-item
- * reorder waits 3s of idle before writing, as a background Inventory save that
- * must not hijack Edit Item / Create Item. Encore extras and item order get
- * bespoke save cards in the tooltip stack (Board Saved on top).
+ * Edit Item / Create Item always Confirm-on-back (Confirm save? does not skip
+ * that prompt). Confirm save? Yes keeps item edits in the app until Board Back
+ * Yes writes the sheet; Board No reverts them. Confirm save? No writes the
+ * item after the prompt. System Settings persist via writeSystem + fallback.
+ * Confirm save? No skips the confirm dialog and writes System, Style, and
+ * Board immediately. Menu-item reorder waits 3s of idle before writing, as a
+ * background Inventory save that must not hijack Edit Item / Create Item.
+ * Encore extras and item order get bespoke save cards in the tooltip stack
+ * (Board Saved on top).
  */
 (function () {
   "use strict";
@@ -76,6 +80,7 @@
     itemOrderTimer: null,
     pendingItemOrderSave: false,
     itemOrderPersist: Promise.resolve(),
+    pendingDeleteIndex: null,
     catalogSettings: [],
   };
   state.draft.confirmSave = state.draft.confirmSave || "yes";
@@ -783,19 +788,35 @@
     return html + "</div></div>";
   }
 
-  function footerBar(label, act) {
+  function footerBar(label, act, kind) {
     var labelHtml =
-      '<span class="footer-label">' + escapeHtml(label) + "</span>";
+      '<span class="footer-label' +
+      (kind === "add-item" ? " footer-label-add" : "") +
+      '">' +
+      escapeHtml(label) +
+      "</span>";
     if (!act) {
       return '<div class="footer-bar footer-soon">' + labelHtml + "</div>";
     }
+    var trash =
+      kind === "add-item"
+        ? '<span class="trash-icon" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<g class="trash-lid"><path d="M4 7h16"/><path d="M9 7V5h6v2"/></g>' +
+          '<g class="trash-body"><path d="M6 7l1.15 12.15A2 2 0 0 0 9.14 21h5.72a2 2 0 0 0 1.99-1.85L18 7"/><path d="M10 11v6M14 11v6"/></g>' +
+          "</svg></span>" +
+          '<span class="footer-label footer-label-delete">Delete Item</span>'
+        : "";
     return (
-      '<button class="footer-bar" type="button" data-act="' +
+      '<button class="footer-bar' +
+      (kind === "add-item" ? " footer-add-item" : "") +
+      '" type="button" data-act="' +
       act +
       '">' +
       '<span class="plus-circle" aria-hidden="true">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>' +
       "</span>" +
+      trash +
       labelHtml +
       "</button>"
     );
@@ -972,8 +993,24 @@
 
   function itemsSnap(b) {
     return ((b && b.items) || []).map(function (it) {
-      return { name: String((it && it.name) || ""), row: it && it.row ? it.row : 0 };
+      return inventorySnap(it);
     });
+  }
+
+  function inventorySnap(it) {
+    it = it || {};
+    return {
+      name: String(it.name || ""),
+      row: it.row ? it.row : 0,
+      price1: String(it.price1 || ""),
+      price2: String(it.price2 || ""),
+      price3: String(it.price3 || ""),
+      subtitle: String(it.subtitle || ""),
+      description: String(it.description || ""),
+      isNew: it.isNew === "yes" ? "yes" : "no",
+      include: it.include === "no" ? "no" : "yes",
+      image: String(it.image || ""),
+    };
   }
 
   function boardSettingsSnap(b) {
@@ -1139,7 +1176,7 @@
     var foot = isAnnouncementsBoard(b)
       ? ""
       : managerBetaFeatures()
-        ? footerBar("Add Item", "item-add")
+        ? footerBar("Add Item", "item-add", "add-item")
         : footerBar("Add Item From Toast", "toast-add");
     return (
       '<section class="screen screen-board" data-board-id="' +
@@ -1280,6 +1317,9 @@
     d.isNew = it.isNew === "yes" ? "yes" : "no";
     d.include = it.include === "no" ? "no" : "yes";
     d.image = it.image || "";
+    d.imageName = it.imageName || "";
+    d.imageData = it.imageData || "";
+    d.imagePreview = it.imagePreview || "";
     d.priceModel = detectPriceModel(it);
     var tokens = [it.price1, it.price2, it.price3];
     if (d.priceModel === "fixed") {
@@ -1396,7 +1436,6 @@
 
   function itemMissingSoft(d) {
     var missing = [];
-    if (!String((d && d.subtitle) || "").trim()) missing.push("Subtitle");
     if (!String((d && d.description) || "").trim()) missing.push("Description");
     if (!(d && (d.imageData || String(d.image || "").trim()))) missing.push("Image");
     return missing;
@@ -1764,8 +1803,9 @@
     return String((src && src.sheetId) || "").trim();
   }
 
-  function applyItemToBoard(d, excelRow) {
+  function applyItemToBoard(d, excelRow, opts) {
     if (!d || !state.boardDraft) return;
+    opts = opts || {};
     var prices = collectItemPrices(d);
     var entry = {
       name: String(d.name || "").trim(),
@@ -1778,6 +1818,9 @@
       isNew: d.isNew === "yes" ? "yes" : "no",
       image: d.image || "",
       include: d.include === "yes" ? "yes" : "no",
+      imageName: d.imageName || "",
+      imageData: d.imageData || "",
+      imagePreview: d.imagePreview || "",
     };
     var items = state.boardDraft.items || [];
     if (String(d.key) === "new") {
@@ -1788,13 +1831,26 @@
       if (isFinite(idx) && items[idx]) items[idx] = entry;
     }
     applyBoardToCatalog(state.boardDraft);
-    if (state.boardCommitted && state.boardCommitted.id === state.boardDraft.id) {
-      state.boardCommitted = clone(state.boardDraft);
+    if (opts.commitBoard) {
+      if (state.boardCommitted && state.boardCommitted.id === state.boardDraft.id) {
+        state.boardCommitted = clone(state.boardDraft);
+      }
+      rememberBoardSnap(state.boardDraft);
     }
-    rememberBoardSnap(state.boardDraft);
     state.itemDraft = itemFromBoard(entry, String(d.key) === "new" ? String(items.length - 1) : d.key);
     state.itemDraft.imagePreview = d.imagePreview || "";
+    state.itemDraft.imageData = d.imageData || "";
+    state.itemDraft.imageName = d.imageName || "";
     state.itemCommitted = clone(state.itemDraft);
+  }
+
+  function deleteBoardItem(idx) {
+    if (!state.boardDraft || !state.boardDraft.items) return;
+    idx = parseInt(idx, 10);
+    if (!isFinite(idx) || idx < 0 || idx >= state.boardDraft.items.length) return;
+    state.boardDraft.items.splice(idx, 1);
+    applyBoardToCatalog(state.boardDraft);
+    if (confirmSaveOff()) persistBoardOrderQuiet();
   }
 
   function persistItemWrite() {
@@ -1856,7 +1912,8 @@
           throw new Error((wrote && wrote.error) || "write failed");
         }
         if (wrote.imageCell) d.image = wrote.imageCell;
-        applyItemToBoard(d, wrote.row);
+        d.imageData = "";
+        applyItemToBoard(d, wrote.row, { commitBoard: confirmSaveOff() });
         showSaveNotice(MSG_ITEM_SAVED);
         var next = state.pendingLeave;
         state.pendingLeave = null;
@@ -1874,7 +1931,7 @@
           return;
         }
         showSaveNotice("Could not write item to sheet — saved for this session");
-        applyItemToBoard(d, d.row);
+        applyItemToBoard(d, d.row, { commitBoard: confirmSaveOff() });
         var next = state.pendingLeave;
         state.pendingLeave = null;
         state.confirmLeave = !!next;
@@ -1906,7 +1963,26 @@
       renderDialog();
       return;
     }
-    persistItemWrite();
+    finishItemSave();
+  }
+
+  function finishItemSave() {
+    if (confirmSaveOff()) persistItemWrite();
+    else commitItemLocalAndLeave();
+  }
+
+  function commitItemLocalAndLeave() {
+    var d = state.itemDraft;
+    if (!d) return;
+    state.dialog = null;
+    renderDialog();
+    applyItemToBoard(d, d.row, { commitBoard: false });
+    showSaveNotice(MSG_ITEM_SAVED);
+    var next = state.pendingLeave;
+    state.pendingLeave = null;
+    state.confirmLeave = !!next;
+    if (next) next();
+    else performBackNav("board", state.boardId);
   }
 
   function discardItemDraft() {
@@ -1920,10 +1996,6 @@
       return;
     }
     state.pendingLeave = next;
-    if (confirmSaveOff()) {
-      beginItemSave();
-      return;
-    }
     state.dialog = "confirm";
     renderDialog();
   }
@@ -2743,6 +2815,7 @@
         '<button class="btn-primary" type="button" data-act="confirm" data-val="yes">Yes</button>' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="no">No</button>' +
         '<button class="btn-primary" type="button" data-act="confirm" data-val="keep">Keep Editing</button>' +
+        '<button class="btn-primary" type="button" data-act="confirm" data-val="cancel">Cancel</button>' +
         "</div></div>";
     } else if (state.dialog === "board-title") {
       var cur = (state.boardDraft && (state.boardDraft.menuTitle || state.boardDraft.title)) || "";
@@ -2843,9 +2916,9 @@
     } else if (state.dialog === "item-description") {
       var desc = (state.itemDraft && state.itemDraft.description) || "";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
+        '<div class="dialog-card is-tall" role="dialog">' +
         "<h2>Description</h2>" +
-        '<textarea class="dialog-textarea" id="item-field-input" maxlength="600">' +
+        '<textarea class="dialog-textarea" id="item-field-input" maxlength="600" rows="12">' +
         escapeHtml(desc) +
         "</textarea>" +
         '<div class="dialog-actions">' +
@@ -2894,6 +2967,21 @@
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="item-include-go">Save anyway</button>' +
         '<button class="btn-primary" type="button" data-act="item-include-keep">Keep editing</button>' +
+        "</div></div>";
+    } else if (state.dialog === "item-delete") {
+      var delItems = (state.boardDraft && state.boardDraft.items) || [];
+      var delIdx = state.pendingDeleteIndex;
+      var delName =
+        delIdx != null && delItems[delIdx] ? delItems[delIdx].name : "this item";
+      els.dialog.innerHTML =
+        '<div class="dialog-card" role="dialog">' +
+        "<h2>Delete this item?</h2>" +
+        '<p class="dialog-note">Are you sure you want to delete ' +
+        escapeHtml(delName) +
+        "? This cannot be undone.</p>" +
+        '<div class="dialog-actions">' +
+        '<button class="btn-primary" type="button" data-act="item-delete-yes">Yes</button>' +
+        '<button class="btn-primary" type="button" data-act="item-delete-no">No</button>' +
         "</div></div>";
     }
     applyTheme();
@@ -4201,6 +4289,83 @@
     });
   }
 
+  function persistDirtyItems(prevSnap) {
+    var sheet = window.TOKI_MANAGER_SHEET;
+    var b = state.boardDraft;
+    if (!sheet || typeof sheet.writeItem !== "function" || !b) {
+      return Promise.resolve();
+    }
+    var prevItems = (prevSnap && prevSnap.items) || [];
+    var prevByRow = {};
+    var prevByName = {};
+    var i;
+    for (i = 0; i < prevItems.length; i++) {
+      var p = prevItems[i];
+      if (!p) continue;
+      if (p.row) prevByRow[p.row] = p;
+      if (p.name && !prevByName[p.name]) prevByName[p.name] = p;
+    }
+    var list = b.items || [];
+    var chain = Promise.resolve();
+    function writeOne(it) {
+      if (!it || !String(it.name || "").trim()) return Promise.resolve();
+      var prev = (it.row && prevByRow[it.row]) || prevByName[it.name] || null;
+      var isNew = !it.row;
+      var changed =
+        isNew ||
+        !!it.imageData ||
+        JSON.stringify(inventorySnap(it)) !== JSON.stringify(inventorySnap(prev || {}));
+      if (!changed) return Promise.resolve();
+      var payload = {
+        sheetId: catalogSheetId(),
+        menu: boardMenuId(b),
+        gid: b.gid || "",
+        item: String(it.name || "").trim(),
+        price1: it.price1 || "",
+        price2: it.price2 || "",
+        price3: it.price3 || "",
+        subtitle: it.subtitle || "",
+        description: it.description || "",
+        isNew: it.isNew,
+        include: it.include,
+        image: it.image || "",
+        imageName: it.imageName || "",
+        imageData: it.imageData || "",
+      };
+      if (it.row) payload.row = it.row;
+      var req = Promise.resolve();
+      if (it.row) {
+        req = fetch("/api/health", { cache: "no-store" })
+          .then(function (res) {
+            return res.ok ? res.json() : {};
+          })
+          .then(function (h) {
+            if (h && h.itemUpdate) return;
+            throw new Error("Menu Settings needs a restart to update existing items.");
+          });
+      }
+      return req.then(function () {
+        return sheet.writeItem(payload).then(function (wrote) {
+          if (!wrote || !wrote.ok) {
+            throw new Error((wrote && wrote.error) || "item write failed");
+          }
+          if (wrote.imageCell) it.image = wrote.imageCell;
+          if (wrote.row) it.row = wrote.row;
+          it.imageData = "";
+          return wrote;
+        });
+      });
+    }
+    for (i = 0; i < list.length; i++) {
+      (function (it) {
+        chain = chain.then(function () {
+          return writeOne(it);
+        });
+      })(list[i]);
+    }
+    return chain;
+  }
+
   function persistBoardWrite(prevSnap, nextSnap) {
     var b = state.boardDraft;
     if (!b || b.kind === "announcements") {
@@ -4234,11 +4399,10 @@
     }
     var nextItems = next.items || itemsSnap(b);
     var prevItems = (prev && prev.items) || [];
-    var itemsChanged =
-      JSON.stringify(nextItems.map(function (it) { return it.name; })) !==
-      JSON.stringify(prevItems.map(function (it) { return it.name; }));
+    var itemsChanged = JSON.stringify(nextItems) !== JSON.stringify(prevItems);
     if (itemsChanged) {
       payload.items = nextItems;
+      payload.pruneItems = true;
       changed = true;
     }
     if (!changed) return Promise.resolve({ needed: false, wrote: null });
@@ -4354,6 +4518,11 @@
       var encoreDirty = encoreFieldsChanged(stylePrev, styleNext);
       var orderDirty = !!(onBoard && itemsOrderChanged(boardPrev, boardNext));
       var boardMetaDirty = !!(onBoard && boardMetaChanged(boardPrev, boardNext));
+      var itemsDirty = !!(
+        onBoard &&
+        JSON.stringify((boardPrev && boardPrev.items) || []) !==
+          JSON.stringify((boardNext && boardNext.items) || [])
+      );
       state.committed = clone(state.draft);
       state.dialog = null;
       var next = state.pendingLeave;
@@ -4364,10 +4533,20 @@
       if (next) next();
       else if (!quiet) renderAll();
       var persist = onBoard
-        ? Promise.all([
-            persistBoardWrite(boardPrev, boardNext),
-            persistStyleWrite(stylePrev, styleNext),
-          ]).then(function (pair) {
+        ? persistDirtyItems(boardPrev)
+            .then(function () {
+              boardNext = boardSettingsSnap(state.boardDraft);
+              applyBoardToCatalog(state.boardDraft);
+              rememberBoardSnap(state.boardDraft);
+              if (state.boardCommitted && state.boardCommitted.id === state.boardDraft.id) {
+                state.boardCommitted = clone(state.boardDraft);
+              }
+              return Promise.all([
+                persistBoardWrite(boardPrev, boardNext),
+                persistStyleWrite(stylePrev, styleNext),
+              ]);
+            })
+            .then(function (pair) {
             var board = pair[0] || {};
             var style = pair[1] || {};
             var wrote = Object.assign({}, style.wrote || {}, board.wrote || {});
@@ -4421,7 +4600,7 @@
             confirmed: confirmedSave,
             encoreDirty: encoreDirty,
             orderDirty: orderDirty,
-            boardMetaDirty: boardMetaDirty,
+            boardMetaDirty: boardMetaDirty || itemsDirty,
           });
         })
         .catch(function (err) {
@@ -4440,6 +4619,7 @@
     if (val === "no") {
       if (state.screen === "board" && state.boardCommitted) {
         state.boardDraft = clone(state.boardCommitted);
+        applyBoardToCatalog(state.boardCommitted);
       }
       state.draft = clone(state.committed);
       state.dialog = null;
@@ -5147,7 +5327,7 @@
 
   function clearItemDragStyles(row) {
     if (!row) return;
-    row.classList.remove("is-dragging");
+    row.classList.remove("is-dragging", "is-delete-candidate");
     row.style.position = "";
     row.style.width = "";
     row.style.height = "";
@@ -5181,7 +5361,10 @@
     var autoDir = 0;
     var raf = 0;
     var THRESH = 6;
+    var footer = board && board.querySelector(".footer-add-item");
+    var deleteArmed = false;
     state.itemDragging = true;
+    state.pendingDeleteIndex = null;
     try {
       handle.setPointerCapture(pid);
     } catch (err) {}
@@ -5213,6 +5396,22 @@
         var last = statics[statics.length - 1];
         if (last.nextSibling !== placeholder) last.after(placeholder);
       }
+      updateDeleteArm();
+    }
+
+    function updateDeleteArm() {
+      if (!footer || !handle || !board) {
+        deleteArmed = false;
+        return false;
+      }
+      var fr = footer.getBoundingClientRect();
+      var hr = handle.getBoundingClientRect();
+      var handleMid = hr.top + hr.height / 2;
+      var trigger = fr.top + fr.height * 0.5;
+      deleteArmed = handleMid >= trigger;
+      board.classList.toggle("is-delete-armed", deleteArmed);
+      row.classList.toggle("is-delete-candidate", deleteArmed);
+      return deleteArmed;
     }
 
     function edgeScroll(clientY) {
@@ -5300,7 +5499,15 @@
       if (row.parentNode && row.parentNode !== list) {
         row.parentNode.removeChild(row);
       }
-      if (commit && dragging && placeholder && state.boardDraft && state.boardDraft.items) {
+      row.classList.remove("is-delete-candidate");
+      if (board) board.classList.remove("is-delete-armed");
+      if (commit && dragging && deleteArmed && state.boardDraft && state.boardDraft.items) {
+        if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        list.innerHTML = itemListHtml(state.boardDraft.items);
+        state.pendingDeleteIndex = from;
+        state.dialog = "item-delete";
+        renderDialog();
+      } else if (commit && dragging && placeholder && state.boardDraft && state.boardDraft.items) {
         var items = state.boardDraft.items.slice();
         var next = [];
         var kids = Array.prototype.slice.call(list.children);
@@ -5482,6 +5689,10 @@
     }
     if (params.get("pick")) state.picker = params.get("pick");
     if (params.get("confirm") === "1") state.dialog = "confirm";
+    if (params.get("confirmsave") === "yes" || params.get("confirmsave") === "no") {
+      state.draft.confirmSave = params.get("confirmsave");
+      if (state.committed) state.committed.confirmSave = params.get("confirmsave");
+    }
     if (params.get("newtheme") === "1") state.dialog = "create";
     if (params.get("theme")) {
       var want = params.get("theme");
@@ -5602,10 +5813,6 @@
       state.pendingLeave = function () {
         history.back();
       };
-      if (confirmSaveOff()) {
-        beginItemSave();
-        return;
-      }
       state.dialog = "confirm";
       renderAll();
       return;
@@ -6044,7 +6251,17 @@
       renderDialog();
       continueItemSaveAfterMissing();
     } else if (act === "item-include-go") {
-      persistItemWrite();
+      finishItemSave();
+    } else if (act === "item-delete-no") {
+      state.pendingDeleteIndex = null;
+      state.dialog = null;
+      renderDialog();
+    } else if (act === "item-delete-yes") {
+      deleteBoardItem(state.pendingDeleteIndex);
+      state.pendingDeleteIndex = null;
+      state.dialog = null;
+      renderDialog();
+      refreshBoardRows();
     } else if (act === "copy-hex") {
       copyHex(t.getAttribute("data-hex"));
     } else if (act === "reload-sheet") {
