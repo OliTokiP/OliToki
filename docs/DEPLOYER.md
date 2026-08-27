@@ -32,8 +32,8 @@ GitHub Pages **must** publish from `restaurant`, not `main`. Otherwise every Lis
 
 1. Open [`deploy.html`](https://olitokip.github.io/OliToki/deploy.html) (or local `/deploy.html`).
 2. Pick **Testing** (default) or **Restaurant**.
-3. File the issue. You must be signed into GitHub as someone with repo write access.
-4. Actions **publishes** the source onto that branch (no merge), writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set.
+3. File the issue. You must be signed into GitHub as someone with repo write access. From this Mac, File starts **one** Actions run (workflow_dispatch). The GitHub issue is the paper trail; it does not start a second ship. From Live without the Mac, submitting the issue is the ship.
+4. Actions **publishes** the source onto that branch (no merge), writes `js/env.js`, and deploys Cloud Run when `TOKI_GCP_SA` is set. Suite pings when that run **succeeds**. A cancelled duplicate is not a dining-room failure.
 
 Restaurant requires the dining-room checkbox. Dry run comments the plan only.
 

@@ -295,14 +295,26 @@ def _watch_deploy_and_notify(
 
     def go() -> None:
         try:
+            from datetime import datetime
+
             import toki_deploy
 
             gh = toki_deploy._gh_bin()
             env = toki_deploy._gh_env()
-            run_id = ""
+            filed_at = time.time()
             run_url = open_url
-            deadline_find = time.time() + 90
-            while time.time() < deadline_find and not run_id:
+
+            def _ts(raw: str) -> float:
+                s = str(raw or "").strip()
+                if s.endswith("Z"):
+                    s = s[:-1] + "+00:00"
+                try:
+                    return datetime.fromisoformat(s).timestamp()
+                except Exception:
+                    return 0.0
+
+            deadline = time.time() + 20 * 60
+            while time.time() < deadline:
                 r = subprocess.run(
                     [
                         gh,
@@ -311,7 +323,7 @@ def _watch_deploy_and_notify(
                         "--workflow",
                         "deploy.yml",
                         "--limit",
-                        "8",
+                        "15",
                         "--json",
                         "databaseId,status,conclusion,url,createdAt",
                     ],
@@ -320,55 +332,57 @@ def _watch_deploy_and_notify(
                     timeout=20,
                     env=env,
                 )
-                if r.returncode == 0 and (r.stdout or "").strip():
-                    rows = json.loads(r.stdout)
-                    if isinstance(rows, list):
-                        for it in rows:
-                            st = str((it or {}).get("status") or "")
-                            if st in ("queued", "in_progress", "waiting", "pending"):
-                                run_id = str((it or {}).get("databaseId") or "")
-                                run_url = str((it or {}).get("url") or run_url)
-                                break
-                        if not run_id and rows:
-                            it = rows[0] or {}
-                            run_id = str(it.get("databaseId") or "")
-                            run_url = str(it.get("url") or run_url)
-                if not run_id:
-                    time.sleep(3)
-            if not run_id:
-                return
-            deadline = time.time() + 20 * 60
-            while time.time() < deadline:
-                r = subprocess.run(
-                    [
-                        gh,
-                        "run",
-                        "view",
-                        str(run_id),
-                        "--json",
-                        "status,conclusion,url",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=20,
-                    env=env,
+                if r.returncode != 0 or not (r.stdout or "").strip():
+                    time.sleep(4)
+                    continue
+                rows = json.loads(r.stdout)
+                if not isinstance(rows, list):
+                    time.sleep(4)
+                    continue
+                recent = [
+                    it
+                    for it in rows
+                    if isinstance(it, dict)
+                    and _ts(str(it.get("createdAt") or "")) >= filed_at - 25
+                ]
+                if not recent:
+                    time.sleep(4)
+                    continue
+                live = [
+                    it
+                    for it in recent
+                    if str(it.get("status") or "")
+                    in ("queued", "in_progress", "waiting", "pending")
+                ]
+                if live:
+                    run_url = str(live[0].get("url") or run_url)
+                    time.sleep(8)
+                    continue
+                successes = [
+                    it for it in recent if str(it.get("conclusion") or "") == "success"
+                ]
+                failures = [
+                    it for it in recent if str(it.get("conclusion") or "") == "failure"
+                ]
+                pick = (successes or failures or recent)[0]
+                run_url = str(pick.get("url") or run_url)
+                if successes:
+                    conc = "success"
+                    ok = True
+                elif failures:
+                    conc = "failure"
+                    ok = False
+                else:
+                    conc = str(pick.get("conclusion") or "cancelled")
+                    ok = False
+                _mac_notify(
+                    f"{label} ship " + ("finished" if ok else "failed"),
+                    conc + (f" · #{n}" if n else ""),
+                    subtitle="Deployer",
+                    open_url=run_url,
+                    tag="suite.deploy.done",
                 )
-                if r.returncode == 0 and (r.stdout or "").strip():
-                    info = json.loads(r.stdout) or {}
-                    st = str(info.get("status") or "")
-                    run_url = str(info.get("url") or run_url)
-                    if st == "completed":
-                        conc = str(info.get("conclusion") or "").strip() or "done"
-                        ok = conc == "success"
-                        _mac_notify(
-                            f"{label} ship " + ("finished" if ok else "failed"),
-                            conc + (f" · #{n}" if n else ""),
-                            subtitle="Deployer",
-                            open_url=run_url,
-                            tag="suite.deploy.done",
-                        )
-                        return
-                time.sleep(8)
+                return
         except Exception as e:
             _log(f"deploy watch notify: {e}")
 
@@ -3776,37 +3790,22 @@ def make_handler(
                 try:
                     import toki_deploy
 
-                    result = toki_deploy.file_deploy_issue(body or {})
-                    # Dispatch the workflow explicitly from the local Mac so that
-                    # "File deploy" in the UI reliably starts the ship/push without
-                    # depending only on the GitHub issues event.
+                    f = body or {}
+                    dispatched = False
+                    # Dispatch first. If that works, the issue is paper trail only
+                    # (`- dispatched: yes` skips the issues trigger). One File
+                    # click used to start three runs; GitHub cancelled the extras
+                    # and Suite reported restaurant as failed.
                     try:
-                        import subprocess
-                        f = body or {}
-                        t = f.get("target") or "testing"
-                        src = f.get("source") or "main"
-                        sh = f.get("ship") or "both"
-                        p = f.get("pin") or "auto"
-                        dry = str(bool(f.get("dry"))).lower()
-                        conf = str(bool(f.get("confirm") or f.get("confirm-restaurant"))).lower()
-                        nt = f.get("notes") or ""
-                        disp_args = [
-                            "/usr/local/bin/gh", "workflow", "run", "deploy.yml",
-                            "--ref", "main",
-                            "-f", f"target={t}",
-                            "-f", f"source={src}",
-                            "-f", f"ship={sh}",
-                            "-f", f"pin={p}",
-                            "-f", f"dry_run={dry}",
-                            "-f", f"confirm_restaurant={conf}",
-                            "-f", f"notes={nt}",
-                        ]
-                        subprocess.run(disp_args, capture_output=True, text=True, timeout=20)
-                        result["dispatched"] = True
+                        toki_deploy.dispatch_workflow(f)
+                        dispatched = True
                     except Exception as _de:
-                        _log(f"deploy dispatch warning (push may rely on issue event): {_de}")
+                        _log(f"deploy dispatch failed; issue event will ship: {_de}")
+                    payload = dict(f)
+                    payload["dispatched"] = dispatched
+                    result = toki_deploy.file_deploy_issue(payload)
+                    result["dispatched"] = dispatched
                     try:
-                        f = body or {}
                         _watch_deploy_and_notify(
                             f.get("target") or "testing",
                             result.get("issueNumber"),

@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "6cb679d",
-  "hashFull": "6cb679dc3022a02e96f52a59b263082fae91998b",
-  "subject": "QA: 2026-08-26 Desktop view has broken rounded corners (pass 1)"
+  "hash": "996c046",
+  "hashFull": "996c046a40edbcdd1471bf7807ca4c5006232ff4",
+  "subject": "Fix restaurant Deployer: one File click was starting three Actions runs; cancelled twins looked like 0% success"
 };

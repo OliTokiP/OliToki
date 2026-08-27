@@ -61,6 +61,7 @@ def parse_issue_body(text: str) -> dict:
         "promote": "no",
         "dry-run": "no",
         "confirm-restaurant": "no",
+        "dispatched": "no",
         "notes": "",
     }
     for raw in StringIO_lines(text):
@@ -307,6 +308,8 @@ def issue_payload(fields: dict) -> dict:
             "- notes: " + (notes or "(none)"),
         ]
     )
+    if yes(fields.get("dispatched")):
+        body += "\n- dispatched: yes"
     return {
         "title": title,
         "body": body,
@@ -319,6 +322,52 @@ def issue_payload(fields: dict) -> dict:
         "confirm": confirm,
         "notes": notes,
     }
+
+
+def dispatch_workflow(fields: dict) -> None:
+    """Start deploy.yml from the Mac. One click should not also need the issue event."""
+    f = fields or {}
+    target = str(f.get("target") or "testing").strip().lower() or "testing"
+    source = str(f.get("source") or "main").strip() or "main"
+    ship = str(f.get("ship") or "both").strip().lower() or "both"
+    pin = str(f.get("pin") or "auto").strip().lower() or "auto"
+    dry = "true" if yes(f.get("dry") or f.get("dry-run")) else "false"
+    confirm = "true" if yes(f.get("confirm") or f.get("confirm-restaurant")) else "false"
+    notes = str(f.get("notes") or "")
+    args = [
+        _gh_bin(),
+        "workflow",
+        "run",
+        "deploy.yml",
+        "--repo",
+        GITHUB_REPO,
+        "--ref",
+        "main",
+        "-f",
+        "target=" + target,
+        "-f",
+        "source=" + source,
+        "-f",
+        "ship=" + ship,
+        "-f",
+        "pin=" + pin,
+        "-f",
+        "dry_run=" + dry,
+        "-f",
+        "confirm_restaurant=" + confirm,
+        "-f",
+        "notes=" + notes,
+    ]
+    r = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        env=_gh_env(),
+    )
+    if r.returncode != 0:
+        err = (r.stderr or r.stdout or "workflow dispatch failed").strip()
+        raise RuntimeError(err[:500])
 
 
 def file_deploy_issue(fields: dict) -> dict:

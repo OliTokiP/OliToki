@@ -37,7 +37,10 @@ on:
         required: false
         default: ""
   issues:
-    types: [opened, labeled]
+    # labeled-only: opening an issue with the label also fires `opened`, which
+    # used to start a second run. The Mac then dispatched a third. Concurrency
+    # cancelled the extras and Suite reported "Restaurant ship failed".
+    types: [labeled]
 
 permissions:
   contents: write
@@ -51,7 +54,10 @@ jobs:
   deploy:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'toki-deploy'))
+      (github.event_name == 'issues' &&
+       github.event.action == 'labeled' &&
+       github.event.label.name == 'toki-deploy' &&
+       !contains(github.event.issue.body, '- dispatched: yes'))
     runs-on: ubuntu-latest
     env:
       TOKI_TESTING_API: ${{ vars.TOKI_TESTING_API }}
