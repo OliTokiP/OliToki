@@ -40,6 +40,9 @@ body.suite-hub {
   color: inherit;
   text-decoration: none;
 }
+.suite-nav a[data-suite-href] {
+  cursor: pointer;
+}
 .suite-nav a:hover {
   text-decoration: underline;
 }

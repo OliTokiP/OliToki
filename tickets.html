@@ -7,7 +7,7 @@
   <link rel="icon" href="assets/suite-icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/suite-icon.png" />
   <title>Tickets</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260826navfix2" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260826navfix3" />
   <style>
     a.card {
       display: block;
@@ -39,6 +39,8 @@
       max-width: 36rem;
       width: 100%;
       box-sizing: border-box;
+      position: relative;
+      z-index: 2;
     }
     body.tickets-embed #panel {
       flex: 1 1 auto;
@@ -58,7 +60,7 @@
     <a class="card" id="open" href="http://127.0.0.1:18765/">Open Tickets on this Mac</a>
   </div>
   <iframe id="panel" title="Tickets" hidden></iframe>
-  <script src="js/surfaces.js?v=20260826navfix2"></script>
+  <script src="js/surfaces.js?v=20260826navfix3"></script>
   <script>
     (function () {
       var html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Tickets");

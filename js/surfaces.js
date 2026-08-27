@@ -31,11 +31,7 @@ window.tokiSuiteNavHtml = function (currentName) {
       parts.push('<span class="is-current">' + label + "</span>");
     } else {
       if (label !== "Tickets") href = tokiBustOperatorHref(href);
-      var extra =
-        window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)
-          ? ' target="_blank" rel="noopener"'
-          : "";
-      parts.push('<a href="' + href + '"' + extra + ">" + label + "</a>");
+      parts.push("<a " + window.tokiSuiteInAppAttrs(href) + ">" + label + "</a>");
     }
   }
   return parts.join(" · ");
@@ -56,35 +52,103 @@ window.tokiOpensOutsideSuite = function (href) {
   }
 };
 
-// Chrome --app (Suite.app) opens <a> clicks in a real Chrome window. Force
-// in-window navigation for the Suite bar, hub cards, and Open-a-copy table.
+window.tokiSuiteAttrEscape = function (s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+};
+
+// In-app destinations must not be real hyperlinks. Chrome --app (Suite.app)
+// sends <a href> clicks to a real Chrome window, and preventDefault races that.
+window.tokiSuiteInAppAttrs = function (href) {
+  href = String(href || "");
+  if (window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)) {
+    return (
+      'href="' +
+      window.tokiSuiteAttrEscape(href) +
+      '" target="_blank" rel="noopener"'
+    );
+  }
+  return (
+    'role="link" tabindex="0" data-suite-href="' +
+    window.tokiSuiteAttrEscape(href) +
+    '"'
+  );
+};
+
+window.tokiSuiteNavigate = function (href) {
+  if (!href) return;
+  var abs = href;
+  try {
+    abs = new URL(href, location.href).href;
+  } catch (e) {}
+  try {
+    location.assign(abs);
+  } catch (err) {
+    location.href = abs;
+  }
+};
+
+// Force in-window navigation for the Suite bar, hub cards, and Open-a-copy table.
 (function tokiEnforceSuiteNav() {
   if (window.__tokiSuiteNavBound) return;
   window.__tokiSuiteNavBound = true;
+
+  function stayHref(el) {
+    if (!el || !el.getAttribute) return "";
+    if (el.getAttribute("download") != null) return "";
+    var href = el.getAttribute("data-suite-href") || "";
+    if (href) return href;
+    if (!el.closest) return "";
+    if (
+      !el.closest(".suite-nav") &&
+      !el.closest("#tools") &&
+      !el.closest("#table-wrap")
+    ) {
+      return "";
+    }
+    href = el.getAttribute("href") || "";
+    if (!href || href.charAt(0) === "#") return "";
+    if (/^(mailto:|tel:|javascript:)/i.test(href)) return "";
+    if (window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)) {
+      return "";
+    }
+    return href;
+  }
+
+  function go(e) {
+    var el =
+      e.target && e.target.closest
+        ? e.target.closest("[data-suite-href], a")
+        : null;
+    var href = stayHref(el);
+    if (!href) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    else e.stopPropagation();
+    window.tokiSuiteNavigate(href);
+  }
+
   document.addEventListener(
     "click",
     function (e) {
-      if (e.defaultPrevented) return;
       if (e.button) return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      var a = e.target && e.target.closest ? e.target.closest("a") : null;
-      if (!a) return;
-      if (a.getAttribute("download") != null) return;
-      var href = a.getAttribute("href");
-      if (!href || href.charAt(0) === "#") return;
-      if (/^(mailto:|tel:|javascript:)/i.test(href)) return;
-      var inBar =
-        (a.closest && a.closest(".suite-nav")) ||
-        (a.closest && a.closest("#tools")) ||
-        (a.closest && a.closest("#table-wrap"));
-      if (!inBar) return;
-      if (window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)) return;
-      e.preventDefault();
-      try {
-        location.href = href;
-      } catch (err) {
-        location = href;
-      }
+      go(e);
+    },
+    true
+  );
+  document.addEventListener(
+    "keydown",
+    function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var el =
+        e.target && e.target.closest
+          ? e.target.closest("[data-suite-href]")
+          : null;
+      if (!el) return;
+      go(e);
     },
     true
   );

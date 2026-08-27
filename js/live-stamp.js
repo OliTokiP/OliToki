@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "996c046",
-  "hashFull": "996c046a40edbcdd1471bf7807ca4c5006232ff4",
-  "subject": "Fix restaurant Deployer: one File click was starting three Actions runs; cancelled twins looked like 0% success"
+  "hash": "90ef8ba",
+  "hashFull": "90ef8ba52a3dc164c2f035ef60359f3092f73e89",
+  "subject": "QA: 2026-08-26 Navigation opening in chrome windows (pass 3)"
 };

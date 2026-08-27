@@ -7,7 +7,7 @@
   <title>Suite — OliToki</title>
   <link rel="icon" href="assets/suite-icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/suite-icon.png" />
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260822restart2" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260826navfix3" />
   <style>
     html, body { max-width: 100%; }
     *, *::before, *::after { box-sizing: border-box; }
@@ -90,6 +90,7 @@
       color: inherit;
       min-height: 44px;
       box-sizing: border-box;
+      cursor: pointer;
     }
     a.card .blurb { display: block; font-weight: 500; color: #666; font-size: .88rem; margin-top: .15rem; }
     .copy-note { margin: 0 0 .65rem; }
@@ -162,6 +163,7 @@
       color: inherit;
       border-left: 1px solid #eee;
     }
+    a.copy-cell { cursor: pointer; }
     a.copy-cell:hover { background: #f4f4f4; text-decoration: underline; }
     .copy-cell.is-here {
       font-weight: 700;
@@ -343,7 +345,7 @@
   <p class="tiny" id="hint"></p>
 
   <script src="js/env.js?v=20260822restart2"></script>
-  <script src="js/surfaces.js?v=20260826navfix2"></script>
+  <script src="js/surfaces.js?v=20260826navfix3"></script>
   <script>
     const PAGES = "https://olitokip.github.io/OliToki";
     const RESTAURANT_API = "https://toki-api-3rx5m3qpzq-uc.a.run.app";
@@ -406,16 +408,17 @@
       if (html) document.getElementById("nav").innerHTML = html;
     })();
 
-    function outsideAttrs(href) {
+    function stayAttrs(href) {
+      if (window.tokiSuiteInAppAttrs) return window.tokiSuiteInAppAttrs(href);
       if (window.tokiOpensOutsideSuite && window.tokiOpensOutsideSuite(href)) {
-        return ' target="_blank" rel="noopener"';
+        return 'href="' + href + '" target="_blank" rel="noopener"';
       }
-      return "";
+      return 'role="link" tabindex="0" data-suite-href="' + href + '"';
     }
     function card(item) {
       const href = operatorHref(item.page);
       return (
-        '<a class="card" href="' + href + '"' + outsideAttrs(href) + ">" +
+        '<a class="card" ' + stayAttrs(href) + ">" +
         item.name +
         (item.blurb ? '<span class="blurb">' + item.blurb + "</span>" : "") +
         "</a>"
@@ -477,11 +480,9 @@
       return (
         '<a class="copy-cell' +
         youCol +
-        '" href="' +
-        href +
-        '"' +
+        '" ' +
+        stayAttrs(href) +
         envAttr +
-        outsideAttrs(href) +
         ">Open</a>"
       );
     }
