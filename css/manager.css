@@ -104,6 +104,16 @@ button {
   text-align: inherit;
 }
 
+button:focus-visible,
+.nav-item:focus-visible,
+.picker-option:focus-visible,
+.link-cell:focus-visible,
+.tutorial-dot:focus-visible,
+.status-color:focus-visible {
+  outline: 2.5px solid var(--main);
+  outline-offset: -2px;
+}
+
 img {
   display: block;
   max-width: 100%;
@@ -2531,6 +2541,13 @@ html.is-item-dragging * {
   .preview-wp,
   .preview-veil {
     transition: none !important;
+  }
+  .toast,
+  .toast.is-out {
+    transition: none !important;
+  }
+  .tutorial-pages {
+    scroll-behavior: auto;
   }
 }
 

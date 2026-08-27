@@ -766,16 +766,16 @@
       return (
         '<button class="' +
         cls +
-        ' row-check" type="button" data-act="toggle" data-key="' +
+        ' row-check" type="button" role="checkbox" aria-checked="' +
+        (on ? "true" : "false") +
+        '" data-act="toggle" data-key="' +
         opts.key +
         '">' +
         '<span class="row-label">' +
         escapeHtml(opts.label) +
         '</span><span class="row-check-box' +
         (on ? " is-on" : "") +
-        '" role="checkbox" aria-checked="' +
-        (on ? "true" : "false") +
-        '"></span></button>'
+        '" aria-hidden="true"></span></button>'
       );
     }
     return (
@@ -2436,7 +2436,7 @@
       );
     }).join("");
     return (
-      '<div class="dialog-card tutorial-card" role="dialog" aria-labelledby="tutorial-title">' +
+      '<div class="dialog-card tutorial-card" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">' +
       '<h2 id="tutorial-title" class="tutorial-title">' +
       escapeHtml(IMAGE_TUTORIAL_SLIDES[0].title) +
       "</h2>" +
@@ -3507,7 +3507,7 @@
       els.picker.hidden = false;
       els.picker.innerHTML =
         shroud +
-        '<div class="picker-card is-binary" role="dialog" aria-labelledby="picker-title">' +
+        '<div class="picker-card is-binary" role="dialog" aria-modal="true" aria-labelledby="picker-title">' +
         '<h2 class="picker-title" id="picker-title">' +
         escapeHtml(spec.title) +
         "</h2>" +
@@ -3563,7 +3563,7 @@
       shroud +
       '<div class="picker-card' +
       long +
-      '" role="dialog" aria-labelledby="picker-title">' +
+      '" role="dialog" aria-modal="true" aria-labelledby="picker-title">' +
       '<h2 class="picker-title" id="picker-title">' +
       escapeHtml(spec.title) +
       "</h2>" +
@@ -3586,7 +3586,7 @@
     if (state.dialog === "confirm") {
       var confirmTitle = state.screen === "image" ? "Save changes?" : "Confirm Changes?";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog" aria-labelledby="dlg-title">' +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
         '<h2 id="dlg-title">' +
         confirmTitle +
         "</h2>" +
@@ -3598,8 +3598,8 @@
     } else if (state.dialog === "board-title") {
       var cur = (state.boardDraft && (state.boardDraft.menuTitle || state.boardDraft.title)) || "";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Menu Title</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Menu Title</h2>" +
         '<input class="dialog-input" id="board-title-input" type="text" maxlength="48" value="' +
         escapeHtml(cur) +
         '">' +
@@ -3616,8 +3616,8 @@
       }, 30);
     } else if (state.dialog === "create") {
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Create New Theme</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Create New Theme</h2>" +
         '<input class="dialog-input" id="theme-name" type="text" maxlength="32" placeholder="Theme name" value="Custom Theme">' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="create-save">Create</button>' +
@@ -3638,8 +3638,8 @@
           : (state.itemDraft && state.itemDraft.subtitle) || "";
       var ph = state.dialog === "item-subtitle" ? "Optional" : "";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">" +
         escapeHtml(title) +
         "</h2>" +
         '<input class="dialog-input" id="item-field-input" type="text" maxlength="80" placeholder="' +
@@ -3670,8 +3670,8 @@
       }
       var tierPh = model === "vb" ? "5" : "S";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Tier</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Tier</h2>" +
         '<p class="dialog-note">' +
         escapeHtml(tierHint) +
         "</p>" +
@@ -3694,8 +3694,8 @@
     } else if (state.dialog === "item-description") {
       var desc = (state.itemDraft && state.itemDraft.description) || "";
       els.dialog.innerHTML =
-        '<div class="dialog-card is-tall" role="dialog">' +
-        "<h2>Description</h2>" +
+        '<div class="dialog-card is-tall" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Description</h2>" +
         '<textarea class="dialog-textarea" id="item-field-input" maxlength="600" rows="12">' +
         escapeHtml(desc) +
         "</textarea>" +
@@ -3709,8 +3709,8 @@
       }, 30);
     } else if (state.dialog === "item-required") {
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Title and price required</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Title and price required</h2>" +
         '<p class="dialog-note">New items must have a title and at least one price.</p>' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="item-required-ok">OK</button>' +
@@ -3723,8 +3723,8 @@
         .join("");
       var creating = state.itemDraft && String(state.itemDraft.key) === "new";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Missing features</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Missing features</h2>" +
         '<p class="dialog-note">Are you sure you want to ' +
         (creating ? "add" : "save") +
         " this item without the following features?</p>" +
@@ -3739,8 +3739,8 @@
         "</div></div>";
     } else if (state.dialog === "item-include") {
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Not shown on the board</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Not shown on the board</h2>" +
         '<p class="dialog-note">This item will be saved but will not appear on the live board until Include in board is Yes.</p>' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="item-include-go">Save anyway</button>' +
@@ -3748,8 +3748,8 @@
         "</div></div>";
     } else if (state.dialog === "image-opaque") {
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Warning</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Warning</h2>" +
         '<p class="dialog-note">Your item may not appear correctly because you haven\'t removed the background yet.</p>' +
         '<div class="dialog-actions">' +
         '<button class="btn-primary" type="button" data-act="image-opaque-ok">OK</button>' +
@@ -3764,8 +3764,8 @@
         delIdx != null && delItems[delIdx] ? delItems[delIdx].name : "this item";
       var delWarn = confirmSaveOff() ? " This cannot be undone." : "";
       els.dialog.innerHTML =
-        '<div class="dialog-card" role="dialog">' +
-        "<h2>Delete this item?</h2>" +
+        '<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">' +
+        "<h2 id=\"dlg-title\">Delete this item?</h2>" +
         '<p class="dialog-note">Are you sure you want to delete ' +
         escapeHtml(delName) +
         "?" +
@@ -3807,6 +3807,14 @@
   var MSG_ENCORE_SAVED = "Global Encore Style Settings updated";
   var MSG_ORDER_SAVED = "Menu Items Order Saved.";
 
+  function prefersReducedMotion() {
+    try {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (err) {
+      return false;
+    }
+  }
+
   function playTooltipAnim(el, frames, onDone, duration) {
     var finished = false;
     var dur = duration == null ? TOOLTIP_FADE_MS : duration;
@@ -3829,6 +3837,16 @@
         if (from.top != null) el.style.top = cs.top;
         el._tokiTipAnim.cancel();
       } catch (err) {}
+    }
+    /* HIG Accessibility: honor Reduce Motion. Skip WAAPI so cards still land. */
+    if (prefersReducedMotion()) {
+      var reduced = frames[frames.length - 1] || {};
+      if (reduced.opacity != null) el.style.opacity = String(reduced.opacity);
+      if (reduced.transform != null) el.style.transform = reduced.transform;
+      if (reduced.height != null) el.style.height = reduced.height;
+      if (reduced.top != null) el.style.top = reduced.top;
+      done();
+      return null;
     }
     if (typeof el.animate === "function") {
       var anim = el.animate(frames, {
