@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "25db1f1",
-  "hashFull": "25db1f1f6757e8ab03353adc3c2462f8954364e5",
-  "subject": "QA: 2026-08-26 Apple Human Interface Guidelines Sanity Check (pass 1)"
+  "hash": "44e559e",
+  "hashFull": "44e559ec55cd1a6e99e4f5fe638c4accd688668f",
+  "subject": "QA: 2026-08-26 Nav bar general navigation sanity check (pass 1)"
 };

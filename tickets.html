@@ -7,7 +7,7 @@
   <link rel="icon" href="assets/suite-icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/suite-icon.png" />
   <title>Tickets</title>
-  <link rel="stylesheet" href="css/suite-chrome.css?v=20260826navfix3" />
+  <link rel="stylesheet" href="css/suite-chrome.css?v=20260826navw1" />
   <style>
     a.card {
       display: block;
@@ -24,19 +24,23 @@
     html.tickets-embed body {
       height: 100%;
     }
+    /* Same 36rem column as Suite / Deployer / Uploader and as the Listener
+       panel inside the iframe. Full-bleed (max-width: none) left the bar on
+       the left edge while Tickets sat centered in the window. */
     body.tickets-embed.suite-page {
       display: flex;
       flex-direction: column;
       padding: 0;
-      max-width: none;
+      max-width: 36rem;
+      margin: 0 auto;
       min-height: 100%;
       height: 100%;
     }
     body.tickets-embed .suite-nav {
       flex: 0 0 auto;
-      padding: 1.25rem 1.25rem .75rem;
+      padding: 1.25rem 1.25rem .5rem;
       margin: 0;
-      max-width: 36rem;
+      max-width: none;
       width: 100%;
       box-sizing: border-box;
       position: relative;
@@ -60,7 +64,7 @@
     <a class="card" id="open" href="http://127.0.0.1:18765/">Open Tickets on this Mac</a>
   </div>
   <iframe id="panel" title="Tickets" hidden></iframe>
-  <script src="js/surfaces.js?v=20260826navfix3"></script>
+  <script src="js/surfaces.js?v=20260826navw1"></script>
   <script>
     (function () {
       var html = window.tokiSuiteNavHtml && window.tokiSuiteNavHtml("Tickets");

@@ -17,6 +17,7 @@ window.tokiSuiteNavHtml = function (currentName) {
   var item;
   var label;
   var href;
+  var bit;
   currentName = currentName || "";
   if (currentName === "Listener") currentName = "Tickets";
   for (i = 0; i < nav.length; i++) {
@@ -28,13 +29,17 @@ window.tokiSuiteNavHtml = function (currentName) {
     }
     if (!label) continue;
     if (label === currentName) {
-      parts.push('<span class="is-current">' + label + "</span>");
+      bit = '<span class="is-current">' + label + "</span>";
     } else {
       if (label !== "Tickets") href = tokiBustOperatorHref(href);
-      parts.push("<a " + window.tokiSuiteInAppAttrs(href) + ">" + label + "</a>");
+      bit = "<a " + window.tokiSuiteInAppAttrs(href) + ">" + label + "</a>";
     }
+    // Trailing middot stays with the label so wrap never splits "Menu Manager"
+    // or leaves a lone · at the start of the next line.
+    if (i < nav.length - 1) bit += " ·";
+    parts.push('<span class="suite-nav-item">' + bit + "</span>");
   }
-  return parts.join(" · ");
+  return parts.join(" ");
 };
 
 window.tokiOpensOutsideSuite = function (href) {

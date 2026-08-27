@@ -2,11 +2,13 @@
 :root {
   color-scheme: light dark;
   --toki-bg: #fff;
+  --toki-fg: #111;
   --toki-muted: #666;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --toki-bg: #111;
+    --toki-fg: #eee;
     --toki-muted: #aaa;
   }
 }
@@ -17,6 +19,7 @@ html {
 }
 body.suite-page {
   font: 16px/1.4 system-ui, sans-serif;
+  color: var(--toki-fg);
   margin: 0 auto;
   padding: 1.25rem;
   max-width: 36rem;
@@ -28,10 +31,19 @@ body.suite-hub {
   max-width: 42rem;
 }
 .suite-nav {
-  font: 16px/1.4 system-ui, sans-serif;
+  font: 16px/1.45 system-ui, sans-serif;
   font-weight: 500;
+  font-size: 16px;
   color: var(--toki-muted);
   margin: 0 0 1rem;
+}
+/* Hub used to mark the bar .tiny (14px). Keep it on the shared 16px scale. */
+body.suite-page .suite-nav.tiny {
+  font-size: 16px;
+  color: var(--toki-muted);
+}
+.suite-nav-item {
+  white-space: nowrap;
 }
 .suite-nav a,
 .suite-nav .is-current {
@@ -47,6 +59,8 @@ body.suite-hub {
   text-decoration: underline;
 }
 .suite-nav .is-current {
+  color: var(--toki-fg);
+  font-weight: 650;
   cursor: default;
 }
 body.suite-page h1 {
