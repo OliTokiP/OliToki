@@ -119,15 +119,37 @@
     return s.slice(0, 80) || "Item";
   }
 
+  function withApiBase(path) {
+    var s = String(path || "").trim();
+    if (!s) return s;
+    if (!/^\/?api\//i.test(s)) return s;
+    if (s.charAt(0) !== "/") s = "/" + s;
+    try {
+      if (typeof location !== "undefined" && /^https?:$/i.test(location.protocol)) {
+        var host = String(location.hostname || "");
+        if (
+          host === "127.0.0.1" ||
+          host === "localhost" ||
+          host === "::1" ||
+          /\.local$/i.test(host)
+        ) {
+          return s;
+        }
+      }
+    } catch (e) {}
+    var base = String(global.TOKI_API_BASE || "").replace(/\/$/, "");
+    return base ? base + s : s;
+  }
+
   function canvasSrcFor(url) {
     var s = String(url || "").trim();
     if (!s) return s;
     var m = s.match(/lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/);
-    if (m) return "/api/media/" + m[1];
+    if (m) return withApiBase("/api/media/" + m[1]);
     m = s.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
-    if (m) return "/api/media/" + m[1];
+    if (m) return withApiBase("/api/media/" + m[1]);
     m = s.match(/\/api\/media\/([A-Za-z0-9_-]+)/);
-    if (m) return "/api/media/" + m[1];
+    if (m) return withApiBase("/api/media/" + m[1]);
     return s;
   }
 
@@ -138,7 +160,12 @@
         return;
       }
       var img = new Image();
-      if (!/^data:|^blob:/i.test(String(src))) img.crossOrigin = "anonymous";
+      if (!/^data:|^blob:/i.test(String(src))) {
+        img.crossOrigin = "anonymous";
+        try {
+          img.referrerPolicy = "no-referrer";
+        } catch (e) {}
+      }
       img.onload = function () {
         resolve(img);
       };
@@ -336,6 +363,7 @@
     parseConfig: parseConfig,
     serializeConfig: serializeConfig,
     itemStem: itemStem,
+    withApiBase: withApiBase,
     canvasSrcFor: canvasSrcFor,
     loadImage: loadImage,
     analyzeImage: analyzeImage,

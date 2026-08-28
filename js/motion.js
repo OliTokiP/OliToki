@@ -1256,6 +1256,14 @@
       img.className = "family-portrait-item";
       img.alt = "";
       img.draggable = false;
+      if (
+        /^https?:\/\//i.test(String(it.src || "")) ||
+        /^\/?api\/media\//i.test(String(it.src || ""))
+      ) {
+        img.referrerPolicy = "no-referrer";
+        img.setAttribute("referrerpolicy", "no-referrer");
+        img.crossOrigin = "anonymous";
+      }
       img.src = it.src;
       img.style.transform =
         "translate(-50%, -50%) scale(" + layout.scale + ")";

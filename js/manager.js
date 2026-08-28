@@ -9,7 +9,8 @@
  * editors 1–3 when Presentation Style is Encore. Board Yes writes Menu Title,
  * Family Portrait, Presentation Mode, and Include Descriptions?
  * (via TOKI_MANAGER_SHEET.writeBoard) and also persists dirty Style fields.
- * Beta item editor writes Inventory via TOKI_MANAGER_SHEET.writeItem.
+ * Item editor writes Inventory via TOKI_MANAGER_SHEET.writeItem on the
+ * selected catalog (Restaurant Copy included — not Beta-gated).
  * Edit Item / Create Item always Confirm-on-back (Confirm save? does not skip
  * that prompt). Confirm save? Yes keeps item edits in the app until Board Back
  * Yes writes the sheet; Board No reverts them. Confirm save? No writes the
@@ -300,6 +301,56 @@
 
   function managerBetaFeatures() {
     return urlHasBetaFlag() || isBetaCatalog();
+  }
+
+  function itemEditorEnabled() {
+    // Edit Item / Create Item / Edit Image ship on Restaurant Copy.
+    // Announcements editor stays behind managerBetaFeatures().
+    return true;
+  }
+
+  function healthUrls() {
+    var urls = ["/api/health"];
+    var bases = [
+      String(window.TOKI_API_BASE || "").replace(/\/$/, ""),
+      String(window.TOKI_RESTAURANT_API || "").replace(/\/$/, ""),
+    ];
+    var i;
+    for (i = 0; i < bases.length; i++) {
+      if (bases[i]) {
+        var u = bases[i] + "/api/health";
+        if (urls.indexOf(u) < 0) urls.push(u);
+      }
+    }
+    return urls;
+  }
+
+  function fetchManagerHealth() {
+    var urls = healthUrls();
+    var i = 0;
+    function next() {
+      if (i >= urls.length) return Promise.resolve({});
+      var url = urls[i++];
+      return fetch(url, { cache: "no-store" }).then(
+        function (res) {
+          return res.ok ? res.json() : next();
+        },
+        function () {
+          return next();
+        }
+      );
+    }
+    return next();
+  }
+
+  function assertItemUpdateOk() {
+    return fetchManagerHealth().then(function (h) {
+      if (h && h.ok && h.itemUpdate === false) {
+        throw new Error(
+          "Menu Settings needs a restart to update existing items (this build will not append a duplicate)."
+        );
+      }
+    });
   }
 
   function showManagerBetaBadge() {
@@ -1164,7 +1215,7 @@
     var html = "";
     var i;
     var drag = !isAnnouncementsBoard(state.boardDraft);
-    var canEdit = managerBetaFeatures() && drag;
+    var canEdit = itemEditorEnabled() && drag;
     for (i = 0; i < items.length; i++) {
       var excluded = items[i] && items[i].include === "no";
       html +=
@@ -1231,7 +1282,7 @@
     var preview = isAnnouncementsBoard(b) ? "" : previewHtml();
     var foot = isAnnouncementsBoard(b)
       ? ""
-      : managerBetaFeatures()
+      : itemEditorEnabled()
         ? footerBar("Add Item", "item-add", "add-item")
         : footerBar("Add Item From Toast", "toast-add");
     return (
@@ -1522,8 +1573,17 @@
     if (item && item.imagePreview) return item.imagePreview;
     var img = String((item && item.image) || "").trim();
     if (!img) return "";
-    if (/^https?:/i.test(img) || img.indexOf("data:") === 0 || img.indexOf("/api/") === 0) {
+    if (/^https?:/i.test(img) || img.indexOf("data:") === 0) {
       return img;
+    }
+    if (img.indexOf("/api/") === 0 || img.indexOf("api/") === 0) {
+      var mediaPath = img.charAt(0) === "/" ? img : "/" + img;
+      var Mapi = window.TOKI_MENUIMG;
+      if (Mapi && typeof Mapi.withApiBase === "function") {
+        return Mapi.withApiBase(mediaPath);
+      }
+      var apiBase = String(window.TOKI_API_BASE || "").replace(/\/$/, "");
+      return apiBase ? apiBase + mediaPath : mediaPath;
     }
     var folder = boardImageFolder(board);
     var M = window.TOKI_MENUIMG;
@@ -1544,7 +1604,7 @@
     if (d && d.imageName) return d.imageName;
     var img = String((d && d.image) || "").trim();
     if (!img) return "";
-    if (/^https?:/i.test(img)) return "Photo on Drive";
+    if (/^https?:/i.test(img)) return "Hosted photo";
     return img.replace(/^.*\//, "");
   }
 
@@ -1768,12 +1828,12 @@
   }
 
   function screenItem() {
-    if (!managerBetaFeatures()) {
+    if (!itemEditorEnabled()) {
       return (
         '<section class="screen screen-soon">' +
         header("Edit Item") +
-        '<div class="soon-body"><h2 class="soon-title">Beta only</h2>' +
-        '<p class="soon-sub">Item editor is on the Beta catalog (or ?beta).</p></div></section>'
+        '<div class="soon-body"><h2 class="soon-title">Coming Soon</h2>' +
+        '<p class="soon-sub">Item editor is not on this board.</p></div></section>'
       );
     }
     var d = ensureItemDraft();
@@ -2050,12 +2110,12 @@
   }
 
   function screenImage() {
-    if (!managerBetaFeatures()) {
+    if (!itemEditorEnabled()) {
       return (
         '<section class="screen screen-soon">' +
         header("Edit Image") +
-        '<div class="soon-body"><h2 class="soon-title">Beta only</h2>' +
-        '<p class="soon-sub">Item editor is on the Beta catalog (or ?beta).</p></div></section>'
+        '<div class="soon-body"><h2 class="soon-title">Coming Soon</h2>' +
+        '<p class="soon-sub">Image editor is not on this board.</p></div></section>'
       );
     }
     ensureItemDraft();
@@ -2639,18 +2699,7 @@
     var writePromise = Promise.resolve(state.itemOrderPersist);
     if (d.row) {
       writePromise = writePromise.then(function () {
-        return fetch("/api/health", { cache: "no-store" })
-          .then(function (res) {
-            return res.ok ? res.json() : {};
-          })
-          .then(function (h) {
-            if (h && h.itemUpdate) return;
-            throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
-          })
-          .catch(function (err) {
-            if (err && /restart/.test(String(err.message || ""))) throw err;
-            throw new Error("Menu Settings needs a restart to update existing items (this build will not append a duplicate).");
-          });
+        return assertItemUpdateOk();
       });
     }
     writePromise
@@ -5177,14 +5226,7 @@
       if (it.row) payload.row = it.row;
       var req = Promise.resolve();
       if (it.row) {
-        req = fetch("/api/health", { cache: "no-store" })
-          .then(function (res) {
-            return res.ok ? res.json() : {};
-          })
-          .then(function (h) {
-            if (h && h.itemUpdate) return;
-            throw new Error("Menu Settings needs a restart to update existing items.");
-          });
+        req = assertItemUpdateOk();
       }
       return req.then(function () {
         return sheet.writeItem(payload).then(function (wrote) {

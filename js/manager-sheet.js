@@ -1778,12 +1778,17 @@
     var via = apiUrl(path);
     if (via && urls.indexOf(via) < 0) urls.push(via);
     // Settings workbook is shared. Restaurant Cloud Run URL is the static
-    // robot link — Menu Settings writes must not depend on a git push or
-    // on the testing container having recovered from a quota spike.
-    if (String(path).indexOf("/api/manager/settings") >= 0) {
+    // robot link — Menu Settings / Inventory writes must not depend on a
+    // git push or on the testing container having recovered from a quota spike.
+    var p = String(path || "");
+    if (
+      p.indexOf("/api/manager/settings") >= 0 ||
+      p.indexOf("/api/manager/item") >= 0 ||
+      p.indexOf("/api/manager/board") >= 0
+    ) {
       var rest = String(global.TOKI_RESTAURANT_API || "").replace(/\/$/, "");
       if (rest) {
-        var rurl = rest + (path.charAt(0) === "/" ? path : "/" + path);
+        var rurl = rest + (p.charAt(0) === "/" ? p : "/" + p);
         if (urls.indexOf(rurl) < 0) urls.push(rurl);
       }
     }

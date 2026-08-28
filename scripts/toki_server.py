@@ -42,7 +42,7 @@ import time
 import traceback
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 # Wall-clock when this process started. Suite Health uses it to know a
@@ -58,7 +58,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.metadata.readonly",
     # Item Uploader: files this robot creates (food photos), not the whole Drive.
     "https://www.googleapis.com/auth/drive.file",
+    # Public Plate Images for GitHub Pages TVs (no git push per photo).
+    "https://www.googleapis.com/auth/devstorage.read_write",
 ]
+DEFAULT_MEDIA_BUCKET = "olitoki-menu-media"
 STYLE_THEME_GID = "183083022"
 # Inventory targets for POST /api/manager/item (gids match js/config*.js).
 ITEM_MENUS = (
@@ -3094,7 +3097,61 @@ class SheetsBackend:
 
     def _drive_upload_folder_id(self) -> str:
         """A user-owned folder shared with the robot. SA My Drive has no quota."""
-        return (os.environ.get("TOKI_UPLOAD_FOLDER_ID") or "").strip()
+        env = (os.environ.get("TOKI_UPLOAD_FOLDER_ID") or "").strip()
+        if env:
+            return env
+        path = ROOT / "secrets" / "upload-folder-id.txt"
+        try:
+            if path.is_file():
+                return path.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+        except Exception:
+            return ""
+        return ""
+
+    def _media_bucket(self) -> str:
+        return (os.environ.get("TOKI_MEDIA_BUCKET") or DEFAULT_MEDIA_BUCKET).strip()
+
+    def upload_gcs_image(self, data: bytes, object_name: str, mime: str) -> dict:
+        """Public object so TVs can <img> it with no git push."""
+        import urllib.request
+
+        bucket = self._media_bucket()
+        if not bucket:
+            raise ValueError("no media bucket")
+        if not data:
+            raise ValueError("empty image")
+        name = str(object_name or "").strip().lstrip("/")
+        if not name or ".." in name:
+            raise ValueError("bad object name")
+        from google.auth.transport.requests import Request
+
+        creds = self.creds
+        if not getattr(creds, "token", None) or getattr(creds, "expired", False):
+            creds.refresh(Request())
+        upload_url = (
+            "https://storage.googleapis.com/upload/storage/v1/b/"
+            + quote(bucket, safe="")
+            + "/o?uploadType=media&name="
+            + quote(name, safe="")
+        )
+        req = urllib.request.Request(upload_url, data=data, method="POST")
+        req.add_header("Authorization", "Bearer " + str(creds.token or ""))
+        req.add_header("Content-Type", mime or "image/webp")
+        req.add_header("Content-Length", str(len(data)))
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read()
+        meta = json.loads(body.decode("utf-8") or "{}")
+        public = (
+            "https://storage.googleapis.com/"
+            + bucket
+            + "/"
+            + quote(name, safe="/")
+        )
+        return {
+            "bucket": bucket,
+            "object": str(meta.get("name") or name),
+            "url": public,
+        }
 
     def upload_drive_image(
         self, data: bytes, filename: str, mime: str
@@ -3321,8 +3378,26 @@ class SheetsBackend:
                     traceback.print_exc()
             elif data:
                 image_info["driveError"] = "no TOKI_UPLOAD_FOLDER_ID"
-            if image_info.get("driveUrl"):
+            if data and self._media_bucket():
+                try:
+                    folder = str(spec.get("folder") or "food-pics").strip("/")
+                    gcs_name = f"{folder}/{stem}.webp"
+                    hosted = self.upload_gcs_image(
+                        data, gcs_name, "image/webp"
+                    )
+                    image_info["gcsBucket"] = hosted.get("bucket") or ""
+                    image_info["gcsObject"] = hosted.get("object") or ""
+                    image_info["gcsUrl"] = hosted.get("url") or ""
+                except Exception as e:
+                    image_info["gcsError"] = str(e)
+                    _log(f"item image GCS upload skipped: {e}")
+                    traceback.print_exc()
+            if image_info.get("gcsUrl"):
+                image_cell = image_info["gcsUrl"]
+            elif image_info.get("driveUrl"):
                 image_cell = image_info["driveUrl"]
+            elif image_info.get("mediaPath"):
+                image_cell = image_info["mediaPath"]
             elif image_info.get("menuimg"):
                 image_cell = image_info["menuimg"]
             elif image_info.get("filename"):
@@ -3403,6 +3478,7 @@ class SheetsBackend:
         _log(
             f"item write {source_name or sid} menu={menu_id} gid={gid} "
             f"item={name!r} {action} row={excel_row} range={wrote_range} "
+            f"gcs={bool(image_info.get('gcsUrl'))} "
             f"drive={bool(image_info.get('driveId'))} ({time.time() - t0:.2f}s)"
         )
         return {
@@ -3906,6 +3982,12 @@ def make_handler(
                         "sheetsApi": backend is not None,
                         "itemUpdate": True,
                         "catalogSheetId": True,
+                        "mediaBucket": (
+                            backend._media_bucket() if backend else ""
+                        ),
+                        "driveUpload": bool(
+                            backend._drive_upload_folder_id() if backend else ""
+                        ),
                         "sheetId": backend.sheet_id if backend else None,
                         "dataSource": (live or {}).get("dataSource"),
                         "requireRestart": (live or {}).get("requireRestart"),

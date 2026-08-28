@@ -558,6 +558,7 @@
     img.addEventListener("error", onErr);
     attachWebpFallback(img);
     stampRasterMaster(img, src);
+    applyRemoteImgAttrs(img, src);
     img.src = src;
     if (
       img.getAttribute("src") === src &&
@@ -799,7 +800,23 @@
 
   function isRemoteImagePath(path) {
     const s = String(path || "").trim();
-    return /^https?:\/\//i.test(s) || /^\/?api\/media\//i.test(s);
+    return (
+      /^https?:\/\//i.test(s) ||
+      /^\/?api\/media\//i.test(s) ||
+      /storage\.googleapis\.com\//i.test(s)
+    );
+  }
+
+  function applyRemoteImgAttrs(el, src) {
+    if (!el) return;
+    if (!isRemoteImagePath(src || el.getAttribute("src") || "")) return;
+    try {
+      el.referrerPolicy = "no-referrer";
+      el.setAttribute("referrerpolicy", "no-referrer");
+    } catch (e) {}
+    try {
+      el.crossOrigin = "anonymous";
+    } catch (e2) {}
   }
 
   function attachWebpFallback(el) {
@@ -12073,6 +12090,7 @@
       stickerOverlay: overlay ? stickerSpec : null,
       onImage: function (img, it) {
         attachWebpFallback(img);
+        applyRemoteImgAttrs(img, it._master || it.src);
         img.dataset.tokiGridN = String(n);
         img.dataset.tokiMaster = it._master;
         if (it._baked && it._baked.url) {
@@ -14978,6 +14996,7 @@
         resolve();
       };
       const t = window.setTimeout(finish, 7000);
+      applyRemoteImgAttrs(img, job.path);
       img.onload = function () {
         window.clearTimeout(t);
         const nw = img.naturalWidth || 0;
