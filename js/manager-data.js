@@ -44,8 +44,8 @@
     { name: "Christmas", main: "#1A3C2A", secondary: "#FFF8F0", highlight: "#C41E3A", special: "#F5D76E" },
     { name: "Easter", main: "#3D2C5A", secondary: "#FFF5FB", highlight: "#E8A0BF", special: "#B8E986" },
     { name: "BU Welcome", main: "#2D2926", secondary: "#FFFFFF", highlight: "#CC0000", special: "#FFD700" },
-    { name: "BU Rally", main: "#2D2926", secondary: "#FFF0E6", highlight: "#CC0000", special: "#FFB703" },
-    { name: "BU Night", main: "#1A1A1A", secondary: "#F5F7FA", highlight: "#CC0000", special: "#F4D03F" },
+    { name: "BU Rally", main: "#CC0000", secondary: "#FFFFFF", highlight: "#2D2926", special: "#FFD700" },
+    { name: "BU Night", main: "#1A1A1A", secondary: "#F5E6C8", highlight: "#FFD700", special: "#CC0000" },
   ];
 
   var COLOR_ROLES = [
