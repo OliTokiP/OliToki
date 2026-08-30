@@ -1,0 +1,1396 @@
+{
+  "updatedAt": "2026-08-30T22:52:23Z",
+  "active": "beta",
+  "sources": {
+    "source": {
+      "sourceId": "source",
+      "sourceName": null,
+      "sheetId": null,
+      "draft": null,
+      "themes": null,
+      "speedTiles": null,
+      "colorRoles": null,
+      "wallpapers": null,
+      "fieldValidations": null,
+      "dataSources": null,
+      "motionStyles": null,
+      "savedAt": "2026-08-18T19:32:28Z"
+    },
+    "restaurant": {
+      "sourceId": "restaurant",
+      "sourceName": "Restaurant Copy",
+      "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+      "draft": {
+        "themeName": "Toki Default",
+        "background": "wallpaper",
+        "bgColor": "special",
+        "patternType": "stripes",
+        "patternColor1": "secondary",
+        "patternColor2": "main",
+        "wallpaper": "galaxy",
+        "scrollSpeed": 2,
+        "presentation": "kenburns",
+        "encoreStyle": "hard_shadow",
+        "encoreSpot": "highlight",
+        "encoreBg": "secondary",
+        "presentationSpeed": 3,
+        "dataSource": "restaurant",
+        "requireRestart": "yes",
+        "refreshTimer": "30 seconds",
+        "systemFont": "poppins",
+        "limitHeavyFilters": "no",
+        "debugMode": "no",
+        "confirmSave": "yes"
+      },
+      "themes": [
+        {
+          "name": "Toki Default",
+          "main": "#000000",
+          "secondary": "#ffffff",
+          "highlight": "#26bbcb",
+          "special": "#ffb703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Ocean Punch",
+          "main": "#0B3D5C",
+          "secondary": "#E8F6FF",
+          "highlight": "#00C2FF",
+          "special": "#FFB703",
+          "patternColor1": "highlight",
+          "patternColor2": "special"
+        },
+        {
+          "name": "Sunset Market",
+          "main": "#5C1A1A",
+          "secondary": "#FFF0E6",
+          "highlight": "#FF6B35",
+          "special": "#FFD166",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Matcha Cream",
+          "main": "#1F4D3A",
+          "secondary": "#F3F7E8",
+          "highlight": "#7CB342",
+          "special": "#F4A261",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Grape Neon",
+          "main": "#2A1248",
+          "secondary": "#F3E8FF",
+          "highlight": "#C77DFF",
+          "special": "#39FF14",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Indigo Paper",
+          "main": "#1A237E",
+          "secondary": "#FFF8E7",
+          "highlight": "#FF6F61",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Summer",
+          "main": "#0B6E99",
+          "secondary": "#FFF6E0",
+          "highlight": "#00A8E8",
+          "special": "#FFB703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Fourth of July",
+          "main": "#0A2240",
+          "secondary": "#F5F7FA",
+          "highlight": "#C41E3A",
+          "special": "#FFD700",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Halloween",
+          "main": "#1A0A24",
+          "secondary": "#F5E6D3",
+          "highlight": "#FF6B00",
+          "special": "#9ACD32",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Thanksgiving",
+          "main": "#3E2723",
+          "secondary": "#FFF3E0",
+          "highlight": "#E65100",
+          "special": "#FFB300",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Christmas",
+          "main": "#0D3B2E",
+          "secondary": "#FFF8F0",
+          "highlight": "#C62828",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Easter",
+          "main": "#4A306D",
+          "secondary": "#F3FCE8",
+          "highlight": "#F48FB1",
+          "special": "#FFE566",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        }
+      ],
+      "speedTiles": {
+        "scroll": {
+          "min": 0,
+          "max": 5
+        },
+        "presentation": {
+          "min": 0,
+          "max": 5
+        }
+      },
+      "colorRoles": [
+        {
+          "id": "main",
+          "label": "Main Color"
+        },
+        {
+          "id": "secondary",
+          "label": "Secondary Color"
+        },
+        {
+          "id": "highlight",
+          "label": "Highlight Color"
+        },
+        {
+          "id": "special",
+          "label": "Highlight Color (Special)"
+        }
+      ],
+      "wallpapers": [
+        {
+          "id": "galaxy",
+          "label": "Galaxy",
+          "src": "assets/bgs/galaxy-bg.webp",
+          "fallback": "assets/bgs/galaxy-bg.jpg"
+        },
+        {
+          "id": "film",
+          "label": "Film",
+          "src": "assets/bgs/film.webp",
+          "fallback": "assets/bgs/film.jpg"
+        }
+      ],
+      "fieldValidations": {
+        "Theme Selector (='Style and Theme'!$A$6:$A$17)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$A$6:$A"
+          ],
+          "strict": true
+        },
+        "BG Color (='Style and Theme'!$H$7:$H$11)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$H$7:$H$11"
+          ],
+          "strict": true,
+          "inputMessage": "Click and enter a value from range"
+        },
+        "BG Pattern": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$J$6:$J"
+          ],
+          "strict": true
+        },
+        "BG Wallpaper (='Style and Theme'!$F$7:$F)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$F$6:$F"
+          ],
+          "strict": true
+        },
+        "BG Blur": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "1"
+          ],
+          "strict": true
+        },
+        "BG Blend Mode": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$G$6:$G"
+          ],
+          "strict": true
+        },
+        "Encore Spotlight Type": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "soft",
+            "hard",
+            "hard_shadow"
+          ],
+          "strict": true
+        },
+        "Encore Spotlight Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "highlight",
+            "black"
+          ],
+          "strict": true
+        },
+        "Encore Background Color": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$H$7:$H$11"
+          ],
+          "strict": true,
+          "inputMessage": "Click and enter a value from range"
+        },
+        "Theme Selector": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "Toki Default",
+            "Ocean Punch",
+            "Sunset Market",
+            "Matcha Cream",
+            "Grape Neon",
+            "Indigo Paper",
+            "Summer",
+            "Fourth of July",
+            "Halloween",
+            "Thanksgiving",
+            "Christmas",
+            "Easter"
+          ],
+          "a1": "='Style and Theme'!$A$6:$A$17"
+        },
+        "BG Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "main color",
+            "secondary color",
+            "highlight color",
+            "highlight color (special)"
+          ],
+          "a1": "='Style and Theme'!$H$7:$H$11"
+        },
+        "BG Wallpaper": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "galaxy",
+            "film"
+          ],
+          "a1": "='Style and Theme'!$F$7:$F"
+        },
+        "BG Scroll Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        },
+        "Presentation Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        }
+      },
+      "dataSources": [
+        {
+          "id": "alpha",
+          "name": "Alpha Copy",
+          "sheetId": "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
+          "env": "",
+          "siteUrl": ""
+        },
+        {
+          "id": "restaurant",
+          "name": "Restaurant Copy",
+          "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+          "env": "restaurant",
+          "siteUrl": "https://olitokip.github.io/OliToki"
+        },
+        {
+          "id": "beta",
+          "name": "Beta (Development) Copy",
+          "sheetId": "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8",
+          "env": "",
+          "siteUrl": ""
+        }
+      ],
+      "motionStyles": {
+        "Ken Burns": {
+          "name": "Ken Burns",
+          "explanation": "Hero photo + list highlight: zoom push-in, hold, zoom/fade out; first entry reuses punch-in; last exit reuses punch-out.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Sequential blocks. Mid-run item = Punch-in → Hold → Punch-out.\nFirst item entrance = Wind-up if >0 else Punch-in.\nLast item exit = Wind-down if >0 else Punch-out.\n0 on Wind-up/Wind-down means “no override” (not “no animation”).\n\nKEN BURNS defaults (seconds):\n- Wind-up 0 → first slide uses Punch-in 3.4 (scale 0.93→1, ease-out; opacity in ≤0.45 ease-fade)\n- Punch-in 3.4 → every slide focus-in\n- Hold 3 → settled only (zoom=1, highlight on); not including punch\n- Punch-out 0.45 → every mid-run exit (scale 1→0.93 + fade, ease-fade)\n- Wind-down 0 → last slide uses Punch-out 0.45\n\nLater: set Wind-up or Wind-down >0 only when first/last should differ from normal punch.\n\nSo both ends default to the same punch behavior; the Wind columns stay free for real first/last overrides when you want them."
+        },
+        "Slideshow": {
+          "name": "Slideshow",
+          "explanation": "Just still images with opacity fades in between. Simple.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": ""
+        },
+        "Encore": {
+          "name": "Encore",
+          "explanation": "",
+          "windUp": 0,
+          "punchIn": 2,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Same block runner + same digit rules as Ken Burns / Slideshow.\nWind-up/Wind-down 0 = use Punch-In / Punch-Out DURATIONS for first/last (not “no animation”).\nSame cell values ⇒ same phase lengths as KB/Slideshow.\n\nENCORE ≠ “Ken Burns with veil only.” Opacity TARGET depends on phase:\n\nWIND-UP & WIND-DOWN (inherit KB/Slideshow opacity behavior PRECISELY):\n- GRID (full collage) opacity in/out — same role as hero image opacity on KB/Slideshow.\n- VEIL also participates on Wind-up (see kicker) / Wind-down as part of that entrance/exit.\n- Camera/zoom as Encore focus treatment.\n\nPUNCH-IN & PUNCH-OUT (mid-run item↔item):\n- GRID does NOT opacity-fade (stays up).\n- VEIL ONLY opacity changes (in on Punch-In, out on Punch-Out), using Punch-In / Punch-Out time values from this row (same numbers as KB/Slideshow when cells match).\n- Camera moves focus item↔item; highlight locksteps with punch.\n\nHOLD: Settled on active item (veil + zoom parked). Duration = Hold cell.\n\nKICKER — Wind-up when Family Portrait DISABLED:\nSingle entrance duration (Wind-Up if >0 else Punch-In). THREE PARALLEL tracks:\n  (1) grid opacity 0→1\n  (2) veil opacity → focused on top-billed item\n  (3) camera zoom from full-spread overview → top-billed lattice point\nAll finish on that entrance clock. Not sequential sub-phases.\n\nWind-down (last of segment; duration Wind-Down if >0 else Punch-Out):\nGrid opacity out + veil out (KB/Slideshow-style full exit), camera settles; then next segment entrance.\n\nFAMILY PORTRAIT (build AFTER Encore satisfactory):\n- Optional one-slide full-spread overview BEFORE Encore bows when FP toggle ON.\n- Not the same as Encore Wind-up cell; FP is extra pre-show beat.\n- Encore without FP: kicker Wind-up above.\n- FP without Encore: later, with other styles.\n\nSEGMENT HANDOFF: last exit / first entrance by segment boundary (Alpha → Drinks etc.) even if both Encore or Encore↔Slideshow/Ken Burns.\n\nIMPLEMENTATION: Engine phases + multi-target treatments (grid vs veil vs camera). Quarantine for lattice/veil reference only. Log style=Encore, phase, surfaces={grid,veil,camera}, seconds"
+        }
+      },
+      "savedAt": "2026-08-23T17:41:24Z"
+    },
+    "alpha": {
+      "sourceId": "alpha",
+      "sourceName": "Restaurant Copy",
+      "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+      "draft": {
+        "themeName": "Sunset Market",
+        "background": "wallpaper",
+        "bgColor": "main",
+        "patternType": "stripes",
+        "patternColor1": "secondary",
+        "patternColor2": "main",
+        "wallpaper": "galaxy",
+        "scrollSpeed": 3,
+        "presentation": "kenburns",
+        "encoreStyle": "hard_shadow",
+        "encoreSpot": "highlight",
+        "encoreBg": "main",
+        "presentationSpeed": 3,
+        "dataSource": "alpha",
+        "requireRestart": "yes",
+        "refreshTimer": "1 second",
+        "systemFont": "poppins",
+        "limitHeavyFilters": "yes",
+        "debugMode": "no",
+        "confirmSave": "yes"
+      },
+      "themes": [
+        {
+          "name": "Toki Default",
+          "main": "#000000",
+          "secondary": "#ffffff",
+          "highlight": "#26bbcb",
+          "special": "#ffb703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Ocean Punch",
+          "main": "#0B3D5C",
+          "secondary": "#E8F6FF",
+          "highlight": "#00C2FF",
+          "special": "#FFB703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Sunset Market",
+          "main": "#5C1A1A",
+          "secondary": "#FFF0E6",
+          "highlight": "#FF6B35",
+          "special": "#FFD166",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Matcha Cream",
+          "main": "#1F4D3A",
+          "secondary": "#F3F7E8",
+          "highlight": "#7CB342",
+          "special": "#F4A261",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Grape Neon",
+          "main": "#2A1248",
+          "secondary": "#F3E8FF",
+          "highlight": "#C77DFF",
+          "special": "#39FF14",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Indigo Paper",
+          "main": "#1A237E",
+          "secondary": "#FFF8E7",
+          "highlight": "#FF6F61",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Summer",
+          "main": "#0B6E99",
+          "secondary": "#FFF6E0",
+          "highlight": "#00A8E8",
+          "special": "#FFB703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Fourth of July",
+          "main": "#0A2240",
+          "secondary": "#F5F7FA",
+          "highlight": "#C41E3A",
+          "special": "#FFD700",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Halloween",
+          "main": "#1A0A24",
+          "secondary": "#F5E6D3",
+          "highlight": "#FF6B00",
+          "special": "#9ACD32",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Thanksgiving",
+          "main": "#3E2723",
+          "secondary": "#FFF3E0",
+          "highlight": "#E65100",
+          "special": "#FFB300",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Christmas",
+          "main": "#0D3B2E",
+          "secondary": "#FFF8F0",
+          "highlight": "#C62828",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Easter",
+          "main": "#4A306D",
+          "secondary": "#F3FCE8",
+          "highlight": "#F48FB1",
+          "special": "#FFE566",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        }
+      ],
+      "speedTiles": {
+        "scroll": {
+          "min": 0,
+          "max": 5
+        },
+        "presentation": {
+          "min": 0,
+          "max": 5
+        }
+      },
+      "colorRoles": [
+        {
+          "id": "main",
+          "label": "Main Color"
+        },
+        {
+          "id": "secondary",
+          "label": "Secondary Color"
+        },
+        {
+          "id": "highlight",
+          "label": "Highlight Color"
+        },
+        {
+          "id": "special",
+          "label": "Highlight Color (Special)"
+        }
+      ],
+      "wallpapers": [
+        {
+          "id": "galaxy",
+          "label": "Galaxy",
+          "src": "assets/bgs/galaxy-bg.webp",
+          "fallback": "assets/bgs/galaxy-bg.jpg"
+        },
+        {
+          "id": "film",
+          "label": "Film",
+          "src": "assets/bgs/film.webp",
+          "fallback": "assets/bgs/film.jpg"
+        }
+      ],
+      "fieldValidations": {
+        "Theme Selector (='Style and Theme'!$A$6:$A$17)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$A$6:$A"
+          ],
+          "strict": true
+        },
+        "BG Color (='Style and Theme'!$H$7:$H$11)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$H$7:$H$11"
+          ],
+          "strict": true,
+          "inputMessage": "Click and enter a value from range"
+        },
+        "BG Pattern": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$J$6:$J"
+          ],
+          "strict": true
+        },
+        "BG Wallpaper (='Style and Theme'!$F$7:$F)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$F$6:$F"
+          ],
+          "strict": true
+        },
+        "BG Blur": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "1"
+          ],
+          "strict": true
+        },
+        "BG Blend Mode": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$G$6:$G"
+          ],
+          "strict": true
+        },
+        "Encore Spotlight Type": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "soft",
+            "hard",
+            "hard_shadow"
+          ],
+          "strict": true
+        },
+        "Encore Spotlight Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "highlight",
+            "black"
+          ],
+          "strict": true
+        },
+        "Encore Background Color": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$H$7:$H$11"
+          ],
+          "strict": true,
+          "inputMessage": "Click and enter a value from range"
+        },
+        "Theme Selector": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "Toki Default",
+            "Ocean Punch",
+            "Sunset Market",
+            "Matcha Cream",
+            "Grape Neon",
+            "Indigo Paper",
+            "Summer",
+            "Fourth of July",
+            "Halloween",
+            "Thanksgiving",
+            "Christmas",
+            "Easter"
+          ],
+          "a1": "='Style and Theme'!$A$6:$A$17"
+        },
+        "BG Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "main color",
+            "secondary color",
+            "highlight color",
+            "highlight color (special)"
+          ],
+          "a1": "='Style and Theme'!$H$7:$H$11"
+        },
+        "BG Wallpaper": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "galaxy",
+            "film"
+          ],
+          "a1": "='Style and Theme'!$F$7:$F"
+        },
+        "BG Scroll Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        },
+        "Presentation Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        }
+      },
+      "dataSources": [
+        {
+          "id": "alpha",
+          "name": "Alpha Copy",
+          "sheetId": "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
+          "env": "testing",
+          "siteUrl": ""
+        },
+        {
+          "id": "restaurant",
+          "name": "Restaurant Copy",
+          "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+          "env": "restaurant",
+          "siteUrl": "https://olitokip.github.io/OliToki"
+        }
+      ],
+      "motionStyles": {
+        "Ken Burns": {
+          "name": "Ken Burns",
+          "explanation": "Hero photo + list highlight: zoom push-in, hold, zoom/fade out; first entry reuses punch-in; last exit reuses punch-out.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Sequential blocks. Mid-run item = Punch-in → Hold → Punch-out.\nFirst item entrance = Wind-up if >0 else Punch-in.\nLast item exit = Wind-down if >0 else Punch-out.\n0 on Wind-up/Wind-down means “no override” (not “no animation”).\n\nKEN BURNS defaults (seconds):\n- Wind-up 0 → first slide uses Punch-in 3.4 (scale 0.93→1, ease-out; opacity in ≤0.45 ease-fade)\n- Punch-in 3.4 → every slide focus-in\n- Hold 3 → settled only (zoom=1, highlight on); not including punch\n- Punch-out 0.45 → every mid-run exit (scale 1→0.93 + fade, ease-fade)\n- Wind-down 0 → last slide uses Punch-out 0.45\n\nLater: set Wind-up or Wind-down >0 only when first/last should differ from normal punch.\n\nSo both ends default to the same punch behavior; the Wind columns stay free for real first/last overrides when you want them."
+        },
+        "Slideshow": {
+          "name": "Slideshow",
+          "explanation": "Just still images with opacity fades in between. Simple.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": ""
+        },
+        "Encore": {
+          "name": "Encore",
+          "explanation": "",
+          "windUp": 0,
+          "punchIn": 2,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Same block runner + same digit rules as Ken Burns / Slideshow.\nWind-up/Wind-down 0 = use Punch-In / Punch-Out DURATIONS for first/last (not “no animation”).\nSame cell values ⇒ same phase lengths as KB/Slideshow.\n\nENCORE ≠ “Ken Burns with veil only.” Opacity TARGET depends on phase:\n\nWIND-UP & WIND-DOWN (inherit KB/Slideshow opacity behavior PRECISELY):\n- GRID (full collage) opacity in/out — same role as hero image opacity on KB/Slideshow.\n- VEIL also participates on Wind-up (see kicker) / Wind-down as part of that entrance/exit.\n- Camera/zoom as Encore focus treatment.\n\nPUNCH-IN & PUNCH-OUT (mid-run item↔item):\n- GRID does NOT opacity-fade (stays up).\n- VEIL ONLY opacity changes (in on Punch-In, out on Punch-Out), using Punch-In / Punch-Out time values from this row (same numbers as KB/Slideshow when cells match).\n- Camera moves focus item↔item; highlight locksteps with punch.\n\nHOLD: Settled on active item (veil + zoom parked). Duration = Hold cell.\n\nKICKER — Wind-up when Family Portrait DISABLED:\nSingle entrance duration (Wind-Up if >0 else Punch-In). THREE PARALLEL tracks:\n  (1) grid opacity 0→1\n  (2) veil opacity → focused on top-billed item\n  (3) camera zoom from full-spread overview → top-billed lattice point\nAll finish on that entrance clock. Not sequential sub-phases.\n\nWind-down (last of segment; duration Wind-Down if >0 else Punch-Out):\nGrid opacity out + veil out (KB/Slideshow-style full exit), camera settles; then next segment entrance.\n\nFAMILY PORTRAIT (build AFTER Encore satisfactory):\n- Optional one-slide full-spread overview BEFORE Encore bows when FP toggle ON.\n- Not the same as Encore Wind-up cell; FP is extra pre-show beat.\n- Encore without FP: kicker Wind-up above.\n- FP without Encore: later, with other styles.\n\nSEGMENT HANDOFF: last exit / first entrance by segment boundary (Alpha → Drinks etc.) even if both Encore or Encore↔Slideshow/Ken Burns.\n\nIMPLEMENTATION: Engine phases + multi-target treatments (grid vs veil vs camera). Quarantine for lattice/veil reference only. Log style=Encore, phase, surfaces={grid,veil,camera}, seconds"
+        }
+      },
+      "savedAt": "2026-08-20T05:25:23Z"
+    },
+    "beta-development-copy": {
+      "sourceId": "beta-development-copy",
+      "sourceName": "Restaurant Copy",
+      "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+      "draft": {
+        "themeName": "Toki Default",
+        "background": "wallpaper",
+        "bgColor": "special",
+        "patternType": "stripes",
+        "patternColor1": "secondary",
+        "patternColor2": "main",
+        "wallpaper": "galaxy",
+        "scrollSpeed": 2,
+        "presentation": "kenburns",
+        "encoreStyle": "hard_shadow",
+        "encoreSpot": "highlight",
+        "encoreBg": "secondary",
+        "presentationSpeed": 3,
+        "dataSource": "beta-development-copy",
+        "requireRestart": "no",
+        "refreshTimer": "30 seconds",
+        "systemFont": "poppins",
+        "limitHeavyFilters": "no",
+        "debugMode": "no",
+        "confirmSave": "yes"
+      },
+      "themes": [
+        {
+          "name": "Toki Default",
+          "main": "#000000",
+          "secondary": "#ffffff",
+          "highlight": "#26bbcb",
+          "special": "#ffb703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Ocean Punch",
+          "main": "#0B3D5C",
+          "secondary": "#E8F6FF",
+          "highlight": "#00C2FF",
+          "special": "#FFB703",
+          "patternColor1": "highlight",
+          "patternColor2": "special"
+        },
+        {
+          "name": "Sunset Market",
+          "main": "#5C1A1A",
+          "secondary": "#FFF0E6",
+          "highlight": "#FF6B35",
+          "special": "#FFD166",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Matcha Cream",
+          "main": "#1F4D3A",
+          "secondary": "#F3F7E8",
+          "highlight": "#7CB342",
+          "special": "#F4A261",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Grape Neon",
+          "main": "#2A1248",
+          "secondary": "#F3E8FF",
+          "highlight": "#C77DFF",
+          "special": "#39FF14",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Indigo Paper",
+          "main": "#1A237E",
+          "secondary": "#FFF8E7",
+          "highlight": "#FF6F61",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Summer",
+          "main": "#0B6E99",
+          "secondary": "#FFF6E0",
+          "highlight": "#00A8E8",
+          "special": "#FFB703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Fourth of July",
+          "main": "#0A2240",
+          "secondary": "#F5F7FA",
+          "highlight": "#C41E3A",
+          "special": "#FFD700",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Halloween",
+          "main": "#1A0A24",
+          "secondary": "#F5E6D3",
+          "highlight": "#FF6B00",
+          "special": "#9ACD32",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Thanksgiving",
+          "main": "#3E2723",
+          "secondary": "#FFF3E0",
+          "highlight": "#E65100",
+          "special": "#FFB300",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Christmas",
+          "main": "#0D3B2E",
+          "secondary": "#FFF8F0",
+          "highlight": "#C62828",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Easter",
+          "main": "#4A306D",
+          "secondary": "#F3FCE8",
+          "highlight": "#F48FB1",
+          "special": "#FFE566",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        }
+      ],
+      "speedTiles": {
+        "scroll": {
+          "min": 0,
+          "max": 5
+        },
+        "presentation": {
+          "min": 0,
+          "max": 5
+        }
+      },
+      "colorRoles": [
+        {
+          "id": "main",
+          "label": "Main Color"
+        },
+        {
+          "id": "secondary",
+          "label": "Secondary Color"
+        },
+        {
+          "id": "highlight",
+          "label": "Highlight Color"
+        },
+        {
+          "id": "special",
+          "label": "Highlight Color (Special)"
+        }
+      ],
+      "wallpapers": [
+        {
+          "id": "galaxy",
+          "label": "Galaxy",
+          "src": "assets/bgs/galaxy-bg.webp",
+          "fallback": "assets/bgs/galaxy-bg.jpg"
+        },
+        {
+          "id": "film",
+          "label": "Film",
+          "src": "assets/bgs/film.webp",
+          "fallback": "assets/bgs/film.jpg"
+        }
+      ],
+      "fieldValidations": {
+        "Theme Selector (='Style and Theme'!$A$6:$A$17)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$A$6:$A"
+          ],
+          "strict": true
+        },
+        "BG Color (='Style and Theme'!$H$7:$H$11)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$H$7:$H$11"
+          ],
+          "strict": true,
+          "inputMessage": "Click and enter a value from range"
+        },
+        "BG Pattern": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$J$6:$J"
+          ],
+          "strict": true
+        },
+        "BG Wallpaper (='Style and Theme'!$F$7:$F)": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$F$6:$F"
+          ],
+          "strict": true
+        },
+        "BG Blur": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "1"
+          ],
+          "strict": true
+        },
+        "BG Blend Mode": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$G$6:$G"
+          ],
+          "strict": true
+        },
+        "Encore Spotlight Type": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "soft",
+            "hard",
+            "hard_shadow"
+          ],
+          "strict": true
+        },
+        "Encore Spotlight Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "highlight",
+            "black"
+          ],
+          "strict": true
+        },
+        "Encore Background Color": {
+          "type": "ONE_OF_RANGE",
+          "values": [
+            "='Style and Theme'!$H$7:$H$11"
+          ],
+          "strict": true,
+          "inputMessage": "Click and enter a value from range"
+        },
+        "Theme Selector": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "Toki Default",
+            "Ocean Punch",
+            "Sunset Market",
+            "Matcha Cream",
+            "Grape Neon",
+            "Indigo Paper",
+            "Summer",
+            "Fourth of July",
+            "Halloween",
+            "Thanksgiving",
+            "Christmas",
+            "Easter"
+          ],
+          "a1": "='Style and Theme'!$A$6:$A$17"
+        },
+        "BG Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "main color",
+            "secondary color",
+            "highlight color",
+            "highlight color (special)"
+          ],
+          "a1": "='Style and Theme'!$H$7:$H$11"
+        },
+        "BG Wallpaper": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "galaxy",
+            "film"
+          ],
+          "a1": "='Style and Theme'!$F$7:$F"
+        },
+        "BG Scroll Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        },
+        "Presentation Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        }
+      },
+      "dataSources": [
+        {
+          "id": "alpha",
+          "name": "Alpha Copy",
+          "sheetId": "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
+          "env": "testing",
+          "siteUrl": "https://toki-api-testing-3rx5m3qpzq-uc.a.run.app"
+        },
+        {
+          "id": "restaurant",
+          "name": "Restaurant Copy",
+          "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+          "env": "restaurant",
+          "siteUrl": "https://olitokip.github.io/OliToki"
+        },
+        {
+          "id": "beta-development-copy",
+          "name": "Beta (Development) Copy",
+          "sheetId": "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8"
+        }
+      ],
+      "motionStyles": {
+        "Ken Burns": {
+          "name": "Ken Burns",
+          "explanation": "Hero photo + list highlight: zoom push-in, hold, zoom/fade out; first entry reuses punch-in; last exit reuses punch-out.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Sequential blocks. Mid-run item = Punch-in → Hold → Punch-out.\nFirst item entrance = Wind-up if >0 else Punch-in.\nLast item exit = Wind-down if >0 else Punch-out.\n0 on Wind-up/Wind-down means “no override” (not “no animation”).\n\nKEN BURNS defaults (seconds):\n- Wind-up 0 → first slide uses Punch-in 3.4 (scale 0.93→1, ease-out; opacity in ≤0.45 ease-fade)\n- Punch-in 3.4 → every slide focus-in\n- Hold 3 → settled only (zoom=1, highlight on); not including punch\n- Punch-out 0.45 → every mid-run exit (scale 1→0.93 + fade, ease-fade)\n- Wind-down 0 → last slide uses Punch-out 0.45\n\nLater: set Wind-up or Wind-down >0 only when first/last should differ from normal punch.\n\nSo both ends default to the same punch behavior; the Wind columns stay free for real first/last overrides when you want them."
+        },
+        "Slideshow": {
+          "name": "Slideshow",
+          "explanation": "Just still images with opacity fades in between. Simple.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": ""
+        },
+        "Encore": {
+          "name": "Encore",
+          "explanation": "",
+          "windUp": 0,
+          "punchIn": 2,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Same block runner + same digit rules as Ken Burns / Slideshow.\nWind-up/Wind-down 0 = use Punch-In / Punch-Out DURATIONS for first/last (not “no animation”).\nSame cell values ⇒ same phase lengths as KB/Slideshow.\n\nENCORE ≠ “Ken Burns with veil only.” Opacity TARGET depends on phase:\n\nWIND-UP & WIND-DOWN (inherit KB/Slideshow opacity behavior PRECISELY):\n- GRID (full collage) opacity in/out — same role as hero image opacity on KB/Slideshow.\n- VEIL also participates on Wind-up (see kicker) / Wind-down as part of that entrance/exit.\n- Camera/zoom as Encore focus treatment.\n\nPUNCH-IN & PUNCH-OUT (mid-run item↔item):\n- GRID does NOT opacity-fade (stays up).\n- VEIL ONLY opacity changes (in on Punch-In, out on Punch-Out), using Punch-In / Punch-Out time values from this row (same numbers as KB/Slideshow when cells match).\n- Camera moves focus item↔item; highlight locksteps with punch.\n\nHOLD: Settled on active item (veil + zoom parked). Duration = Hold cell.\n\nKICKER — Wind-up when Family Portrait DISABLED:\nSingle entrance duration (Wind-Up if >0 else Punch-In). THREE PARALLEL tracks:\n  (1) grid opacity 0→1\n  (2) veil opacity → focused on top-billed item\n  (3) camera zoom from full-spread overview → top-billed lattice point\nAll finish on that entrance clock. Not sequential sub-phases.\n\nWind-down (last of segment; duration Wind-Down if >0 else Punch-Out):\nGrid opacity out + veil out (KB/Slideshow-style full exit), camera settles; then next segment entrance.\n\nFAMILY PORTRAIT (build AFTER Encore satisfactory):\n- Optional one-slide full-spread overview BEFORE Encore bows when FP toggle ON.\n- Not the same as Encore Wind-up cell; FP is extra pre-show beat.\n- Encore without FP: kicker Wind-up above.\n- FP without Encore: later, with other styles.\n\nSEGMENT HANDOFF: last exit / first entrance by segment boundary (Alpha → Drinks etc.) even if both Encore or Encore↔Slideshow/Ken Burns.\n\nIMPLEMENTATION: Engine phases + multi-target treatments (grid vs veil vs camera). Quarantine for lattice/veil reference only. Log style=Encore, phase, surfaces={grid,veil,camera}, seconds"
+        }
+      },
+      "savedAt": "2026-08-22T19:16:49Z"
+    },
+    "beta": {
+      "sourceId": "beta",
+      "sourceName": "Beta (Development) Copy",
+      "sheetId": "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8",
+      "draft": {
+        "themeName": "BU Night",
+        "background": "wallpaper",
+        "bgColor": "main",
+        "patternType": "stripes",
+        "patternColor1": "secondary",
+        "patternColor2": "main",
+        "wallpaper": "film",
+        "scrollSpeed": 2,
+        "presentation": "kenburns",
+        "encoreStyle": "hard_shadow",
+        "encoreSpot": "highlight",
+        "encoreBg": "main",
+        "presentationSpeed": 3,
+        "dataSource": "beta",
+        "requireRestart": "no",
+        "refreshTimer": "30 seconds",
+        "systemFont": "poppins",
+        "limitHeavyFilters": "no",
+        "debugMode": "yes",
+        "confirmSave": "no"
+      },
+      "themes": [
+        {
+          "name": "Toki Default",
+          "main": "#000000",
+          "secondary": "#ffffff",
+          "highlight": "#26bbcb",
+          "special": "#ffb703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Ocean Punch",
+          "main": "#0B3D5C",
+          "secondary": "#E8F6FF",
+          "highlight": "#00C2FF",
+          "special": "#FFB703",
+          "patternColor1": "highlight",
+          "patternColor2": "special"
+        },
+        {
+          "name": "Sunset Market",
+          "main": "#5C1A1A",
+          "secondary": "#FFF0E6",
+          "highlight": "#FF6B35",
+          "special": "#FFD166",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Matcha Cream",
+          "main": "#1F4D3A",
+          "secondary": "#F3F7E8",
+          "highlight": "#7CB342",
+          "special": "#F4A261",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Grape Neon",
+          "main": "#2A1248",
+          "secondary": "#F3E8FF",
+          "highlight": "#C77DFF",
+          "special": "#39FF14",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Indigo Paper",
+          "main": "#1A237E",
+          "secondary": "#FFF8E7",
+          "highlight": "#FF6F61",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Summer",
+          "main": "#0B6E99",
+          "secondary": "#FFF6E0",
+          "highlight": "#00A8E8",
+          "special": "#FFB703",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Fourth of July",
+          "main": "#0A2240",
+          "secondary": "#F5F7FA",
+          "highlight": "#C41E3A",
+          "special": "#FFD700",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Halloween",
+          "main": "#1A0A24",
+          "secondary": "#F5E6D3",
+          "highlight": "#FF6B00",
+          "special": "#9ACD32",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Thanksgiving",
+          "main": "#3E2723",
+          "secondary": "#FFF3E0",
+          "highlight": "#E65100",
+          "special": "#FFB300",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Christmas",
+          "main": "#0D3B2E",
+          "secondary": "#FFF8F0",
+          "highlight": "#C62828",
+          "special": "#FFD54F",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "Easter",
+          "main": "#4A306D",
+          "secondary": "#F3FCE8",
+          "highlight": "#F48FB1",
+          "special": "#FFE566",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "BU Welcome",
+          "main": "#2D2926",
+          "secondary": "#FFFFFF",
+          "highlight": "#CC0000",
+          "special": "#FFD700",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "BU Rally",
+          "main": "#CC0000",
+          "secondary": "#FFFFFF",
+          "highlight": "#2D2926",
+          "special": "#FFD700",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        },
+        {
+          "name": "BU Night",
+          "main": "#1A1A1A",
+          "secondary": "#F5E6C8",
+          "highlight": "#FFD700",
+          "special": "#CC0000",
+          "patternColor1": "secondary",
+          "patternColor2": "main"
+        }
+      ],
+      "speedTiles": {
+        "scroll": {
+          "min": 0,
+          "max": 5
+        },
+        "presentation": {
+          "min": 0,
+          "max": 5
+        }
+      },
+      "colorRoles": [
+        {
+          "id": "main",
+          "label": "Main Color"
+        },
+        {
+          "id": "secondary",
+          "label": "Secondary Color"
+        },
+        {
+          "id": "highlight",
+          "label": "Highlight Color"
+        },
+        {
+          "id": "special",
+          "label": "Highlight Color (Special)"
+        }
+      ],
+      "wallpapers": [
+        {
+          "id": "galaxy",
+          "label": "Galaxy",
+          "src": "assets/bgs/galaxy-bg.webp",
+          "fallback": "assets/bgs/galaxy-bg.jpg"
+        },
+        {
+          "id": "film",
+          "label": "Film",
+          "src": "assets/bgs/film.webp",
+          "fallback": "assets/bgs/film.jpg"
+        }
+      ],
+      "fieldValidations": {
+        "Theme Selector": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "Toki Default",
+            "Ocean Punch",
+            "Sunset Market",
+            "Matcha Cream",
+            "Grape Neon",
+            "Indigo Paper",
+            "Summer",
+            "Fourth of July",
+            "Halloween",
+            "Thanksgiving",
+            "Christmas",
+            "Easter",
+            "BU Welcome",
+            "BU Rally",
+            "BU Night"
+          ],
+          "a1": "='Style and Theme'!$A$6:$A$20"
+        },
+        "BG Color": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "main color",
+            "secondary color",
+            "highlight color",
+            "highlight color (special)"
+          ],
+          "a1": "='Style and Theme'!$H$7:$H$11"
+        },
+        "BG Wallpaper": {
+          "type": "ONE_OF_LIST",
+          "values": [
+            "galaxy",
+            "film"
+          ],
+          "a1": "='Style and Theme'!$F$7:$F"
+        },
+        "BG Scroll Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        },
+        "Presentation Speed": {
+          "type": "NUMBER_BETWEEN",
+          "values": [
+            "0",
+            "5"
+          ]
+        }
+      },
+      "dataSources": [
+        {
+          "id": "alpha",
+          "name": "Alpha Copy",
+          "sheetId": "1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10",
+          "env": "",
+          "siteUrl": ""
+        },
+        {
+          "id": "restaurant",
+          "name": "Restaurant Copy",
+          "sheetId": "1dXnhfxd9kzAkKNz4oVwTZHHK8focy6GW-twpC8B11gM",
+          "env": "restaurant",
+          "siteUrl": "https://olitokip.github.io/OliToki"
+        },
+        {
+          "id": "beta",
+          "name": "Beta (Development) Copy",
+          "sheetId": "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8",
+          "env": "",
+          "siteUrl": ""
+        }
+      ],
+      "motionStyles": {
+        "Ken Burns": {
+          "name": "Ken Burns",
+          "explanation": "Hero photo + list highlight: zoom push-in, hold, zoom/fade out; first entry reuses punch-in; last exit reuses punch-out.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Sequential blocks. Mid-run item = Punch-in → Hold → Punch-out.\nFirst item entrance = Wind-up if >0 else Punch-in.\nLast item exit = Wind-down if >0 else Punch-out.\n0 on Wind-up/Wind-down means “no override” (not “no animation”).\n\nKEN BURNS defaults (seconds):\n- Wind-up 0 → first slide uses Punch-in 3.4 (scale 0.93→1, ease-out; opacity in ≤0.45 ease-fade)\n- Punch-in 3.4 → every slide focus-in\n- Hold 3 → settled only (zoom=1, highlight on); not including punch\n- Punch-out 0.45 → every mid-run exit (scale 1→0.93 + fade, ease-fade)\n- Wind-down 0 → last slide uses Punch-out 0.45\n\nLater: set Wind-up or Wind-down >0 only when first/last should differ from normal punch.\n\nSo both ends default to the same punch behavior; the Wind columns stay free for real first/last overrides when you want them."
+        },
+        "Slideshow": {
+          "name": "Slideshow",
+          "explanation": "Just still images with opacity fades in between. Simple.",
+          "windUp": 0,
+          "punchIn": 3.4,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": ""
+        },
+        "Encore": {
+          "name": "Encore",
+          "explanation": "",
+          "windUp": 0,
+          "punchIn": 2,
+          "hold": 1,
+          "punchOut": 0.45,
+          "windDown": 0,
+          "notes": "ENGINE: Same block runner + same digit rules as Ken Burns / Slideshow.\nWind-up/Wind-down 0 = use Punch-In / Punch-Out DURATIONS for first/last (not “no animation”).\nSame cell values ⇒ same phase lengths as KB/Slideshow.\n\nENCORE ≠ “Ken Burns with veil only.” Opacity TARGET depends on phase:\n\nWIND-UP & WIND-DOWN (inherit KB/Slideshow opacity behavior PRECISELY):\n- GRID (full collage) opacity in/out — same role as hero image opacity on KB/Slideshow.\n- VEIL also participates on Wind-up (see kicker) / Wind-down as part of that entrance/exit.\n- Camera/zoom as Encore focus treatment.\n\nPUNCH-IN & PUNCH-OUT (mid-run item↔item):\n- GRID does NOT opacity-fade (stays up).\n- VEIL ONLY opacity changes (in on Punch-In, out on Punch-Out), using Punch-In / Punch-Out time values from this row (same numbers as KB/Slideshow when cells match).\n- Camera moves focus item↔item; highlight locksteps with punch.\n\nHOLD: Settled on active item (veil + zoom parked). Duration = Hold cell.\n\nKICKER — Wind-up when Family Portrait DISABLED:\nSingle entrance duration (Wind-Up if >0 else Punch-In). THREE PARALLEL tracks:\n  (1) grid opacity 0→1\n  (2) veil opacity → focused on top-billed item\n  (3) camera zoom from full-spread overview → top-billed lattice point\nAll finish on that entrance clock. Not sequential sub-phases.\n\nWind-down (last of segment; duration Wind-Down if >0 else Punch-Out):\nGrid opacity out + veil out (KB/Slideshow-style full exit), camera settles; then next segment entrance.\n\nFAMILY PORTRAIT (build AFTER Encore satisfactory):\n- Optional one-slide full-spread overview BEFORE Encore bows when FP toggle ON.\n- Not the same as Encore Wind-up cell; FP is extra pre-show beat.\n- Encore without FP: kicker Wind-up above.\n- FP without Encore: later, with other styles.\n\nSEGMENT HANDOFF: last exit / first entrance by segment boundary (Alpha → Drinks etc.) even if both Encore or Encore↔Slideshow/Ken Burns.\n\nIMPLEMENTATION: Engine phases + multi-target treatments (grid vs veil vs camera). Quarantine for lattice/veil reference only. Log style=Encore, phase, surfaces={grid,veil,camera}, seconds"
+        }
+      },
+      "savedAt": "2026-08-30T22:52:23Z"
+    }
+  }
+}

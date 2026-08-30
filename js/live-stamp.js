@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "9623375",
-  "hashFull": "9623375a293178a65aba4fca4b2d8a13658694c9",
-  "subject": "QA: 2026-08-30 Add new Welcome Back BU themes to both beta and restaurant gsheets (pass 2)"
+  "hash": "a84a366",
+  "hashFull": "a84a36644ba55b2fa8a00118701844cf3e2a2016",
+  "subject": "QA: track manager-fallback BU theme palettes (pass 2 follow-up)"
 };
