@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-08-21 02:20 (Announcement Body color HTML)  
+**Last updated:** 2026-09-21 18:00 (Board 4 Weather Widget)  
 
 **Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **What each style actually does (times, veil, highlight, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md).  
@@ -222,6 +222,7 @@ Frame on the **right**; photo side on the **left**.
 | **Announcement Panel** | Large message box (title, subtitle, body, motion) | `#announcement-box`, Announcement |
 | **Announcement Body** | Main copy area inside the Announcement Panel. Sheet **Text** is markdown plus typed color HTML; type hyphenates and scales so it stays inside the shell. Authoring: [ANNOUNCEMENT_MARKDOWN.md](./ANNOUNCEMENT_MARKDOWN.md). | `#announcement-body` |
 | **Drink Options Box** | Footer-style box of drink items / overview | `#drink-options-box` |
+| **Weather Widget** | Live date, hours, clock, and current °F + animated condition icon on the photo side (bottom-left). Not a Footer Box. | `#weather-widget` |
 | **Hero Panel** | Same idea as boards 1–3; sits on the left over the Background | `#hero-wrap` |
 | **Plate** | Drink or feature image in the Hero Panel | `#hero` |
 
@@ -281,7 +282,7 @@ As headers migrate, prefer:
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Board 4: swap Frame and photo side; Menu List hidden; Announcement Panel + Drink Options Box in the Frame; Stripes optional.
+Board 4: swap Frame and photo side; Menu List hidden; Announcement Panel + Drink Options Box in the Frame; Stripes optional; **Weather Widget** pinned bottom-left on the photo side (over the Background, above the Plate).
 
 ---
 
@@ -302,6 +303,7 @@ Track deliberately; do not block handoff:
 
 | Date | Change |
 |------|--------|
+| 2026-09-21 | Board 4 **Weather Widget** (`#weather-widget`) — date / hours / clock / °F + icon on the photo side |
 | 2026-08-11 | **Motion phases** §4.1–4.4: Wind-up, Punch-in, **Hold**, Punch-out, Wind-down; role vs treatment; Animation Block / Handoff / Presentation Segment; Ken Burns, Family Portrait, Encore recipes; Encore Wind-up context-dependent on Family Portrait |
 | 2026-08-09 | v1 — Hero Panel, Plate, Frame, Menu List, Footer Boxes, Encore/Spotlight, Board 4 Announcement Panel |
 | 2026-08 | Plate as container object (#hero-plate owns motion + shadow; sticker is child decoration). Portrait slots are plate units. Version Stamp moved to Toki Debug header (disclaimer always shows allergy). Full View debug HUD mode added. |

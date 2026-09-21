@@ -2256,6 +2256,126 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   height: 250px;
 }
 
+/* Weather Widget — Board 4 photo side. Measured from Weather Widget Mockup.pdf @1920×1080. */
+#weather-widget {
+  display: none;
+}
+
+.board-drinks #weather-widget {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  z-index: 6;
+  left: 30px;
+  top: 910px;
+  width: 712px;
+  height: 133px;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--toki-font);
+  font-weight: 400;
+}
+
+.weather-widget-shell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.weather-widget-shell .shell-outer {
+  fill: var(--secondary-color);
+}
+
+.weather-widget-shell .shell-body {
+  fill: var(--main-color);
+}
+
+#weather-widget .weather-widget-header {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 37px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  color: var(--main-color);
+  line-height: 1;
+}
+
+#weather-date {
+  font-size: calc(22px * var(--toki-font-scale, 1));
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--main-color);
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Poppins (and Roboto) parens sit oversized vs the cap height — shrink the glyphs only. */
+#weather-date .weather-paren {
+  font-size: 0.72em;
+  font-weight: inherit;
+  display: inline-block;
+  transform: scaleY(0.86);
+  transform-origin: center;
+  vertical-align: 0.12em;
+}
+
+#weather-widget .weather-widget-body {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  min-height: 0;
+  padding: 0 8px 4px;
+  color: var(--secondary-color);
+}
+
+#weather-time,
+#weather-temp {
+  font-size: calc(50px * var(--toki-font-scale, 1));
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  color: var(--secondary-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+#weather-time {
+  justify-self: center;
+}
+
+#weather-conditions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#weather-icon {
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
+  overflow: visible;
+}
+
+#weather-icon svg {
+  display: block;
+  width: 78px;
+  height: 78px;
+  overflow: visible;
+}
+
 .drinks-box-shell .shell-outer {
   fill: var(--secondary-color);
   /* Board 4 box FP overview: same shape chrome ease as footer info-boxes */
@@ -3013,7 +3133,8 @@ body.preview-wall #stripes-track {
 body.textbox-wireframes #stage #menu-list,
 body.textbox-wireframes #stage #footer-boxes,
 body.textbox-wireframes #stage .info-box:not([hidden]),
-body.textbox-wireframes #stage .drinks-box:not([hidden]) {
+body.textbox-wireframes #stage .drinks-box:not([hidden]),
+body.textbox-wireframes #stage #weather-widget:not([hidden]) {
   outline: 2px dashed rgba(0, 255, 120, 0.9);
   outline-offset: -2px;
 }
@@ -3026,7 +3147,9 @@ body.textbox-wireframes #stage .drink-item,
 body.textbox-wireframes #stage .info-box-header,
 body.textbox-wireframes #stage .info-box-body,
 body.textbox-wireframes #stage .drinks-box-header,
-body.textbox-wireframes #stage .drinks-box-body {
+body.textbox-wireframes #stage .drinks-box-body,
+body.textbox-wireframes #stage .weather-widget-header,
+body.textbox-wireframes #stage .weather-widget-body {
   outline: 1px dashed rgba(255, 159, 28, 0.95);
   outline-offset: -1px;
 }

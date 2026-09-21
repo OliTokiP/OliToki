@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;400;700;900&family=Roboto+Condensed:wght@300;700&family=Poppins:wght@300;400;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/motion.css?v=20260820veil12" />
-  <link rel="stylesheet" href="css/menu.css?v=20260825encorebg4" />
+  <link rel="stylesheet" href="css/menu.css?v=20260921weather1" />
   <link rel="stylesheet" href="css/system-font.css?v=20260814font3" />
 </head>
 <body class="board-drinks">
@@ -85,6 +85,24 @@
       </div>
     </div>
 
+    <!-- Weather Widget — photo-side HUD (mockup bottom-left). Independent of sheet load. -->
+    <div id="weather-widget" hidden title="Weather by Open-Meteo">
+      <svg class="weather-widget-shell" viewBox="0 0 712 133" preserveAspectRatio="none" aria-hidden="true">
+        <rect class="shell-outer" width="712" height="133" />
+        <rect class="shell-body" x="4" y="37" width="704" height="92" />
+      </svg>
+      <div class="weather-widget-header">
+        <span id="weather-date"></span>
+      </div>
+      <div class="weather-widget-body">
+        <span id="weather-time"></span>
+        <div id="weather-conditions" hidden>
+          <span id="weather-icon" aria-hidden="true"></span>
+          <span id="weather-temp"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- Plate object on the left (over galaxy). Sticker is plate child: fade, no Ken Burns. -->
     <div id="hero-wrap">
       <div id="hero-plate" hidden>
@@ -130,6 +148,7 @@
   <script src="js/announcement-md.js?v=20260821md3"></script>
   <script src="js/box-pack.js?v=20260823boxpack8"></script>
   <script src="js/menuimg.js?v=20260828rf1"></script>
-  <script src="js/menu.js?v=20260828rf1"></script>
+  <script src="js/weather-widget.js?v=20260921weather1"></script>
+  <script src="js/menu.js?v=20260830disc1"></script>
 </body>
 </html>

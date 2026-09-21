@@ -4,6 +4,8 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
+**Last updated:** 2026-09-21 18:00 (Board 4 Weather Widget)  
+
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
 ---
@@ -19,6 +21,7 @@ This guide is the **layout contract**. Code may reorganize; these numbers and ru
 | 4 | Title, disclaimer, menu list, footer/drinks boxes | Content |
 | 5 | `#hero-wrap` / `#hero` | Food photo |
 | 6 | `#new-sticker` | Shadow + body + “New!” label |
+| 6 | `#weather-widget` | Board 4 only — date / clock / weather HUD (above Plate) |
 
 ---
 
@@ -308,6 +311,22 @@ Fade in lockstep with hero (`opacity` 0.45s).
 ### Hero (drinks)
 
 Left side over galaxy (mirrored composition vs boards 1–3). Slideshow may include overview image + individual drink images.
+
+### Weather Widget
+
+Pinned HUD on the photo side. Measured from `Weather Widget Mockup.pdf` @ 1920×1080. Theme tokens: shell outer = Secondary, body = Main, header type = Main, body type = Secondary.
+
+| | Value |
+|--|--------|
+| Origin | **left 30**, **top 910** |
+| Size | **712 × 133** |
+| Header band | **37px** (centered date + hours) |
+| Body inset | **4px** sides / bottom (same shell language as Footer / drinks boxes) |
+| Body | Two even columns: time left, icon + °F right |
+| Type | Date **22px** Regular; time / temp **50px** Regular × `--toki-font-scale` |
+| Parens | `.weather-paren` at **0.72em** + slight `scaleY` (Poppins parens run large; apply on Roboto too) |
+| Hours | Thu / Fri / Sat **Open until 1:30 AM**; Sun–Wed **10:30 PM** (America/New_York calendar day) |
+| Data | Open-Meteo current, Allston MA; amCharts SVG in `assets/amcharts_weather_icons_1.0.0/` (animated solo, static on `preview-wall`) |
 
 ---
 

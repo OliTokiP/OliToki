@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "a84a366",
-  "hashFull": "a84a36644ba55b2fa8a00118701844cf3e2a2016",
-  "subject": "QA: track manager-fallback BU theme palettes (pass 2 follow-up)"
+  "hash": "339c537",
+  "hashFull": "339c53725b8806d0d5b10cc9c35920e9c3802c84",
+  "subject": "QA: 2026-09-21 Weather Widget Feature Request (pass 1)"
 };

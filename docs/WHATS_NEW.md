@@ -1,9 +1,29 @@
 # What’s New
 
-**Last updated:** 2026-08-23 14:49  
+**Last updated:** 2026-09-21 18:00  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-09-21 18:00 — Board 4 Weather Widget
+
+**Boards / surface:** Menu Screens — Drinks & Deals (`index4.html`)  
+**Sheet:** none (hours are mockup-fixed; weather is Open-Meteo, not the catalog)  
+**Summary:** Photo-side HUD at **30, 910 / 712×133** shows today’s date, **(Open until …)** with shrunken parentheses, a live clock, and current °F plus an animated condition SVG. Clock stays live if weather is offline.
+
+### Details
+- Placement from `Weather Widget Mockup.pdf` (native 1920×1080). Header 37px; body two even columns.
+- Hours: Thu/Fri/Sat until **1:30 AM**, other days **10:30 PM**, `America/New_York`.
+- Open-Meteo current conditions for Allston MA; amCharts CC-BY icons in `assets/amcharts_weather_icons_1.0.0/` (static copies on the wall preview).
+- Independent of sheet load (`js/weather-widget.js`). Hard-refresh `?v=20260921weather1`.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 
