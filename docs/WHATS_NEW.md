@@ -1,9 +1,31 @@
 # What’s New
 
-**Last updated:** 2026-09-22 10:40  
+**Last updated:** 2026-09-22 13:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-09-22 13:30 — Closed Status overlay when the shop is closed
+
+**Boards / surface:** Menu Screens — all four boards (`index.html` … `index4.html`)  
+**Sheet:** OliToki Menu Settings → **Store Hours** (gid `1732597216`)  
+**Summary:** Between open hours the four TVs drop the menu and show a unified **CLOSED** graphic: Board 1 **CL**, Board 2 **OS**, Board 3 **ED**, Board 4 bunny + hours. Background pan, presentation, stripes, and the Weather Widget halt so overnight Fire Sticks are not burning GPU. They start again at the next open.
+
+### Details
+- Static SVGs in `assets/closed/` (mockup Closed 1–4). Not live type.
+- Same overnight window as the Weather Widget: close past **24:00** stays on that service day until the close.
+- Fail-soft baked hours if the tab is down. Independent of the catalog Google load.
+- QA: `?closed=1` force on, `?closed=0` force off, `?wxNow=` freeze Eastern time. `preview-all.html?closed=1` forwards to each iframe so the wall spells CLOSED.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [DATA_MODEL.md](./DATA_MODEL.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
 
 ---
 

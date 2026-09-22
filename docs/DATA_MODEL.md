@@ -30,7 +30,7 @@ Configs: `js/config.js` … `config4.js` bind each HTML board to gids.
 
 ### OliToki Menu Settings → Store Hours
 
-GID `1732597216`. Board 4 Weather Widget **(Open until …)** only — not a catalog tab.
+GID `1732597216`. Board 4 Weather Widget **(Open until …)** and the four-board **Closed Status** overlay — not a catalog tab.
 
 | Col | Header | Notes |
 |-----|--------|-------|

@@ -2256,6 +2256,49 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   height: 250px;
 }
 
+/* Closed Status — full-stage static SVG (Closed 1–4). Replaces board graphics
+   between Store Hours. Halt of RAF / presentation is in js/closed-status.js + menu.js. */
+#closed-status {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  background: #000;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body.store-closed #closed-status {
+  display: block;
+}
+
+#closed-status[hidden] {
+  display: none !important;
+}
+
+#closed-status img,
+#closed-status-art {
+  position: absolute;
+  inset: 0;
+  width: 1920px;
+  height: 1080px;
+  object-fit: fill;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+body.store-closed #stage > :not(#closed-status) {
+  visibility: hidden !important;
+}
+
+body.store-closed #galaxy .galaxy-layer,
+body.store-closed #stripes-track,
+body.store-closed #bg-pattern-track {
+  animation-play-state: paused !important;
+  will-change: auto !important;
+}
+
 /* Weather Widget — Board 4 photo side. Measured from Weather Widget Mockup.pdf @1920×1080. */
 #weather-widget {
   display: none;

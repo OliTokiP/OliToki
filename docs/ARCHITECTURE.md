@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-09-22 10:40 (Store Hours overnight window)
+**Last updated:** 2026-09-22 13:30 (Closed Status overlay)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -26,6 +26,7 @@
 | `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, Plate objects (hero + portrait), hero motion, stickers, stripes |
 | `js/announcement-md.js` | Board 4 Announcement Body markdown + typed color HTML (plain CSV Text → safe DOM) |
 | `js/weather-widget.js` | Board 4 Weather Widget: Eastern clock + Store Hours overnight window + Open-Meteo °F + amCharts SVG (`index4.html` only) |
+| `js/closed-status.js` | All boards: Closed Status overlay from Store Hours + static `assets/closed/closed-1.svg` … `closed-4.svg` (CL / OS / ED / hours). Halts galaxy / presentation while closed |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
 | `scripts/toki_server.py` | Static file server + Sheets CSV proxy + caches |

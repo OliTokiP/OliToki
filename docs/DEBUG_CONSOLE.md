@@ -143,7 +143,8 @@ These only affect the current browser tab/session.
 | `bgPattern` | Style pattern or Board 4 stripes on | Pattern name (`stripes`, `none`, …) |
 | `bgDualPan` | Scroll &gt; 0 **and** layer B has a src | `scroll on` / `scroll 0` |
 | `bgBlur` | `#galaxy.has-blur` | Sheet percent (`0%` = hard off) |
-| `softRefresh` | Poll timer armed. **NO** if Require restart | `settings` / timer |
+| `softRefresh` | Poll timer armed. **NO** if Require restart or Closed Status | `settings` / timer |
+| `closedStatus` | Store Hours overlay is on (`body.store-closed`) | hours / `?closed=` |
 | `encore` | Encore stage visible with content | config / live |
 | `heroPlate` | Hero plate visible with an image | Hero filename + pixels |
 

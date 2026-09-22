@@ -4,7 +4,7 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
-**Last updated:** 2026-09-22 10:40 (Store Hours overnight window)  
+**Last updated:** 2026-09-22 13:30 (Closed Status overlay)  
 
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
@@ -327,6 +327,19 @@ Pinned HUD on the photo side. Measured from `Weather Widget Mockup.pdf` @ 1920×
 | Parens | `.weather-paren` at **0.72em** + slight `scaleY` (Poppins parens run large; apply on Roboto too) |
 | Hours | OliToki Menu Settings → **Store Hours**. Close past 24:00 (Thu–Sat **25:30** → **1:30 AM**) stays on that service day until the close; Sun–Wed **22:30** → **10:30 PM**. Date line is the live Eastern calendar day. |
 | Data | Open-Meteo current, Allston MA; amCharts SVG in `assets/amcharts_weather_icons_1.0.0/` (animated solo, static on `preview-wall`) |
+
+### Closed Status
+
+Full-stage overlay when Store Hours say closed. Static SVGs from `assets/closed/` — not live type.
+
+| Board | File | Art |
+|-------|------|-----|
+| 1 Bowls | `closed-1.svg` | **CL** |
+| 2 Handhelds | `closed-2.svg` | **OS** |
+| 3 Munchies | `closed-3.svg` | **ED** |
+| 4 Drinks | `closed-4.svg` | Bunny + baked Store Hours copy |
+
+`#closed-status` fills the Stage (z-index 40, black plate). Galaxy pan, presentation, stripes, and the Weather Widget halt until the next open. `?closed=1` forces the overlay for QA.
 
 ---
 

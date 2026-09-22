@@ -6,7 +6,7 @@
 2. Design **console kill-switches** that truly disable work (not just hide UI)  
 3. Decide when **tearing a feature down and rebuilding** costs more than **leaving it idle**
 
-**Last updated:** 2026-09-21 18:00 (Board 4 Weather Widget)  
+**Last updated:** 2026-09-22 13:30 (Closed Status overlay)  
 **Primary runtime:** `js/menu.js`, `css/menu.css`  
 **Target display:** 1920×1080; stress cases = Amazon Fire Stick, `preview-all.html` wall (4 boards)
 
@@ -107,7 +107,8 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | **Shout / future Motion Styles** | **Low–High** | Depends on effect | Treat each named style separately when implementing; default to Low until measured. |
 | **Stripes** (Board 4 scroll) | **Medium** | Extra scrolling layer | Kill = hide + stop stripe animation. |
 | **Disclaimer / Version Stamp** | **Very Low** | Text paint | Disclaimer always shows allergy text. Version Stamp (when enabled) is appended only to the floating Toki Debug header. |
-| **Weather Widget** (Board 4) | **Low** | 1s clock text; Open-Meteo + Store Hours poll ~10 min; one 64² SVG | Hang idle if hidden. **Hard kill:** `TOKI_WEATHER_WIDGET.stop()`. Wall uses **static** SVGs (no CSS keyframes). Fail-soft: clock still runs if weather or hours fetch dies. |
+| **Weather Widget** (Board 4) | **Low** | 1s clock text; Open-Meteo + Store Hours poll ~10 min; one 64² SVG | Hang idle if hidden. **Hard kill:** `TOKI_WEATHER_WIDGET.stop()`. Wall uses **static** SVGs (no CSS keyframes). Fail-soft: clock still runs if weather or hours fetch dies. Closed Status calls `stop()` while the overlay is on. |
+| **Closed Status** (all boards) | **Low** (on) / **saves High** (vs leaving the menu running overnight) | One full-stage static SVG; Store Hours poll ~10 min; 5s open/close check | **Hard kill** of galaxy RAF, presentation / Ken Burns, stripes, Weather Widget, and menu soft-refresh while `body.store-closed`. Overlay is `#closed-status`. Resume on the next open. Hours poll stays armed. |
 | **Textbox wireframes** (Debug Features **Show Textbox Wireframes** or `?textBoxDebug=1`) | **Very Low** | CSS outlines | QA spacing overlay. Off by default. No layout shift. |
 
 ### 3.4 Data pipeline

@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-09-21 18:00 (Board 4 Weather Widget)  
+**Last updated:** 2026-09-22 13:30 (Closed Status overlay)  
 
 **Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **What each style actually does (times, veil, highlight, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md).  
@@ -46,6 +46,7 @@ Fixed **1920×1080** canvas.
 | **Menu Title** | Board title text (e.g. “Bowls & Salads”) | `#menu-title` |
 | **Disclaimer** | Allergy / food-safety copy (usually top of the photo side) | `#disclaimer` |
 | **Version Stamp** | Optional git/build info appended to the Toki Debug HUD header (when Show Version + debug visuals active) | Show Version |
+| **Closed Status** | Full-stage static overlay when Store Hours say the shop is closed. Four boards spell **CLOSED** (CL / OS / ED) with Board 4 showing hours. Replaces board graphics and halts Background pan / presentation until open. | `#closed-status`, `body.store-closed` |
 
 ---
 
@@ -303,6 +304,7 @@ Track deliberately; do not block handoff:
 
 | Date | Change |
 |------|--------|
+| 2026-09-22 | **Closed Status** (`#closed-status`) — four-board CLOSED overlay from Store Hours; static SVGs, graphics halt while closed |
 | 2026-09-21 | Board 4 **Weather Widget** (`#weather-widget`) — date / hours / clock / °F + icon on the photo side |
 | 2026-08-11 | **Motion phases** §4.1–4.4: Wind-up, Punch-in, **Hold**, Punch-out, Wind-down; role vs treatment; Animation Block / Handoff / Presentation Segment; Ken Burns, Family Portrait, Encore recipes; Encore Wind-up context-dependent on Family Portrait |
 | 2026-08-09 | v1 — Hero Panel, Plate, Frame, Menu List, Footer Boxes, Encore/Spotlight, Board 4 Announcement Panel |

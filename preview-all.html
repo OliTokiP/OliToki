@@ -353,14 +353,19 @@
             return;
           }
           const sep = src.indexOf("?") >= 0 ? "&" : "?";
-          const betaBit =
-            new URLSearchParams(location.search || "").has("beta") ? "&beta" : "";
+          const wallParams = new URLSearchParams(location.search || "");
+          let extraBit = wallParams.has("beta") ? "&beta" : "";
+          ["closed", "wxNow", "hoursAt", "pause"].forEach(function (key) {
+            if (!wallParams.has(key)) return;
+            extraBit +=
+              "&" + key + "=" + encodeURIComponent(wallParams.get(key) || "");
+          });
           const url =
             src +
             sep +
             "preview=all&wall=" +
             idx +
-            betaBit +
+            extraBit +
             "&t=" +
             t +
             "-" +

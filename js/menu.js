@@ -1595,6 +1595,81 @@
       updateDebugVisuals();
     }
   }
+
+  /** True while Closed Status overlay owns the stage (Store Hours / ?closed=). */
+  let _graphicsHalted = false;
+
+  function urlPauseRequested() {
+    try {
+      return (
+        new URLSearchParams(window.location.search || "").get("pause") === "1"
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isStoreClosed() {
+    try {
+      if (
+        window.TOKI_CLOSED_STATUS &&
+        typeof window.TOKI_CLOSED_STATUS.isClosed === "function"
+      ) {
+        return !!window.TOKI_CLOSED_STATUS.isClosed();
+      }
+    } catch (e) {}
+    return !!(document.body && document.body.classList.contains("store-closed"));
+  }
+
+  function haltForClosed() {
+    stopSlideshow();
+    stopAnnouncementSlideshow();
+    pauseGalaxyScroll();
+    if (els.stripesTrack) {
+      els.stripesTrack.style.animationPlayState = "paused";
+    }
+    if (els.bgPatternTrack) {
+      els.bgPatternTrack.style.animationPlayState = "paused";
+    }
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    setFeatureActive("closedStatus", true, "store closed overlay");
+    if (_graphicsHalted) return;
+    _graphicsHalted = true;
+    tokiInfo("closed status: graphics halted");
+  }
+
+  function resumeFromClosed() {
+    const wasHalted = _graphicsHalted;
+    _graphicsHalted = false;
+    setFeatureActive("closedStatus", false, "store open");
+    if (isStoreClosed()) {
+      haltForClosed();
+      return;
+    }
+    if (!_menuPainted) return;
+    resumeGalaxyScroll();
+    updateStripeAnimation();
+    updateBgPatternAnimation();
+    if (urlPauseRequested()) {
+      if (isDrinks) {
+        setAnnouncementMessage(announcementIndex, { instant: true });
+      }
+      tokiInfo("closed status: overlay off (pause=1 keeps presentation still)");
+      return;
+    }
+    startSlideshow();
+    if (isDrinks) startAnnouncementSlideshow();
+    if (!boxPackLabEnabled()) startAutoRefresh();
+    if (wasHalted) tokiInfo("closed status: graphics resumed");
+  }
+
+  function syncClosedGraphicsHalt() {
+    if (isStoreClosed()) haltForClosed();
+    else if (_graphicsHalted) resumeFromClosed();
+  }
   /** Quarantined xlsx fills — always empty in API-only mode. */
   let sheetFills = {};
   /** Quarantined xlsx fonts — always empty in API-only mode. */
@@ -5943,7 +6018,7 @@
 
   function updateStripeAnimation() {
     if (!els.stripesTrack) return;
-    if (config.includeStripes === false) {
+    if (isStoreClosed() || config.includeStripes === false) {
       els.stripesTrack.style.animationPlayState = "paused";
       return;
     }
@@ -6042,7 +6117,7 @@
     if (!track) return;
     const mult = parseBgScrollSpeed(config && config.bgScrollSpeed, 1);
     const pat = config && config.bgPattern;
-    if (!pat || !isStripesPatternToken(pat) || mult <= 0) {
+    if (isStoreClosed() || !pat || !isStripesPatternToken(pat) || mult <= 0) {
       track.style.animationPlayState = "paused";
       return;
     }
@@ -9602,9 +9677,7 @@
     stopAnnouncementSlideshow();
     const msgs = announcementBox.messages || [];
     if (msgs.length <= 1) return;
-    if (
-      new URLSearchParams(window.location.search || "").get("pause") === "1"
-    ) {
+    if (urlPauseRequested() || isStoreClosed()) {
       return;
     }
     const cur = msgs[announcementIndex] || msgs[0];
@@ -15163,6 +15236,11 @@
   function startSlideshow() {
     cancelPresentationAdvance();
     stopMotionEngine();
+    if (isStoreClosed()) {
+      _presentationRunning = false;
+      updateDebugVisuals();
+      return;
+    }
     // One rule for all boards: engine slides use slides[]; else alpha items
     const count = usesBoardSlides()
       ? slides.length
@@ -15273,6 +15351,7 @@
 
   function resumeGalaxyScroll() {
     if (!galaxyStarted || !config.bgImage || !galaxyTick) return;
+    if (isStoreClosed()) return;
     galaxyPaused = false;
     galaxyResetClock = true;
     if (!galaxyRaf) galaxyRaf = requestAnimationFrame(galaxyTick);
@@ -15284,6 +15363,7 @@
     // Color-only (no image): no pan/crossfade loop
     if (!config.bgImage) return;
     if (!els.galaxyA) return;
+    if (isStoreClosed()) galaxyPaused = true;
     if (galaxyStarted) return; // idempotent — softReload must not re-enter
     galaxyStarted = true;
 
@@ -15649,8 +15729,7 @@
   }
 
   function applySoftPaint(prevIndex) {
-    const pause =
-      new URLSearchParams(window.location.search).get("pause") === "1";
+    const pause = urlPauseRequested() || isStoreClosed();
     stopSlideshow();
     stopAnnouncementSlideshow();
     renderTitle();
@@ -15675,6 +15754,7 @@
       setAnnouncementMessage(announcementIndex, { instant: true });
     }
     _menuPainted = true;
+    syncClosedGraphicsHalt();
   }
 
   async function recoverFromHang() {
@@ -15857,6 +15937,11 @@
       refreshTimer = null;
     }
     stopSettingsWatcher();
+    if (isStoreClosed()) {
+      startSettingsWatcher();
+      setFeatureActive("softRefresh", false, "store closed");
+      return;
+    }
     if (liveSettings.requireRestart) {
       tokiInfo(
         "auto-refresh OFF (Require restart to update) —",
@@ -15929,6 +16014,7 @@
       { id: "heroPlate", label: "Hero Plate", impact: "Medium" },
       { id: "heroMulti", label: "Hero Multi", impact: "High" },
       { id: "softRefresh", label: "Soft Refresh", impact: "Medium" },
+      { id: "closedStatus", label: "Closed Status", impact: "Low" },
       { id: "requireRestart", label: "Require Restart", impact: "Info" },
       { id: "brokenImages", label: "Broken images", impact: "Info" },
       { id: "drawTextBoxes", label: "Textbox Wireframes", impact: "Very Low" },
@@ -16017,8 +16103,11 @@
               !b.hidden &&
               b.getAttribute("src")
             );
-            return !!(scrollOn && bLive && config.bgImage);
+            return !!(scrollOn && bLive && config.bgImage && !galaxyPaused);
           }
+
+          case "closedStatus":
+            return isStoreClosed();
 
           case "bgBlend": {
             const g = document.getElementById("galaxy");
@@ -17108,15 +17197,19 @@
       } else {
         setActive(0, true);
       }
-      playOpeningWindUp();
-      if (params.get("pause") !== "1") {
-        startSlideshow();
-        if (isDrinks) startAnnouncementSlideshow();
-      } else if (isDrinks) {
-        setAnnouncementMessage(announcementIndex, { instant: true });
-      }
-      if (params.get("pause") !== "1" && !boxPackLabEnabled()) {
-        startAutoRefresh();
+      if (isStoreClosed()) {
+        haltForClosed();
+      } else {
+        playOpeningWindUp();
+        if (params.get("pause") !== "1") {
+          startSlideshow();
+          if (isDrinks) startAnnouncementSlideshow();
+        } else if (isDrinks) {
+          setAnnouncementMessage(announcementIndex, { instant: true });
+        }
+        if (params.get("pause") !== "1" && !boxPackLabEnabled()) {
+          startAutoRefresh();
+        }
       }
       try {
         initBoxPackLab();
@@ -17204,6 +17297,13 @@
       els.disclaimer.hidden = true;
     }
     applyDisclaimerContent();
+
+    window.addEventListener("toki:closed-change", function (ev) {
+      const next = ev && ev.detail ? !!ev.detail.closed : isStoreClosed();
+      if (next) haltForClosed();
+      else resumeFromClosed();
+    });
+    if (isStoreClosed()) haltForClosed();
 
     scaleStageToWindow();
     window.addEventListener("resize", () => {
