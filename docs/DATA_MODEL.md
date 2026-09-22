@@ -5,6 +5,8 @@ Spreadsheet is the CMS. The browser never holds the service account key; `toki_s
 **OliToki spreadsheet ID (default):**  
 `1gtTQIXzTptmDxuddR0idCuataAhH6jnoEzp8dRY9g10`
 
+**OliToki Menu Settings** (`1OwNKHzjP46xKJBW8sTm4IOWhIzf0lENdZ8rv_GY37fY`) is a separate workbook (Data Source, Debugger, **Store Hours**). It is not the catalog.
+
 **Revised tabs (not live yet):** see [SHEET_MIGRATION.md](./SHEET_MIGRATION.md).  
 **On-screen naming:** see [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md).
 
@@ -25,6 +27,18 @@ Spreadsheet is the CMS. The browser never holds the service account key; `toki_s
 | 6 - Announcements | (legacy / related) | May exist; Board 4 owns chrome columns |
 
 Configs: `js/config.js` … `config4.js` bind each HTML board to gids.
+
+### OliToki Menu Settings → Store Hours
+
+GID `1732597216`. Board 4 Weather Widget **(Open until …)** only — not a catalog tab.
+
+| Col | Header | Notes |
+|-----|--------|-------|
+| A | Day | Monday … Sunday |
+| B | Opens | 24-hour clock (`11:30`) |
+| C | Closes | 24-hour clock. Past **24:00** borrows the next calendar morning (`25:30` = 1:30 AM). That service day stays active until the close has passed. |
+
+Live values (2026-09-22): open **11:30** every day; Sun–Wed close **22:30**; Thu–Sat close **25:30**.
 
 ---
 

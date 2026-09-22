@@ -1,9 +1,30 @@
 # What’s New
 
-**Last updated:** 2026-09-21 18:00  
+**Last updated:** 2026-09-22 10:40  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-09-22 10:40 — Weather Widget hours follow Store Hours overnight
+
+**Boards / surface:** Menu Screens — Drinks & Deals (`index4.html`)  
+**Sheet:** OliToki Menu Settings → **Store Hours** (gid `1732597216`)  
+**Summary:** **(Open until …)** reads Open / Close from Store Hours. Close past **24:00** stays on that service day until the close has passed, so Saturday 12:15 AM still says **1:30 AM** (Friday/Saturday late night) instead of jumping to Sunday’s **10:30 PM**. Clock date stays the real Eastern calendar day.
+
+### Details
+- Columns: **Day**, **Opens**, **Closes** in 24-hour clock (`11:30`, `22:30`, `25:30`).
+- Live sheet: Sun–Wed close **22:30** (10:30 PM); Thu–Sat close **25:30** (1:30 AM the next calendar morning).
+- Between close and the next open, the widget shows the next service day’s close.
+- Fail-soft: if the tab is down, baked hours match that sheet. Independent of the catalog Google load. `?wxNow=` freezes Eastern time for QA.
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [DATA_MODEL.md](./DATA_MODEL.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
 
 ---
 

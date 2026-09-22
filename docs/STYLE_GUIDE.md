@@ -4,7 +4,7 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
-**Last updated:** 2026-09-21 18:00 (Board 4 Weather Widget)  
+**Last updated:** 2026-09-22 10:40 (Store Hours overnight window)  
 
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
@@ -325,7 +325,7 @@ Pinned HUD on the photo side. Measured from `Weather Widget Mockup.pdf` @ 1920×
 | Body | Two even columns: time left, icon + °F right |
 | Type | Date **22px** Regular; time / temp **50px** Regular × `--toki-font-scale` |
 | Parens | `.weather-paren` at **0.72em** + slight `scaleY` (Poppins parens run large; apply on Roboto too) |
-| Hours | Thu / Fri / Sat **Open until 1:30 AM**; Sun–Wed **10:30 PM** (America/New_York calendar day) |
+| Hours | OliToki Menu Settings → **Store Hours**. Close past 24:00 (Thu–Sat **25:30** → **1:30 AM**) stays on that service day until the close; Sun–Wed **22:30** → **10:30 PM**. Date line is the live Eastern calendar day. |
 | Data | Open-Meteo current, Allston MA; amCharts SVG in `assets/amcharts_weather_icons_1.0.0/` (animated solo, static on `preview-wall`) |
 
 ---

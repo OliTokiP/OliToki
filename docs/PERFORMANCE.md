@@ -107,7 +107,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | **Shout / future Motion Styles** | **Low–High** | Depends on effect | Treat each named style separately when implementing; default to Low until measured. |
 | **Stripes** (Board 4 scroll) | **Medium** | Extra scrolling layer | Kill = hide + stop stripe animation. |
 | **Disclaimer / Version Stamp** | **Very Low** | Text paint | Disclaimer always shows allergy text. Version Stamp (when enabled) is appended only to the floating Toki Debug header. |
-| **Weather Widget** (Board 4) | **Low** | 1s clock text; Open-Meteo poll ~10 min; one 64² SVG | Hang idle if hidden. **Hard kill:** `TOKI_WEATHER_WIDGET.stop()`. Wall uses **static** SVGs (no CSS keyframes). Fail-soft: clock still runs if weather fetch dies. |
+| **Weather Widget** (Board 4) | **Low** | 1s clock text; Open-Meteo + Store Hours poll ~10 min; one 64² SVG | Hang idle if hidden. **Hard kill:** `TOKI_WEATHER_WIDGET.stop()`. Wall uses **static** SVGs (no CSS keyframes). Fail-soft: clock still runs if weather or hours fetch dies. |
 | **Textbox wireframes** (Debug Features **Show Textbox Wireframes** or `?textBoxDebug=1`) | **Very Low** | CSS outlines | QA spacing overlay. Off by default. No layout shift. |
 
 ### 3.4 Data pipeline

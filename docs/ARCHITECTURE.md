@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-09-21 18:00 (Board 4 Weather Widget)
+**Last updated:** 2026-09-22 10:40 (Store Hours overnight window)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -25,7 +25,7 @@
 | `js/data-source.js` | `google` vs `local` switch |
 | `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, Plate objects (hero + portrait), hero motion, stickers, stripes |
 | `js/announcement-md.js` | Board 4 Announcement Body markdown + typed color HTML (plain CSV Text → safe DOM) |
-| `js/weather-widget.js` | Board 4 Weather Widget: local clock/hours + Open-Meteo °F + amCharts SVG (`index4.html` only) |
+| `js/weather-widget.js` | Board 4 Weather Widget: Eastern clock + Store Hours overnight window + Open-Meteo °F + amCharts SVG (`index4.html` only) |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
 | `scripts/toki_server.py` | Static file server + Sheets CSV proxy + caches |
