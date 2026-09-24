@@ -4,7 +4,7 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
-**Last updated:** 2026-09-22 13:30 (Closed Status overlay)  
+**Last updated:** 2026-09-24 10:00 (Closed Status hours 11:00)  
 
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
@@ -337,7 +337,7 @@ Full-stage overlay when Store Hours say closed. Static SVGs from `assets/closed/
 | 1 Bowls | `closed-1.svg` | **CL** |
 | 2 Handhelds | `closed-2.svg` | **OS** |
 | 3 Munchies | `closed-3.svg` | **ED** |
-| 4 Drinks | `closed-4.svg` | Bunny + baked Store Hours copy |
+| 4 Drinks | `closed-4.svg` | Bunny + baked Store Hours copy (open **11:00**) |
 
 `#closed-status` fills the Stage (z-index 40, black plate). Galaxy pan, presentation, stripes, and the Weather Widget halt until the next open. `?closed=1` forces the overlay for QA.
 

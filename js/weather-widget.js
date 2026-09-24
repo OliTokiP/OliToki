@@ -122,7 +122,7 @@
   }
 
   function defaultHours() {
-    var earlyOpen = 11 * 60 + 30;
+    var earlyOpen = 11 * 60;
     var earlyClose = 22 * 60 + 30;
     var lateClose = 25 * 60 + 30;
     var days = [];
@@ -219,10 +219,12 @@
     var i;
     if (weekdayIndex(header[0]) < 0) {
       for (i = 0; i < header.length; i++) {
-        var h = String(header[i] || "").toLowerCase();
-        if (h.indexOf("day") !== -1) dayCol = i;
-        if (h.indexOf("open") !== -1) openCol = i;
-        if (h.indexOf("close") !== -1) closeCol = i;
+        var h = String(header[i] || "")
+          .toLowerCase()
+          .replace(/^\s+|\s+$/g, "");
+        if (h === "day" || h.indexOf("day") === 0) dayCol = i;
+        if (h === "opens" || h.indexOf("open") === 0) openCol = i;
+        if (h === "closes" || h.indexOf("close") === 0) closeCol = i;
       }
       start = 1;
     }

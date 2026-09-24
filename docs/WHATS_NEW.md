@@ -1,9 +1,25 @@
 # What’s New
 
-**Last updated:** 2026-09-22 13:30  
+**Last updated:** 2026-09-24 10:00  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-09-24 10:00 — Closed Status hours open at 11:00
+
+**Boards / surface:** Menu Screens — Board 4 Closed Status (`index4.html`); fail-soft hours on all four boards  
+**Sheet:** OliToki Menu Settings → **Store Hours** (gid `1732597216`) — restaurant updates Opens to **11:00**  
+**Summary:** Board 4’s baked hours graphic now reads **11:00 AM** (was 11:30). Fail-soft open matches so the overlay still comes off at 11 if the tab is down.
+
+### Details
+- Static copy in `assets/closed/closed-4.svg` (mockup Closed 4). Not live type.
+- Fail-soft: open **11:00** daily; Sun–Wed close **22:30**; Thu–Sat close **25:30**.
+- QA: `?closed=1` on Board 4 / the wall to read the hours art.
+
+### Docs updated
+- [DATA_MODEL.md](./DATA_MODEL.md)
 
 ---
 
@@ -36,7 +52,7 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 **Summary:** **(Open until …)** reads Open / Close from Store Hours. Close past **24:00** stays on that service day until the close has passed, so Saturday 12:15 AM still says **1:30 AM** (Friday/Saturday late night) instead of jumping to Sunday’s **10:30 PM**. Clock date stays the real Eastern calendar day.
 
 ### Details
-- Columns: **Day**, **Opens**, **Closes** in 24-hour clock (`11:30`, `22:30`, `25:30`).
+- Columns: **Day**, **Opens**, **Closes** in 24-hour clock (`11:00`, `22:30`, `25:30`).
 - Live sheet: Sun–Wed close **22:30** (10:30 PM); Thu–Sat close **25:30** (1:30 AM the next calendar morning).
 - Between close and the next open, the widget shows the next service day’s close.
 - Fail-soft: if the tab is down, baked hours match that sheet. Independent of the catalog Google load. `?wxNow=` freezes Eastern time for QA.

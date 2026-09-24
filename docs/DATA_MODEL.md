@@ -35,10 +35,10 @@ GID `1732597216`. Board 4 Weather Widget **(Open until …)** and the four-board
 | Col | Header | Notes |
 |-----|--------|-------|
 | A | Day | Monday … Sunday |
-| B | Opens | 24-hour clock (`11:30`) |
+| B | Opens | 24-hour clock (`11:00`) |
 | C | Closes | 24-hour clock. Past **24:00** borrows the next calendar morning (`25:30` = 1:30 AM). That service day stays active until the close has passed. |
 
-Live values (2026-09-22): open **11:30** every day; Sun–Wed close **22:30**; Thu–Sat close **25:30**.
+Live values (2026-09-24): open **11:00** every day; Sun–Wed close **22:30**; Thu–Sat close **25:30**. Header match is **Opens** / **Closes** at the start of the column name so a later “Show Closed …” column does not steal Closes.
 
 ---
 
