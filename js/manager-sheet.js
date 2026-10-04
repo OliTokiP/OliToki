@@ -14,8 +14,10 @@
  * Pages already reads. House style:
  *   BG Scroll Speed (0<=5)
  *   Presentation Speed (0,1,2,3)
- *   Theme Selector (='Style and Theme'!$A$6:$A$17)
- * Also: [0-5], [0..5], [A6:A17], (>=3). Offline last.
+ *   Theme Selector (='Style and Theme'!$A$6:$A)  — open-ended; capped
+ *   suffixes like $A$6:$A$20 are treated as stale and Themes Database
+ *   rows beyond them still load.
+ * Also: [0-5], [0..5], [A6:A], (>=3). Offline last.
  */
 (function (global) {
   "use strict";
@@ -1242,13 +1244,56 @@
     return finishThemes(themes);
   }
 
-  function selectThemes(rows, headerRules) {
-    var rule = fieldValidation(headerRules, ["Theme Selector"]);
-    if (rule && rule.a1) {
-      var listed = themesFromA1(rows, rule.a1);
-      if (listed.length) return listed;
+  /* Prefer live dataValidation ($A$6:$A) over a stale capped header suffix. */
+  function a1FromThemeRule(rule) {
+    if (!rule) return "";
+    if (rule.a1 && parseA1Range(rule.a1)) return rule.a1;
+    if (rule.values && rule.values.length) {
+      var i;
+      for (i = 0; i < rule.values.length; i++) {
+        if (parseA1Range(rule.values[i])) return rule.values[i];
+      }
     }
-    return parseThemes(rows);
+    return "";
+  }
+
+  function mergeThemeLists(primary, extra) {
+    var seen = {};
+    var out = [];
+    var lists = [primary || [], extra || []];
+    var li;
+    var i;
+    for (li = 0; li < lists.length; li++) {
+      for (i = 0; i < lists[li].length; i++) {
+        var t = lists[li][i];
+        var k = String((t && t.name) || "")
+          .trim()
+          .toLowerCase();
+        if (!k || seen[k]) continue;
+        seen[k] = true;
+        out.push(t);
+      }
+    }
+    return out;
+  }
+
+  function selectThemes(rows, headerRules, validationFields) {
+    var fromDb = parseThemes(rows);
+    // Sheets dataValidation is the live contract (often open-ended $A$6:$A).
+    // Header suffixes like $A$6:$A$20 go stale when authors add theme rows.
+    var rule =
+      fieldValidation(validationFields, ["Theme Selector"]) ||
+      fieldValidation(headerRules, ["Theme Selector"]);
+    var a1 = a1FromThemeRule(rule);
+    if (a1) {
+      var listed = themesFromA1(rows, a1);
+      if (listed.length) {
+        // Append Themes Database names beyond a capped A1 so new themes
+        // show in Menu Manager without editing the header every time.
+        return mergeThemeLists(listed, fromDb);
+      }
+    }
+    return fromDb;
   }
 
   function colorRolesFromRule(rule) {
@@ -1453,11 +1498,14 @@
     var headerRules = rulesFromStyleRows(styleRows);
     var merged = Object.assign({}, validationFields || {}, headerRules);
     var speedTiles = buildSpeedTiles(validationFields || null, headerRules);
-    var themes = selectThemes(styleRows, headerRules);
-    var themeRule = fieldValidation(headerRules, ["Theme Selector"]);
+    var themes = selectThemes(styleRows, headerRules, validationFields || null);
+    var themeRule =
+      fieldValidation(validationFields, ["Theme Selector"]) ||
+      fieldValidation(headerRules, ["Theme Selector"]);
+    var themeA1 = a1FromThemeRule(themeRule);
     console.info(
       "Menu Manager themes from",
-      themeRule && themeRule.a1 ? themeRule.a1 : "Themes Database walk",
+      themeA1 || "Themes Database walk",
       themes.map(function (t) { return t.name; })
     );
     var colorRoles = colorRolesFromRule(
@@ -1774,9 +1822,16 @@
 
   async function postManager(path, payload, timeoutMs) {
     await detectProxy();
-    var urls = [path];
     var via = apiUrl(path);
-    if (via && urls.indexOf(via) < 0) urls.push(via);
+    var urls = [];
+    // Pages has no /api proxy. A relative POST would send the plate photo
+    // to GitHub and only then retry Cloud Run.
+    if (via && /^https?:/i.test(via)) {
+      urls.push(via);
+    } else {
+      urls.push(path);
+      if (via && urls.indexOf(via) < 0) urls.push(via);
+    }
     // Settings workbook is shared. Restaurant Cloud Run URL is the static
     // robot link — Menu Settings / Inventory writes must not depend on a
     // git push or on the testing container having recovered from a quota spike.
@@ -1784,6 +1839,7 @@
     if (
       p.indexOf("/api/manager/settings") >= 0 ||
       p.indexOf("/api/manager/item") >= 0 ||
+      p.indexOf("/api/manager/media") >= 0 ||
       p.indexOf("/api/manager/board") >= 0
     ) {
       var rest = String(global.TOKI_RESTAURANT_API || "").replace(/\/$/, "");
@@ -1850,6 +1906,12 @@
     return out;
   }
 
+  async function writeMedia(payload) {
+    var out = await postManager("/api/manager/media", payload || {}, 60000);
+    if (!out.ok) console.warn("manager-sheet: media write failed", out.error);
+    return out;
+  }
+
   async function writeSystem(payload) {
     // Persists Require restart / System Font / Limit Heavy Filters /
     // Confirm Save / Refresh Timer / Debug Mode into the OliToki Menu Settings workbook.
@@ -1879,6 +1941,7 @@
     writeTheme: writeTheme,
     writeBoard: writeBoard,
     writeItem: writeItem,
+    writeMedia: writeMedia,
     writeSystem: writeSystem,
     styleGid: STYLE_GID,
   };

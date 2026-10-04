@@ -1591,10 +1591,15 @@
       var disp = M.resolveDisplayPath(img, folder);
       return disp.replace(/display\.webp$/i, "display-sm.webp");
     }
-    var file = img.replace(/^.*\//, "");
+    var path = img.replace(/^\/+/, "");
+    var dir = folder;
+    var file = path.replace(/^.*\//, "");
+    if (path.indexOf("food-pics/") === 0) {
+      dir = path.replace(/\/[^/]+$/, "");
+    }
     var base = file.replace(/\.[^.]+$/, "");
-    if (/-sm$/i.test(base)) return folder + "/" + base + ".webp";
-    return folder + "/" + base + "-sm.webp";
+    if (/-sm$/i.test(base)) return dir + "/" + base + ".webp";
+    return dir + "/" + base + "-sm.webp";
   }
 
   function itemImageLabel(d) {
@@ -1959,19 +1964,44 @@
     }
   }
 
-  function menuimgPayload(d) {
-    var m = d && d.menuimg;
+  function menuimgForStore(m) {
     if (!m) return null;
-    var out = {
+    return {
       fileName: String(m.fileName || m.filename_1 || ""),
       scale: m.scale != null ? m.scale : m.scale_1,
       x: m.x != null ? m.x : m.x_1,
       y: m.y != null ? m.y : m.y_1,
-      sourceData: m.sourceData || "",
-      displayData: m.displayData || (d && d.imageData) || "",
+      displayData: m.displayData || "",
+      hasTransparency: !!m.hasTransparency,
+      sourceData: "",
     };
-    if (!out.fileName && !out.sourceData && !out.displayData) return null;
+  }
+
+  function menuimgPayload(d) {
+    var m = d && d.menuimg;
+    var display = (m && m.displayData) || (d && d.imageData) || "";
+    if (!m && !display) return null;
+    var out = {
+      fileName: String((m && (m.fileName || m.filename_1)) || (d && d.imageName) || ""),
+      scale: m ? (m.scale != null ? m.scale : m.scale_1) : 100,
+      x: m ? (m.x != null ? m.x : m.x_1) : 0,
+      y: m ? (m.y != null ? m.y : m.y_1) : 0,
+      sourceData: "",
+      displayData: display,
+    };
+    if (!out.fileName && !out.displayData) return null;
     return out;
+  }
+
+  function expectHostedItemImage() {
+    var env = String(window.TOKI_ENV || "").toLowerCase();
+    if (env === "restaurant" || env === "testing") return true;
+    return /github\.io/i.test(String(location.hostname || ""));
+  }
+
+  function imageCellIsHosted(cell) {
+    var s = String(cell || "").trim();
+    return /^https?:/i.test(s) || /^\/?api\/media\//i.test(s);
   }
 
   function imageDraftSnap(d) {
@@ -2384,6 +2414,36 @@
     }
   }
 
+  function hostPlateImage(item, display) {
+    var sheet = window.TOKI_MANAGER_SHEET;
+    var b = state.boardDraft || ensureBoardDraft();
+    if (!sheet || typeof sheet.writeMedia !== "function") {
+      return Promise.reject(new Error("Photo save needs the Menu Settings server"));
+    }
+    if (!item || !display) return Promise.reject(new Error("Could not flatten image"));
+    var payload = {
+      sheetId: catalogSheetId(),
+      menu: boardMenuId(b),
+      gid: (b && b.gid) || "",
+      item: String((item && item.name) || "").trim(),
+      imageName: (item && item.imageName) || "image.webp",
+      imageData: display,
+    };
+    if (item && item.row) payload.row = item.row;
+    return sheet.writeMedia(payload).then(function (wrote) {
+      if (!wrote || !wrote.ok || !wrote.imageCell) {
+        throw new Error((wrote && wrote.error) || "Could not host photo");
+      }
+      if (expectHostedItemImage() && !imageCellIsHosted(wrote.imageCell)) {
+        throw new Error("Photo saved in the app but was not hosted for the TVs");
+      }
+      item.image = wrote.imageCell;
+      item.imageData = "";
+      if (item.menuimg) item.menuimg.displayData = "";
+      return wrote;
+    });
+  }
+
   function commitImageToItem() {
     var draft = state.imageDraft;
     var item = state.itemDraft || ensureItemDraft();
@@ -2400,18 +2460,20 @@
       item.imagePreview = blob ? URL.createObjectURL(blob) : display;
       item.imageData = display;
       item.imageName = draft.fileName || item.imageName || "image.webp";
-      item.menuimg = {
+      item.menuimg = menuimgForStore({
         fileName: draft.fileName,
         scale: draft.scale,
         x: draft.x,
         y: draft.y,
-        sourceData: draft.sourceData || "",
         displayData: display,
         hasTransparency: !!draft.hasTransparency,
-      };
+      });
       draft.displayData = display;
+      draft.sourceData = "";
       state.imageDraft = draft;
-      state.imageCommitted = clone(draft);
+      return hostPlateImage(item, display);
+    }).then(function () {
+      state.imageCommitted = clone(state.imageDraft);
     });
   }
 
@@ -2630,7 +2692,7 @@
       imageName: d.imageName || "",
       imageData: d.imageData || "",
       imagePreview: d.imagePreview || "",
-      menuimg: d.menuimg ? clone(d.menuimg) : null,
+      menuimg: menuimgForStore(d.menuimg),
     };
     var items = state.boardDraft.items || [];
     if (String(d.key) === "new") {
@@ -2651,7 +2713,7 @@
     state.itemDraft.imagePreview = d.imagePreview || "";
     state.itemDraft.imageData = d.imageData || "";
     state.itemDraft.imageName = d.imageName || "";
-    state.itemDraft.menuimg = d.menuimg ? clone(d.menuimg) : null;
+    state.itemDraft.menuimg = menuimgForStore(d.menuimg);
     state.itemCommitted = clone(state.itemDraft);
   }
 
@@ -2713,7 +2775,15 @@
           throw new Error((wrote && wrote.error) || "write failed");
         }
         if (wrote.imageCell) d.image = wrote.imageCell;
+        if (
+          expectHostedItemImage() &&
+          (payload.imageData || (payload.menuimg && payload.menuimg.displayData)) &&
+          !imageCellIsHosted(wrote.imageCell)
+        ) {
+          throw new Error("Photo saved in the app but was not hosted for the TVs");
+        }
         d.imageData = "";
+        if (d.menuimg) d.menuimg.displayData = "";
         applyItemToBoard(d, wrote.row, { commitBoard: confirmSaveOff() });
         showSaveNotice(MSG_ITEM_SAVED);
         var next = state.pendingLeave;
@@ -2726,7 +2796,7 @@
         state.persistInFlight = false;
         console.warn("Menu Manager item save failed", err);
         var msg = String((err && err.message) || err);
-        if (/restart/.test(msg)) {
+        if (/restart/.test(msg) || /host/i.test(msg)) {
           state.pendingLeave = null;
           showSaveNotice(msg);
           return;
@@ -5204,6 +5274,7 @@
       var changed =
         isNew ||
         !!it.imageData ||
+        !!(it.menuimg && it.menuimg.displayData) ||
         JSON.stringify(inventorySnap(it)) !== JSON.stringify(inventorySnap(prev || {}));
       if (!changed) return Promise.resolve();
       var payload = {
@@ -5235,7 +5306,15 @@
           }
           if (wrote.imageCell) it.image = wrote.imageCell;
           if (wrote.row) it.row = wrote.row;
+          if (
+            expectHostedItemImage() &&
+            (payload.imageData || (payload.menuimg && payload.menuimg.displayData)) &&
+            !imageCellIsHosted(wrote.imageCell)
+          ) {
+            throw new Error("Photo saved in the app but was not hosted for the TVs");
+          }
           it.imageData = "";
+          if (it.menuimg) it.menuimg.displayData = "";
           return wrote;
         });
       });
@@ -5524,9 +5603,12 @@
         .catch(function (err) {
           state.persistInFlight = false;
           console.warn("Menu Manager save failed", err);
+          var boardMsg = String((err && err.message) || err || "");
           showSaveNotice(
             onBoard
-              ? "Could not write board to sheet — saved for this session"
+              ? /host/i.test(boardMsg)
+                ? boardMsg
+                : "Could not write board to sheet — saved for this session"
               : wasSystemDirty
               ? "Could not write system settings to sheet — saved for this session"
               : "Could not write style to sheet — saved for this session"

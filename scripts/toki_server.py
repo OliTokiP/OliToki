@@ -3402,6 +3402,19 @@ class SheetsBackend:
                 image_cell = image_info["menuimg"]
             elif image_info.get("filename"):
                 image_cell = image_info["filename"]
+            if _hosted() and data and not (
+                image_info.get("gcsUrl")
+                or image_info.get("driveUrl")
+                or image_info.get("mediaPath")
+            ):
+                raise ValueError(
+                    "Could not host photo: "
+                    + str(
+                        image_info.get("gcsError")
+                        or image_info.get("driveError")
+                        or "no public URL"
+                    )
+                )
         write_image = bool(raw_image) or bool(raw_source) or ("image" in body)
         if kind == "board":
             put(name, "item", default_col=0)
@@ -3497,6 +3510,117 @@ class SheetsBackend:
             "imageCell": image_cell,
             "page": spec.get("page") or "",
             "folder": spec["folder"],
+        }
+
+    def write_media(self, body: dict, sheet_id: str | None = None) -> dict:
+        """Upload a flattened plate and write only the Image cell when row is known."""
+        menu_id = str(body.get("menu") or body.get("menuId") or "").strip().lower()
+        if menu_id in ("1", "2", "3"):
+            menu_id = "board" + menu_id
+        spec = _ITEM_MENUS_BY_ID.get(menu_id)
+        if not spec:
+            raise ValueError("unknown menu")
+        name = str(body.get("item") or body.get("name") or "").strip()
+        raw_image = (
+            body.get("imageData")
+            or body.get("imageBase64")
+            or ""
+        )
+        if not raw_image:
+            menuimg_body = body.get("menuimg") if isinstance(body.get("menuimg"), dict) else {}
+            raw_image = str(menuimg_body.get("displayData") or "")
+        if not raw_image:
+            raise ValueError("missing image data")
+        data, mime = _decode_image_payload(raw_image)
+        stem = _item_stem(name, str(body.get("imageName") or ""))
+        folder = str(spec.get("folder") or "food-pics").strip("/")
+        image_cell = ""
+        image_info: dict = {}
+        if not _hosted():
+            try:
+                saved = _save_food_image(data, folder, stem, stem + ".webp", mime)
+                image_info.update(saved)
+                image_cell = str(saved.get("path") or "")
+            except Exception as e:
+                image_info["localError"] = str(e)
+                _log(f"media local write skipped: {e}")
+        if data and self._media_bucket():
+            hosted = self.upload_gcs_image(data, f"{folder}/{stem}.webp", "image/webp")
+            image_info["gcsBucket"] = hosted.get("bucket") or ""
+            image_info["gcsObject"] = hosted.get("object") or ""
+            image_info["gcsUrl"] = hosted.get("url") or ""
+            image_cell = str(hosted.get("url") or image_cell)
+        if not image_cell:
+            raise ValueError("Could not host photo")
+        sid, source_name = self.resolve_catalog_sheet_id(sheet_id)
+        gid = str(body.get("gid") or spec["gid"] or "").strip()
+        title = self._tab_title_for_gid(sid, gid)
+        safe_title = "'" + title.replace("'", "''") + "'"
+        wrote_range = ""
+        excel_row = 0
+        raw_row = body.get("row") if "row" in body else body.get("rowIndex")
+        target_row = None
+        if raw_row not in (None, "", 0, "0"):
+            try:
+                n = int(raw_row)
+                if n > 0:
+                    target_row = n
+            except (TypeError, ValueError):
+                target_row = None
+        if target_row:
+            with self._api_lock:
+                result = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .get(
+                        spreadsheetId=sid,
+                        range=safe_title + "!A1:Z40",
+                        majorDimension="ROWS",
+                        valueRenderOption="FORMATTED_VALUE",
+                    )
+                    .execute()
+                )
+            rows = result.get("values") or []
+            _header_idx, data_start, headers = self._inventory_layout(rows)
+            if target_row < data_start + 1:
+                raise ValueError("row is not in Inventory")
+            cols: dict[str, int] = {}
+            for c, h in enumerate(headers):
+                fold = self._header_fold(str(h or ""))
+                if fold:
+                    cols[fold] = c
+            img_col = cols.get("image", 7)
+            a1 = f"{safe_title}!{self._col_letters(img_col)}{target_row}"
+            with self._api_lock:
+                updated = (
+                    self.sheets.spreadsheets()
+                    .values()
+                    .update(
+                        spreadsheetId=sid,
+                        range=a1,
+                        valueInputOption="USER_ENTERED",
+                        body={"values": [[image_cell]]},
+                    )
+                    .execute()
+                )
+            wrote_range = str(updated.get("updatedRange") or a1)
+            excel_row = target_row
+            _flush_data_caches()
+        _log(
+            f"media write {source_name or sid} menu={menu_id} item={name!r} "
+            f"row={excel_row} gcs={bool(image_info.get('gcsUrl'))}"
+        )
+        return {
+            "ok": True,
+            "menu": menu_id,
+            "item": name,
+            "row": excel_row,
+            "range": wrote_range,
+            "sheetId": sid,
+            "sourceName": source_name,
+            "image": image_info,
+            "imageCell": image_cell,
+            "folder": folder,
         }
 
 
@@ -3825,6 +3949,34 @@ def make_handler(
                     traceback.print_exc()
                     self._json(500, {"error": str(e)})
                 return
+            if parsed.path == "/api/manager/media":
+                backend = self._backend()
+                if not backend:
+                    self._json(
+                        503,
+                        {
+                            "error": "Sheets API not configured",
+                            "hint": "Add secrets/google-service-account.json",
+                        },
+                    )
+                    return
+                body, err = self._read_json_body(12_000_000)
+                if err:
+                    self._json(400, err)
+                    return
+                sheet_id = str(body.get("sheetId") or "").strip()
+                try:
+                    result = backend.write_media(body, sheet_id or None)
+                    self._json(200, result)
+                except ValueError as e:
+                    self._json(400, {"error": str(e)})
+                except KeyError as e:
+                    self._json(404, {"error": str(e)})
+                except Exception as e:
+                    _log(f"media write error: {e}")
+                    traceback.print_exc()
+                    self._json(500, {"error": str(e)})
+                return
             if parsed.path == "/api/manager/item":
                 backend = self._backend()
                 if not backend:
@@ -3836,6 +3988,8 @@ def make_handler(
                         },
                     )
                     return
+                # Flattened 1500x1000 display only. Original camera/PNG bytes
+                # stay off this POST (Menu Manager strips sourceData).
                 body, err = self._read_json_body(12_000_000)
                 if err:
                     self._json(400, err)
