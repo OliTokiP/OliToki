@@ -2297,6 +2297,10 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   overflow: hidden;
 }
 
+body.theme-halloween #closed-status {
+  background: #1a0924;
+}
+
 body.store-closed #closed-status {
   display: block;
 }

@@ -10,7 +10,7 @@
 (function (root) {
   "use strict";
 
-  var ART_VER = "20261005h3";
+  var ART_VER = "20261005h4";
   var CLOSED_VER = "20260924closed2";
   var DEFAULT_LOGO = "assets/TokiLogoFix.svg?v=20260815qa4";
 
