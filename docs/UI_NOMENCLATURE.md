@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-09-22 13:30 (Closed Status overlay)  
+**Last updated:** 2026-10-05 15:00 (Halloween Logo costumes)  
 
 **Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **What each style actually does (times, veil, highlight, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md).  
@@ -42,11 +42,11 @@ Fixed **1920×1080** canvas.
 | **Frame** | Opaque vector shape: white **Header Band** + black **Menu Panel**, with diagonal cutout toward the photo side | `#frame`, frame header / frame panel |
 | **Header Band** | White (secondary) top strip of the Frame that holds the Logo and Menu Title | `.frame-header` |
 | **Menu Panel** | Dark (main) body of the Frame that holds the Menu List (and on Board 4, the right-side content) | `.frame-panel`, black panel |
-| **Logo** | Toki mark in the Header Band | `#logo` |
+| **Logo** | Toki mark in the Header Band. Halloween Theme swaps the default outline mark for a per-board costume (Bowls Tokula, Handhelds Mummy, Munchies Pirate, Drinks Witch). | `#logo`, `.logo-mark`, `.logo-costume` |
 | **Menu Title** | Board title text (e.g. “Bowls & Salads”) | `#menu-title` |
 | **Disclaimer** | Allergy / food-safety copy (usually top of the photo side) | `#disclaimer` |
 | **Version Stamp** | Optional git/build info appended to the Toki Debug HUD header (when Show Version + debug visuals active) | Show Version |
-| **Closed Status** | Full-stage static overlay when Store Hours say the shop is closed. Four boards spell **CLOSED** (CL / OS / ED) with Board 4 showing hours. Replaces board graphics and halts Background pan / presentation until open. | `#closed-status`, `body.store-closed` |
+| **Closed Status** | Full-stage static overlay when Store Hours say the shop is closed. Four boards spell **CLOSED** (CL / OS / ED) with Board 4 showing hours. Halloween Theme uses Toki Ghost on Board 4 in place of the outline bunny. Replaces board graphics and halts Background pan / presentation until open. | `#closed-status`, `body.store-closed`, `body.theme-halloween` |
 
 ---
 
@@ -304,6 +304,7 @@ Track deliberately; do not block handoff:
 
 | Date | Change |
 |------|--------|
+| 2026-10-05 | **Halloween Logo** costumes on `#logo` when Theme Selector is Halloween; Closed Status Board 4 uses Toki Ghost (`closed-h-4.svg`) |
 | 2026-09-22 | **Closed Status** (`#closed-status`) — four-board CLOSED overlay from Store Hours; static SVGs, graphics halt while closed |
 | 2026-09-21 | Board 4 **Weather Widget** (`#weather-widget`) — date / hours / clock / °F + icon on the photo side |
 | 2026-08-11 | **Motion phases** §4.1–4.4: Wind-up, Punch-in, **Hold**, Punch-out, Wind-down; role vs treatment; Animation Block / Handoff / Presentation Segment; Ken Burns, Family Portrait, Encore recipes; Encore Wind-up context-dependent on Family Portrait |

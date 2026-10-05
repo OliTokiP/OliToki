@@ -1383,6 +1383,7 @@
 
   let config = {
     title: "",
+    themeName: "",
     mainColor: "#000000",
     secondaryColor: "#ffffff",
     // Stage BG: color plate always on; image optional on top with FX
@@ -1857,6 +1858,36 @@
     return cMain >= cSec ? main : secondary;
   }
 
+  /**
+   * Allergy disclaimer ink. Prefer Main / Secondary (house rule), but when
+   * both are dark (e.g. BU Dark: scarlet + espresso) neither readable on a
+   * film/wallpaper plate — also try Highlight, then pure white / black.
+   * Threshold ~4.5 keeps thin Condensed/Poppins copy legible on TVs.
+   */
+  function pickDisclaimerColor(bgHex, mainHex, secondaryHex, highlightHex) {
+    const bg = normalizeHex(bgHex) || "#000000";
+    const preferred = pickContrastingThemeColor(bg, mainHex, secondaryHex);
+    if (contrastRatio(bg, preferred) >= 4.5) return preferred;
+
+    const extras = [
+      normalizeHex(highlightHex),
+      "#ffffff",
+      "#000000",
+    ];
+    let best = preferred;
+    let bestC = contrastRatio(bg, preferred);
+    for (let i = 0; i < extras.length; i++) {
+      const c = extras[i];
+      if (!c) continue;
+      const ratio = contrastRatio(bg, c);
+      if (ratio > bestC) {
+        bestC = ratio;
+        best = c;
+      }
+    }
+    return best;
+  }
+
   // last-paint: {themeName, main, secondary, highlight, special} in localStorage (per-origin).
   // Overlay immediately at boot for no Toki Default flash; update only on successful live apply.
   // Boards and Manager use separate storage (different origins); do not use manager-fallback.json.
@@ -1880,11 +1911,12 @@
     root.style.setProperty("--highlight", lp.highlight);
     root.style.setProperty("--highlight-special", lp.special || lp.highlight);
     root.style.setProperty("--highlight-new", lp.special || lp.highlight);
+    applyHalloweenMark(lp.themeName);
     return true;
   }
   function captureLastPaintFromConfig(themeNameHint) {
     const p = {
-      themeName: themeNameHint || "Current",
+      themeName: themeNameHint || config.themeName || "Current",
       main: config.mainColor || "#000000",
       secondary: config.secondaryColor || "#ffffff",
       highlight: config.highlight || "#26bbcb",
@@ -3047,6 +3079,55 @@
     return parseTextAlign("", defaultVal);
   }
 
+  function applyHalloweenMark(themeNameHint) {
+    const H = window.TOKI_HALLOWEEN;
+    if (!H) return;
+    let name = H.urlThemeOverride() || themeNameHint || config.themeName || "";
+    if (!name) {
+      const lp = readLastPaint();
+      if (lp && lp.themeName) name = lp.themeName;
+    }
+    const on = H.isHalloween(name);
+    if (document.body) {
+      document.body.classList.toggle("theme-halloween", on);
+    }
+    const logo = document.getElementById("logo");
+    if (logo) {
+      const svg = logo.querySelector(".logo-mark") || logo.querySelector("svg");
+      let img = logo.querySelector(".logo-costume");
+      if (!img) {
+        img = document.createElement("img");
+        img.className = "logo-costume";
+        img.alt = "";
+        img.draggable = false;
+        logo.appendChild(img);
+      }
+      if (on) {
+        const layout = H.layoutFromConfig(cfg);
+        const src = H.costumeUrl(layout);
+        if (img.getAttribute("src") !== src) img.src = src;
+        img.hidden = false;
+        if (svg) svg.setAttribute("hidden", "");
+        logo.setAttribute("aria-label", H.costumeLabel(layout));
+      } else {
+        img.hidden = true;
+        if (svg) svg.removeAttribute("hidden");
+        logo.setAttribute("aria-label", "Toki");
+      }
+    }
+    try {
+      window.dispatchEvent(
+        new CustomEvent("toki:theme-change", {
+          detail: { themeName: name, halloween: on },
+        })
+      );
+    } catch (e) {}
+    const closed = window.TOKI_CLOSED_STATUS;
+    if (closed && typeof closed.syncArt === "function") {
+      closed.syncArt();
+    }
+  }
+
   function applyConfigColors() {
     const main = config.mainColor || "#000000";
     const secondary = config.secondaryColor || "#ffffff";
@@ -3066,6 +3147,7 @@
     applyDisclaimerContent();
     applyDisclaimerColor();
     applyEncoreSpotlightChrome(null);
+    applyHalloweenMark(config.themeName);
   }
 
   /**
@@ -3657,6 +3739,7 @@
     if (!els.disclaimer) return;
     const main = config.mainColor || "#000000";
     const secondary = config.secondaryColor || "#ffffff";
+    const highlight = config.highlight || "#26bbcb";
     const plate =
       normalizeHex(config.bgColor) ||
       normalizeHex(config.bgSolid) ||
@@ -3667,12 +3750,12 @@
 
     // No image / fully transparent image → contrast against the color plate only
     if (!imagePath || opacity01 <= 0.02) {
-      setDisclaimerColor(pickContrastingThemeColor(plate, main, secondary));
+      setDisclaimerColor(pickDisclaimerColor(plate, main, secondary, highlight));
       return;
     }
 
     // Provisional: plate-only until the composite sample finishes (avoids flash)
-    setDisclaimerColor(pickContrastingThemeColor(plate, main, secondary));
+    setDisclaimerColor(pickDisclaimerColor(plate, main, secondary, highlight));
 
     const gen = ++_disclaimerSampleGen;
     const srcAtStart = imagePath;
@@ -3693,7 +3776,7 @@
         if (plateNow !== plateAtStart) return;
 
         const bg = normalizeHex(compositeHex) || plate;
-        const color = pickContrastingThemeColor(bg, main, secondary);
+        const color = pickDisclaimerColor(bg, main, secondary, highlight);
         setDisclaimerColor(color);
         console.info(
           "Disclaimer contrast on composite BG",
@@ -3714,7 +3797,9 @@
           err && err.message ? err.message : err
         );
         if (gen === _disclaimerSampleGen) {
-          setDisclaimerColor(pickContrastingThemeColor(plate, main, secondary));
+          setDisclaimerColor(
+            pickDisclaimerColor(plate, main, secondary, highlight)
+          );
         }
       });
   }
@@ -5159,6 +5244,7 @@
 
     config = {
       title: parsed.title || config.title || "",
+      themeName: parsed.themeName || config.themeName || "",
       mainColor: main,
       secondaryColor: secondary,
       bgColor: bgColor,
@@ -7321,6 +7407,7 @@
 
   function applyThemeToParsed(parsed, theme) {
     if (!parsed || !theme) return parsed;
+    parsed.themeName = theme.themeName || parsed.themeName;
     parsed.mainColor = theme.mainColor;
     parsed.secondaryColor = theme.secondaryColor;
     parsed.highlight = theme.highlight;
@@ -17316,6 +17403,7 @@
     });
 
     applyLastPaintOverlay(); // CSS defaults + immediate last-paint overlay so no Toki flash before sheet arrives; never write on boot
+    applyHalloweenMark(); // URL ?theme=Halloween or last-paint costume before sheet arrives
 
     _bootAt = Date.now();
     try {

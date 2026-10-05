@@ -1,9 +1,29 @@
 # What’s New
 
-**Last updated:** 2026-09-24 10:00  
+**Last updated:** 2026-10-05 15:00  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-10-05 15:00 — Halloween Theme costumes
+
+**Boards / surface:** Menu Screens (all four boards) + Menu Manager Style / Board preview  
+**Sheet:** Style and Theme → Theme Selector = **Halloween** (no new columns)  
+**Summary:** Selecting Halloween in Menu Manager dresses the Header Band Logo in a per-board costume and swaps Board 4’s Closed Status bunny for Toki Ghost. Same files on testing and restaurant after a ship.
+
+### Details
+- Bowls **Tokula**, Handhelds **Toki Mummy**, Munchies **Toki Pirate**, Drinks **Toki Witch** (`assets/halloween/`).
+- Closed Status Board 4 uses `assets/closed/closed-h-4.svg` (ghost + hours). Boards 1–3 stay CL / OS / ED.
+- Menu Manager Style preview shows Tokula; Board 2 / 3 editors show that board’s costume.
+- QA: `?theme=Halloween` on a board URL (does not write the sheet). `?closed=1` with it shows the ghost hours art.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
 
 ---
 

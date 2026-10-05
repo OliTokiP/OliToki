@@ -1,10 +1,12 @@
 /**
  * TokiMenu — Closed Status overlay (all four boards).
  *
- * Mockup: vault Mockups/Closed Status Mockup (Closed 1–4.svg + Closed Status.pdf).
+ * Mockup: vault Mockups/Closed Status Mockup (Closed 1–4.svg + Closed Status.pdf;
+ * Halloween: Closed Status H 1–4 + Closed Status H.pdf).
  * When Store Hours say the shop is closed, each board paints its static SVG
  * (CL / OS / ED / bunny+hours) and asks the menu runtime to halt galaxy pan,
- * presentation, stripes, and weather work. Opens again on the next service
+ * presentation, stripes, and weather work. Halloween Theme swaps Board 4’s
+ * bunny for Toki Ghost (`closed-h-4.svg`). Opens again on the next service
  * window. Independent of the catalog Google load.
  *
  * QA: ?closed=1 force on, ?closed=0 force off, ?wxNow= / ?hoursAt= freeze
@@ -398,10 +400,38 @@
       art = $("closed-status-art") || overlay.querySelector("img");
     }
     overlay.setAttribute("data-board", String(slot));
-    if (art) {
-      art.src = ART_BASE + slot + ".svg?v=" + ART_VER;
-    }
+    syncArt();
     return overlay;
+  }
+
+  function halloweenOn() {
+    var H = root.TOKI_HALLOWEEN;
+    if (H && typeof H.urlThemeOverride === "function" && H.isHalloween(H.urlThemeOverride())) {
+      return true;
+    }
+    if (document.body && document.body.classList.contains("theme-halloween")) {
+      return true;
+    }
+    try {
+      var raw = localStorage.getItem("tokiLastPaint");
+      var lp = raw ? JSON.parse(raw) : null;
+      if (H && lp && H.isHalloween(lp.themeName)) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function artSrc() {
+    var H = root.TOKI_HALLOWEEN;
+    if (H && typeof H.closedArtUrl === "function") {
+      return H.closedArtUrl(slot, halloweenOn());
+    }
+    return ART_BASE + slot + ".svg?v=" + ART_VER;
+  }
+
+  function syncArt() {
+    if (!art) return;
+    var next = artSrc();
+    if (art.getAttribute("src") !== next) art.src = next;
   }
 
   function setWeatherRunning(on) {
@@ -486,6 +516,9 @@
       tickClosed();
       fetchHours();
     });
+    window.addEventListener("toki:theme-change", function () {
+      syncArt();
+    });
   }
 
   function stop() {
@@ -506,6 +539,7 @@
       return slot;
     },
     refreshHours: fetchHours,
+    syncArt: syncArt,
   };
 
   if ($("stage")) {

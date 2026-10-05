@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-08-28 (Item editor + Edit Image on Restaurant Copy) 
+**Last updated:** 2026-10-05 15:00 (Halloween Logo costumes in Style preview) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -100,7 +100,7 @@ After those Background children, Style and Theme shows **Presentation Speed**, t
 
 Pattern Color 1 / 2 are per-theme (Themes Database K/L on the selected row). The Style preview updates from the draft immediately; Confirm Yes writes those cells so TV boards (`#bg-pattern`, Board 4 `#stripes`) pick them up on the next sheet load.
 
-Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Encore calls `TOKI_MOTION.encorePunchIn` / `encorePunchOut` on `#family-portrait-stage`. The 848.1×1080 lattice is cover-scaled into the photo box using `--device-w` (not `100cqi` — Fire Stick Silk has no container query units). Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings.
+Preview (sticky under the header) is a **scaled crop of the live board**, not a second motion system. Slideshow / Ken Burns call `TOKI_MOTION.heroPunchIn` / `heroPunchOut` in `js/motion.js` — the same functions as the live board. Encore calls `TOKI_MOTION.encorePunchIn` / `encorePunchOut` on `#family-portrait-stage`. The 848.1×1080 lattice is cover-scaled into the photo box using `--device-w` (not `100cqi` — Fire Stick Silk has no container query units). Treatments: `css/motion.css`. Top slot height is the same `--top-slot-h` as System Settings. **Halloween** Theme swaps the preview Logo to that board’s costume (Style preview = Tokula / Bowls; Board 2 Mummy, Board 3 Pirate) — the same files as the TVs.
 
 Presentation Speed `0` = stop, `≥1` = go. Presentation Style is per-board and is **not** loaded from the sheet — Style screen defaults to Ken Burns. Create New Theme is gated (toast only).
 
@@ -125,7 +125,7 @@ Y_1: 0
 |--------|--------|
 | `BG Scroll Speed (0<=5)` | 0…5 |
 | `Presentation Speed (0,1,2,3)` | those integers |
-| `Theme Selector (='Style and Theme'!$A$6:$A$17)` | values in that range |
+| `Theme Selector (='Style and Theme'!$A$6:$A)` | values in that range |
 
 `[0-5]`, `[0..5]`, `(>=3)` also parse. Matching ignores the suffix (`Highlight Color (Special)` stays a name). No spec → offline defaults.
 

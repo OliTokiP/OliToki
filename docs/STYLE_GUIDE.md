@@ -4,7 +4,7 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
-**Last updated:** 2026-09-24 10:00 (Closed Status hours 11:00)  
+**Last updated:** 2026-10-05 15:00 (Halloween Logo costumes)  
 
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
@@ -101,7 +101,7 @@ clip-path: polygon(
 
 | Element     | Position / size                                           | Notes                                               |
 | ----------- | --------------------------------------------------------- | --------------------------------------------------- |
-| Logo        | `left: 758px; top: 16px; 156×202`                         | Stroke/eyes = Main                                  |
+| Logo        | `left: 758px; top: 16px; 156×202`                         | Stroke/eyes = Main. Halloween: costume img, 210×210 |
 | Menu title  | `left: 140px; top: 18px; width: 600px; height: header−28` | Font ~104px, weight 700, Main on Secondary header   |
 | Disclaimer  | `top: 18px; right: 28px; max-width: 720px`                | Roboto Condensed 300, 16px; color by contrast on BG |
 | Menu list   | `top: 234; left: 0; width: 1114; height: fills panel`     | Padding ~28 / 16 / 20; shortens when footer on      |
@@ -274,7 +274,18 @@ ViewBox `0 0 146.7 193.9`. Stroke/eyes use Main:
 .logo-eye { fill: var(--main-color); }
 ```
 
-Board 4 logo: `right: 36px; top: 12px; 148×192` (mirror placement).
+Halloween Theme (`body.theme-halloween`) hides `.logo-mark` and shows `.logo-costume` from `assets/halloween/`:
+
+| Board | Costume | File |
+|-------|---------|------|
+| 1 Bowls | Tokula | `tokula.svg` |
+| 2 Handhelds | Toki Mummy | `toki-mummy.svg` |
+| 3 Munchies | Toki Pirate | `toki-pirate.svg` |
+| 4 Drinks | Toki Witch | `toki-witch.svg` |
+
+Costumes are filled art (not Main-color stroke). `object-fit: contain` in a slightly larger box so capes and hats stay on the Header Band.
+
+Board 4 logo: `right: 36px; top: 12px; 148×192` (mirror placement). Halloween: 200×210.
 
 ---
 
@@ -332,14 +343,14 @@ Pinned HUD on the photo side. Measured from `Weather Widget Mockup.pdf` @ 1920×
 
 Full-stage overlay when Store Hours say closed. Static SVGs from `assets/closed/` — not live type.
 
-| Board | File | Art |
-|-------|------|-----|
-| 1 Bowls | `closed-1.svg` | **CL** |
-| 2 Handhelds | `closed-2.svg` | **OS** |
-| 3 Munchies | `closed-3.svg` | **ED** |
-| 4 Drinks | `closed-4.svg` | Bunny + baked Store Hours copy (open **11:00**) |
+| Board | File | Halloween | Art |
+|-------|------|-----------|-----|
+| 1 Bowls | `closed-1.svg` | `closed-h-1.svg` | **CL** |
+| 2 Handhelds | `closed-2.svg` | `closed-h-2.svg` | **OS** |
+| 3 Munchies | `closed-3.svg` | `closed-h-3.svg` | **ED** |
+| 4 Drinks | `closed-4.svg` | `closed-h-4.svg` | Bunny + baked hours (open **11:00**). Halloween: **Toki Ghost** + the same hours |
 
-`#closed-status` fills the Stage (z-index 40, black plate). Galaxy pan, presentation, stripes, and the Weather Widget halt until the next open. `?closed=1` forces the overlay for QA.
+`#closed-status` fills the Stage (z-index 40, black plate). Galaxy pan, presentation, stripes, and the Weather Widget halt until the next open. `?closed=1` forces the overlay for QA. Halloween Theme Selector (or `?theme=Halloween`) picks the `closed-h-*` files.
 
 ---
 

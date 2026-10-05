@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-09-22 (Closed Status `closed=`)
+**Last updated:** 2026-10-05 (Halloween `theme=`)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -36,6 +36,7 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`beta`** | Load **Beta (Development) Copy** instead of Settings A2 (Restaurant). Also uses Beta’s Settings row (Require restart, Refresh Timer, Debug Mode — A3–G3), not Restaurant A2–G2. Dining-room TVs omit this. Also: `preview-all.html?beta` forwards it to each wall iframe. |
 | **`wxNow=`** | Freeze the Eastern clock at this instant (ISO timestamp, e.g. `2026-09-21T04:15:00Z` = Sunday 12:15 AM EDT). Weather Widget **Open until** and Closed Status both read it. Alias: `hoursAt`. |
 | **`closed=1`** | Force the Closed Status overlay on (static CL / OS / ED / hours SVGs) and halt galaxy / presentation. `closed=0` forces the menu to stay open. `preview-all.html?closed=1` forwards to each wall iframe. |
+| **`theme=Halloween`** | QA only: treat the Logo / Closed Status as Halloween (per-board costumes + Toki Ghost on Board 4) without writing the sheet. Does not change catalog Theme Selector. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 
@@ -74,6 +75,8 @@ manager.html?beta#/system
 preview-all.html?beta
 preview-all.html?closed=1
 index.html?closed=1
+index.html?theme=Halloween&pause=1
+index4.html?theme=Halloween&closed=1
 index4.html?wxNow=2026-09-22T04:15:00Z
 ```
 

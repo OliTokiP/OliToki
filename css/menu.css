@@ -213,10 +213,32 @@ body {
   overflow: visible;
 }
 
-#logo svg {
+#logo svg,
+#logo .logo-mark {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+#logo .logo-costume {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+body.theme-halloween #logo {
+  width: 210px;
+  height: 210px;
+}
+
+body.theme-halloween #logo .logo-mark {
+  display: none;
+}
+
+body.theme-halloween #logo .logo-costume {
+  display: block;
 }
 
 #logo .logo-outline {
@@ -2069,6 +2091,12 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   height: 192px;
 }
 
+.board-drinks.theme-halloween #logo {
+  width: 200px;
+  height: 210px;
+  top: 8px;
+}
+
 /* Pinstripes masked to black panel, slow scroll.
    Spec: each band 93px wide, angle 38.5°.
    Built as horizontal 93px bands then rotated — browsers AA rotated
@@ -2256,8 +2284,9 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   height: 250px;
 }
 
-/* Closed Status — full-stage static SVG (Closed 1–4). Replaces board graphics
-   between Store Hours. Halt of RAF / presentation is in js/closed-status.js + menu.js. */
+/* Closed Status — full-stage static SVG (Closed 1–4, or Closed H 1–4 on Halloween).
+   Replaces board graphics between Store Hours. Halt of RAF / presentation is in
+   js/closed-status.js + menu.js. */
 #closed-status {
   position: absolute;
   inset: 0;

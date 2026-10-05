@@ -607,6 +607,37 @@
     syncFontReadyClass();
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", t.highlight);
+    applyPreviewLogo();
+  }
+
+  function previewCostumeLayout() {
+    var H = window.TOKI_HALLOWEEN;
+    if (!H) return "bowls";
+    if (state.screen === "board" && state.boardDraft) {
+      return H.layoutFromBoardId(state.boardDraft.id);
+    }
+    return "bowls";
+  }
+
+  function previewLogoSrc() {
+    var H = window.TOKI_HALLOWEEN;
+    var name = state.draft && state.draft.themeName;
+    if (H && H.isHalloween(name)) {
+      return H.costumeUrl(previewCostumeLayout());
+    }
+    return (H && H.DEFAULT_LOGO) || "assets/TokiLogoFix.svg?v=20260815qa4";
+  }
+
+  function applyPreviewLogo() {
+    var H = window.TOKI_HALLOWEEN;
+    var on = !!(H && H.isHalloween(state.draft && state.draft.themeName));
+    if (document.body) document.body.classList.toggle("theme-halloween", on);
+    var src = previewLogoSrc();
+    var box = document.querySelector(".preview-logo");
+    if (!box) return;
+    var img = box.querySelector("img");
+    if (!img) return;
+    if (img.getAttribute("src") !== src) img.src = src;
   }
 
   function pageVersion() {
@@ -3096,7 +3127,9 @@
       '<div class="preview-frame-header"></div>' +
       '<div class="preview-frame-panel"></div></div>' +
       '<div class="preview-logo" aria-hidden="true">' +
-      '<img src="assets/TokiLogoFix.svg?v=20260815qa4" alt=""></div>' +
+      '<img src="' +
+      escapeHtml(previewLogoSrc()) +
+      '" alt=""></div>' +
       '<div class="preview-nums" aria-hidden="true">' +
       nums +
       "</div></div>"
@@ -6137,6 +6170,7 @@
      theme changes, and picker applies (see MOTION_GLOSSARY 3/4 and ticket). */
   function syncPreviewFromDraft(preview) {
     if (!preview) return;
+    applyPreviewLogo();
     syncEncoreLayout(preview);
     var d = state.draft;
     var encore = previewPresentation() === "encore";

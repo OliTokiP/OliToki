@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "7f63666",
-  "hashFull": "7f63666cf28f655ddd14854526f875c2d6b6dff1",
-  "subject": "QA: 2026-09-22 Closed Status Feature (pass 2)"
+  "hash": "79930cd",
+  "hashFull": "79930cd9f1a501bd2df87c9a8f5680773608c820",
+  "subject": "QA: 2026-10-05 Halloween Theme Additions (pass 1)"
 };
