@@ -45,6 +45,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pages: write
 
 concurrency:
   group: toki-deploy
@@ -186,3 +187,61 @@ jobs:
         run: |
           echo "Website git ship done. Cloud Run skipped — add repo secret TOKI_GCP_SA."
           echo "Until then, from the Mac: scripts/cloud-run/deploy.sh (restaurant) or TOKI_GCP_SERVICE=toki-api-testing TOKI_DEPLOY_MODE=web ./deploy.sh"
+
+      # GitHub's automatic pages-build-deployment often sits queued, then
+      # dies with "job was not acquired by Runner of type hosted". Deployer
+      # used to go green after the git push while TVs stayed on the old stamp.
+      - name: Wait for GitHub Pages (restaurant website)
+        if: >
+          steps.ship.outputs.dry != '1' &&
+          steps.ship.outputs.target == 'restaurant' &&
+          (steps.ship.outputs.ship == 'website' || steps.ship.outputs.ship == 'both')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          WANT=$(python3 - <<'PY'
+          import json, pathlib, re
+          text = pathlib.Path("js/live-stamp.js").read_text()
+          m = re.search(r'"hash":\s*"([^"]+)"', text)
+          print(m.group(1) if m else "")
+          PY
+          )
+          if [ -z "$WANT" ]; then
+            echo "no hash in js/live-stamp.js"
+            exit 1
+          fi
+          echo "want live stamp $WANT"
+          request_build() {
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" || true
+          }
+          live_hash() {
+            curl -fsS -H "Cache-Control: no-cache" -H "Pragma: no-cache" \
+              "https://olitokip.github.io/OliToki/js/live-stamp.js?nocache=$(date +%s)" \
+              | python3 -c "import sys,re; t=sys.stdin.read(); m=re.search(r'\"hash\":\\s*\"([^\"]+)\"', t); print(m.group(1) if m else '')"
+          }
+          wait_live() {
+            local i got
+            for i in $(seq 1 48); do
+              got=$(live_hash || true)
+              echo "try $i live=${got:-?} want=$WANT"
+              if [ "$got" = "$WANT" ]; then
+                echo "Pages is live at $WANT"
+                return 0
+              fi
+              sleep 15
+            done
+            return 1
+          }
+          request_build
+          if wait_live; then
+            exit 0
+          fi
+          echo "first Pages wait missed — requesting another build"
+          request_build
+          if wait_live; then
+            exit 0
+          fi
+          echo "Pages did not publish $WANT"
+          gh api "repos/${GITHUB_REPOSITORY}/pages/builds/latest" || true
+          exit 1
