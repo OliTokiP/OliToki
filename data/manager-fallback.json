@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-30T22:52:23Z",
+  "updatedAt": "2026-10-05T19:03:18Z",
   "active": "beta",
   "sources": {
     "source": {
@@ -1080,14 +1080,14 @@
       "sourceName": "Beta (Development) Copy",
       "sheetId": "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8",
       "draft": {
-        "themeName": "BU Night",
+        "themeName": "Halloween",
         "background": "wallpaper",
-        "bgColor": "main",
+        "bgColor": "secondary",
         "patternType": "stripes",
         "patternColor1": "secondary",
         "patternColor2": "main",
         "wallpaper": "film",
-        "scrollSpeed": 2,
+        "scrollSpeed": 1,
         "presentation": "kenburns",
         "encoreStyle": "hard_shadow",
         "encoreSpot": "highlight",
@@ -1098,8 +1098,8 @@
         "refreshTimer": "30 seconds",
         "systemFont": "poppins",
         "limitHeavyFilters": "no",
-        "debugMode": "yes",
-        "confirmSave": "no"
+        "debugMode": "no",
+        "confirmSave": "yes"
       },
       "themes": [
         {
@@ -1236,6 +1236,15 @@
           "special": "#CC0000",
           "patternColor1": "secondary",
           "patternColor2": "main"
+        },
+        {
+          "name": "BU Dark",
+          "main": "#CC0000",
+          "secondary": "#2D2926",
+          "highlight": "#FFFFFF",
+          "special": "#FFD700",
+          "patternColor1": "highlight",
+          "patternColor2": "main"
         }
       ],
       "speedTiles": {
@@ -1298,9 +1307,10 @@
             "Easter",
             "BU Welcome",
             "BU Rally",
-            "BU Night"
+            "BU Night",
+            "BU Dark"
           ],
-          "a1": "='Style and Theme'!$A$6:$A$20"
+          "a1": "='Style and Theme'!$A$6:$A"
         },
         "BG Color": {
           "type": "ONE_OF_LIST",
@@ -1390,7 +1400,7 @@
           "notes": "ENGINE: Same block runner + same digit rules as Ken Burns / Slideshow.\nWind-up/Wind-down 0 = use Punch-In / Punch-Out DURATIONS for first/last (not “no animation”).\nSame cell values ⇒ same phase lengths as KB/Slideshow.\n\nENCORE ≠ “Ken Burns with veil only.” Opacity TARGET depends on phase:\n\nWIND-UP & WIND-DOWN (inherit KB/Slideshow opacity behavior PRECISELY):\n- GRID (full collage) opacity in/out — same role as hero image opacity on KB/Slideshow.\n- VEIL also participates on Wind-up (see kicker) / Wind-down as part of that entrance/exit.\n- Camera/zoom as Encore focus treatment.\n\nPUNCH-IN & PUNCH-OUT (mid-run item↔item):\n- GRID does NOT opacity-fade (stays up).\n- VEIL ONLY opacity changes (in on Punch-In, out on Punch-Out), using Punch-In / Punch-Out time values from this row (same numbers as KB/Slideshow when cells match).\n- Camera moves focus item↔item; highlight locksteps with punch.\n\nHOLD: Settled on active item (veil + zoom parked). Duration = Hold cell.\n\nKICKER — Wind-up when Family Portrait DISABLED:\nSingle entrance duration (Wind-Up if >0 else Punch-In). THREE PARALLEL tracks:\n  (1) grid opacity 0→1\n  (2) veil opacity → focused on top-billed item\n  (3) camera zoom from full-spread overview → top-billed lattice point\nAll finish on that entrance clock. Not sequential sub-phases.\n\nWind-down (last of segment; duration Wind-Down if >0 else Punch-Out):\nGrid opacity out + veil out (KB/Slideshow-style full exit), camera settles; then next segment entrance.\n\nFAMILY PORTRAIT (build AFTER Encore satisfactory):\n- Optional one-slide full-spread overview BEFORE Encore bows when FP toggle ON.\n- Not the same as Encore Wind-up cell; FP is extra pre-show beat.\n- Encore without FP: kicker Wind-up above.\n- FP without Encore: later, with other styles.\n\nSEGMENT HANDOFF: last exit / first entrance by segment boundary (Alpha → Drinks etc.) even if both Encore or Encore↔Slideshow/Ken Burns.\n\nIMPLEMENTATION: Engine phases + multi-target treatments (grid vs veil vs camera). Quarantine for lattice/veil reference only. Log style=Encore, phase, surfaces={grid,veil,camera}, seconds"
         }
       },
-      "savedAt": "2026-08-30T22:52:23Z"
+      "savedAt": "2026-10-05T19:03:18Z"
     }
   }
 }
