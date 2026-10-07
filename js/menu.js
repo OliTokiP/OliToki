@@ -9807,20 +9807,52 @@
         if (onHidden) onHidden();
         return;
       }
+      var gen = (el._annFadeGen || 0) + 1;
+      el._annFadeGen = gen;
+      function alive() {
+        return el._annFadeGen === gen;
+      }
+      function clearInline() {
+        el.style.transition = "";
+        el.style.opacity = "";
+        el.classList.remove("ann-fading");
+      }
       if (instant || !doFade) {
-        el.classList.remove("ann-fading");
+        clearInline();
         if (onHidden) onHidden();
-        el.classList.remove("ann-fading");
         return;
       }
+      var fadeMs = FADE_MS;
       el.classList.add("ann-fading");
+      el.style.transition = "opacity " + fadeMs + "ms var(--ease-fade, ease)";
+      el.style.opacity = "0";
       window.setTimeout(function () {
+        if (!alive()) return;
+        // Freeze at 0, swap copy, then commit 0 on the NEW boxes before 0→1.
+        // Silk drops the class-only fade-in if innerHTML/fit runs in the hole.
+        el.style.transition = "none";
+        el.style.opacity = "0";
         if (onHidden) onHidden();
-        // next frame: fade back in
+        void el.offsetWidth;
         requestAnimationFrame(function () {
-          el.classList.remove("ann-fading");
+          if (!alive()) return;
+          requestAnimationFrame(function () {
+            if (!alive()) return;
+            el.classList.add("ann-fading");
+            el.style.transition =
+              "opacity " + fadeMs + "ms var(--ease-fade, ease)";
+            el.style.opacity = "0";
+            void el.offsetWidth;
+            el.classList.remove("ann-fading");
+            el.style.opacity = "1";
+            window.setTimeout(function () {
+              if (!alive()) return;
+              el.style.transition = "";
+              el.style.opacity = "";
+            }, fadeMs + 40);
+          });
         });
-      }, FADE_MS);
+      }, fadeMs);
     }
 
     // Title / subtitle: only fade when resolved string changes
@@ -9842,10 +9874,15 @@
     if (instant) {
       applyTitleSub();
       applyBody();
-      if (els.announcementTitle) els.announcementTitle.classList.remove("ann-fading");
-      if (els.announcementSubtitle)
-        els.announcementSubtitle.classList.remove("ann-fading");
-      if (els.announcementBody) els.announcementBody.classList.remove("ann-fading");
+      [els.announcementTitle, els.announcementSubtitle, els.announcementBody].forEach(
+        function (node) {
+          if (!node) return;
+          node._annFadeGen = (node._annFadeGen || 0) + 1;
+          node.style.transition = "";
+          node.style.opacity = "";
+          node.classList.remove("ann-fading");
+        }
+      );
     }
 
     announcementIndex = i;

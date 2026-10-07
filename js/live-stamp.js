@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "1b85e53",
-  "hashFull": "1b85e53600ec281b21c280bd5e5e36c5cf0dde45",
-  "subject": "Restore gradient stripes, keep angle when frozen, honor Override Wallpaper Scroll"
+  "hash": "ef73a7c",
+  "hashFull": "ef73a7c307d408b13e661072956ab5fac7e5f1c1",
+  "subject": "Fix announcement fade-in on Fire Stick after message swap"
 };
