@@ -2291,10 +2291,11 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   position: absolute;
   inset: 0;
   z-index: 35;
-  display: none;
+  display: block;
   pointer-events: none;
   overflow: hidden;
   opacity: 0;
+  visibility: hidden;
   background-color: transparent;
   background-repeat: no-repeat;
   background-position: 0 0;
@@ -2304,27 +2305,14 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 }
 
 #holiday-splash.is-visible {
-  display: block;
+  visibility: visible;
   will-change: opacity;
-  transition: opacity 250ms linear;
-}
-
-#holiday-splash.is-in {
-  opacity: 1;
-}
-
-#holiday-splash.is-hold {
-  opacity: 1;
-  transition: none;
-}
-
-#holiday-splash.is-out {
-  opacity: 0;
-  transition: opacity 500ms linear;
 }
 
 #holiday-splash[hidden] {
   display: none !important;
+  visibility: hidden;
+  opacity: 0;
   will-change: auto;
 }
 

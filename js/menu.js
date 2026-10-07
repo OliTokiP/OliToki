@@ -1929,6 +1929,9 @@
     root.style.setProperty("--highlight-special", lp.special || lp.highlight);
     root.style.setProperty("--highlight-new", lp.special || lp.highlight);
     if (lp.spookyRoulette != null) config.spookyRoulette = !!lp.spookyRoulette;
+    try {
+      window.TOKI_SPOOKY_ROULETTE = !!config.spookyRoulette;
+    } catch (e) {}
     applyHalloweenMark(lp.themeName);
     return true;
   }

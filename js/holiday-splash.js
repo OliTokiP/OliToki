@@ -8,10 +8,11 @@
  * last board is in, then all four fade out together (0.5s).
  *
  * Overlay is a CSS background on #holiday-splash — never an <img>, so it
- * stays out of the food-image decoder. Spooky Roulette is read from the
- * Style tab menu.js already loaded (toki:theme-change / TOKI_SPOOKY_ROULETTE).
- * This file does not fetch Style or /api/health; extra sheet traffic starved
- * the Google load (dead theme, empty plates, blank drinks).
+ * stays out of the food-image decoder. Fade is Web Animations (opacity),
+ * not a class snap. Art preloads before the fade so the SVG is not still
+ * decoding at full opacity. Spooky Roulette is read from last-paint, then
+ * toki:theme-change / TOKI_SPOOKY_ROULETTE — never from its own Style fetch.
+ * Late join after the 1s stagger skips that minute (no four-board pop).
  *
  * Sheet: Style and Theme Settings → Spooky Roulette (column N). Menu Manager
  * shows that row only when Theme is Halloween.
@@ -30,6 +31,7 @@
   var FADE_OUT_MS = 500;
   var BOARD_COUNT = 4;
 
+  var LAST_PAINT_KEY = "tokiLastPaint";
   var started = false;
   var overlay = null;
   var slot = 1;
@@ -44,6 +46,8 @@
   var lastMinuteKey = null;
   var lastSrc = "";
   var preloaded = false;
+  var preloadDone = false;
+  var preloadWaiters = [];
 
   function $(id) {
     return document.getElementById(id);
@@ -203,6 +207,15 @@
     return ids;
   }
 
+  function readLastPaint() {
+    try {
+      var raw = localStorage.getItem(LAST_PAINT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function halloweenOn() {
     var H = root.TOKI_HALLOWEEN;
     if (H && typeof H.urlThemeOverride === "function" && H.isHalloween(H.urlThemeOverride())) {
@@ -212,11 +225,8 @@
       return true;
     }
     if (sheetHalloween) return true;
-    try {
-      var raw = localStorage.getItem("tokiLastPaint");
-      var lp = raw ? JSON.parse(raw) : null;
-      if (H && lp && H.isHalloween(lp.themeName)) return true;
-    } catch (e) {}
+    var lp = readLastPaint();
+    if (H && lp && H.isHalloween(lp.themeName)) return true;
     return false;
   }
 
@@ -227,6 +237,8 @@
     try {
       if (root.TOKI_SPOOKY_ROULETTE) return true;
     } catch (e) {}
+    var lp = readLastPaint();
+    if (lp && lp.spookyRoulette != null) return !!lp.spookyRoulette;
     return false;
   }
 
@@ -236,16 +248,59 @@
     return halloweenOn() && rouletteOn();
   }
 
-  function preloadArt() {
+  function finishPreload() {
+    if (preloadDone) return;
+    preloadDone = true;
+    var q = preloadWaiters;
+    preloadWaiters = [];
+    var i;
+    for (i = 0; i < q.length; i++) {
+      try {
+        q[i]();
+      } catch (e) {}
+    }
+  }
+
+  function preloadArt(done) {
     var H = root.TOKI_HALLOWEEN;
-    if (preloaded || !H || typeof H.splashCount !== "function") return;
+    if (typeof done === "function") {
+      if (preloadDone) {
+        done();
+        return;
+      }
+      preloadWaiters.push(done);
+    }
+    if (preloaded) return;
+    if (!H || typeof H.splashCount !== "function") {
+      finishPreload();
+      return;
+    }
     preloaded = true;
     var n = H.splashCount();
+    var left = n;
     var i;
+    if (left <= 0) {
+      finishPreload();
+      return;
+    }
+    window.setTimeout(function () {
+      if (!preloadDone) finishPreload();
+    }, 2000);
     for (i = 0; i < n; i++) {
-      var img = new Image();
-      img.decoding = "async";
-      img.src = H.splashUrl(i);
+      (function (src) {
+        var img = new Image();
+        var settled = false;
+        function one() {
+          if (preloadDone || settled) return;
+          settled = true;
+          left -= 1;
+          if (left <= 0) finishPreload();
+        }
+        img.decoding = "async";
+        img.onload = img.onerror = one;
+        img.src = src;
+        if (img.complete) one();
+      })(H.splashUrl(i));
     }
   }
 
@@ -277,10 +332,63 @@
     hideTimer = 0;
   }
 
+  function cancelFade() {
+    if (!overlay) return;
+    if (overlay.getAnimations) {
+      overlay.getAnimations().forEach(function (a) {
+        try {
+          a.cancel();
+        } catch (e) {}
+      });
+    }
+    overlay.style.transition = "none";
+  }
+
+  function currentOpacity() {
+    if (!overlay) return 0;
+    var o = parseFloat(window.getComputedStyle(overlay).opacity);
+    return isFinite(o) ? o : 0;
+  }
+
+  function fadeOpacity(to, ms, done) {
+    if (!overlay) {
+      if (done) done();
+      return;
+    }
+    cancelFade();
+    var from = currentOpacity();
+    var dur = ms > 0 ? ms : 0;
+    overlay.style.opacity = String(from);
+    if (dur <= 0 || from === to) {
+      overlay.style.opacity = String(to);
+      if (done) done();
+      return;
+    }
+    if (typeof overlay.animate === "function") {
+      var anim = overlay.animate(
+        [{ opacity: from }, { opacity: to }],
+        { duration: dur, easing: "linear", fill: "forwards" }
+      );
+      anim.onfinish = function () {
+        overlay.style.opacity = String(to);
+        if (done) done();
+      };
+      return;
+    }
+    overlay.style.transition = "opacity " + dur + "ms linear";
+    void overlay.offsetWidth;
+    overlay.style.opacity = String(to);
+    window.setTimeout(function () {
+      if (done) done();
+    }, dur);
+  }
+
   function hideOverlay() {
     clearPlayTimers();
     playing = false;
     if (!overlay) return;
+    cancelFade();
+    overlay.style.opacity = "0";
     overlay.classList.remove("is-in");
     overlay.classList.remove("is-out");
     overlay.classList.remove("is-hold");
@@ -324,20 +432,56 @@
     ensureOverlay();
     if (!overlay) return;
     slot = boardSlot();
-    if (mode !== "now" && mode !== "hold" && playing && lastMinuteKey === key) {
+    if (mode !== "now" && mode !== "hold" && lastMinuteKey === key) {
       return;
     }
-    preloadArt();
+    preloadArt(function () {
+      runPlay(key, mode || "tick");
+    });
+  }
+
+  function runPlay(key, mode) {
+    if (!enabled()) {
+      hideOverlay();
+      return;
+    }
+    if (mode !== "now" && mode !== "hold" && lastMinuteKey === key) {
+      return;
+    }
+    ensureOverlay();
+    if (!overlay) return;
+    slot = boardSlot();
+    var elapsed = mode === "now" ? 0 : msIntoMinute(nowDate());
+    var fadeStart = (slot - 1) * STAGGER_MS;
+    var staggerEnd = BOARD_COUNT * STAGGER_MS;
+    var fadeOutAt = staggerEnd + HOLD_MS;
+    if (mode !== "now" && mode !== "hold") {
+      if (elapsed >= fadeOutAt + FADE_OUT_MS) {
+        lastMinuteKey = key;
+        hideOverlay();
+        return;
+      }
+      // First look at this minute after the whole stagger is over: skip
+      // instead of snapping all four boards on at full opacity.
+      if (elapsed >= staggerEnd) {
+        lastMinuteKey = key;
+        return;
+      }
+    }
     var idx = pickIndex(key);
     var label = applyArt(idx);
     lastMinuteKey = key;
     playing = true;
+    clearPlayTimers();
+    cancelFade();
     overlay.hidden = false;
     overlay.setAttribute("aria-hidden", "false");
     overlay.classList.remove("is-in");
     overlay.classList.remove("is-out");
     overlay.classList.remove("is-hold");
     overlay.classList.add("is-visible");
+    overlay.style.opacity = "0";
+    void overlay.offsetWidth;
     console.info(
       "[TokiMenu splash] board",
       slot,
@@ -349,51 +493,55 @@
     if (mode === "hold") {
       overlay.classList.add("is-hold");
       overlay.classList.add("is-in");
+      overlay.style.opacity = "1";
       return;
     }
-    var elapsed = mode === "now" ? 0 : msIntoMinute(nowDate());
-    var fadeStart = (slot - 1) * STAGGER_MS;
-    var fadeOutAt = BOARD_COUNT * STAGGER_MS + HOLD_MS;
-    if (elapsed >= fadeOutAt + FADE_OUT_MS) {
-      hideOverlay();
-      return;
-    }
-    clearPlayTimers();
-    if (elapsed >= fadeStart + FADE_IN_MS) {
-      overlay.classList.add("is-hold");
-      overlay.classList.add("is-in");
-    } else {
-      var delay = Math.max(0, fadeStart - elapsed);
-      fadeInTimer = window.setTimeout(function () {
-        fadeInTimer = 0;
-        overlay.classList.remove("is-hold");
-        overlay.classList.remove("is-out");
-        window.requestAnimationFrame(function () {
-          if (!playing || !overlay) return;
-          overlay.classList.add("is-in");
-        });
-      }, delay);
-    }
-    if (elapsed >= fadeOutAt) {
+    function startFadeIn() {
+      if (!playing || !overlay || lastMinuteKey !== key) return;
+      fadeInTimer = 0;
       overlay.classList.remove("is-hold");
-      overlay.classList.remove("is-in");
-      overlay.classList.add("is-out");
-      hideTimer = window.setTimeout(function () {
-        hideTimer = 0;
-        hideOverlay();
-      }, FADE_OUT_MS + 20);
-      return;
+      overlay.classList.remove("is-out");
+      overlay.classList.add("is-in");
+      fadeOpacity(1, FADE_IN_MS);
     }
-    fadeOutTimer = window.setTimeout(function () {
+    function startFadeOut() {
+      if (!playing || !overlay || lastMinuteKey !== key) return;
       fadeOutTimer = 0;
       overlay.classList.remove("is-hold");
       overlay.classList.remove("is-in");
       overlay.classList.add("is-out");
-      hideTimer = window.setTimeout(function () {
-        hideTimer = 0;
+      fadeOpacity(0, FADE_OUT_MS, function () {
+        if (lastMinuteKey !== key) return;
         hideOverlay();
-      }, FADE_OUT_MS + 20);
-    }, fadeOutAt - elapsed);
+      });
+    }
+    if (elapsed >= fadeOutAt) {
+      overlay.style.opacity = "1";
+      overlay.classList.add("is-in");
+      startFadeOut();
+      return;
+    }
+    if (elapsed >= fadeStart + FADE_IN_MS) {
+      overlay.classList.add("is-hold");
+      overlay.classList.add("is-in");
+      overlay.style.opacity = "1";
+    } else if (elapsed >= fadeStart) {
+      var already = (elapsed - fadeStart) / FADE_IN_MS;
+      overlay.style.opacity = String(Math.max(0, Math.min(1, already)));
+      overlay.classList.add("is-in");
+      fadeOpacity(1, fadeStart + FADE_IN_MS - elapsed);
+    } else {
+      overlay.style.opacity = "0";
+      var wait = fadeStart - elapsed;
+      if (wait <= 16) {
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(startFadeIn);
+        });
+      } else {
+        fadeInTimer = window.setTimeout(startFadeIn, wait);
+      }
+    }
+    fadeOutTimer = window.setTimeout(startFadeOut, fadeOutAt - elapsed);
   }
 
   function tickSplash() {
@@ -406,9 +554,7 @@
     var key = minuteKey(now);
     var elapsed = msIntoMinute(now);
     if (elapsed <= splashWindowMs()) {
-      if (key !== lastMinuteKey || (!playing && elapsed < BOARD_COUNT * STAGGER_MS + HOLD_MS)) {
-        play(key, "tick");
-      }
+      if (key !== lastMinuteKey) play(key, "tick");
     } else if (playing && elapsed > splashWindowMs()) {
       hideOverlay();
     }
@@ -494,6 +640,23 @@
       return slot;
     },
     enabled: enabled,
+    artReady: function () {
+      return preloadDone;
+    },
+    snapshot: function () {
+      var el = overlay || $("holiday-splash");
+      var cs = el ? window.getComputedStyle(el) : null;
+      var op = cs ? parseFloat(cs.opacity) : 0;
+      return {
+        slot: slot,
+        enabled: enabled(),
+        playing: playing,
+        label: el ? el.getAttribute("data-splash") || "" : "",
+        opacity: isFinite(op) ? op : 0,
+        hidden: !el || !!el.hidden,
+        src: lastSrc,
+      };
+    },
   };
 
   if ($("stage")) {
