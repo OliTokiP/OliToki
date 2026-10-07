@@ -4424,7 +4424,7 @@
     showTooltip({
       title: isYes ? "Soft refresh disabled." : "Soft refresh enabled.",
       body: isYes
-        ? "TVs must be restarted for changes to take effect."
+        ? "Boards keep the last catalog until someone refreshes the TV. This toggle is saved now."
         : "Menus will check for updates on a fixed timer - you don't have to do a thing.",
     });
   }
@@ -4992,12 +4992,16 @@
       state.pendingLeave = null;
       confirmChoice("yes", true);
       if (id === "no" && boardDirty()) maybeAutoSave(true);
+    } else if (pickKey === "requireRestart") {
+      showRequireRestartTooltip(id);
+      // Same as Confirm save: the tooltip talks as if the flag is live, so
+      // write it now. A Manager refresh must not resurrect No from a 429.
+      clearItemOrderSaveTimer();
+      state.pendingLeave = null;
+      confirmChoice("yes", true);
     } else if (confirmSaveOff()) {
       state.pendingLeave = null;
       maybeAutoSave(true);
-    }
-    if (pickKey === "requireRestart") {
-      showRequireRestartTooltip(id);
     }
     if (pickKey === "limitHeavyFilters" && id === "yes") {
       showFilterCapTooltip();

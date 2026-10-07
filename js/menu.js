@@ -6104,18 +6104,18 @@
 
     if (isDrinks) {
       // Frame stripes: raw Style & Theme hex — never Pattern Bake.
-      root.style.setProperty(
-        "--stripe-1",
+      const stripe1 =
         normalizeHex(config.stripeColor1) ||
-          normalizeHex(config.patternColor1) ||
-          main
-      );
-      root.style.setProperty(
-        "--stripe-2",
+        normalizeHex(config.patternColor1) ||
+        main;
+      const stripe2 =
         normalizeHex(config.stripeColor2) ||
-          normalizeHex(config.patternColor2) ||
-          secondary
-      );
+        normalizeHex(config.patternColor2) ||
+        secondary;
+      root.style.setProperty("--stripe-1", stripe1);
+      root.style.setProperty("--stripe-2", stripe2);
+      applyStripeGeometry(root);
+      paintStripeTile(els.stripesTrack, stripe1, stripe2);
       const showStripes = !!config.includeStripes;
       if (els.stripes) {
         els.stripes.hidden = !showStripes;
@@ -6131,6 +6131,72 @@
     }
     // Keep BG pattern (if active) in sync with shared bgScrollSpeed
     updateBgPatternAnimation();
+  }
+
+  const STRIPE_ANGLE_DEG = -51.5;
+  const STRIPE_PERIOD_PX = 186;
+  const STRIPE_WIDTH_PX = 93;
+
+  function stripeTileMetrics() {
+    const rad = (Math.abs(STRIPE_ANGLE_DEG) * Math.PI) / 180;
+    const p = STRIPE_PERIOD_PX;
+    const s = Math.sin(rad);
+    const c = Math.cos(rad);
+    return {
+      tileW: p / s,
+      tileH: p / c,
+      scrollX: p * s,
+      scrollY: p * c,
+    };
+  }
+
+  function applyStripeGeometry(rootEl) {
+    const root = rootEl || document.documentElement;
+    const m = stripeTileMetrics();
+    root.style.setProperty("--stripe-tile-w", m.tileW.toFixed(3) + "px");
+    root.style.setProperty("--stripe-tile-h", m.tileH.toFixed(3) + "px");
+    root.style.setProperty("--stripe-scroll-x", m.scrollX.toFixed(3) + "px");
+    root.style.setProperty("--stripe-scroll-y", m.scrollY.toFixed(3) + "px");
+  }
+
+  function paintStripeTile(el, c1, c2) {
+    if (!el) return;
+    const a = STRIPE_ANGLE_DEG;
+    const w = STRIPE_WIDTH_PX;
+    const p = STRIPE_PERIOD_PX;
+    const m = stripeTileMetrics();
+    const fill1 = normalizeHex(c1) || String(c1 || "#000000");
+    const fill2 = normalizeHex(c2) || String(c2 || "#ffffff");
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+      m.tileW.toFixed(3) +
+      '" height="' +
+      m.tileH.toFixed(3) +
+      '" viewBox="0 0 ' +
+      m.tileW.toFixed(3) +
+      " " +
+      m.tileH.toFixed(3) +
+      '"><defs><pattern id="s" patternUnits="userSpaceOnUse" width="' +
+      p +
+      '" height="' +
+      p +
+      '" patternTransform="rotate(' +
+      a +
+      ')"><rect x="-400" y="0" width="800" height="' +
+      w +
+      '" fill="' +
+      fill1 +
+      '"/><rect x="-400" y="' +
+      w +
+      '" width="800" height="' +
+      w +
+      '" fill="' +
+      fill2 +
+      '"/></pattern></defs><rect width="100%" height="100%" fill="url(#s)"/></svg>';
+    el.style.backgroundImage =
+      'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+    el.style.backgroundSize =
+      m.tileW.toFixed(3) + "px " + m.tileH.toFixed(3) + "px";
   }
 
   function updateStripeAnimation() {
@@ -6223,6 +6289,8 @@
       const c2 = patternBakeHex(config.patternColor2, secondary);
       root.style.setProperty("--bg-pattern-1", c1);
       root.style.setProperty("--bg-pattern-2", c2);
+      applyStripeGeometry(root);
+      paintStripeTile(track, c1, c2);
       updateBgPatternAnimation(track);
     } else {
       hidePattern();

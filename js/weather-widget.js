@@ -2,9 +2,13 @@
  * TokiMenu — Board 4 Weather Widget (photo-side HUD).
  *
  * Mockup: vault Mockups/Weather Widget Mockup.pdf @ 1920×1080.
- * Live clock + hours in America/New_York. Hours come from OliToki Menu
- * Settings → Store Hours (close past 24:00 stays on that service day until
- * that close). Current °F + animated amCharts SVG from Open-Meteo.
+ * Live clock + hours in America/New_York. The clock is a headless Eastern
+ * second tick on every board (toki:clock-tick); the HUD, Open-Meteo, and
+ * Store Hours fetch run only when #weather-widget is in the page (Board 4).
+ * Hours come from OliToki Menu Settings → Store Hours (close past 24:00
+ * stays on that service day until that close). Current °F + animated
+ * amCharts SVG from Open-Meteo. Closed Status may hide the HUD; the clock
+ * keeps ticking so Holiday Splash stays on the same Eastern marks.
  *
  * Attribution: weather data © Open-Meteo (https://open-meteo.com).
  * Icons © amCharts, CC BY 4.0 (assets/amcharts_weather_icons_1.0.0/LICENSE).
@@ -40,7 +44,9 @@
   var lastTimeKey = "";
   var lastIcon = "";
   var svgCache = {};
-  var started = false;
+  var clockStarted = false;
+  var hudStarted = false;
+  var visBound = false;
   var frozenNow = null;
   var hoursSchedule = defaultHours();
 
@@ -71,7 +77,7 @@
   function readFrozenNow() {
     try {
       var q = new URLSearchParams(location.search);
-      var raw = q.get("wxNow") || q.get("hoursAt");
+      var raw = q.get("wxNow") || q.get("hoursAt") || q.get("splashAt");
       if (!raw) return null;
       var d = new Date(raw);
       if (isNaN(d.getTime())) return null;
@@ -350,10 +356,39 @@
     if (els.time) els.time.textContent = t;
   }
 
+  function emitClockTick() {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("toki:clock-tick", {
+          detail: { at: nowDate().getTime() },
+        })
+      );
+    } catch (e) {}
+  }
+
   function tickClock() {
+    emitClockTick();
+    if (!hudStarted) return;
     var p = partsNow();
     paintDate(p);
     paintTime(p);
+  }
+
+  function msUntilNextSecond(d) {
+    var wait = 1000 - d.getMilliseconds();
+    if (wait < 16) wait += 1000;
+    return wait;
+  }
+
+  function scheduleClock() {
+    if (clockTimer) window.clearTimeout(clockTimer);
+    clockTimer = 0;
+    tickClock();
+    if (frozenNow) return;
+    clockTimer = window.setTimeout(function () {
+      clockTimer = 0;
+      scheduleClock();
+    }, msUntilNextSecond(nowDate()));
   }
 
   function iconName(code, isDay) {
@@ -502,47 +537,72 @@
     return !!(els.root && els.date && els.time);
   }
 
-  function start() {
-    if (started) return;
+  function onVis() {
+    if (document.hidden) return;
+    tickClock();
+    if (!hudStarted) return;
+    fetchHours().then(function () {
+      tickClock();
+    });
+    fetchWeather();
+  }
+
+  function startClock() {
+    if (clockStarted) return;
+    clockStarted = true;
+    if (!frozenNow) frozenNow = readFrozenNow();
+    if (!visBound) {
+      visBound = true;
+      document.addEventListener("visibilitychange", onVis);
+    }
+    scheduleClock();
+  }
+
+  function startHud() {
+    if (hudStarted) return;
     if (!cacheEls()) return;
-    started = true;
-    frozenNow = readFrozenNow();
+    hudStarted = true;
+    if (!frozenNow) frozenNow = readFrozenNow();
     els.root.hidden = false;
     tickClock();
     fetchHours().then(function () {
       tickClock();
     });
     fetchWeather();
-    clockTimer = window.setInterval(tickClock, CLOCK_MS);
+    if (weatherTimer) window.clearInterval(weatherTimer);
+    if (hoursTimer) window.clearInterval(hoursTimer);
     weatherTimer = window.setInterval(fetchWeather, WEATHER_MS);
     hoursTimer = window.setInterval(function () {
       fetchHours().then(function () {
         tickClock();
       });
     }, HOURS_MS);
-    document.addEventListener("visibilitychange", function () {
-      if (document.hidden) return;
-      tickClock();
-      fetchHours().then(function () {
-        tickClock();
-      });
-      fetchWeather();
-    });
+  }
+
+  function start() {
+    startClock();
+    startHud();
+  }
+
+  function stopHud() {
+    if (weatherTimer) window.clearInterval(weatherTimer);
+    if (hoursTimer) window.clearInterval(hoursTimer);
+    weatherTimer = 0;
+    hoursTimer = 0;
+    hudStarted = false;
+    if (els.root) els.root.hidden = true;
   }
 
   function stop() {
-    if (clockTimer) window.clearInterval(clockTimer);
-    if (weatherTimer) window.clearInterval(weatherTimer);
-    if (hoursTimer) window.clearInterval(hoursTimer);
-    clockTimer = 0;
-    weatherTimer = 0;
-    hoursTimer = 0;
-    started = false;
+    stopHud();
   }
 
   root.TOKI_WEATHER_WIDGET = {
     start: start,
     stop: stop,
+    startClock: startClock,
+    startHud: startHud,
+    stopHud: stopHud,
     refresh: fetchWeather,
     refreshHours: fetchHours,
     activeUntilFor: function (date) {
@@ -554,9 +614,10 @@
     },
   };
 
+  startClock();
   if (document.getElementById("weather-widget")) {
-    start();
+    startHud();
   } else if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start);
+    document.addEventListener("DOMContentLoaded", startHud);
   }
 })(window);

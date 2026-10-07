@@ -7,12 +7,20 @@
  * Fade-in staggers left → right (0.25s each, 1s total), holds 7s after the
  * last board is in, then all four fade out together (0.5s).
  *
+ * The trigger is the weather clock (toki:clock-tick), an Eastern-second
+ * pulse shared by every board — HUD on drinks, headless on 1–3. Minute
+ * key is still the shuffle seed so four TVs pick the same four costumes.
+ *
  * Overlay is a CSS background on #holiday-splash — never an <img>, so it
  * stays out of the food-image decoder. Fade is Web Animations (opacity),
  * not a class snap. Art preloads before the fade so the SVG is not still
- * decoding at full opacity. Spooky Roulette is read from last-paint, then
- * toki:theme-change / TOKI_SPOOKY_ROULETTE — never from its own Style fetch.
- * Late join after the 1s stagger skips that minute (no four-board pop).
+ * decoding at full opacity. Costume art keeps its own fills; #splash-bg
+ * and #splash-caption take that board’s theme pair:
+ *   1 Highlight / Main, 2 Secondary / Main, 3 Special / Main, 4 Main / Secondary.
+ * Spooky Roulette is read from last-paint, then toki:theme-change /
+ * TOKI_SPOOKY_ROULETTE — never from its own Style fetch.
+ * A board that wakes during the window joins mid-stagger; past fade-out
+ * it waits for the next minute.
  *
  * Sheet: Style and Theme Settings → Spooky Roulette (column N). Menu Manager
  * shows that row only when Theme is Halloween.
@@ -45,9 +53,16 @@
   var hideTimer = 0;
   var lastMinuteKey = null;
   var lastSrc = "";
+  var lastBlob = "";
+  var svgTextCache = {};
   var preloaded = false;
   var preloadDone = false;
   var preloadWaiters = [];
+
+  var FALLBACK_MAIN = "#1A0A24";
+  var FALLBACK_SECONDARY = "#F5E6D3";
+  var FALLBACK_HIGHLIGHT = "#FF6B00";
+  var FALLBACK_SPECIAL = "#9ACD32";
 
   function $(id) {
     return document.getElementById(id);
@@ -165,10 +180,10 @@
     return p.second * 1000 + (d.getMilliseconds() % 1000);
   }
 
-  function msUntilNextMinute(d) {
-    var rem = 60000 - msIntoMinute(d);
-    if (rem < 50) rem += 60000;
-    return rem;
+  function msUntilNextSecond(d) {
+    var wait = 1000 - d.getMilliseconds();
+    if (wait < 16) wait += 1000;
+    return wait;
   }
 
   function splashWindowMs() {
@@ -213,6 +228,130 @@
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
+    }
+  }
+
+  function cssColor(name, fallback) {
+    try {
+      var v = window
+        .getComputedStyle(document.documentElement)
+        .getPropertyValue(name);
+      v = String(v || "").trim();
+      if (v) return v;
+    } catch (e) {}
+    return fallback;
+  }
+
+  function themeColors() {
+    var lp = readLastPaint() || {};
+    return {
+      main: cssColor("--main-color", lp.main || FALLBACK_MAIN),
+      secondary: cssColor(
+        "--secondary-color",
+        lp.secondary || FALLBACK_SECONDARY
+      ),
+      highlight: cssColor("--highlight", lp.highlight || FALLBACK_HIGHLIGHT),
+      special: cssColor(
+        "--highlight-special",
+        lp.special || FALLBACK_SPECIAL
+      ),
+    };
+  }
+
+  function boardTint(s) {
+    var c = themeColors();
+    s = Number(s) || slot;
+    if (s === 2) return { bg: c.secondary, caption: c.main };
+    if (s === 3) return { bg: c.special, caption: c.main };
+    if (s === 4) return { bg: c.main, caption: c.secondary };
+    return { bg: c.highlight, caption: c.main };
+  }
+
+  function svgCacheKey(src) {
+    return String(src || "").split("?")[0];
+  }
+
+  function loadSvgText(src) {
+    var key = svgCacheKey(src);
+    if (svgTextCache[key]) {
+      return Promise.resolve(svgTextCache[key]);
+    }
+    return fetch(src, { cache: "force-cache" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("splash art " + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        svgTextCache[key] = text;
+        return text;
+      });
+  }
+
+  function tintSvg(text, bg, caption) {
+    var doc;
+    try {
+      doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    } catch (e) {
+      return text;
+    }
+    var svg = doc.documentElement;
+    if (!svg || String(svg.nodeName).toLowerCase() !== "svg") return text;
+    var bgEl =
+      doc.getElementById("splash-bg") || svg.querySelector("#splash-bg");
+    if (bgEl) {
+      bgEl.setAttribute("fill", bg);
+      bgEl.style.fill = bg;
+      bgEl.removeAttribute("class");
+    }
+    var cap =
+      doc.getElementById("splash-caption") ||
+      svg.querySelector("#splash-caption");
+    if (cap) {
+      cap.setAttribute("fill", caption);
+      cap.style.fill = caption;
+      var nodes = cap.querySelectorAll(
+        "path, circle, ellipse, polygon, polyline, text, tspan"
+      );
+      var i;
+      for (i = 0; i < nodes.length; i++) {
+        nodes[i].setAttribute("fill", caption);
+        nodes[i].style.fill = caption;
+        nodes[i].removeAttribute("class");
+      }
+    }
+    var defs = svg.querySelector("defs");
+    if (!defs) {
+      defs = doc.createElementNS("http://www.w3.org/2000/svg", "defs");
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    var style = doc.createElementNS("http://www.w3.org/2000/svg", "style");
+    style.textContent =
+      "#splash-bg{fill:" +
+      bg +
+      " !important;}" +
+      "#splash-caption path,#splash-caption circle,#splash-caption ellipse," +
+      "#splash-caption polygon,#splash-caption polyline,#splash-caption text{" +
+      "fill:" +
+      caption +
+      " !important;}";
+    defs.appendChild(style);
+    var out = new XMLSerializer().serializeToString(svg);
+    if (out.indexOf("xmlns") === -1) {
+      out = out.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    return out;
+  }
+
+  function blobUrlFor(text) {
+    return URL.createObjectURL(new Blob([text], { type: "image/svg+xml" }));
+  }
+
+  function revokeBlob() {
+    if (lastBlob) {
+      try {
+        URL.revokeObjectURL(lastBlob);
+      } catch (e) {}
+      lastBlob = "";
     }
   }
 
@@ -288,7 +427,6 @@
     }, 2000);
     for (i = 0; i < n; i++) {
       (function (src) {
-        var img = new Image();
         var settled = false;
         function one() {
           if (preloadDone || settled) return;
@@ -296,10 +434,7 @@
           left -= 1;
           if (left <= 0) finishPreload();
         }
-        img.decoding = "async";
-        img.onload = img.onerror = one;
-        img.src = src;
-        if (img.complete) one();
+        loadSvgText(src).then(one).catch(one);
       })(H.splashUrl(i));
     }
   }
@@ -397,6 +532,7 @@
     overlay.setAttribute("aria-hidden", "true");
     overlay.style.backgroundImage = "";
     lastSrc = "";
+    revokeBlob();
   }
 
   function pickIndex(key) {
@@ -413,12 +549,31 @@
     var H = root.TOKI_HALLOWEEN;
     var src = H.splashUrl(idx);
     var label = H.splashLabel ? H.splashLabel(idx) : String(idx);
-    if (src !== lastSrc) {
+    var tint = boardTint(slot);
+    var key = src + "|" + tint.bg + "|" + tint.caption;
+    var text = svgTextCache[svgCacheKey(src)];
+    if (text && key !== lastSrc) {
+      var painted = tintSvg(text, tint.bg, tint.caption);
+      revokeBlob();
+      lastBlob = blobUrlFor(painted);
+      overlay.style.backgroundImage = "url(" + JSON.stringify(lastBlob) + ")";
+      lastSrc = key;
+    } else if (!text) {
       overlay.style.backgroundImage = "url(" + JSON.stringify(src) + ")";
       lastSrc = src;
+      loadSvgText(src)
+        .then(function () {
+          if (!overlay) return;
+          if (overlay.getAttribute("data-splash") !== label) return;
+          lastSrc = "";
+          applyArt(idx);
+        })
+        .catch(function () {});
     }
     overlay.setAttribute("aria-label", "Holiday splash " + label);
     overlay.setAttribute("data-splash", label);
+    overlay.setAttribute("data-splash-bg", tint.bg);
+    overlay.setAttribute("data-splash-caption", tint.caption);
     return label;
   }
 
@@ -459,12 +614,6 @@
       if (elapsed >= fadeOutAt + FADE_OUT_MS) {
         lastMinuteKey = key;
         hideOverlay();
-        return;
-      }
-      // First look at this minute after the whole stagger is over: skip
-      // instead of snapping all four boards on at full opacity.
-      if (elapsed >= staggerEnd) {
-        lastMinuteKey = key;
         return;
       }
     }
@@ -560,23 +709,42 @@
     }
   }
 
-  function arm() {
+  function onClockTick() {
+    tickSplash();
+  }
+
+  function fallbackClock() {
     if (armTimer) window.clearTimeout(armTimer);
     armTimer = 0;
-    if (!enabled()) return;
-    if (readSplashMode() === "hold") return;
     tickSplash();
     if (frozenNow) return;
     armTimer = window.setTimeout(function () {
       armTimer = 0;
-      tickSplash();
-      arm();
-    }, msUntilNextMinute(nowDate()));
+      fallbackClock();
+    }, msUntilNextSecond(nowDate()));
+  }
+
+  function arm() {
+    if (!enabled()) return;
+    if (readSplashMode() === "hold") return;
+    tickSplash();
+    if (frozenNow) return;
+    window.removeEventListener("toki:clock-tick", onClockTick);
+    window.addEventListener("toki:clock-tick", onClockTick);
+    var wx = root.TOKI_WEATHER_WIDGET;
+    if (wx && typeof wx.startClock === "function") {
+      wx.startClock();
+      if (armTimer) window.clearTimeout(armTimer);
+      armTimer = 0;
+      return;
+    }
+    fallbackClock();
   }
 
   function syncEnabled() {
     if (!enabled()) {
       hideOverlay();
+      window.removeEventListener("toki:clock-tick", onClockTick);
       if (armTimer) window.clearTimeout(armTimer);
       armTimer = 0;
       return;
@@ -587,8 +755,7 @@
       play(minuteKey(nowDate()), "hold");
       return;
     }
-    if (!armTimer) arm();
-    else tickSplash();
+    arm();
   }
 
   function onThemeChange(ev) {
@@ -598,6 +765,10 @@
     if (d && d.halloween != null) sheetHalloween = !!d.halloween;
     if (d && d.spookyRoulette != null) sheetRoulette = !!d.spookyRoulette;
     syncEnabled();
+    if (playing && overlay && !overlay.hidden && lastMinuteKey) {
+      lastSrc = "";
+      applyArt(pickIndex(lastMinuteKey));
+    }
   }
 
   function start() {
@@ -624,6 +795,7 @@
   }
 
   function stop() {
+    window.removeEventListener("toki:clock-tick", onClockTick);
     if (armTimer) window.clearTimeout(armTimer);
     armTimer = 0;
     hideOverlay();

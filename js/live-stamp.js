@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "384bf15",
-  "hashFull": "384bf150128ddf71a0b6418df027445bafc79d27",
-  "subject": "QA: 2026-10-07 Holiday Splash Screens (pass 4)"
+  "hash": "6753e8b",
+  "hashFull": "6753e8b03898189355ec1f9322a14115154e42a4",
+  "subject": "Holiday splash: Eastern clock, theme board tints, lean stripe tile"
 };

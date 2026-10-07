@@ -179,6 +179,19 @@ _settings_cache: dict = {"at": 0.0, "data": None}
 # every time or the shared service account burns the 60 reads/min quota.
 SETTINGS_TTL = 30.0
 _GEXEC_PATCHED = False
+_SHEETS_NO_RETRY = threading.local()
+
+
+class _sheets_no_retry:
+    """Settings reads must fail fast on 429 and serve cache — 7 retries hang Manager."""
+
+    def __enter__(self):
+        _SHEETS_NO_RETRY.on = True
+        return self
+
+    def __exit__(self, *exc):
+        _SHEETS_NO_RETRY.on = False
+        return False
 
 
 def _patch_sheets_retry() -> None:
@@ -195,6 +208,8 @@ def _patch_sheets_retry() -> None:
     orig = HttpRequest.execute
 
     def execute(self, *args, **kwargs):
+        if getattr(_SHEETS_NO_RETRY, "on", False):
+            return orig(self, *args, **kwargs)
         delay = 0.75
         for i in range(7):
             try:
@@ -1240,20 +1255,30 @@ class SheetsBackend:
             data = parse_settings_rows([], self.fallback_sheet_id)
             data["settingsSheetId"] = ""
             return data
-        rows = self._settings_rows()
-        data = parse_settings_rows(rows, self.fallback_sheet_id)
-        data["settingsSheetId"] = self.settings_sheet_id
         try:
-            dbg = parse_debug_menu_rows(self._debugger_rows())
-            data["debugFeatures"] = dbg.get("debugFeatures") or {}
+            with _sheets_no_retry():
+                rows = self._settings_rows()
+            data = parse_settings_rows(rows, self.fallback_sheet_id)
+            data["settingsSheetId"] = self.settings_sheet_id
+            try:
+                with _sheets_no_retry():
+                    dbg = parse_debug_menu_rows(self._debugger_rows())
+                data["debugFeatures"] = dbg.get("debugFeatures") or {}
+            except Exception as e:
+                _log(f"Debugger tab read failed ({e})")
+                data.setdefault("debugFeatures", {})
+            data.setdefault("debugMode", False)
+            with _settings_lock:
+                _settings_cache["at"] = time.time()
+                _settings_cache["data"] = data
+            return dict(data)
         except Exception as e:
-            _log(f"Debugger tab read failed ({e})")
-            data.setdefault("debugFeatures", {})
-        data.setdefault("debugMode", False)
-        with _settings_lock:
-            _settings_cache["at"] = time.time()
-            _settings_cache["data"] = data
-        return dict(data)
+            with _settings_lock:
+                hit = _settings_cache.get("data")
+            if isinstance(hit, dict) and hit:
+                _log(f"settings: serve cache after read fail ({e})")
+                return dict(hit)
+            raise
 
     def write_settings(self, body: dict) -> dict:
         """Write System Settings into the OliToki Menu Settings workbook."""
@@ -1405,22 +1430,72 @@ class SheetsBackend:
                     )
                 .execute()
             )
-        with _settings_lock:
-            _settings_cache["at"] = 0
-            _settings_cache["data"] = None
+        wrote = {k: v[1] for k, v in values.items()}
+        self._patch_settings_cache_after_write(want_raw, wrote)
         _log(
             f"settings write {sid} row={data_idx + 1} "
-            f"{ {k: v[1] for k, v in values.items()} } "
+            f"{wrote} "
             f"cells={updated.get('totalUpdatedCells')} ({time.time() - t0:.2f}s)"
         )
         return {
             "ok": True,
             "settingsSheetId": sid,
-            "wrote": {k: v[1] for k, v in values.items()},
+            "wrote": wrote,
             "wroteRow": data_idx + 1,
             "sourceId": settings_source_id(want_raw),
             "skippedDataSource": bool("dataSource" in body),
         }
+
+    def _patch_settings_cache_after_write(self, want_raw: str, wrote: dict) -> None:
+        """Keep /api/settings usable after a write when Google reads are 429."""
+        yn_keys = {
+            "requirerestart": "requireRestart",
+            "limitheavyfilters": "limitHeavyFilters",
+            "confirmsave": "confirmSave",
+            "debugmode": "debugMode",
+        }
+        want_id = settings_source_id(want_raw)
+        with _settings_lock:
+            hit = _settings_cache.get("data")
+            if not isinstance(hit, dict) or not hit:
+                _settings_cache["at"] = 0
+                _settings_cache["data"] = None
+                return
+            patched = dict(hit)
+            rows = list(patched.get("catalogSettings") or [])
+            row = None
+            for i, r in enumerate(rows):
+                if not isinstance(r, dict):
+                    continue
+                if r.get("id") == want_id or settings_source_id(r.get("name")) == want_id:
+                    row = dict(r)
+                    rows[i] = row
+                    break
+            live_id = settings_source_id(patched.get("dataSource") or "restaurant")
+            for fold, field in yn_keys.items():
+                if fold not in wrote:
+                    continue
+                flag = str(wrote[fold]).strip().upper() in ("TRUE", "YES", "1")
+                if row is not None:
+                    row[field] = flag
+                if want_id == live_id:
+                    patched[field] = flag
+            if "systemfont" in wrote:
+                font = "poppins" if "poppin" in str(wrote["systemfont"]).lower() else "roboto"
+                if row is not None:
+                    row["systemFont"] = font
+                if want_id == live_id:
+                    patched["systemFont"] = font
+            if "refreshtimer" in wrote:
+                timer = clamp_refresh_timer(str(wrote["refreshtimer"]))
+                if row is not None:
+                    row["refreshTimer"] = timer
+                if want_id == live_id:
+                    patched["refreshTimer"] = timer
+            if row is not None:
+                patched["catalogSettings"] = rows
+            _settings_cache["data"] = patched
+            _settings_cache["at"] = time.time()
 
     def _find_settings_data_idx(
         self, rows: list, header_idx: int, catalog_idx: int | None, want: str

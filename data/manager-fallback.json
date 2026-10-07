@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T17:27:01Z",
+  "updatedAt": "2026-10-07T17:34:58Z",
   "active": "restaurant",
   "sources": {
     "source": {
@@ -34,9 +34,9 @@
         "encoreSpot": "highlight",
         "encoreBg": "secondary",
         "presentationSpeed": 3,
-        "spookyRoulette": "no",
+        "spookyRoulette": "yes",
         "dataSource": "restaurant",
-        "requireRestart": "no",
+        "requireRestart": "yes",
         "refreshTimer": "30 seconds",
         "systemFont": "poppins",
         "limitHeavyFilters": "no",
@@ -232,75 +232,6 @@
         }
       ],
       "fieldValidations": {
-        "Theme Selector (='Style and Theme'!$A$6:$A)": {
-          "type": "ONE_OF_RANGE",
-          "values": [
-            "='Style and Theme'!$A$6:$A"
-          ],
-          "strict": true
-        },
-        "BG Color (='Style and Theme'!$H$7:$H$11)": {
-          "type": "ONE_OF_RANGE",
-          "values": [
-            "='Style and Theme'!$H$7:$H$11"
-          ],
-          "strict": true,
-          "inputMessage": "Click and enter a value from range"
-        },
-        "BG Pattern": {
-          "type": "ONE_OF_RANGE",
-          "values": [
-            "='Style and Theme'!$J$6:$J"
-          ],
-          "strict": true
-        },
-        "BG Wallpaper (='Style and Theme'!$F$7:$F)": {
-          "type": "ONE_OF_RANGE",
-          "values": [
-            "='Style and Theme'!$F$6:$F"
-          ],
-          "strict": true
-        },
-        "BG Blur": {
-          "type": "NUMBER_BETWEEN",
-          "values": [
-            "0",
-            "1"
-          ],
-          "strict": true
-        },
-        "BG Blend Mode": {
-          "type": "ONE_OF_RANGE",
-          "values": [
-            "='Style and Theme'!$G$6:$G"
-          ],
-          "strict": true
-        },
-        "Encore Spotlight Type": {
-          "type": "ONE_OF_LIST",
-          "values": [
-            "soft",
-            "hard",
-            "hard_shadow"
-          ],
-          "strict": true
-        },
-        "Encore Spotlight Color": {
-          "type": "ONE_OF_LIST",
-          "values": [
-            "highlight",
-            "black"
-          ],
-          "strict": true
-        },
-        "Encore Background Color": {
-          "type": "ONE_OF_RANGE",
-          "values": [
-            "='Style and Theme'!$H$7:$H$11"
-          ],
-          "strict": true,
-          "inputMessage": "Click and enter a value from range"
-        },
         "Theme Selector": {
           "type": "ONE_OF_LIST",
           "values": [
@@ -411,7 +342,7 @@
           "notes": "ENGINE: Same block runner + same digit rules as Ken Burns / Slideshow.\nWind-up/Wind-down 0 = use Punch-In / Punch-Out DURATIONS for first/last (not “no animation”).\nSame cell values ⇒ same phase lengths as KB/Slideshow.\n\nENCORE ≠ “Ken Burns with veil only.” Opacity TARGET depends on phase:\n\nWIND-UP & WIND-DOWN (inherit KB/Slideshow opacity behavior PRECISELY):\n- GRID (full collage) opacity in/out — same role as hero image opacity on KB/Slideshow.\n- VEIL also participates on Wind-up (see kicker) / Wind-down as part of that entrance/exit.\n- Camera/zoom as Encore focus treatment.\n\nPUNCH-IN & PUNCH-OUT (mid-run item↔item):\n- GRID does NOT opacity-fade (stays up).\n- VEIL ONLY opacity changes (in on Punch-In, out on Punch-Out), using Punch-In / Punch-Out time values from this row (same numbers as KB/Slideshow when cells match).\n- Camera moves focus item↔item; highlight locksteps with punch.\n\nHOLD: Settled on active item (veil + zoom parked). Duration = Hold cell.\n\nKICKER — Wind-up when Family Portrait DISABLED:\nSingle entrance duration (Wind-Up if >0 else Punch-In). THREE PARALLEL tracks:\n  (1) grid opacity 0→1\n  (2) veil opacity → focused on top-billed item\n  (3) camera zoom from full-spread overview → top-billed lattice point\nAll finish on that entrance clock. Not sequential sub-phases.\n\nWind-down (last of segment; duration Wind-Down if >0 else Punch-Out):\nGrid opacity out + veil out (KB/Slideshow-style full exit), camera settles; then next segment entrance.\n\nFAMILY PORTRAIT (build AFTER Encore satisfactory):\n- Optional one-slide full-spread overview BEFORE Encore bows when FP toggle ON.\n- Not the same as Encore Wind-up cell; FP is extra pre-show beat.\n- Encore without FP: kicker Wind-up above.\n- FP without Encore: later, with other styles.\n\nSEGMENT HANDOFF: last exit / first entrance by segment boundary (Alpha → Drinks etc.) even if both Encore or Encore↔Slideshow/Ken Burns.\n\nIMPLEMENTATION: Engine phases + multi-target treatments (grid vs veil vs camera). Quarantine for lattice/veil reference only. Log style=Encore, phase, surfaces={grid,veil,camera}, seconds"
         }
       },
-      "savedAt": "2026-10-07T17:27:01Z"
+      "savedAt": "2026-10-07T17:34:58Z"
     },
     "alpha": {
       "sourceId": "alpha",
