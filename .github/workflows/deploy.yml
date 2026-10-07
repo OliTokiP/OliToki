@@ -117,9 +117,20 @@ jobs:
           PY
           )
           DRY=$(grep -c '"dry": true' /tmp/toki-deploy.out || true)
+          PIN=$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("/tmp/toki-deploy.out").read_text()
+          m = re.search(r"- pin: `([^`]+)`(?: → `([^`]+)`)?", text)
+          print((m.group(2) or m.group(1) or "").strip() if m else "")
+          PY
+          )
+          if [ -z "$PIN" ]; then
+            if [ "$TARGET" = "restaurant" ]; then PIN=restaurant; else PIN=alpha; fi
+          fi
           echo "target=$TARGET" >> "$GITHUB_OUTPUT"
           echo "ship=$SHIP" >> "$GITHUB_OUTPUT"
           echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
 
       - name: Comment plan
         if: github.event_name == 'issues'
@@ -175,7 +186,7 @@ jobs:
           service: toki-api-testing
           region: us-central1
           source: web-context
-          env_vars: TOKI_API_ONLY=0,TOKI_ENV=testing,TOKI_FORCE_SOURCE=alpha
+          env_vars: TOKI_API_ONLY=0,TOKI_ENV=testing,TOKI_FORCE_SOURCE=${{ steps.ship.outputs.pin }}
           secrets: TOKI_SA_JSON=toki-sa-json:latest
           flags: --allow-unauthenticated --memory 1Gi --timeout 60 --min-instances 1 --max-instances 2 --port 8080
 

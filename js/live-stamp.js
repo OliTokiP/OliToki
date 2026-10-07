@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "ef73a7c",
-  "hashFull": "ef73a7c307d408b13e661072956ab5fac7e5f1c1",
-  "subject": "Fix announcement fade-in on Fire Stick after message swap"
+  "hash": "28c4d77",
+  "hashFull": "28c4d774dcb97527616f0c8fee178954ea855421",
+  "subject": "Honor Deployer pin on testing Cloud Run sheet force"
 };
