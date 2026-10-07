@@ -359,18 +359,20 @@
   function iconName(code, isDay) {
     var n = Number(code);
     var day = Number(isDay) === 1;
+    // amCharts only ships moon art for clear + cloudy. Rain/snow "light"
+    // drawings include a sun — at night use the heavier no-sun cousins.
     if (n === 0) return day ? "day" : "night";
     if (n === 1) return day ? "cloudy-day-1" : "cloudy-night-1";
     if (n === 2) return day ? "cloudy-day-2" : "cloudy-night-2";
-    if (n === 3 || n === 45 || n === 48) return "cloudy";
-    if (n === 51 || n === 53 || n === 56) return "rainy-1";
-    if (n === 55 || n === 57) return "rainy-2";
-    if (n === 61 || n === 80) return "rainy-3";
+    if (n === 3 || n === 45 || n === 48) return day ? "cloudy" : "cloudy-night-3";
+    if (n === 51 || n === 53 || n === 56) return day ? "rainy-1" : "rainy-4";
+    if (n === 55 || n === 57) return day ? "rainy-2" : "rainy-5";
+    if (n === 61 || n === 80) return day ? "rainy-3" : "rainy-6";
     if (n === 63 || n === 81) return "rainy-4";
     if (n === 65 || n === 82) return "rainy-6";
     if (n === 66 || n === 67) return "rainy-7";
-    if (n === 71 || n === 85) return "snowy-1";
-    if (n === 73) return "snowy-3";
+    if (n === 71 || n === 85) return day ? "snowy-1" : "snowy-4";
+    if (n === 73) return day ? "snowy-3" : "snowy-5";
     if (n === 75 || n === 77 || n === 86) return "snowy-5";
     if (n === 95 || n === 96 || n === 99) return "thunder";
     return day ? "day" : "night";

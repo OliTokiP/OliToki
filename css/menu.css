@@ -2285,7 +2285,8 @@ body.pattern-bake.preview-wall #bg-pattern-track {
 }
 
 /* Holiday Splash — full-stage SVG (Spooky Roulette). Superimposed over the
-   live menu; does not halt presentation. Under Closed Status (z 40). */
+   live menu; does not halt presentation. Under Closed Status (z 40).
+   CSS background (no <img>) so the food-image decoder never sees it. */
 #holiday-splash {
   position: absolute;
   inset: 0;
@@ -2294,27 +2295,37 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   pointer-events: none;
   overflow: hidden;
   opacity: 0;
-  background: transparent;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 100% 100%;
+  contain: paint;
+  isolation: isolate;
 }
 
 #holiday-splash.is-visible {
   display: block;
+  will-change: opacity;
+  transition: opacity 250ms linear;
+}
+
+#holiday-splash.is-in {
+  opacity: 1;
+}
+
+#holiday-splash.is-hold {
+  opacity: 1;
+  transition: none;
+}
+
+#holiday-splash.is-out {
+  opacity: 0;
+  transition: opacity 500ms linear;
 }
 
 #holiday-splash[hidden] {
   display: none !important;
-}
-
-#holiday-splash img,
-#holiday-splash-art {
-  position: absolute;
-  inset: 0;
-  width: 1920px;
-  height: 1080px;
-  object-fit: fill;
-  display: block !important;
-  pointer-events: none;
-  user-select: none;
+  will-change: auto;
 }
 
 /* Closed Status — full-stage static SVG (Closed 1–4, or Closed H 1–4 on Halloween).

@@ -736,10 +736,16 @@
 
     function armTree(root) {
       if (!root) return;
-      if (root.tagName === "IMG") armRasterUntilDecode(root);
+      if (root.id === "holiday-splash") return;
+      if (root.closest && root.closest("#holiday-splash")) return;
+      if (root.tagName === "IMG") {
+        if (!isHolidaySplashArt(root)) armRasterUntilDecode(root);
+      }
       if (!root.querySelectorAll) return;
       const list = root.querySelectorAll("img");
-      for (let i = 0; i < list.length; i++) armRasterUntilDecode(list[i]);
+      for (let i = 0; i < list.length; i++) {
+        if (!isHolidaySplashArt(list[i])) armRasterUntilDecode(list[i]);
+      }
     }
 
     armTree(document);
@@ -774,6 +780,7 @@
       function (e) {
         const el = e.target;
         if (!el || el.tagName !== "IMG") return;
+        if (isHolidaySplashArt(el)) return;
         if (el.dataset && el.dataset.tokiParked === "1") return;
         const src = el.getAttribute("src") || "";
         if (!src) return;
@@ -1227,7 +1234,7 @@
    *   E BG Blur | F BG Blend Mode | G BG Opacity | H BG Scroll Speed |
    *   I Presentation Speed | J Show Github Version |
    *   K Encore Spotlight Type | L Encore Spotlight Color |
-   *   M Encore Background Color
+   *   M Encore Background Color | N Spooky Roulette
    *
    * Themes Database (rows: section label → headers → theme rows):
    *   A Theme Name | B Main | C Secondary | D Highlight | E Highlight Special
@@ -1252,6 +1259,7 @@
     encoreSpotlightType: 10,
     encoreSpotlightColor: 11,
     encoreBackgroundColor: 12, // M — Color Picker / hex (Encore plate)
+    spookyRoulette: 13, // N — Yes/No Holiday Splash (Halloween child)
   };
   const STYLE_REVISED_THEME = {
     themeName: 0,
@@ -1392,6 +1400,7 @@
   let config = {
     title: "",
     themeName: "",
+    spookyRoulette: false,
     mainColor: "#000000",
     secondaryColor: "#ffffff",
     // Stage BG: color plate always on; image optional on top with FX
@@ -1919,6 +1928,7 @@
     root.style.setProperty("--highlight", lp.highlight);
     root.style.setProperty("--highlight-special", lp.special || lp.highlight);
     root.style.setProperty("--highlight-new", lp.special || lp.highlight);
+    if (lp.spookyRoulette != null) config.spookyRoulette = !!lp.spookyRoulette;
     applyHalloweenMark(lp.themeName);
     return true;
   }
@@ -1928,7 +1938,8 @@
       main: config.mainColor || "#000000",
       secondary: config.secondaryColor || "#ffffff",
       highlight: config.highlight || "#26bbcb",
-      special: config.highlightSpecial || "#fff900"
+      special: config.highlightSpecial || "#fff900",
+      spookyRoulette: !!config.spookyRoulette,
     };
     writeLastPaint(p);
   }
@@ -3124,9 +3135,14 @@
       }
     }
     try {
+      window.TOKI_SPOOKY_ROULETTE = !!config.spookyRoulette;
       window.dispatchEvent(
         new CustomEvent("toki:theme-change", {
-          detail: { themeName: name, halloween: on },
+          detail: {
+            themeName: name,
+            halloween: on,
+            spookyRoulette: !!config.spookyRoulette,
+          },
         })
       );
     } catch (e) {}
@@ -5253,6 +5269,10 @@
     config = {
       title: parsed.title || config.title || "",
       themeName: parsed.themeName || config.themeName || "",
+      spookyRoulette:
+        parsed.spookyRoulette != null
+          ? !!parsed.spookyRoulette
+          : !!config.spookyRoulette,
       mainColor: main,
       secondaryColor: secondary,
       bgColor: bgColor,
@@ -7358,6 +7378,27 @@
       }
     }
 
+    let spookyRoulette = false;
+    if (isRevised) {
+      const headers = rows[boardRowIndex - 1] || [];
+      let colRoulette = -1;
+      for (let c = 0; c < headers.length; c++) {
+        const fold = String(headers[c] || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "");
+        if (fold === "spookyroulette") {
+          colRoulette = c;
+          break;
+        }
+      }
+      if (colRoulette < 0 && setCols.spookyRoulette != null) {
+        colRoulette = setCols.spookyRoulette;
+      }
+      if (colRoulette >= 0) {
+        spookyRoulette = parseYesNo(cell(boardRow, colRoulette), false);
+      }
+    }
+
     const theme = {
       themeName: themeName,
       mainColor: main,
@@ -7380,11 +7421,14 @@
       encoreSpotlightType: encoreSpotlightType,
       encoreSpotlightColor: encoreSpotlightColor,
       encoreBackgroundColor: encoreBackgroundColor,
+      spookyRoulette: !!spookyRoulette,
     };
     tokiInfo(
       "Style theme:",
       isRevised ? "(revised)" : "(legacy)",
       theme.themeName || "(unnamed)",
+      "roulette",
+      theme.spookyRoulette ? "yes" : "no",
       "main",
       theme.mainColor,
       "secondary",
@@ -7419,6 +7463,7 @@
   function applyThemeToParsed(parsed, theme) {
     if (!parsed || !theme) return parsed;
     parsed.themeName = theme.themeName || parsed.themeName;
+    parsed.spookyRoulette = !!theme.spookyRoulette;
     parsed.mainColor = theme.mainColor;
     parsed.secondaryColor = theme.secondaryColor;
     parsed.highlight = theme.highlight;

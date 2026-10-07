@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "2b02606",
-  "hashFull": "2b02606f4a06df99a81d4bc077a1c895cb20582d",
-  "subject": "QA: 2026-10-07 Holiday Splash Screens (pass 2)"
+  "hash": "f864828",
+  "hashFull": "f864828ef08f9b9d7231a8afe2860a4d47279ba4",
+  "subject": "QA: 2026-10-07 Holiday Splash Screens (pass 3)"
 };
