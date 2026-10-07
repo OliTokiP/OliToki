@@ -3,6 +3,7 @@
  *
  * Sheet tab: "Announcements" (gid=149404218) — revised Settings + Inventory.
  *   Live Settings: Title | Include Footer Box | BG Pattern (None|Stripes)
+ *     | Show Widget? | Override Wallpaper Scroll
  *   Dead (do not read): old BG Color, old Pattern column, stripe color cells.
  *   Inventory (under settings): Announcement Title | Subtitle | Text |
  *             Box Color | Speed | Motion Style | Motion Setting

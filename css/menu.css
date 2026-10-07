@@ -50,12 +50,6 @@ body {
   --stripe-width: 93px;
   --stripe-period: 186px;
   --stripe-angle: -51.5deg;
-  /* Axis-aligned tile for |angle| 51.5° / period 186: period/sin, period/cos.
-     Scroll is one perpendicular period in screen space (old rotate+translateY). */
-  --stripe-tile-w: 237.669px;
-  --stripe-tile-h: 298.788px;
-  --stripe-scroll-x: 145.565px;
-  --stripe-scroll-y: 115.788px;
   /* Calibrated against Menu Mockup No BG.png */
   --list-pad-x: 28px;
   --list-pad-top: 16px;
@@ -2054,10 +2048,6 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
   /* PS measures from vertical (0° = upright poles); CSS rotate is from
      horizontal bands → 90° − 38.5° = 51.5°. Sign keeps the mockup lean. */
   --stripe-angle: -51.5deg;
-  --stripe-tile-w: 237.669px;
-  --stripe-tile-h: 298.788px;
-  --stripe-scroll-x: 145.565px;
-  --stripe-scroll-y: 115.788px;
 }
 
 /* Top-right of left hero frame; same top as boards 1–3 (18px). */
@@ -2109,9 +2099,10 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 
 /* Pinstripes masked to black panel, slow scroll.
    Spec: each band 93px wide, angle 38.5°.
-   Repeating SVG tile (horizontal bands, rotate in the pattern) plus a
-   one-period translate3d. Parent clip-path stays still. Fallback is a
-   repeating-linear-gradient at the baked screen angle.
+   Built as horizontal 93px bands then rotated — browsers AA rotated
+   edges much better than diagonal repeating-linear-gradient stops.
+   Soft ~1px stop blend adds a little extra smoothing on the color boundary.
+   Base transform keeps the angle when scroll is 0 (animation paused).
 */
 /* Stripes layer — only on drinks board when Include Stripes ≠ 0 */
 #stripes {
@@ -2142,37 +2133,40 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 
 .board-drinks #stripes-track {
   position: absolute;
-  /* One tile of pad so a period of translate never shows an edge */
-  top: calc(-1 * var(--stripe-tile-h));
-  right: calc(-1 * var(--stripe-tile-w));
-  bottom: calc(-1 * var(--stripe-tile-h));
-  left: calc(-1 * var(--stripe-tile-w));
-  background-color: var(--stripe-2);
+  /* Oversized so rotation + scroll never show the tile edges */
+  width: 320%;
+  height: 320%;
+  left: -110%;
+  top: -110%;
   background-image: repeating-linear-gradient(
-    calc(180deg - var(--stripe-angle)),
+    to bottom,
     var(--stripe-1) 0,
     var(--stripe-1) calc(var(--stripe-width) - 0.6px),
     var(--stripe-2) calc(var(--stripe-width) + 0.6px),
     var(--stripe-2) calc(var(--stripe-period) - 0.6px),
     var(--stripe-1) calc(var(--stripe-period) + 0.6px)
   );
-  background-repeat: repeat;
+  background-size: 100% var(--stripe-period);
   /* FOREGROUND panel pattern — full strength (no atmospheric fade).
      Style #bg-pattern stays ~0.35 for background texture only. */
   opacity: 1;
+  transform: rotate(var(--stripe-angle));
+  transform-origin: center center;
   will-change: transform;
   animation-name: drinks-stripe-scroll;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-duration: 6s;
+  animation-fill-mode: both;
 }
 
 @keyframes drinks-stripe-scroll {
   from {
-    transform: translate3d(0, 0, 0);
+    transform: rotate(var(--stripe-angle)) translate3d(0, 0, 0);
   }
   to {
-    transform: translate3d(var(--stripe-scroll-x), var(--stripe-scroll-y), 0);
+    /* One full black+white period along the band normal */
+    transform: rotate(var(--stripe-angle)) translate3d(0, var(--stripe-period), 0);
   }
 }
 
@@ -2200,26 +2194,28 @@ body.encore-wallpaper-parked .family-portrait-bg-img {
 
 #bg-pattern-track {
   position: absolute;
-  top: calc(-1 * var(--stripe-tile-h));
-  right: calc(-1 * var(--stripe-tile-w));
-  bottom: calc(-1 * var(--stripe-tile-h));
-  left: calc(-1 * var(--stripe-tile-w));
-  background-color: var(--bg-pattern-2);
+  width: 320%;
+  height: 320%;
+  left: -110%;
+  top: -110%;
   background-image: repeating-linear-gradient(
-    calc(180deg - var(--stripe-angle)),
+    to bottom,
     var(--bg-pattern-1) 0,
     var(--bg-pattern-1) calc(var(--stripe-width) - 0.6px),
     var(--bg-pattern-2) calc(var(--stripe-width) + 0.6px),
     var(--bg-pattern-2) calc(var(--stripe-period) - 0.6px),
     var(--bg-pattern-1) calc(var(--stripe-period) + 0.6px)
   );
-  background-repeat: repeat;
+  background-size: 100% var(--stripe-period);
   opacity: 0.35;
+  transform: rotate(var(--stripe-angle));
+  transform-origin: center center;
   will-change: transform;
   animation-name: drinks-stripe-scroll;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-duration: 6s;
+  animation-fill-mode: both;
 }
 
 /* Pattern Bake: opaque bands; hex already = stripe×0.35 + BG×0.65 */

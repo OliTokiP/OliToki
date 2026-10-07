@@ -1125,7 +1125,8 @@
 
   /**
    * Board 4 Announcements tab (gid 149404218) — Settings + message Inventory.
-   * Live Settings only: A Title | B Include Footer Box | C BG Pattern (None|Stripes).
+   * Live Settings: A Title | B Include Footer Box | C BG Pattern (None|Stripes)
+   *   | D Show Widget? | E Override Wallpaper Scroll.
    * Old C BG Color / D Pattern / E–F stripe colors are dead — do not read.
    * Inventory (headers under Settings data; may omit "Inventory" label):
    *   Announcement Title | Subtitle | Text | Box Color | Speed |
@@ -1136,6 +1137,8 @@
     title: 0,
     includeFooterBox: 1, // singular: "Drinks" | "Proteins" | "Sauces" | "Veggies" | blank/none
     bgPattern: 2, // None | Stripes
+    showWidget: 3, // Show Widget?
+    overrideWallpaperScroll: 4, // Override Wallpaper Scroll — freeze drinks wallpaper
   };
   const ANN_REVISED_INVENTORY = {
     announcementTitle: 0,
@@ -1419,6 +1422,7 @@
     stripeColor1: "#000000",
     stripeColor2: "#ffffff",
     includeStripes: false,
+    overrideWallpaperScroll: false,
     bgPattern: null,
     patternColor1: "#000000",
     patternColor2: "#ffffff",
@@ -4166,7 +4170,7 @@
     );
 
     // One layer when not scrolling (or wall). Dual only for seamless pan.
-    const scrollMult = parseBgScrollSpeed(config.bgScrollSpeed, 1);
+    const scrollMult = wallpaperScrollMult();
     const scrollOn = !wall && scrollMult > 0;
     // Speed 0: snap home *before* dropping layer B so a live soft-reload
     // cannot hide the incoming fade copy while A is still fading out.
@@ -4848,9 +4852,36 @@
       lastSpeed = speed;
     }
 
-    // Live Settings: A Title | B Include Footer Box | C BG Pattern only.
+    // Live Settings: A Title | B Include Footer Box | C BG Pattern |
+    // D Show Widget? | E Override Wallpaper Scroll.
+    const settingsHeaders =
+      settingsIdx > 0 ? rows[settingsIdx - 1] : rows[1] || [];
+    function annSettingsCol(fallback, names) {
+      let i;
+      const wants = names.map(function (n) {
+        return String(n || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "");
+      });
+      for (i = 0; i < settingsHeaders.length; i++) {
+        const k = String(settingsHeaders[i] || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "");
+        if (wants.indexOf(k) >= 0) return i;
+      }
+      return fallback;
+    }
+    const patternCol = annSettingsCol(rs.bgPattern, ["BG Pattern"]);
+    const overrideCol = annSettingsCol(rs.overrideWallpaperScroll, [
+      "Override Wallpaper Scroll",
+      "Override Wallpaper",
+    ]);
     const showPanelPattern = isStripesPatternToken(
-      cell(settingsRow, rs.bgPattern)
+      cell(settingsRow, patternCol)
+    );
+    const overrideWallpaperScroll = parseYesNo(
+      cell(settingsRow, overrideCol),
+      false
     );
 
     const footerSel = normalizeFooterBoxSelection(
@@ -4867,6 +4898,7 @@
       items: [], // filled by attachBoard4FooterBox from shared box sheets
       includeFooterBox: footerSel,
       includeStripes: showPanelPattern,
+      overrideWallpaperScroll: overrideWallpaperScroll,
       announcementBox: {
         title: firstMsg ? firstMsg.title : "",
         subtitle: firstMsg ? firstMsg.subtitle : "",
@@ -5305,6 +5337,9 @@
       patternColor1: patternColor1,
       patternColor2: patternColor2,
       includeStripes: isDrinks ? !!parsed.includeStripes : false,
+      overrideWallpaperScroll: isDrinks
+        ? !!parsed.overrideWallpaperScroll
+        : false,
       announcementBg: annSurf.color,
       announcementBgImage: annSurf.image,
       announcementBodyText: annSurf.text,
@@ -6114,8 +6149,10 @@
         secondary;
       root.style.setProperty("--stripe-1", stripe1);
       root.style.setProperty("--stripe-2", stripe2);
-      applyStripeGeometry(root);
-      paintStripeTile(els.stripesTrack, stripe1, stripe2);
+      if (els.stripesTrack) {
+        els.stripesTrack.style.backgroundImage = "";
+        els.stripesTrack.style.backgroundSize = "";
+      }
       const showStripes = !!config.includeStripes;
       if (els.stripes) {
         els.stripes.hidden = !showStripes;
@@ -6131,72 +6168,6 @@
     }
     // Keep BG pattern (if active) in sync with shared bgScrollSpeed
     updateBgPatternAnimation();
-  }
-
-  const STRIPE_ANGLE_DEG = -51.5;
-  const STRIPE_PERIOD_PX = 186;
-  const STRIPE_WIDTH_PX = 93;
-
-  function stripeTileMetrics() {
-    const rad = (Math.abs(STRIPE_ANGLE_DEG) * Math.PI) / 180;
-    const p = STRIPE_PERIOD_PX;
-    const s = Math.sin(rad);
-    const c = Math.cos(rad);
-    return {
-      tileW: p / s,
-      tileH: p / c,
-      scrollX: p * s,
-      scrollY: p * c,
-    };
-  }
-
-  function applyStripeGeometry(rootEl) {
-    const root = rootEl || document.documentElement;
-    const m = stripeTileMetrics();
-    root.style.setProperty("--stripe-tile-w", m.tileW.toFixed(3) + "px");
-    root.style.setProperty("--stripe-tile-h", m.tileH.toFixed(3) + "px");
-    root.style.setProperty("--stripe-scroll-x", m.scrollX.toFixed(3) + "px");
-    root.style.setProperty("--stripe-scroll-y", m.scrollY.toFixed(3) + "px");
-  }
-
-  function paintStripeTile(el, c1, c2) {
-    if (!el) return;
-    const a = STRIPE_ANGLE_DEG;
-    const w = STRIPE_WIDTH_PX;
-    const p = STRIPE_PERIOD_PX;
-    const m = stripeTileMetrics();
-    const fill1 = normalizeHex(c1) || String(c1 || "#000000");
-    const fill2 = normalizeHex(c2) || String(c2 || "#ffffff");
-    const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="' +
-      m.tileW.toFixed(3) +
-      '" height="' +
-      m.tileH.toFixed(3) +
-      '" viewBox="0 0 ' +
-      m.tileW.toFixed(3) +
-      " " +
-      m.tileH.toFixed(3) +
-      '"><defs><pattern id="s" patternUnits="userSpaceOnUse" width="' +
-      p +
-      '" height="' +
-      p +
-      '" patternTransform="rotate(' +
-      a +
-      ')"><rect x="-400" y="0" width="800" height="' +
-      w +
-      '" fill="' +
-      fill1 +
-      '"/><rect x="-400" y="' +
-      w +
-      '" width="800" height="' +
-      w +
-      '" fill="' +
-      fill2 +
-      '"/></pattern></defs><rect width="100%" height="100%" fill="url(#s)"/></svg>';
-    el.style.backgroundImage =
-      'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
-    el.style.backgroundSize =
-      m.tileW.toFixed(3) + "px " + m.tileH.toFixed(3) + "px";
   }
 
   function updateStripeAnimation() {
@@ -6289,8 +6260,10 @@
       const c2 = patternBakeHex(config.patternColor2, secondary);
       root.style.setProperty("--bg-pattern-1", c1);
       root.style.setProperty("--bg-pattern-2", c2);
-      applyStripeGeometry(root);
-      paintStripeTile(track, c1, c2);
+      if (track) {
+        track.style.backgroundImage = "";
+        track.style.backgroundSize = "";
+      }
       updateBgPatternAnimation(track);
     } else {
       hidePattern();
@@ -15184,6 +15157,12 @@
     return Math.max(0, n);
   }
 
+  /** Wallpaper pan only. Announcements "Override Wallpaper Scroll" freezes drinks. */
+  function wallpaperScrollMult() {
+    if (isDrinks && config && config.overrideWallpaperScroll) return 0;
+    return parseBgScrollSpeed(config && config.bgScrollSpeed, 1);
+  }
+
   /** Board "Presentation Mode" dropdown: Slideshow | Encore */
   /**
    * Presentation Mode from Settings: slideshow | encore | kenburns
@@ -15582,7 +15561,7 @@
     galaxyStarted = true;
 
     // Wall, or scroll=0: one layer. Dual only when the wallpaper actually pans.
-    const scrollOn = parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0;
+    const scrollOn = wallpaperScrollMult() > 0;
     const singleLayer =
       isPreviewWall() ||
       !scrollOn ||
@@ -15623,7 +15602,7 @@
         // Crossfade before the photo's left edge enters the stage.
         // Leave headroom for the ~1.2s crossfade (still drifts +dx).
         const speed =
-          BASE_SCROLL_PX_PER_SEC * parseBgScrollSpeed(config.bgScrollSpeed, 1);
+          BASE_SCROLL_PX_PER_SEC * wallpaperScrollMult();
         const fadeDrift = speed * (FADE_DURATION_MS / 1000) + 24;
         return -Math.max(48, fadeDrift);
       }
@@ -15758,7 +15737,7 @@
       lastTs = ts;
       if (dt === 0) return;
 
-      const scrollMult = parseBgScrollSpeed(config.bgScrollSpeed, 1);
+      const scrollMult = wallpaperScrollMult();
       // Style speed 0 (not Encore freeze): abort crossfade and park at start pose.
       if (galaxySnapHome || (scrollMult <= 0 && !galaxyParkedAtHome)) {
         fading = false;
@@ -15871,6 +15850,7 @@
       s1: config.stripeColor1,
       s2: config.stripeColor2,
       includeStripes: config.includeStripes,
+      overrideWallpaperScroll: !!config.overrideWallpaperScroll,
       annBg: config.announcementBg,
       annImg: config.announcementBgImage,
       proteinBg: config.proteinBoxBg,
@@ -16310,7 +16290,7 @@
           }
 
           case "bgDualPan": {
-            const scrollOn = parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0;
+            const scrollOn = wallpaperScrollMult() > 0;
             const b = els.galaxyB;
             const bLive = !!(
               b &&
@@ -16544,9 +16524,11 @@
           case "bgBlend":
             return parseBgBlendMode(config.bgBlendMode) || "normal";
           case "bgDualPan":
-            return parseBgScrollSpeed(config.bgScrollSpeed, 1) > 0
+            return wallpaperScrollMult() > 0
               ? "scroll on"
-              : "scroll 0";
+              : config.overrideWallpaperScroll
+                ? "override off"
+                : "scroll 0";
           case "heroPlate":
             return (
               rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src")) +
