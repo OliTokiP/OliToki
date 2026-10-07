@@ -287,6 +287,8 @@ Costumes are filled art (not Main-color stroke). `object-fit: contain` in a slig
 
 Board 4 logo: `right: 36px; top: 12px; 148×192` (mirror placement). Halloween: 200×210.
 
+**Holiday Splash (Spooky Roulette):** six full-stage SVGs (`assets/halloween/splash-ghost.svg` … `splash-wolf.svg`) overlay the live menu. Menu Manager exposes On/Off only on Halloween. Timing: 0.25s stagger fade-in left → right, 7s hold, 0.5s fade-out together. Seed is the Eastern minute so all four boards agree and never match.
+
 ---
 
 ## 9. New sticker

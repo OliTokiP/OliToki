@@ -2529,7 +2529,7 @@ class SheetsBackend:
                 .execute()
             )
         rows = result.get("values") or []
-        _header_idx, data_idx, cols = self._settings_layout(rows)
+        header_idx, data_idx, cols = self._settings_layout(rows)
         field_a1 = {
             "themeselector": self._a1_for(
                 cols, ["themeselector"], data_idx, 0
@@ -2575,6 +2575,12 @@ class SheetsBackend:
                 data_idx,
                 12,
             ),
+            "spookyroulette": self._a1_for(
+                cols,
+                ["spookyroulette"],
+                data_idx,
+                13,
+            ),
         }
         values: dict[str, str] = {}
         extra: list[dict] = []
@@ -2583,6 +2589,7 @@ class SheetsBackend:
         wrote_speeds = False
         wrote_encore = False
         wrote_pattern = False
+        wrote_roulette = False
         theme = str(body.get("theme") or body.get("themeName") or "").strip()
         if theme:
             values["themeselector"] = self._canonical_theme(rows, theme)
@@ -2651,6 +2658,32 @@ class SheetsBackend:
 
         pat1 = _body_color(("patternColor1", "pattern_color_1"))
         pat2 = _body_color(("patternColor2", "pattern_color_2"))
+        roulette_raw = body.get("spookyRoulette")
+        if roulette_raw is None:
+            roulette_raw = body.get("spooky_roulette")
+        if roulette_raw is not None and str(roulette_raw).strip() != "":
+            rs = str(roulette_raw).strip().lower()
+            if rs in ("1", "yes", "y", "true", "on"):
+                values["spookyroulette"] = "Yes"
+            else:
+                values["spookyroulette"] = "No"
+            wrote_roulette = True
+            if "spookyroulette" not in cols:
+                headers = (rows[header_idx] if header_idx < len(rows) else []) or []
+                n_header = ""
+                if len(headers) > 13:
+                    n_header = str(headers[13] or "").strip()
+                if not n_header:
+                    extra.append(
+                        {
+                            "range": safe_title
+                            + "!"
+                            + self._col_letters(13)
+                            + str(header_idx + 1),
+                            "values": [["Spooky Roulette"]],
+                        }
+                    )
+
         if pat1 is not None or pat2 is not None:
             theme_for_pat = values.get("themeselector") or ""
             if not theme_for_pat:
@@ -2727,6 +2760,7 @@ class SheetsBackend:
             "wroteSpeeds": wrote_speeds,
             "wroteEncore": wrote_encore,
             "wrotePattern": wrote_pattern,
+            "wroteRoulette": wrote_roulette,
             "scrollSpeed": values.get("bgscrollspeed"),
             "presentationSpeed": values.get("presentationspeed"),
             "range": ", ".join([r for r in ranges if r]),

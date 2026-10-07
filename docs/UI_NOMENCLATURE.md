@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-10-05 15:00 (Halloween Logo costumes)  
+**Last updated:** 2026-10-07 (Holiday Splash / Spooky Roulette)  
 
 **Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **What each style actually does (times, veil, highlight, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md).  
@@ -47,6 +47,7 @@ Fixed **1920×1080** canvas.
 | **Disclaimer** | Allergy / food-safety copy (usually top of the photo side) | `#disclaimer` |
 | **Version Stamp** | Optional git/build info appended to the Toki Debug HUD header (when Show Version + debug visuals active) | Show Version |
 | **Closed Status** | Full-stage static overlay when Store Hours say the shop is closed. Four boards spell **CLOSED** (CL / OS / ED) with Board 4 showing hours. Halloween Theme uses Toki Ghost on Board 4 in place of the outline bunny. Replaces board graphics and halts Background pan / presentation until open. | `#closed-status`, `body.store-closed`, `body.theme-halloween` |
+| **Holiday Splash** | Full-stage Halloween SVG superimposed over the live menu for a short beat. **Spooky Roulette** (Menu Manager, Halloween Theme only) turns it on. At the top of every Eastern minute each board draws one of six splashes; no two boards match. Fade-in staggers left → right (0.25s each), holds 7s, then all four fade out together. | `#holiday-splash`, Style **Spooky Roulette** |
 
 ---
 

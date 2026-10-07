@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "5b49d91",
-  "hashFull": "5b49d911422badfa6a856988ccdda5f380d9eb36",
-  "subject": "Add .nojekyll so GitHub Pages skips Jekyll (prevents publish failures on JS/HTML)."
+  "hash": "e268948",
+  "hashFull": "e268948493a4bfaef61823d840c58e7a81db2b5a",
+  "subject": "QA: 2026-10-07 Holiday Splash Screens (pass 1)"
 };

@@ -1,9 +1,30 @@
 # What’s New
 
-**Last updated:** 2026-10-05 15:00  
+**Last updated:** 2026-10-07 00:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-10-07 — Holiday Splash (Spooky Roulette)
+
+**Boards / surface:** Menu Screens (all four boards) + Menu Manager Style and Theme  
+**Sheet:** Style and Theme Settings → **Spooky Roulette** (column N, Yes/No). Header is written on first save if missing.  
+**Summary:** Halloween Theme can superimpose a full-stage splash SVG over each menu at the top of every minute. The four boards shuffle six costumes so no two match, fade in left to right over 1 second, hold 7 seconds, then fade out together.
+
+### Details
+- Art: Ghost, Mummy, Pirate, Vampire, Witch, Wolf (`assets/halloween/splash-*.svg`, from `Halloween Screen Splash/`).
+- Menu Manager shows **Spooky Roulette** On/Off as a child of Theme only when Theme is Halloween.
+- Overlay does not halt presentation. Closed Status still wins (splash skips while closed).
+- QA: `?theme=Halloween&roulette=1&splash=hold` (or `splash=1` to play the sequence). `preview-all` forwards `theme`, `roulette`, `splash`, `splashAt`.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [SHEET_MIGRATION.md](./SHEET_MIGRATION.md)
 
 ---
 

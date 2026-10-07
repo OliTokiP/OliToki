@@ -1,16 +1,18 @@
 /**
- * TokiMenu — Halloween Theme costumes + Closed Status ghost art.
+ * TokiMenu — Halloween Theme costumes + Closed Status ghost art
+ * + Holiday Splash (Spooky Roulette) SVG list.
  *
  * When Style Theme Selector is Halloween, each board Logo (#logo) swaps from
  * the default Toki mark to that board’s costume. Closed Status Board 4 uses
  * Toki Ghost in place of the outline bunny (mockup Closed Status H 1–4).
  *
  * Menu Manager Style / Board previews use the same files.
+ * Splash overlays: js/holiday-splash.js (Spooky Roulette).
  */
 (function (root) {
   "use strict";
 
-  var ART_VER = "20261005h4";
+  var ART_VER = "20261007splash1";
   var CLOSED_VER = "20260924closed2";
   var DEFAULT_LOGO = "assets/TokiLogoFix.svg?v=20260815qa4";
 
@@ -20,6 +22,15 @@
     munchies: { file: "toki-pirate.svg", label: "Toki Pirate" },
     drinks: { file: "toki-witch.svg", label: "Toki Witch" },
   };
+
+  var SPLASH = [
+    { file: "splash-ghost.svg", label: "Ghost" },
+    { file: "splash-mummy.svg", label: "Mummy" },
+    { file: "splash-pirate.svg", label: "Pirate" },
+    { file: "splash-vampire.svg", label: "Vampire" },
+    { file: "splash-witch.svg", label: "Witch" },
+    { file: "splash-wolf.svg", label: "Wolf" },
+  ];
 
   function normalizeThemeKey(raw) {
     return String(raw == null ? "" : raw)
@@ -65,6 +76,26 @@
     return "assets/closed/closed-" + n + ".svg?v=" + CLOSED_VER;
   }
 
+  function splashCount() {
+    return SPLASH.length;
+  }
+
+  function splashUrl(index) {
+    var n = Number(index);
+    if (!isFinite(n) || n < 0) n = 0;
+    n = n % SPLASH.length;
+    var row = SPLASH[n] || SPLASH[0];
+    return "assets/halloween/" + row.file + "?v=" + ART_VER;
+  }
+
+  function splashLabel(index) {
+    var n = Number(index);
+    if (!isFinite(n) || n < 0) n = 0;
+    n = n % SPLASH.length;
+    var row = SPLASH[n] || SPLASH[0];
+    return row.label;
+  }
+
   function urlThemeOverride() {
     try {
       var t = new URLSearchParams(location.search).get("theme");
@@ -77,6 +108,7 @@
   root.TOKI_HALLOWEEN = {
     ART_VER: ART_VER,
     COSTUME: COSTUME,
+    SPLASH: SPLASH,
     DEFAULT_LOGO: DEFAULT_LOGO,
     normalizeThemeKey: normalizeThemeKey,
     isHalloween: isHalloween,
@@ -85,6 +117,9 @@
     costumeUrl: costumeUrl,
     costumeLabel: costumeLabel,
     closedArtUrl: closedArtUrl,
+    splashCount: splashCount,
+    splashUrl: splashUrl,
+    splashLabel: splashLabel,
     urlThemeOverride: urlThemeOverride,
   };
 })(window);

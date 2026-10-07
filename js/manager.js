@@ -2931,6 +2931,15 @@
       label: "Theme",
       value: d.themeName,
     });
+    var H = window.TOKI_HALLOWEEN;
+    if (H && H.isHalloween(d.themeName)) {
+      html += row({
+        key: "spookyRoulette",
+        label: "Spooky Roulette",
+        value: labelOf(D.onOff || D.yesNo, d.spookyRoulette || "no"),
+        child: true,
+      });
+    }
     html += row({
       key: "background",
       label: "Background",
@@ -3376,6 +3385,19 @@
               break;
             }
           }
+        },
+      };
+    }
+    if (key === "spookyRoulette") {
+      return {
+        title: "Spooky Roulette",
+        kind: "trueFalse",
+        options: D.onOff || D.yesNo,
+        get: function () {
+          return state.draft.spookyRoulette || "no";
+        },
+        set: function (id) {
+          state.draft.spookyRoulette = id === "yes" ? "yes" : "no";
         },
       };
     }
@@ -4572,7 +4594,8 @@
       !wrote.wroteTheme &&
       !wrote.wroteBackground &&
       !wrote.wroteSpeeds &&
-      !wrote.wrotePattern
+      !wrote.wrotePattern &&
+      !wrote.wroteRoulette
     );
   }
 
@@ -4583,7 +4606,8 @@
       !wrote.wroteTheme &&
       !wrote.wroteBackground &&
       !wrote.wroteSpeeds &&
-      !wrote.wrotePattern
+      !wrote.wrotePattern &&
+      !wrote.wroteRoulette
     ) {
       return "";
     }
@@ -5137,6 +5161,7 @@
       encoreStyle: d.encoreStyle || "",
       encoreSpot: d.encoreSpot || "",
       encoreBg: d.encoreBg || "",
+      spookyRoulette: d.spookyRoulette === "yes" ? "yes" : "no",
     };
   }
 
@@ -5151,7 +5176,8 @@
           wrote.wroteBackground ||
           wrote.wroteSpeeds ||
           wrote.wroteEncore ||
-          wrote.wrotePattern)
+          wrote.wrotePattern ||
+          wrote.wroteRoulette)
       );
       if (boardOk && styleOk) return "Board and Style saved to " + src;
       if (boardOk && wrote && wrote.wroteInventory) {
@@ -5178,6 +5204,7 @@
         if (wrote.wrotePattern) bits.push("pattern colors");
         if (wrote.wroteSpeeds) bits.push("speeds");
         if (wrote.wroteEncore) bits.push("Encore");
+        if (wrote.wroteRoulette) bits.push("Spooky Roulette");
         var what = bits.length ? bits.join(" and ") : "Style";
         return fb
           ? what + " saved to " + src
@@ -5216,13 +5243,15 @@
     var patternChanged =
       next.patternColor1 !== prev.patternColor1 ||
       next.patternColor2 !== prev.patternColor2;
+    var rouletteChanged = next.spookyRoulette !== prev.spookyRoulette;
     if (
       !themeChanged &&
       !bgChanged &&
       !scrollChanged &&
       !presChanged &&
       !encoreChanged &&
-      !patternChanged
+      !patternChanged &&
+      !rouletteChanged
     ) {
       return Promise.resolve({ needed: false, wrote: null });
     }
@@ -5257,6 +5286,7 @@
       payload.patternColor1 = next.patternColor1;
       payload.patternColor2 = next.patternColor2;
     }
+    if (rouletteChanged) payload.spookyRoulette = next.spookyRoulette;
     var req = sheet.writeStyle
       ? sheet.writeStyle(payload)
       : sheet.writeTheme(next.themeName, sheetId);
@@ -6764,6 +6794,14 @@
         state.draft.themeName = want;
       }
     }
+    if (params.get("roulette")) {
+      var rv = String(params.get("roulette") || "").trim().toLowerCase();
+      if (rv === "1" || rv === "yes" || rv === "on" || rv === "true") {
+        state.draft.spookyRoulette = "yes";
+      } else if (rv === "0" || rv === "no" || rv === "off" || rv === "false") {
+        state.draft.spookyRoulette = "no";
+      }
+    }
     if (params.get("bg")) state.draft.background = params.get("bg");
     if (params.get("pres")) state.draft.presentation = params.get("pres");
     if (params.get("spot")) state.draft.encoreSpot = params.get("spot");
@@ -7054,6 +7092,7 @@
         if (!n || n < 30) d.refreshTimer = "30 seconds";
       })(fromSheet);
       fromSheet.debugMode = fromSheet.debugMode || "no";
+      fromSheet.spookyRoulette = fromSheet.spookyRoulette || "no";
       // Keep draft numbers inside the live tile set (sheet conditionals).
       fromSheet.scrollSpeed = clampDraftSpeed(
         fromSheet.scrollSpeed,

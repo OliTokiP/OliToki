@@ -105,6 +105,11 @@
     { id: "no", label: "No" },
   ];
 
+  var ON_OFF = [
+    { id: "yes", label: "On" },
+    { id: "no", label: "Off" },
+  ];
+
   var PRICE_MODELS = [
     { id: "fixed", label: "Fixed-Portion Pricing" },
     { id: "ltp", label: "Linear Tiered Pricing" },
@@ -201,6 +206,7 @@
     encoreSpot: "black",
     encoreBg: "secondary",
     presentationSpeed: 3,
+    spookyRoulette: "no",
     dataSource: global.TOKI_DEFAULT_SOURCE || "restaurant",
     requireRestart: "yes",
     refreshTimer: "30 seconds",
@@ -225,6 +231,7 @@
     encoreSpotColors: ENCORE_SPOT_COLORS,
     fonts: FONTS,
     yesNo: YES_NO,
+    onOff: ON_OFF,
     priceModels: PRICE_MODELS,
     refreshTimers: REFRESH_TIMERS,
     zeroOne: ZERO_ONE,

@@ -2,10 +2,11 @@
  * OliToki Menu Manager — sheet read + theme write.
  * Loads OliToki Menu Settings + the chosen catalog's Style and Theme tab.
  * Field-name draft only (no column indexes in the UI). Confirm posts
- * theme + background + Pattern Color 1 / 2 to /api/manager/style; the
+ * theme + background + Pattern Color 1 / 2 + Spooky Roulette to
+ * /api/manager/style; the
  * server maps Theme Selector (A3), BG Color / Pattern / Wallpaper
- * (B3 / C3 / D3), and Pattern Color 1 / 2 on the selected Themes
- * Database row (K/L).
+ * (B3 / C3 / D3), Pattern Color 1 / 2 on the selected Themes
+ * Database row (K/L), and Spooky Roulette (N3).
  * Board Settings Yes posts /api/manager/board (Menu Title, Family Portrait,
  * Presentation Mode, Include Descriptions?) — field names, not columns.
  * System Settings (incl. Confirm save?) post via /api/manager/settings (fallback always).
@@ -38,6 +39,7 @@
     encoreSpotlightType: 10,
     encoreSpotlightColor: 11,
     encoreBackgroundColor: 12,
+    spookyRoulette: 13,
   };
   var STYLE_THEME = {
     themeName: 0,
@@ -1373,6 +1375,7 @@
       "Presentation Speed",
       "Slideshow Speed",
     ]);
+    var colRoulette = headerIndex(headers, ["Spooky Roulette"]);
     if (colTheme < 0) colTheme = STYLE_SETTINGS.themeSelector;
     if (colBg < 0) colBg = STYLE_SETTINGS.bgColor;
     if (colPat < 0) colPat = STYLE_SETTINGS.bgPattern;
@@ -1442,6 +1445,12 @@
         3,
         presMin,
         presMax
+      ),
+      spookyRoulette: parseYesNo(
+        colRoulette >= 0
+          ? cell(row, colRoulette)
+          : cell(row, STYLE_SETTINGS.spookyRoulette),
+        false
       ),
     };
   }
@@ -1531,6 +1540,7 @@
       encoreSpot: style.encoreSpot,
       encoreBg: style.encoreBg,
       presentationSpeed: style.presentationSpeed,
+      spookyRoulette: style.spookyRoulette || "no",
       dataSource: dsId,
       requireRestart: settings.requireRestart,
       refreshTimer: settings.refreshTimer || "30 seconds",

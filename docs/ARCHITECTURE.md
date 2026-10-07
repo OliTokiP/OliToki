@@ -26,7 +26,8 @@
 | `js/menu.js` | **Monolith:** fetch, parse, theme, list fit, footer boxes, Plate objects (hero + portrait), hero motion, stickers, stripes |
 | `js/announcement-md.js` | Board 4 Announcement Body markdown + typed color HTML (plain CSV Text → safe DOM) |
 | `js/weather-widget.js` | Board 4 Weather Widget: Eastern clock + Store Hours overnight window + Open-Meteo °F + amCharts SVG (`index4.html` only) |
-| `js/halloween.js` | Halloween Theme costumes for `#logo` + Closed Status `closed-h-*` art |
+| `js/halloween.js` | Halloween Theme costumes for `#logo` + Closed Status `closed-h-*` art + Holiday Splash SVG list |
+| `js/holiday-splash.js` | All boards: Holiday Splash overlay (Spooky Roulette). Six Halloween SVGs; unique pick per board per Eastern minute; stagger fade-in, 7s hold, fade-out together |
 | `js/closed-status.js` | All boards: Closed Status overlay from Store Hours + static `assets/closed/closed-1.svg` … `closed-4.svg` (CL / OS / ED / hours; Halloween `closed-h-*` with Toki Ghost on Board 4). Halts galaxy / presentation while closed |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
