@@ -639,8 +639,15 @@
     }
   }
 
+  function isHolidaySplashArt(img) {
+    if (!img) return false;
+    if (img.id === "holiday-splash-art") return true;
+    return !!(img.closest && img.closest("#holiday-splash"));
+  }
+
   function armRasterUntilDecode(img) {
     if (!img || img.tagName !== "IMG") return;
+    if (isHolidaySplashArt(img)) return;
     img.classList.add("toki-await-decode");
     if (img.complete && img.naturalWidth > 0) {
       markRasterDecoded(img);
@@ -741,6 +748,7 @@
         const m = muts[i];
         if (m.type === "attributes" && m.target && m.target.tagName === "IMG") {
           const img = m.target;
+          if (isHolidaySplashArt(img)) continue;
           if (img.dataset && img.dataset.tokiParked === "1") continue;
           if (!img.getAttribute("src") || !(img.complete && img.naturalWidth > 0)) {
             img.classList.remove("toki-decoded");
@@ -6720,6 +6728,9 @@
     };
     if (liveSettings.sheetId) {
       cfg.googleSheetId = liveSettings.sheetId;
+      if (window.TOKI_CONFIG) {
+        window.TOKI_CONFIG.googleSheetId = liveSettings.sheetId;
+      }
     }
     applySystemFont(liveSettings.systemFont);
     const debugRaw =

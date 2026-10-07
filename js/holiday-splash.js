@@ -19,6 +19,8 @@
 
   var TZ = "America/New_York";
   var STYLE_GID = "183083022";
+  var BETA_COPY_SHEET_ID = "1Bh5pbaBUT5kzANZg_r_ELGxEkphOty4uNyg92ZDBMs8";
+  var FETCH_MS = 8000;
   var POLL_MS = 30 * 1000;
   var FADE_IN_MS = 250;
   var STAGGER_MS = 250;
@@ -40,6 +42,8 @@
   var fadeOutTimer = 0;
   var hideTimer = 0;
   var lastMinuteKey = null;
+  var liveSheetId = "";
+  var styleFetchGen = 0;
 
   function $(id) {
     return document.getElementById(id);
@@ -152,11 +156,13 @@
     return p.year * 525600 + p.month * 44640 + p.day * 1440 + p.hour * 60 + p.minute;
   }
 
-  function msUntilNextMinute(d) {
+  function msIntoMinute(d) {
     var p = easternParts(d);
-    var rem = (60 - p.second) * 1000 - (d.getMilliseconds() % 1000);
-    if (rem < 50) rem += 60000;
-    return rem;
+    return p.second * 1000 + (d.getMilliseconds() % 1000);
+  }
+
+  function splashWindowMs() {
+    return BOARD_COUNT * STAGGER_MS + HOLD_MS + FADE_OUT_MS;
   }
 
   function mix32(n) {
@@ -299,10 +305,81 @@
     return !!fallback;
   }
 
+  function urlWantsBeta() {
+    try {
+      return query().has("beta");
+    } catch (e) {
+      return false;
+    }
+  }
+
   function catalogSheetId() {
-    var cfg = root.TOKI_CONFIG;
-    if (cfg && cfg.googleSheetId) return String(cfg.googleSheetId).trim();
+    if (urlWantsBeta()) return BETA_COPY_SHEET_ID;
+    if (liveSheetId) return liveSheetId;
+    // Do not use TOKI_CONFIG.googleSheetId — config.js still names Alpha Copy.
+    // Boards paint Restaurant (or ?beta) after live settings; splash must match.
     return "";
+  }
+
+  function fetchWithTimeout(url, ms) {
+    ms = ms || FETCH_MS;
+    var opts = { cache: "no-store", mode: "cors" };
+    if (typeof AbortController !== "function") {
+      return fetch(url, opts);
+    }
+    var ctrl = new AbortController();
+    opts.signal = ctrl.signal;
+    var t = window.setTimeout(function () {
+      try {
+        ctrl.abort();
+      } catch (e) {}
+    }, ms);
+    return fetch(url, opts).then(
+      function (res) {
+        window.clearTimeout(t);
+        return res;
+      },
+      function (err) {
+        window.clearTimeout(t);
+        throw err;
+      }
+    );
+  }
+
+  function healthUrls() {
+    var urls = ["/api/health"];
+    var base = String(root.TOKI_API_BASE || "").replace(/\/$/, "");
+    if (base) urls.push(base + "/api/health");
+    return urls;
+  }
+
+  function fetchHealthSheetId() {
+    if (urlWantsBeta()) {
+      liveSheetId = BETA_COPY_SHEET_ID;
+      return Promise.resolve(liveSheetId);
+    }
+    if (liveSheetId) return Promise.resolve(liveSheetId);
+    var urls = healthUrls();
+    var i = 0;
+    function next() {
+      if (i >= urls.length) return Promise.resolve("");
+      var url = urls[i++];
+      return fetchWithTimeout(url, 6000)
+        .then(function (res) {
+          if (!res.ok) throw new Error("health " + res.status);
+          return res.json();
+        })
+        .then(function (j) {
+          var sid = String((j && j.sheetId) || "").trim();
+          if (!sid) throw new Error("health empty");
+          liveSheetId = sid;
+          return sid;
+        })
+        .catch(function () {
+          return next();
+        });
+    }
+    return next();
   }
 
   function parseStyleFlags(rows) {
@@ -325,12 +402,18 @@
     var fold;
     for (c = 0; c < headers.length; c++) {
       fold = foldKey(headers[c]);
-      if (fold === "themeselector" && colTheme < 0) colTheme = c;
+      if (
+        (fold === "themeselector" || fold.indexOf("themeselector") === 0) &&
+        colTheme < 0
+      ) {
+        colTheme = c;
+      }
       if (fold === "spookyroulette" && colRoulette < 0) colRoulette = c;
     }
+    if (colTheme < 0) colTheme = 0;
     if (colRoulette < 0 && headers.length > 13) {
       fold = foldKey(headers[13]);
-      if (!fold) colRoulette = 13;
+      if (!fold || fold === "spookyroulette") colRoulette = 13;
     }
     var H = root.TOKI_HALLOWEEN;
     var themeName = colTheme >= 0 ? cell(row, colTheme) : "";
@@ -371,34 +454,50 @@
   }
 
   function fetchText(url) {
-    return fetch(url, { cache: "no-store", mode: "cors" }).then(function (res) {
+    return fetchWithTimeout(url).then(function (res) {
       if (!res.ok) throw new Error("splash style " + res.status);
       return res.text();
     });
   }
 
   function fetchStyleFlags() {
-    var urls = styleCsvUrls();
-    var i = 0;
-    function next() {
-      if (i >= urls.length) return Promise.reject(new Error("splash style empty"));
-      var url = urls[i++];
-      return fetchText(url).then(
-        function (text) {
-          if (/^\s*</.test(text)) throw new Error("splash style HTML");
-          var flags = parseStyleFlags(parseCsv(text));
-          applyStyleFlags(flags);
-          return flags;
-        },
-        function () {
-          return next();
+    var gen = ++styleFetchGen;
+    return fetchHealthSheetId()
+      .then(function () {
+        var urls = styleCsvUrls();
+        var i = 0;
+        function next() {
+          if (i >= urls.length) {
+            return Promise.reject(new Error("splash style empty"));
+          }
+          var url = urls[i++];
+          return fetchText(url).then(
+            function (text) {
+              if (/^\s*</.test(text)) throw new Error("splash style HTML");
+              var flags = parseStyleFlags(parseCsv(text));
+              if (gen !== styleFetchGen) return flags;
+              applyStyleFlags(flags);
+              console.info(
+                "[TokiMenu splash] style",
+                flags.themeName || "?",
+                "roulette",
+                flags.roulette ? "yes" : "no",
+                "sheet",
+                catalogSheetId() || "tv-default"
+              );
+              return flags;
+            },
+            function () {
+              return next();
+            }
+          );
         }
-      );
-    }
-    return next().catch(function (err) {
-      console.warn("[TokiMenu splash] Style", err);
-      return null;
-    });
+        return next();
+      })
+      .catch(function (err) {
+        console.warn("[TokiMenu splash] Style", err);
+        return null;
+      });
   }
 
   function ensureOverlay() {
@@ -416,6 +515,7 @@
       art.id = "holiday-splash-art";
       art.alt = "";
       art.draggable = false;
+      art.classList.add("toki-decoded");
       overlay.appendChild(art);
       stage.appendChild(overlay);
     } else {
@@ -465,18 +565,19 @@
     if (!H || typeof H.splashUrl !== "function") return;
     ensureOverlay();
     if (!overlay || !art) return;
+    slot = boardSlot();
     var idx = pickIndex(key);
     var src = H.splashUrl(idx);
     var label = H.splashLabel ? H.splashLabel(idx) : String(idx);
     if (art.getAttribute("src") !== src) art.src = src;
+    art.classList.add("toki-decoded");
+    art.classList.remove("toki-await-decode");
     overlay.setAttribute("aria-label", "Holiday splash " + label);
     lastMinuteKey = key;
     playing = true;
     overlay.hidden = false;
     overlay.setAttribute("aria-hidden", "false");
     overlay.classList.add("is-visible");
-    overlay.style.opacity = "0";
-    overlay.classList.remove("is-in");
     console.info(
       "[TokiMenu splash] board",
       slot,
@@ -491,15 +592,40 @@
       overlay.classList.add("is-in");
       return;
     }
-    var delay = (slot - 1) * STAGGER_MS;
-    var untilOut = BOARD_COUNT * STAGGER_MS + HOLD_MS - delay;
-    overlay.style.transition = "none";
-    fadeInTimer = window.setTimeout(function () {
-      fadeInTimer = 0;
-      overlay.style.transition = "opacity " + FADE_IN_MS + "ms linear";
+    var elapsed = mode === "now" ? 0 : msIntoMinute(nowDate());
+    var fadeStart = (slot - 1) * STAGGER_MS;
+    var fadeOutAt = BOARD_COUNT * STAGGER_MS + HOLD_MS;
+    if (elapsed >= fadeOutAt + FADE_OUT_MS) {
+      hideOverlay();
+      return;
+    }
+    clearPlayTimers();
+    if (elapsed >= fadeStart + FADE_IN_MS) {
+      overlay.style.transition = "none";
       overlay.style.opacity = "1";
       overlay.classList.add("is-in");
-    }, delay);
+    } else {
+      overlay.style.transition = "none";
+      overlay.style.opacity = "0";
+      overlay.classList.remove("is-in");
+      var delay = Math.max(0, fadeStart - elapsed);
+      fadeInTimer = window.setTimeout(function () {
+        fadeInTimer = 0;
+        overlay.style.transition = "opacity " + FADE_IN_MS + "ms linear";
+        overlay.style.opacity = "1";
+        overlay.classList.add("is-in");
+      }, delay);
+    }
+    if (elapsed >= fadeOutAt) {
+      overlay.style.transition = "opacity " + FADE_OUT_MS + "ms linear";
+      overlay.style.opacity = "0";
+      overlay.classList.remove("is-in");
+      hideTimer = window.setTimeout(function () {
+        hideTimer = 0;
+        hideOverlay();
+      }, FADE_OUT_MS + 20);
+      return;
+    }
     fadeOutTimer = window.setTimeout(function () {
       fadeOutTimer = 0;
       overlay.style.transition = "opacity " + FADE_OUT_MS + "ms linear";
@@ -509,28 +635,40 @@
         hideTimer = 0;
         hideOverlay();
       }, FADE_OUT_MS + 20);
-    }, untilOut);
+    }, fadeOutAt - elapsed);
+  }
+
+  function tickSplash() {
+    if (!enabled()) {
+      if (playing) hideOverlay();
+      return;
+    }
+    if (readSplashMode() === "hold") return;
+    var now = nowDate();
+    var key = minuteKey(now);
+    var elapsed = msIntoMinute(now);
+    if (elapsed <= splashWindowMs()) {
+      if (key !== lastMinuteKey || (!playing && elapsed < BOARD_COUNT * STAGGER_MS + HOLD_MS)) {
+        play(key, "tick");
+      }
+    } else if (playing && elapsed > splashWindowMs()) {
+      hideOverlay();
+    }
   }
 
   function arm() {
-    if (armTimer) window.clearTimeout(armTimer);
+    if (armTimer) window.clearInterval(armTimer);
     armTimer = 0;
     if (!enabled()) return;
     if (readSplashMode() === "hold") return;
-    var now = nowDate();
-    var wait = frozenNow ? POLL_MS : msUntilNextMinute(now);
-    armTimer = window.setTimeout(function () {
-      armTimer = 0;
-      var key = minuteKey(nowDate());
-      if (key !== lastMinuteKey) play(key, "tick");
-      arm();
-    }, wait);
+    tickSplash();
+    armTimer = window.setInterval(tickSplash, 250);
   }
 
   function syncEnabled() {
     if (!enabled()) {
       hideOverlay();
-      if (armTimer) window.clearTimeout(armTimer);
+      if (armTimer) window.clearInterval(armTimer);
       armTimer = 0;
       return;
     }
@@ -539,7 +677,8 @@
       play(minuteKey(nowDate()), "hold");
       return;
     }
-    arm();
+    if (!armTimer) arm();
+    else tickSplash();
   }
 
   function start() {
@@ -582,7 +721,7 @@
 
   function stop() {
     if (pollTimer) window.clearInterval(pollTimer);
-    if (armTimer) window.clearTimeout(armTimer);
+    if (armTimer) window.clearInterval(armTimer);
     pollTimer = 0;
     armTimer = 0;
     hideOverlay();
