@@ -1126,8 +1126,9 @@
   /**
    * Board 4 Announcements tab (gid 149404218) — Settings + message Inventory.
    * Live Settings: A Title | B Include Footer Box | C BG Pattern (None|Stripes)
-   *   | D Show Widget? | E Override Wallpaper Scroll.
-   * Old C BG Color / D Pattern / E–F stripe colors are dead — do not read.
+   *   | D Show Widget? | E Override Wallpaper Scroll | F BG Color Override
+   *   | G BG Color (theme Color Picker).
+   * BG Color Override Yes → solid G color, never paint Style wallpaper.
    * Inventory (headers under Settings data; may omit "Inventory" label):
    *   Announcement Title | Subtitle | Text | Box Color | Speed |
    *   Motion Style | Motion Setting
@@ -1139,6 +1140,8 @@
     bgPattern: 2, // None | Stripes
     showWidget: 3, // Show Widget?
     overrideWallpaperScroll: 4, // Override Wallpaper Scroll — freeze drinks wallpaper
+    bgColorOverride: 5, // BG Color Override — skip wallpaper, solid theme color
+    bgColor: 6, // BG Color — Color Picker label (Main / Secondary / Highlight / Special)
   };
   const ANN_REVISED_INVENTORY = {
     announcementTitle: 0,
@@ -1423,6 +1426,8 @@
     stripeColor2: "#ffffff",
     includeStripes: false,
     overrideWallpaperScroll: false,
+    bgColorOverride: false,
+    bgColorOverrideChoice: "",
     bgPattern: null,
     patternColor1: "#000000",
     patternColor2: "#ffffff",
@@ -1936,6 +1941,26 @@
     try {
       window.TOKI_SPOOKY_ROULETTE = !!config.spookyRoulette;
     } catch (e) {}
+    if (isDrinks && lp.bgColorOverride) {
+      config.bgColorOverride = true;
+      config.bgColorOverrideChoice = lp.bgColorOverrideChoice || "";
+      config.bgImage = null;
+      const plate =
+        normalizeHex(lp.bgColor) ||
+        normalizeHex(lp.secondary) ||
+        normalizeHex(lp.main) ||
+        "#000000";
+      config.bgColor = plate;
+      config.bgSolid = plate;
+      config.bgMode = "solid";
+      const galaxy = document.getElementById("galaxy");
+      if (galaxy) {
+        galaxy.style.backgroundColor = plate;
+        galaxy.classList.add("is-solid");
+        galaxy.classList.remove("has-image");
+      }
+      if (document.body) document.body.classList.add("ann-solid-bg");
+    }
     applyHalloweenMark(lp.themeName);
     return true;
   }
@@ -1948,6 +1973,11 @@
       special: config.highlightSpecial || "#fff900",
       spookyRoulette: !!config.spookyRoulette,
     };
+    if (isDrinks) {
+      p.bgColorOverride = !!config.bgColorOverride;
+      p.bgColorOverrideChoice = config.bgColorOverrideChoice || "";
+      p.bgColor = config.bgColor || "";
+    }
     writeLastPaint(p);
   }
 
@@ -4109,6 +4139,13 @@
       normalizeHex(config.bgSolid) ||
       main;
     let imagePath = config.bgImage || null;
+    if (isDrinks && config.bgColorOverride) imagePath = null;
+    if (document.body) {
+      document.body.classList.toggle(
+        "ann-solid-bg",
+        !!(isDrinks && config.bgColorOverride)
+      );
+    }
     if (imagePath) {
       const rawPath = imagePath;
       imagePath = displayFriendlyBgPath(imagePath);
@@ -4853,20 +4890,21 @@
     }
 
     // Live Settings: A Title | B Include Footer Box | C BG Pattern |
-    // D Show Widget? | E Override Wallpaper Scroll.
+    // D Show Widget? | E Override Wallpaper Scroll | F BG Color Override |
+    // G BG Color (Color Picker; header may carry a Style formula suffix).
     const settingsHeaders =
       settingsIdx > 0 ? rows[settingsIdx - 1] : rows[1] || [];
+    function foldAnnHeader(s) {
+      return String(s || "")
+        .replace(/\s*\(.*$/, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "");
+    }
     function annSettingsCol(fallback, names) {
       let i;
-      const wants = names.map(function (n) {
-        return String(n || "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "");
-      });
+      const wants = names.map(foldAnnHeader);
       for (i = 0; i < settingsHeaders.length; i++) {
-        const k = String(settingsHeaders[i] || "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "");
+        const k = foldAnnHeader(settingsHeaders[i]);
         if (wants.indexOf(k) >= 0) return i;
       }
       return fallback;
@@ -4876,6 +4914,12 @@
       "Override Wallpaper Scroll",
       "Override Wallpaper",
     ]);
+    const bgOverrideCol = annSettingsCol(rs.bgColorOverride, [
+      "BG Color Override",
+      "Override BG Color",
+      "Background Color Override",
+    ]);
+    const bgColorCol = annSettingsCol(rs.bgColor, ["BG Color", "Background Color"]);
     const showPanelPattern = isStripesPatternToken(
       cell(settingsRow, patternCol)
     );
@@ -4883,6 +4927,13 @@
       cell(settingsRow, overrideCol),
       false
     );
+    const bgColorOverride = parseYesNo(
+      cell(settingsRow, bgOverrideCol),
+      false
+    );
+    const bgColorOverrideChoice = String(
+      cell(settingsRow, bgColorCol) || ""
+    ).trim();
 
     const footerSel = normalizeFooterBoxSelection(
       cell(settingsRow, rs.includeFooterBox)
@@ -4899,6 +4950,8 @@
       includeFooterBox: footerSel,
       includeStripes: showPanelPattern,
       overrideWallpaperScroll: overrideWallpaperScroll,
+      bgColorOverride: bgColorOverride,
+      bgColorOverrideChoice: bgColorOverrideChoice,
       announcementBox: {
         title: firstMsg ? firstMsg.title : "",
         subtitle: firstMsg ? firstMsg.subtitle : "",
@@ -5257,7 +5310,7 @@
       parsed.footerDrinksBoxBg
     );
 
-    const bgColor =
+    let bgColor =
       normalizeHex(parsed.bgColor) ||
       normalizeHex(parsed.bgSolid) ||
       main;
@@ -5278,6 +5331,15 @@
       : config.bgPattern;
     if (isStripesPatternToken(bgPattern)) {
       bgImage = null;
+    }
+    const bgColorOverride = isDrinks && !!parsed.bgColorOverride;
+    const bgColorOverrideChoice = bgColorOverride
+      ? String(parsed.bgColorOverrideChoice || "").trim()
+      : "";
+    if (bgColorOverride) {
+      bgImage = null;
+      bgColor =
+        parseBgColor(bgColorOverrideChoice, null, themeColors) || main;
     }
     const bgBlur = parseUnit01(
       parsed.bgBlur != null ? parsed.bgBlur : config.bgBlur,
@@ -5340,6 +5402,8 @@
       overrideWallpaperScroll: isDrinks
         ? !!parsed.overrideWallpaperScroll
         : false,
+      bgColorOverride: bgColorOverride,
+      bgColorOverrideChoice: bgColorOverrideChoice,
       announcementBg: annSurf.color,
       announcementBgImage: annSurf.image,
       announcementBodyText: annSurf.text,
@@ -15196,7 +15260,13 @@
 
   /** Wallpaper pan only. Announcements "Override Wallpaper Scroll" freezes drinks. */
   function wallpaperScrollMult() {
-    if (isDrinks && config && config.overrideWallpaperScroll) return 0;
+    if (
+      isDrinks &&
+      config &&
+      (config.overrideWallpaperScroll || config.bgColorOverride)
+    ) {
+      return 0;
+    }
     return parseBgScrollSpeed(config && config.bgScrollSpeed, 1);
   }
 
@@ -15591,10 +15661,16 @@
     applyStageBackground();
     applyBgPattern();
     // Color-only (no image): no pan/crossfade loop
-    if (!config.bgImage) return;
+    if (!config.bgImage) {
+      pauseGalaxyScroll();
+      return;
+    }
     if (!els.galaxyA) return;
     if (isStoreClosed()) galaxyPaused = true;
-    if (galaxyStarted) return; // idempotent — softReload must not re-enter
+    if (galaxyStarted) {
+      resumeGalaxyScroll();
+      return;
+    }
     galaxyStarted = true;
 
     // Wall, or scroll=0: one layer. Dual only when the wallpaper actually pans.
@@ -15888,6 +15964,8 @@
       s2: config.stripeColor2,
       includeStripes: config.includeStripes,
       overrideWallpaperScroll: !!config.overrideWallpaperScroll,
+      bgColorOverride: !!config.bgColorOverride,
+      bgColorOverrideChoice: config.bgColorOverrideChoice || "",
       annBg: config.announcementBg,
       annImg: config.announcementBgImage,
       proteinBg: config.proteinBoxBg,
@@ -15966,9 +16044,7 @@
     renderTitle();
     renderList();
     renderFooterBoxes();
-    applyStageBackground();
-    applyBgPattern();
-    if (config.bgImage) startGalaxyScroll();
+    startGalaxyScroll();
     const maxIdx =
       isDrinks || usesBoardSlides()
         ? Math.max(0, slides.length - 1)
@@ -16538,6 +16614,9 @@
               .join(", ");
           }
           case "bgWallpaper": {
+            if (config.bgColorOverride) {
+              return "override " + (config.bgColor || "solid");
+            }
             if (!config.bgImage) {
               if (config.bgPattern && isStripesPatternToken(config.bgPattern)) {
                 return "none (pattern owns BG)";
@@ -16563,9 +16642,11 @@
           case "bgDualPan":
             return wallpaperScrollMult() > 0
               ? "scroll on"
-              : config.overrideWallpaperScroll
-                ? "override off"
-                : "scroll 0";
+              : config.bgColorOverride
+                ? "color override"
+                : config.overrideWallpaperScroll
+                  ? "override off"
+                  : "scroll 0";
           case "heroPlate":
             return (
               rasterDebugLabel(els.hero, els.hero && els.hero.getAttribute("src")) +

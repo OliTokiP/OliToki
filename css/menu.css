@@ -124,6 +124,14 @@ body {
   display: none !important;
 }
 
+/* Announcements BG Color Override: solid plate, no wallpaper bitmaps. */
+body.ann-solid-bg #galaxy-a,
+body.ann-solid-bg #galaxy-b {
+  display: none !important;
+  filter: none !important;
+  will-change: auto !important;
+}
+
 /* Encore + collage: image lives on the portrait rig; hide free galaxy layers
    (solid plate stays). Saves pan RAF work and locks BG to Ken Burns zoom. */
 #galaxy.encore-scaffold-bg .galaxy-layer {

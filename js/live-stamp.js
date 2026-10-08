@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "28c4d77",
-  "hashFull": "28c4d774dcb97527616f0c8fee178954ea855421",
-  "subject": "Honor Deployer pin on testing Cloud Run sheet force"
+  "hash": "4ffc44a",
+  "hashFull": "4ffc44ae2b92100a2012ce62a346d8bd1c9b2deb",
+  "subject": "Announcements BG Color Override paints a solid theme color and skips wallpaper"
 };
