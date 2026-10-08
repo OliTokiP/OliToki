@@ -12,9 +12,10 @@
  * key is still the shuffle seed so four TVs pick the same four costumes.
  *
  * Overlay is a CSS background on #holiday-splash — never an <img>, so it
- * stays out of the food-image decoder. Fade is Web Animations (opacity),
- * not a class snap. Art preloads before the fade so the SVG is not still
- * decoding at full opacity. Costume art keeps its own fills; #splash-bg
+ * stays out of the food-image decoder. Fade is an inline CSS opacity
+ * transition (Silk drops WAAPI interpolation on this full-stage layer when
+ * drinks stripes are scrolling). Art preloads before the fade so the SVG
+ * is not still decoding at full opacity. Costume art keeps its own fills; #splash-bg
  * and #splash-caption take that board’s theme pair:
  *   1 Highlight / Main, 2 Secondary / Main, 3 Special / Main, 4 Main / Secondary.
  * Spooky Roulette is read from last-paint, then toki:theme-change /
@@ -58,6 +59,7 @@
   var preloaded = false;
   var preloadDone = false;
   var preloadWaiters = [];
+  var splashFadeGen = 0;
 
   var FALLBACK_MAIN = "#1A0A24";
   var FALLBACK_SECONDARY = "#F5E6D3";
@@ -467,7 +469,17 @@
     hideTimer = 0;
   }
 
+  function setStripeFadePause(on) {
+    try {
+      if (document.body) {
+        document.body.classList.toggle("splash-fading", !!on);
+      }
+    } catch (e) {}
+  }
+
   function cancelFade() {
+    splashFadeGen += 1;
+    setStripeFadePause(false);
     if (!overlay) return;
     if (overlay.getAnimations) {
       overlay.getAnimations().forEach(function (a) {
@@ -491,31 +503,43 @@
       return;
     }
     cancelFade();
+    var gen = splashFadeGen;
+    function alive() {
+      return gen === splashFadeGen && overlay;
+    }
     var from = currentOpacity();
     var dur = ms > 0 ? ms : 0;
+    overlay.style.transition = "none";
     overlay.style.opacity = String(from);
+    void overlay.offsetWidth;
     if (dur <= 0 || from === to) {
       overlay.style.opacity = String(to);
       if (done) done();
       return;
     }
-    if (typeof overlay.animate === "function") {
-      var anim = overlay.animate(
-        [{ opacity: from }, { opacity: to }],
-        { duration: dur, easing: "linear", fill: "forwards" }
-      );
-      anim.onfinish = function () {
+    // Pause drinks stripe scroll only for the fade window. Silk drops a
+    // full-stage opacity interpolation while the 320% stripe track is
+    // transforming; announcements could keep scrolling because those boxes
+    // are small. Resume as soon as this fade commits.
+    setStripeFadePause(true);
+    requestAnimationFrame(function () {
+      if (!alive()) return;
+      requestAnimationFrame(function () {
+        if (!alive()) return;
+        overlay.style.transition = "none";
+        overlay.style.opacity = String(from);
+        void overlay.offsetWidth;
+        overlay.style.transition = "opacity " + dur + "ms linear";
         overlay.style.opacity = String(to);
-        if (done) done();
-      };
-      return;
-    }
-    overlay.style.transition = "opacity " + dur + "ms linear";
-    void overlay.offsetWidth;
-    overlay.style.opacity = String(to);
-    window.setTimeout(function () {
-      if (done) done();
-    }, dur);
+        window.setTimeout(function () {
+          if (!alive()) return;
+          overlay.style.transition = "none";
+          overlay.style.opacity = String(to);
+          setStripeFadePause(false);
+          if (done) done();
+        }, dur + 40);
+      });
+    });
   }
 
   function hideOverlay() {

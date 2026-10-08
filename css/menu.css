@@ -2322,6 +2322,13 @@ body.pattern-bake.preview-wall #bg-pattern-track {
   will-change: opacity;
 }
 
+/* Pause drinks stripe scroll only while the splash overlay is interpolating.
+   Hold / idle keep stripes moving. */
+body.splash-fading #stripes-track,
+body.splash-fading #bg-pattern-track {
+  animation-play-state: paused !important;
+}
+
 #holiday-splash[hidden] {
   display: none !important;
   visibility: hidden;

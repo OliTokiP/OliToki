@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "4ffc44a",
-  "hashFull": "4ffc44ae2b92100a2012ce62a346d8bd1c9b2deb",
-  "subject": "Announcements BG Color Override paints a solid theme color and skips wallpaper"
+  "hash": "e7c8e9c",
+  "hashFull": "e7c8e9cb887a43de6f46636a950d988ac9d47d24",
+  "subject": "Splash fade uses CSS opacity commit and pauses stripes only during the fade"
 };
