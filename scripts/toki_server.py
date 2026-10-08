@@ -4260,6 +4260,7 @@ def make_handler(
                         "forcedSource": (live or {}).get("forcedSource")
                         or (os.environ.get("TOKI_FORCE_SOURCE") or ""),
                         "revision": os.environ.get("K_REVISION") or "",
+                        "nowMs": int(time.time() * 1000),
                         "email": (
                             backend.creds.service_account_email
                             if backend

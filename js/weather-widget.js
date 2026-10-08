@@ -3,10 +3,10 @@
  *
  * Mockup: vault Mockups/Weather Widget Mockup.pdf @ 1920×1080.
  * Live clock + hours in America/New_York. The clock is a headless Eastern
- * second tick on every board (toki:clock-tick), aimed at Date second
- * boundaries so drinks HUD paint cannot skip or slip a second. The HUD,
- * Open-Meteo, and Store Hours fetch run only when #weather-widget is in
- * the page (Board 4).
+ * second tick on every board (toki:clock-tick), aimed at Cloud Run nowMs
+ * so four Fire Sticks share one server clock. HUD paint is scheduled after
+ * the next-second timer is armed. The HUD, Open-Meteo, and Store Hours
+ * fetch run only when #weather-widget is in the page (Board 4).
  * Hours come from OliToki Menu Settings → Store Hours (close past 24:00
  * stays on that service day until that close). Current °F + animated
  * amCharts SVG from Open-Meteo. Closed Status may hide the HUD; the clock
@@ -24,6 +24,7 @@
   var WEATHER_MS = 10 * 60 * 1000;
   var HOURS_MS = 10 * 60 * 1000;
   var CLOCK_MS = 1000;
+  var CLOCK_SYNC_MS = 10 * 60 * 1000;
   var WEEK_MIN = 7 * 1440;
   var STORE_HOURS_GID = "1732597216";
   var ICON_BASE = "assets/amcharts_weather_icons_1.0.0/";
@@ -47,6 +48,8 @@
   var lastIcon = "";
   var svgCache = {};
   var clockStarted = false;
+  var clockOffsetMs = 0;
+  var clockSyncTimer = 0;
   var hudStarted = false;
   var visBound = false;
   var frozenNow = null;
@@ -73,7 +76,41 @@
   }
 
   function nowDate() {
-    return frozenNow || new Date();
+    if (frozenNow) return frozenNow;
+    return new Date(Date.now() + clockOffsetMs);
+  }
+
+  function healthUrls() {
+    var urls = ["/api/health"];
+    try {
+      var base = String(root.TOKI_API_BASE || "").replace(/\/$/, "");
+      if (base) urls.push(base + "/api/health");
+    } catch (e) {}
+    return urls;
+  }
+
+  function syncServerClock() {
+    var urls = healthUrls();
+    var t0 = Date.now();
+    function tryUrl(i) {
+      if (i >= urls.length) return Promise.resolve();
+      return fetch(urls[i], { cache: "no-store" })
+        .then(function (res) {
+          if (!res.ok) return tryUrl(i + 1);
+          return res.json().then(function (j) {
+            var t1 = Date.now();
+            var server = Number(j && j.nowMs);
+            if (!Number.isFinite(server) || server <= 0) return;
+            clockOffsetMs = Math.round(server - (t0 + t1) / 2);
+          });
+        })
+        .catch(function () {
+          return tryUrl(i + 1);
+        });
+    }
+    return tryUrl(0).then(function () {
+      if (clockStarted && !frozenNow) scheduleClock();
+    });
   }
 
   function readFrozenNow() {
@@ -391,11 +428,12 @@
     }
     // Arm the next second first so drinks HUD paint cannot eat the wait
     // or skip a boundary (old <16ms bump jumped a whole second).
-    var next = nextSecondAt(Date.now());
+    var nowMs = nowDate().getTime();
+    var next = nextSecondAt(nowMs);
     clockTimer = window.setTimeout(function () {
       clockTimer = 0;
       scheduleClock();
-    }, Math.max(0, next - Date.now()));
+    }, Math.max(0, next - nowMs));
     tickClock();
   }
 
@@ -564,6 +602,11 @@
       document.addEventListener("visibilitychange", onVis);
     }
     scheduleClock();
+    if (!frozenNow) {
+      syncServerClock();
+      if (clockSyncTimer) window.clearInterval(clockSyncTimer);
+      clockSyncTimer = window.setInterval(syncServerClock, CLOCK_SYNC_MS);
+    }
   }
 
   function startHud() {
@@ -603,6 +646,8 @@
 
   function stop() {
     stopHud();
+    if (clockSyncTimer) window.clearInterval(clockSyncTimer);
+    clockSyncTimer = 0;
   }
 
   root.TOKI_WEATHER_WIDGET = {
@@ -611,6 +656,7 @@
     startClock: startClock,
     startHud: startHud,
     stopHud: stopHud,
+    nowDate: nowDate,
     refresh: fetchWeather,
     refreshHours: fetchHours,
     activeUntilFor: function (date) {
