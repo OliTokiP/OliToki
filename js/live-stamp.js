@@ -1,5 +1,5 @@
 window.TOKI_LIVE_STAMP = {
-  "hash": "0d17958",
-  "hashFull": "0d179583f805b2d7f294efbf4e8656c390c867d2",
+  "hash": "f95bb17",
+  "hashFull": "f95bb17b4a524fab8365ad333f9167e01d29e73a",
   "subject": "Share Cloud Run nowMs as the splash clock; restore one-shot fade cues"
 };
