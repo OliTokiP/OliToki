@@ -8,8 +8,10 @@
  * last board is in, then all four fade out together (0.5s).
  *
  * The trigger is the weather clock (toki:clock-tick), an Eastern-second
- * pulse shared by every board — HUD on drinks, headless on 1–3. Minute
- * key is still the shuffle seed so four TVs pick the same four costumes.
+ * pulse on every board — HUD on drinks, headless on 1–3. Fade-in stagger
+ * and the shared fade-out are re-armed from ms-into-minute on each tick
+ * so a late drinks setTimeout cannot slip the whole cue. Minute key is
+ * still the shuffle seed so four TVs pick the same four costumes.
  *
  * Overlay is a CSS background on #holiday-splash — never an <img>, so it
  * stays out of the food-image decoder. Fade is an inline CSS opacity
@@ -60,6 +62,13 @@
   var preloadDone = false;
   var preloadWaiters = [];
   var splashFadeGen = 0;
+  var cueKey = null;
+  var cueFadeStart = 0;
+  var cueFadeOutAt = 0;
+  var cueFromMinute = true;
+  var cueOrigin = 0;
+  var fadedIn = false;
+  var fadedOut = false;
 
   var FALLBACK_MAIN = "#1A0A24";
   var FALLBACK_SECONDARY = "#F5E6D3";
@@ -184,7 +193,7 @@
 
   function msUntilNextSecond(d) {
     var wait = 1000 - d.getMilliseconds();
-    if (wait < 16) wait += 1000;
+    if (wait < 1) wait = 1000;
     return wait;
   }
 
@@ -545,6 +554,11 @@
   function hideOverlay() {
     clearPlayTimers();
     playing = false;
+    cueKey = null;
+    cueFromMinute = true;
+    cueOrigin = 0;
+    fadedIn = false;
+    fadedOut = false;
     if (!overlay) return;
     cancelFade();
     overlay.style.opacity = "0";
@@ -619,6 +633,78 @@
     });
   }
 
+  function cueElapsed() {
+    if (cueFromMinute) return msIntoMinute(nowDate());
+    return Math.max(0, Date.now() - cueOrigin);
+  }
+
+  function startFadeIn() {
+    if (!playing || !overlay || fadedIn || fadedOut) return;
+    if (cueKey && lastMinuteKey !== cueKey) return;
+    fadedIn = true;
+    fadeInTimer = 0;
+    overlay.classList.remove("is-hold");
+    overlay.classList.remove("is-out");
+    overlay.classList.add("is-in");
+    var remaining = cueFadeStart + FADE_IN_MS - cueElapsed();
+    if (remaining < 16) {
+      overlay.style.opacity = "1";
+      overlay.classList.add("is-hold");
+      return;
+    }
+    fadeOpacity(1, Math.min(FADE_IN_MS, remaining));
+  }
+
+  function startFadeOut() {
+    if (!playing || !overlay || fadedOut) return;
+    if (cueKey && lastMinuteKey !== cueKey) return;
+    fadedOut = true;
+    fadedIn = true;
+    fadeOutTimer = 0;
+    if (fadeInTimer) {
+      window.clearTimeout(fadeInTimer);
+      fadeInTimer = 0;
+    }
+    overlay.classList.remove("is-hold");
+    overlay.classList.remove("is-in");
+    overlay.classList.add("is-out");
+    fadeOpacity(0, FADE_OUT_MS, function () {
+      if (lastMinuteKey !== cueKey) return;
+      hideOverlay();
+    });
+  }
+
+  function armCues(elapsed) {
+    if (!playing || fadedOut) return;
+    if (fadeInTimer) {
+      window.clearTimeout(fadeInTimer);
+      fadeInTimer = 0;
+    }
+    if (fadeOutTimer) {
+      window.clearTimeout(fadeOutTimer);
+      fadeOutTimer = 0;
+    }
+    var waitOut = cueFadeOutAt - elapsed;
+    if (waitOut <= 16) {
+      startFadeOut();
+      return;
+    }
+    fadeOutTimer = window.setTimeout(function () {
+      fadeOutTimer = 0;
+      startFadeOut();
+    }, waitOut);
+    if (fadedIn) return;
+    var waitIn = cueFadeStart - elapsed;
+    if (waitIn <= 16) {
+      startFadeIn();
+      return;
+    }
+    fadeInTimer = window.setTimeout(function () {
+      fadeInTimer = 0;
+      startFadeIn();
+    }, waitIn);
+  }
+
   function runPlay(key, mode) {
     if (!enabled()) {
       hideOverlay();
@@ -630,7 +716,16 @@
     ensureOverlay();
     if (!overlay) return;
     slot = boardSlot();
-    var elapsed = mode === "now" ? 0 : msIntoMinute(nowDate());
+    var elapsed;
+    if (mode === "now") {
+      cueFromMinute = false;
+      cueOrigin = Date.now();
+      elapsed = 0;
+    } else {
+      cueFromMinute = true;
+      cueOrigin = 0;
+      elapsed = msIntoMinute(nowDate());
+    }
     var fadeStart = (slot - 1) * STAGGER_MS;
     var staggerEnd = BOARD_COUNT * STAGGER_MS;
     var fadeOutAt = staggerEnd + HOLD_MS;
@@ -644,6 +739,11 @@
     var idx = pickIndex(key);
     var label = applyArt(idx);
     lastMinuteKey = key;
+    cueKey = key;
+    cueFadeStart = fadeStart;
+    cueFadeOutAt = fadeOutAt;
+    fadedIn = false;
+    fadedOut = false;
     playing = true;
     clearPlayTimers();
     cancelFade();
@@ -667,26 +767,8 @@
       overlay.classList.add("is-hold");
       overlay.classList.add("is-in");
       overlay.style.opacity = "1";
+      fadedIn = true;
       return;
-    }
-    function startFadeIn() {
-      if (!playing || !overlay || lastMinuteKey !== key) return;
-      fadeInTimer = 0;
-      overlay.classList.remove("is-hold");
-      overlay.classList.remove("is-out");
-      overlay.classList.add("is-in");
-      fadeOpacity(1, FADE_IN_MS);
-    }
-    function startFadeOut() {
-      if (!playing || !overlay || lastMinuteKey !== key) return;
-      fadeOutTimer = 0;
-      overlay.classList.remove("is-hold");
-      overlay.classList.remove("is-in");
-      overlay.classList.add("is-out");
-      fadeOpacity(0, FADE_OUT_MS, function () {
-        if (lastMinuteKey !== key) return;
-        hideOverlay();
-      });
     }
     if (elapsed >= fadeOutAt) {
       overlay.style.opacity = "1";
@@ -698,23 +780,15 @@
       overlay.classList.add("is-hold");
       overlay.classList.add("is-in");
       overlay.style.opacity = "1";
+      fadedIn = true;
     } else if (elapsed >= fadeStart) {
       var already = (elapsed - fadeStart) / FADE_IN_MS;
       overlay.style.opacity = String(Math.max(0, Math.min(1, already)));
       overlay.classList.add("is-in");
-      fadeOpacity(1, fadeStart + FADE_IN_MS - elapsed);
     } else {
       overlay.style.opacity = "0";
-      var wait = fadeStart - elapsed;
-      if (wait <= 16) {
-        window.requestAnimationFrame(function () {
-          window.requestAnimationFrame(startFadeIn);
-        });
-      } else {
-        fadeInTimer = window.setTimeout(startFadeIn, wait);
-      }
     }
-    fadeOutTimer = window.setTimeout(startFadeOut, fadeOutAt - elapsed);
+    armCues(elapsed);
   }
 
   function tickSplash() {
@@ -726,7 +800,9 @@
     var now = nowDate();
     var key = minuteKey(now);
     var elapsed = msIntoMinute(now);
-    if (elapsed <= splashWindowMs()) {
+    if (playing && lastMinuteKey === key) {
+      armCues(cueElapsed());
+    } else if (elapsed <= splashWindowMs()) {
       if (key !== lastMinuteKey) play(key, "tick");
     } else if (playing && elapsed > splashWindowMs()) {
       hideOverlay();

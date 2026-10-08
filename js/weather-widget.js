@@ -3,8 +3,10 @@
  *
  * Mockup: vault Mockups/Weather Widget Mockup.pdf @ 1920×1080.
  * Live clock + hours in America/New_York. The clock is a headless Eastern
- * second tick on every board (toki:clock-tick); the HUD, Open-Meteo, and
- * Store Hours fetch run only when #weather-widget is in the page (Board 4).
+ * second tick on every board (toki:clock-tick), aimed at Date second
+ * boundaries so drinks HUD paint cannot skip or slip a second. The HUD,
+ * Open-Meteo, and Store Hours fetch run only when #weather-widget is in
+ * the page (Board 4).
  * Hours come from OliToki Menu Settings → Store Hours (close past 24:00
  * stays on that service day until that close). Current °F + animated
  * amCharts SVG from Open-Meteo. Closed Status may hide the HUD; the clock
@@ -374,21 +376,27 @@
     paintTime(p);
   }
 
-  function msUntilNextSecond(d) {
-    var wait = 1000 - d.getMilliseconds();
-    if (wait < 16) wait += 1000;
-    return wait;
+  function nextSecondAt(nowMs) {
+    var next = nowMs - (nowMs % 1000) + 1000;
+    if (next <= nowMs) next += 1000;
+    return next;
   }
 
   function scheduleClock() {
     if (clockTimer) window.clearTimeout(clockTimer);
     clockTimer = 0;
-    tickClock();
-    if (frozenNow) return;
+    if (frozenNow) {
+      tickClock();
+      return;
+    }
+    // Arm the next second first so drinks HUD paint cannot eat the wait
+    // or skip a boundary (old <16ms bump jumped a whole second).
+    var next = nextSecondAt(Date.now());
     clockTimer = window.setTimeout(function () {
       clockTimer = 0;
       scheduleClock();
-    }, msUntilNextSecond(nowDate()));
+    }, Math.max(0, next - Date.now()));
+    tickClock();
   }
 
   function iconName(code, isDay) {
