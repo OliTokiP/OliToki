@@ -16,7 +16,8 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 ### Details
 - Font: Fraunces Black Italic 306px (`assets/fonts/Fraunces-BlackItalic.ttf`). Three rows: Highlight (LTR), Secondary (RTL), Highlight Special (LTR).
 - Art: Toki Santa on boards 1+3, Toki Rudolph on 2+4 (`assets/christmas/`).
-- Plate: `#holiday-roulette` fills the Stage with `--main-color` (Christmas green). Live menu is covered, not seen through.
+- Plate: `#holiday-roulette` fills the Stage with `--main-color` (Christmas green). Live menu is covered, not seen through. The three rows keep the PDF’s 367px pitch and are centered in the Stage (caps and descenders on screen).
+- Fire Stick: each track is a few phrase copies with wrapped `translateX`, the Eastern offset is cached off the rAF, and the rest of the Stage is `visibility: hidden` while the plate is up.
 - Menu Manager shows **Holiday Roulette** On/Off as a child of Theme only when Theme is Christmas.
 - While the plate is up, galaxy pan, presentation, stripes, and soft-refresh halt (`body.holiday-roulette-on` / `toki:holiday-roulette-change`). Weather clock stays armed for the shared `nowMs` scroll. Closed Status still wins.
 - QA: `?theme=Christmas&roulette=1&splash=hold` (or `splash=1` to play the sequence). `preview-all` forwards `theme`, `roulette`, `splash`, `splashAt`.

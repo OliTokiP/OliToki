@@ -20,9 +20,19 @@
  * a CSS-background mascot — never an <img>, so the food-image decoder
  * never sees it. While the plate is up, menu.js halts galaxy pan,
  * presentation, stripes, and soft-refresh (same hang as Closed Status)
- * so Fire Sticks are not compositing the menu under an opaque layer.
- * The weather clock stays armed — roulette scroll is f(nowMs). Closed
- * Status still wins.
+ * and CSS hides the rest of the Stage so Fire Sticks are not compositing
+ * the menu under an opaque layer. The weather clock stays armed —
+ * roulette scroll is f(nowMs). Closed Status still wins.
+ *
+ * Vertical: the PDF’s 9pt optical frames sit at -101 / 266 / 633. The
+ * shipped 72pt Black Italic draws its ink higher, so those frames clip
+ * the caps. CSS shifts that same 367px pitch down 88px and centers the
+ * tight ink in the 1080 Stage.
+ *
+ * Fire Stick: each track is a few phrase copies (not a 50k-px run) and
+ * translateX wraps inside one phrase. Eastern ms-into-minute caches the
+ * timezone offset so the rAF does not build Intl every frame. Opacity is
+ * written only while it is changing.
  *
  * Sheet: Style and Theme Settings → Holiday Roulette (column O). Menu
  * Manager shows that row only when Theme is Christmas.
@@ -41,7 +51,6 @@
   var BOARD_W = 1920;
   var SPEED_PX_S = 192;
   var PHRASE = "Happy Holidays! ";
-  var COPIES = 20;
   var FONT_CSS = '900 italic 306px "Fraunces"';
 
   var LAST_PAINT_KEY = "tokiLastPaint";
@@ -62,6 +71,12 @@
   var artReady = false;
   var preloaded = false;
   var haltOn = false;
+  var easternFmt = null;
+  var tzCacheAt = 0;
+  var tzCacheOff = 0;
+  var paintedOp = "";
+  var paintedVis = "";
+  var splashNowDone = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -144,19 +159,25 @@
     return new Date();
   }
 
+  function easternFormatter() {
+    if (!easternFmt) {
+      easternFmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      });
+    }
+    return easternFmt;
+  }
+
   function easternParts(d) {
-    var fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: TZ,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    });
     var map = {};
-    fmt.formatToParts(d).forEach(function (p) {
+    easternFormatter().formatToParts(d).forEach(function (p) {
       map[p.type] = p.value;
     });
     return {
@@ -174,9 +195,24 @@
     return p.year * 525600 + p.month * 44640 + p.day * 1440 + p.hour * 60 + p.minute;
   }
 
-  function msIntoMinute(d) {
+  // America/New_York offset is whole hours and changes only at DST.
+  // Cache it so the scroll rAF does not call formatToParts every frame.
+  function easternOffsetMs(d) {
+    var t = d.getTime();
+    if (tzCacheAt && Math.abs(t - tzCacheAt) < 30000) return tzCacheOff;
     var p = easternParts(d);
-    return p.second * 1000 + (d.getMilliseconds() % 1000);
+    var asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+    var truncated = t - (t % 1000);
+    tzCacheOff = asUTC - truncated;
+    tzCacheAt = t;
+    return tzCacheOff;
+  }
+
+  function msIntoMinute(d) {
+    var ms = d.getTime() + easternOffsetMs(d);
+    var m = ms % 60000;
+    if (m < 0) m += 60000;
+    return m;
   }
 
   function splashWindowMs() {
@@ -247,7 +283,11 @@
         row.setAttribute("data-dir", dirs[i]);
         var track = document.createElement("div");
         track.className = "holiday-roulette-track";
-        track.textContent = PHRASE.repeat(COPIES);
+        var run = document.createElement("span");
+        run.className = "holiday-roulette-run";
+        run.textContent = PHRASE.repeat(4);
+        run.setAttribute("data-n", "4");
+        track.appendChild(run);
         row.appendChild(track);
         rows.appendChild(row);
         tracks.push({ el: track, dir: dirs[i] });
@@ -282,6 +322,45 @@
     mascotEl.style.backgroundImage = "url(" + JSON.stringify(src) + ")";
     overlay.setAttribute("aria-label", "Holiday roulette " + label);
     overlay.setAttribute("data-mascot", label);
+  }
+
+  function trackRun(track) {
+    var run = track.querySelector(".holiday-roulette-run");
+    if (run) return run;
+    var probe = track.querySelector(".holiday-roulette-probe");
+    run = document.createElement("span");
+    run.className = "holiday-roulette-run";
+    run.textContent = PHRASE.repeat(4);
+    run.setAttribute("data-n", "4");
+    track.textContent = "";
+    track.appendChild(run);
+    if (probe) track.appendChild(probe);
+    return run;
+  }
+
+  // One board shows 1920px. translateX wraps inside a phrase, so the track
+  // only needs one phrase plus one board, plus a spare copy.
+  function copiesNeeded() {
+    var w = phraseW;
+    if (!w || w < 32) return 4;
+    var n = Math.ceil((w + BOARD_W) / w) + 1;
+    if (n < 3) n = 3;
+    if (n > 8) n = 8;
+    return n;
+  }
+
+  function fitCopies() {
+    if (!tracks.length) return 0;
+    var n = copiesNeeded();
+    var text = PHRASE.repeat(n);
+    var i;
+    for (i = 0; i < tracks.length; i++) {
+      var run = trackRun(tracks[i].el);
+      if (run.getAttribute("data-n") === String(n)) continue;
+      run.textContent = text;
+      run.setAttribute("data-n", String(n));
+    }
+    return n;
   }
 
   function measurePhrase() {
@@ -378,16 +457,31 @@
     var period = phraseW || 1;
     var raw = (elapsed / 1000) * SPEED_PX_S;
     var scrolled = wrapMod(raw, period);
-    var lead = period * 2;
+    var slotOff = (slot - 1) * BOARD_W;
     var i;
     for (i = 0; i < tracks.length; i++) {
       var dir = tracks[i].dir === "rtl" ? -1 : 1;
-      var x = dir * scrolled - (slot - 1) * BOARD_W - lead;
-      tracks[i].el.style.transform = "translate3d(" + x + "px,0,0)";
+      // Same wall phase as the unwrapped lead formula, folded into one phrase
+      // so the layer stays a few copies wide. Keep subpixel (do not round per
+      // board) or the seam between sticks drifts by a pixel.
+      var x = wrapMod(dir * scrolled - slotOff, period) - period;
+      var next = "translate3d(" + x.toFixed(3) + "px,0,0)";
+      if (tracks[i].x !== next) {
+        tracks[i].el.style.transform = next;
+        tracks[i].x = next;
+      }
     }
     var op = opacityAt(elapsed, mode);
-    overlay.style.opacity = String(op);
-    overlay.style.visibility = op > 0.001 ? "visible" : "hidden";
+    var opStr = op >= 0.999 ? "1" : op <= 0.001 ? "0" : op.toFixed(3);
+    if (opStr !== paintedOp) {
+      overlay.style.opacity = opStr;
+      paintedOp = opStr;
+    }
+    var vis = op > 0.001 ? "visible" : "hidden";
+    if (vis !== paintedVis) {
+      overlay.style.visibility = vis;
+      paintedVis = vis;
+    }
   }
 
   function stopRaf() {
@@ -419,6 +513,8 @@
     stopRaf();
     playing = false;
     setMenuHalt(false);
+    paintedOp = "";
+    paintedVis = "";
     if (!overlay) return;
     overlay.style.opacity = "0";
     overlay.style.visibility = "hidden";
@@ -432,6 +528,7 @@
     function frame() {
       rafId = 0;
       if (!playing || !overlay) return;
+      if (document.hidden) return;
       if (!enabled()) {
         hideOverlay();
         return;
@@ -440,6 +537,7 @@
       if (mode === "now") {
         elapsed = Date.now() - playStartedAt;
         if (elapsed > splashWindowMs()) {
+          splashNowDone = true;
           hideOverlay();
           return;
         }
@@ -474,15 +572,23 @@
     if (!fontReady) return;
     applyMascot();
     overlay.hidden = false;
+    // Force a blank frame before the measured paint. The skip-cache must
+    // match these writes or a second play() leaves the plate at opacity 0.
     overlay.style.opacity = "0";
     overlay.style.visibility = "hidden";
+    paintedOp = "0";
+    paintedVis = "hidden";
     void overlay.offsetWidth;
     if (!phraseW) phraseW = measurePhrase();
+    fitCopies();
     if (!phraseW) {
       window.setTimeout(function () {
         if (playing && overlay && !phraseW) {
           phraseW = measurePhrase();
-          if (phraseW) paintFrame(mode === "now" ? 0 : msIntoMinute(nowDate()), mode);
+          if (phraseW) {
+            fitCopies();
+            paintFrame(mode === "now" ? 0 : msIntoMinute(nowDate()), mode);
+          }
         }
       }, 50);
     }
@@ -538,8 +644,16 @@
       if (playing) hideOverlay();
       return;
     }
-    if (readSplashMode() === "hold") {
+    var splashMode = readSplashMode();
+    if (splashMode === "hold") {
       if (!playing) play(minuteKey(nowDate()), "hold");
+      return;
+    }
+    // ?splash=1 owns its own 8s clock. The minute tick must not cut it
+    // off when the Eastern second is already past the window, and must
+    // not start a second copy after that play finishes.
+    if (splashMode === "now") {
+      if (!splashNowDone && !playing) play(minuteKey(nowDate()), "now");
       return;
     }
     var now = nowDate();
@@ -647,7 +761,14 @@
     }
     syncEnabled();
     document.addEventListener("visibilitychange", function () {
-      if (document.hidden) return;
+      if (document.hidden) {
+        stopRaf();
+        return;
+      }
+      if (playing && overlay && !overlay.hidden) {
+        var mode = readSplashMode();
+        rafLoop(mode === "hold" ? "hold" : mode === "now" ? "now" : "tick");
+      }
       syncEnabled();
     });
     window.addEventListener("toki:theme-change", onThemeChange);
@@ -689,6 +810,7 @@
         opacity: isFinite(op) ? op : 0,
         hidden: !el || !!el.hidden,
         phraseW: phraseW,
+        copies: tracks.length ? Number(trackRun(tracks[0].el).getAttribute("data-n")) || 0 : 0,
       };
     },
   };
