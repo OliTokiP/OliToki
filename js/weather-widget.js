@@ -9,8 +9,9 @@
  * fetch run only when #weather-widget is in the page (Board 4).
  * Hours come from OliToki Menu Settings → Store Hours (close past 24:00
  * stays on that service day until that close). Current °F + animated
- * amCharts SVG from Open-Meteo. Closed Status may hide the HUD; the clock
- * keeps ticking so Holiday Splash stays on the same Eastern marks.
+ * amCharts SVG from Open-Meteo. Closed Status may hide the HUD. The Eastern
+ * tick and the Cloud Run resync stay armed for the life of the page, so
+ * Holiday Splash still shares one clock after the store has been closed.
  *
  * Attribution: weather data © Open-Meteo (https://open-meteo.com).
  * Icons © amCharts, CC BY 4.0 (assets/amcharts_weather_icons_1.0.0/LICENSE).
@@ -49,7 +50,8 @@
   var svgCache = {};
   var clockStarted = false;
   var clockOffsetMs = 0;
-  var clockSyncTimer = 0;
+  var clockSyncInFlight = null;
+  var nextClockSyncAt = 0;
   var hudStarted = false;
   var visBound = false;
   var frozenNow = null;
@@ -90,27 +92,64 @@
   }
 
   function syncServerClock() {
+    if (frozenNow) return Promise.resolve();
+    if (clockSyncInFlight) return clockSyncInFlight;
+    // Sample on the 1s tick, not setInterval. Closed Status calls stop()
+    // overnight, and that used to clear the 10-minute interval for good
+    // (startClock bails once clockStarted is set). Each stick then free-ran
+    // until the next page load. A hung health fetch must also time out so
+    // later samples are not stuck behind a full connection pool.
+    nextClockSyncAt = Date.now() + CLOCK_SYNC_MS;
     var urls = healthUrls();
-    var t0 = Date.now();
     function tryUrl(i) {
       if (i >= urls.length) return Promise.resolve();
-      return fetch(urls[i], { cache: "no-store" })
+      var started = Date.now();
+      var ctrl =
+        typeof AbortController === "function" ? new AbortController() : null;
+      var timer = 0;
+      if (ctrl) {
+        timer = window.setTimeout(function () {
+          try {
+            ctrl.abort();
+          } catch (e) {}
+        }, 5000);
+      }
+      var opts = { cache: "no-store" };
+      if (ctrl) opts.signal = ctrl.signal;
+      return fetch(urls[i], opts)
         .then(function (res) {
+          if (timer) window.clearTimeout(timer);
+          timer = 0;
           if (!res.ok) return tryUrl(i + 1);
           return res.json().then(function (j) {
-            var t1 = Date.now();
             var server = Number(j && j.nowMs);
-            if (!Number.isFinite(server) || server <= 0) return;
-            clockOffsetMs = Math.round(server - (t0 + t1) / 2);
+            if (!Number.isFinite(server) || server <= 0) return tryUrl(i + 1);
+            var t1 = Date.now();
+            clockOffsetMs = Math.round(server - (started + t1) / 2);
           });
         })
         .catch(function () {
+          if (timer) window.clearTimeout(timer);
+          timer = 0;
           return tryUrl(i + 1);
         });
     }
-    return tryUrl(0).then(function () {
-      if (clockStarted && !frozenNow) scheduleClock();
-    });
+    clockSyncInFlight = tryUrl(0).then(
+      function () {
+        clockSyncInFlight = null;
+        if (clockStarted && !frozenNow) scheduleClock();
+      },
+      function () {
+        clockSyncInFlight = null;
+      }
+    );
+    return clockSyncInFlight;
+  }
+
+  function maybeSyncFromClock() {
+    if (frozenNow || clockSyncInFlight) return;
+    if (nextClockSyncAt && Date.now() < nextClockSyncAt) return;
+    syncServerClock();
   }
 
   function readFrozenNow() {
@@ -407,6 +446,7 @@
 
   function tickClock() {
     emitClockTick();
+    maybeSyncFromClock();
     if (!hudStarted) return;
     var p = partsNow();
     paintDate(p);
@@ -602,11 +642,6 @@
       document.addEventListener("visibilitychange", onVis);
     }
     scheduleClock();
-    if (!frozenNow) {
-      syncServerClock();
-      if (clockSyncTimer) window.clearInterval(clockSyncTimer);
-      clockSyncTimer = window.setInterval(syncServerClock, CLOCK_SYNC_MS);
-    }
   }
 
   function startHud() {
@@ -645,9 +680,8 @@
   }
 
   function stop() {
+    // HUD polls only. The tick keeps running, and it resamples Cloud Run.
     stopHud();
-    if (clockSyncTimer) window.clearInterval(clockSyncTimer);
-    clockSyncTimer = 0;
   }
 
   root.TOKI_WEATHER_WIDGET = {
