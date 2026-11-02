@@ -690,6 +690,7 @@
     startClock: startClock,
     startHud: startHud,
     stopHud: stopHud,
+    syncNow: syncServerClock,
     nowDate: nowDate,
     refresh: fetchWeather,
     refreshHours: fetchHours,

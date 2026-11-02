@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-10-05 (Halloween `theme=`)
+**Last updated:** 2026-11-02 (Holiday Roulette)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -37,7 +37,8 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`wxNow=`** | Freeze the Eastern clock at this instant (ISO timestamp, e.g. `2026-09-21T04:15:00Z` = Sunday 12:15 AM EDT). Weather Widget **Open until** and Closed Status both read it. Alias: `hoursAt`. |
 | **`closed=1`** | Force the Closed Status overlay on (static CL / OS / ED / hours SVGs) and halt galaxy / presentation. `closed=0` forces the menu to stay open. `preview-all.html?closed=1` forwards to each wall iframe. |
 | **`theme=Halloween`** | QA only: treat the Logo / Closed Status as Halloween (per-board costumes + Toki Ghost on Board 4) without writing the sheet. Does not change catalog Theme Selector. |
-| **`roulette=1`** | Force Holiday Splash (Spooky Roulette) on. `roulette=0` forces it off. Needs Halloween (`theme=Halloween` or Theme Selector). |
+| **`theme=Christmas`** | QA only: treat the board as Christmas Theme (Holiday Roulette gate + Christmas palette if the sheet theme is not already Christmas) without writing the sheet. |
+| **`roulette=1`** | Force the active theme’s roulette on. Halloween → Spooky Roulette (Holiday Splash). Christmas → Holiday Roulette (Happy Holidays wall). `roulette=0` forces it off. |
 | **`splash=1`** | Play the Holiday Splash sequence immediately (do not wait for the next minute). `splash=hold` shows the pick and stays. |
 | **`splashAt=`** | Freeze the Eastern clock for splash scheduling (ISO timestamp). Same freeze as `wxNow` / `hoursAt` when those are set. |
 
@@ -53,7 +54,9 @@ These can sit on the query string or after the hash (`#/menu/style?pick=theme`).
 | **`bg=pattern`** / **`bg=wallpaper`** | Start with that background kind. |
 | **`pres=encore`** | Start with that presentation style. |
 | **`theme=Halloween`** | Start on that theme name. |
-| **`roulette=1`** | Draft Spooky Roulette On (Halloween child row). `roulette=0` = Off. |
+| **`theme=Christmas`** | Start on Christmas (reveals the Holiday Roulette child row). |
+| **`roulette=1`** | Draft the active theme’s roulette On (Spooky Roulette on Halloween, Holiday Roulette on Christmas). `roulette=0` = Off. |
+| **`pick=holidayRoulette`** | Open the Holiday Roulette On/Off picker. |
 | **`spot=`** / **`ebg=`** | Encore spotlight / encore background. |
 | **`speed=3`** | Presentation speed. |
 | **`item=0`** | Preview item index. |
@@ -81,6 +84,8 @@ preview-all.html?closed=1
 index.html?closed=1
 index.html?theme=Halloween&pause=1
 index.html?theme=Halloween&roulette=1&splash=hold
+index.html?theme=Christmas&roulette=1&splash=hold
+preview-all.html?theme=Christmas&roulette=1&splash=hold
 index4.html?theme=Halloween&closed=1
 index4.html?wxNow=2026-09-22T04:15:00Z
 ```

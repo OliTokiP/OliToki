@@ -2336,6 +2336,109 @@ body.splash-fading #bg-pattern-track {
   will-change: auto;
 }
 
+/* Holiday Roulette — Christmas “Happy Holidays!” wall marquee.
+   Transparent overlay over the live menu; mascot is a CSS background
+   so the food-image decoder never sees it. Under Closed Status (z 40). */
+@font-face {
+  font-family: "Fraunces";
+  font-style: italic;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../assets/fonts/Fraunces-BlackItalic.ttf") format("truetype");
+}
+
+#holiday-roulette {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: block;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  background: transparent;
+  contain: paint;
+  isolation: isolate;
+}
+
+#holiday-roulette.is-visible {
+  visibility: visible;
+}
+
+#holiday-roulette[hidden] {
+  display: none !important;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.holiday-roulette-rows {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.holiday-roulette-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 441px;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1;
+  font-family: "Fraunces", serif;
+  font-weight: 900;
+  font-style: italic;
+  font-size: 306px;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.holiday-roulette-row.is-top {
+  top: -101px;
+  color: var(--highlight);
+}
+
+.holiday-roulette-row.is-mid {
+  top: 266px;
+  color: var(--secondary-color);
+}
+
+.holiday-roulette-row.is-bot {
+  top: 633px;
+  color: var(--highlight-special);
+}
+
+.holiday-roulette-track {
+  display: inline-block;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.holiday-roulette-probe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.holiday-roulette-mascot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 640px;
+  height: 860px;
+  transform: translate(-50%, -50%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* Closed Status — full-stage static SVG (Closed 1–4, or Closed H 1–4 on Halloween).
    Replaces board graphics between Store Hours. Halt of RAF / presentation is in
    js/closed-status.js + menu.js. */

@@ -630,8 +630,13 @@
 
   function applyPreviewLogo() {
     var H = window.TOKI_HALLOWEEN;
+    var C = window.TOKI_CHRISTMAS;
     var on = !!(H && H.isHalloween(state.draft && state.draft.themeName));
-    if (document.body) document.body.classList.toggle("theme-halloween", on);
+    var xmas = !!(C && C.isChristmas(state.draft && state.draft.themeName));
+    if (document.body) {
+      document.body.classList.toggle("theme-halloween", on);
+      document.body.classList.toggle("theme-christmas", xmas);
+    }
     var src = previewLogoSrc();
     var box = document.querySelector(".preview-logo");
     if (!box) return;
@@ -2932,11 +2937,20 @@
       value: d.themeName,
     });
     var H = window.TOKI_HALLOWEEN;
+    var C = window.TOKI_CHRISTMAS;
     if (H && H.isHalloween(d.themeName)) {
       html += row({
         key: "spookyRoulette",
         label: "Spooky Roulette",
         value: labelOf(D.onOff || D.yesNo, d.spookyRoulette || "no"),
+        child: true,
+      });
+    }
+    if (C && C.isChristmas(d.themeName)) {
+      html += row({
+        key: "holidayRoulette",
+        label: "Holiday Roulette",
+        value: labelOf(D.onOff || D.yesNo, d.holidayRoulette || "no"),
         child: true,
       });
     }
@@ -3398,6 +3412,19 @@
         },
         set: function (id) {
           state.draft.spookyRoulette = id === "yes" ? "yes" : "no";
+        },
+      };
+    }
+    if (key === "holidayRoulette") {
+      return {
+        title: "Holiday Roulette",
+        kind: "trueFalse",
+        options: D.onOff || D.yesNo,
+        get: function () {
+          return state.draft.holidayRoulette || "no";
+        },
+        set: function (id) {
+          state.draft.holidayRoulette = id === "yes" ? "yes" : "no";
         },
       };
     }
@@ -4595,7 +4622,8 @@
       !wrote.wroteBackground &&
       !wrote.wroteSpeeds &&
       !wrote.wrotePattern &&
-      !wrote.wroteRoulette
+      !wrote.wroteRoulette &&
+      !wrote.wroteHolidayRoulette
     );
   }
 
@@ -4607,7 +4635,8 @@
       !wrote.wroteBackground &&
       !wrote.wroteSpeeds &&
       !wrote.wrotePattern &&
-      !wrote.wroteRoulette
+      !wrote.wroteRoulette &&
+      !wrote.wroteHolidayRoulette
     ) {
       return "";
     }
@@ -5166,6 +5195,7 @@
       encoreSpot: d.encoreSpot || "",
       encoreBg: d.encoreBg || "",
       spookyRoulette: d.spookyRoulette === "yes" ? "yes" : "no",
+      holidayRoulette: d.holidayRoulette === "yes" ? "yes" : "no",
     };
   }
 
@@ -5181,7 +5211,8 @@
           wrote.wroteSpeeds ||
           wrote.wroteEncore ||
           wrote.wrotePattern ||
-          wrote.wroteRoulette)
+          wrote.wroteRoulette ||
+          wrote.wroteHolidayRoulette)
       );
       if (boardOk && styleOk) return "Board and Style saved to " + src;
       if (boardOk && wrote && wrote.wroteInventory) {
@@ -5209,6 +5240,7 @@
         if (wrote.wroteSpeeds) bits.push("speeds");
         if (wrote.wroteEncore) bits.push("Encore");
         if (wrote.wroteRoulette) bits.push("Spooky Roulette");
+        if (wrote.wroteHolidayRoulette) bits.push("Holiday Roulette");
         var what = bits.length ? bits.join(" and ") : "Style";
         return fb
           ? what + " saved to " + src
@@ -5248,6 +5280,7 @@
       next.patternColor1 !== prev.patternColor1 ||
       next.patternColor2 !== prev.patternColor2;
     var rouletteChanged = next.spookyRoulette !== prev.spookyRoulette;
+    var holidayRouletteChanged = next.holidayRoulette !== prev.holidayRoulette;
     if (
       !themeChanged &&
       !bgChanged &&
@@ -5255,7 +5288,8 @@
       !presChanged &&
       !encoreChanged &&
       !patternChanged &&
-      !rouletteChanged
+      !rouletteChanged &&
+      !holidayRouletteChanged
     ) {
       return Promise.resolve({ needed: false, wrote: null });
     }
@@ -5291,6 +5325,7 @@
       payload.patternColor2 = next.patternColor2;
     }
     if (rouletteChanged) payload.spookyRoulette = next.spookyRoulette;
+    if (holidayRouletteChanged) payload.holidayRoulette = next.holidayRoulette;
     var req = sheet.writeStyle
       ? sheet.writeStyle(payload)
       : sheet.writeTheme(next.themeName, sheetId);
@@ -6800,10 +6835,18 @@
     }
     if (params.get("roulette")) {
       var rv = String(params.get("roulette") || "").trim().toLowerCase();
-      if (rv === "1" || rv === "yes" || rv === "on" || rv === "true") {
-        state.draft.spookyRoulette = "yes";
-      } else if (rv === "0" || rv === "no" || rv === "off" || rv === "false") {
-        state.draft.spookyRoulette = "no";
+      var rouletteOn =
+        rv === "1" || rv === "yes" || rv === "on" || rv === "true";
+      var rouletteOff =
+        rv === "0" || rv === "no" || rv === "off" || rv === "false";
+      var C = window.TOKI_CHRISTMAS;
+      var H = window.TOKI_HALLOWEEN;
+      if (C && C.isChristmas(state.draft.themeName)) {
+        if (rouletteOn) state.draft.holidayRoulette = "yes";
+        else if (rouletteOff) state.draft.holidayRoulette = "no";
+      } else if (H && H.isHalloween(state.draft.themeName)) {
+        if (rouletteOn) state.draft.spookyRoulette = "yes";
+        else if (rouletteOff) state.draft.spookyRoulette = "no";
       }
     }
     if (params.get("bg")) state.draft.background = params.get("bg");
@@ -7097,6 +7140,7 @@
       })(fromSheet);
       fromSheet.debugMode = fromSheet.debugMode || "no";
       fromSheet.spookyRoulette = fromSheet.spookyRoulette || "no";
+      fromSheet.holidayRoulette = fromSheet.holidayRoulette || "no";
       // Keep draft numbers inside the live tile set (sheet conditionals).
       fromSheet.scrollSpeed = clampDraftSpeed(
         fromSheet.scrollSpeed,

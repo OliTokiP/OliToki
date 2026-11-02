@@ -28,6 +28,8 @@
 | `js/weather-widget.js` | Board 4 Weather Widget: Eastern clock + Store Hours overnight window + Open-Meteo °F + amCharts SVG (`index4.html` only) |
 | `js/halloween.js` | Halloween Theme costumes for `#logo` + Closed Status `closed-h-*` art + Holiday Splash SVG list |
 | `js/holiday-splash.js` | All boards: Holiday Splash overlay (Spooky Roulette). Six Halloween SVGs; unique pick per board per Eastern minute; stagger fade-in, 7s hold, fade-out together. CSS background (no `<img>`); roulette flag from menu.js Style parse — does not fetch Style itself |
+| `js/christmas.js` | Christmas Theme helpers: `isChristmas`, Holiday Roulette mascot URLs (Santa / Rudolph), QA palette |
+| `js/holiday-roulette.js` | All boards: Holiday Roulette overlay (Christmas). Three-row Fraunces marquee as one 4-board wall; fade in together; translateX + opacity from Cloud Run nowMs every rAF. CSS text + mascot background (no `<img>`); flag from menu.js Style parse |
 | `js/closed-status.js` | All boards: Closed Status overlay from Store Hours + static `assets/closed/closed-1.svg` … `closed-4.svg` (CL / OS / ED / hours; Halloween `closed-h-*` with Toki Ghost on Board 4). Halts galaxy / presentation while closed |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |

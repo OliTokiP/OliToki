@@ -332,6 +332,8 @@ def git_commit(message: str, full: bool = False) -> bool:
             ":(glob)assets/**/*-sm.webp",
             ":(glob)assets/*.svg",
             ":(glob)assets/halloween/*",
+            ":(glob)assets/christmas/*",
+            ":(glob)assets/fonts/*",
             ":(glob)assets/closed/*",
             ":(glob)assets/stickers/*",
         ], check=False)

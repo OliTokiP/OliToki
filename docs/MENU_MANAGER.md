@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-10-07 (Holiday Splash / Spooky Roulette) 
+**Last updated:** 2026-11-02 (Holiday Roulette) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -59,7 +59,7 @@ Outlines use a darkened Highlight. Child rows (pattern / wallpaper / encore extr
 
 Shared top slot (System + Menu Settings): Data Source, Current Theme, the four theme hexes (colored), Require restart, Version. No sheet-source line. No fake “Menus on” until board include is real.
 
-QA query extras on Style: `?pick=theme`, `?pick=spookyRoulette`, `?pick=background`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?encore=old`, `?theme=Halloween`, `?roulette=1`, `?confirm=1`, `?confirmsave=yes` / `?confirmsave=no` (forces Confirm save? for this session without writing the sheet). **`?beta`** selects **Beta (Development) Copy** and gates unshipped Manager UI (Announcements editor). Item editor is on every catalog. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`. Splash overlay: `#/?tip=save` (home-hero shroud). Settings overlay: `#/system?tip=save` then Back to watch the stack box ease into splash.
+QA query extras on Style: `?pick=theme`, `?pick=spookyRoulette`, `?pick=holidayRoulette`, `?pick=background`, `?bg=pattern`, `?bg=wallpaper`, `?pres=encore`, `?encore=old`, `?theme=Halloween`, `?roulette=1`, `?confirm=1`, `?confirmsave=yes` / `?confirmsave=no` (forces Confirm save? for this session without writing the sheet). **`?beta`** selects **Beta (Development) Copy** and gates unshipped Manager UI (Announcements editor). Item editor is on every catalog. Tooltip preview: `?tip=stack`, `?tip=family`, `?tip=encore`, `?tip=save`, `?tip=restart`, `?tip=restart-no`, `?tip=filter`, `?tip=debug`, `?tip=hard`, `?tip=hard-shadow`, `?tip=encore-save`, `?tip=order`, `?tip=board-save`. Splash overlay: `#/?tip=save` (home-hero shroud). Settings overlay: `#/system?tip=save` then Back to watch the stack box ease into splash.
 
 ---
 
@@ -97,6 +97,8 @@ Context-driven children (same idea as the mockup):
 | Background = Wallpaper | Wallpaper Type, BG Scroll Speed |
 
 When Theme is **Halloween**, a child row **Spooky Roulette** (On / Off) appears under Theme. It writes Style Settings column **N** (`Spooky Roulette`). TV boards overlay a Holiday Splash at the top of every Eastern minute while this is On and Theme stays Halloween.
+
+When Theme is **Christmas**, a child row **Holiday Roulette** (On / Off) appears under Theme. It writes Style Settings column **O** (`Holiday Roulette`). Header is created on first save if missing. TV boards overlay a four-screen “Happy Holidays!” marquee (Fraunces Black Italic, three rows, Santa / Rudolph) at the top of every Eastern minute while this is On and Theme stays Christmas. All four boards fade in together — no stagger — and scroll position is `f(nowMs)` every frame so the wall stays seamed.
 
 After those Background children, Style and Theme shows **Presentation Speed**, then the New Theme bar. Presentation Style and Encore Spotlight Style / Color / Background are **not** on this screen.
 

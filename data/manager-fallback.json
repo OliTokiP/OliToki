@@ -35,6 +35,7 @@
         "encoreBg": "secondary",
         "presentationSpeed": 3,
         "spookyRoulette": "yes",
+        "holidayRoulette": "no",
         "dataSource": "restaurant",
         "requireRestart": "yes",
         "refreshTimer": "30 seconds",

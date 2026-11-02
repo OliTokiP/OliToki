@@ -2656,6 +2656,12 @@ class SheetsBackend:
                 data_idx,
                 13,
             ),
+            "holidayroulette": self._a1_for(
+                cols,
+                ["holidayroulette"],
+                data_idx,
+                14,
+            ),
         }
         values: dict[str, str] = {}
         extra: list[dict] = []
@@ -2665,6 +2671,7 @@ class SheetsBackend:
         wrote_encore = False
         wrote_pattern = False
         wrote_roulette = False
+        wrote_holiday_roulette = False
         theme = str(body.get("theme") or body.get("themeName") or "").strip()
         if theme:
             values["themeselector"] = self._canonical_theme(rows, theme)
@@ -2759,6 +2766,32 @@ class SheetsBackend:
                         }
                     )
 
+        holiday_raw = body.get("holidayRoulette")
+        if holiday_raw is None:
+            holiday_raw = body.get("holiday_roulette")
+        if holiday_raw is not None and str(holiday_raw).strip() != "":
+            hs = str(holiday_raw).strip().lower()
+            if hs in ("1", "yes", "y", "true", "on"):
+                values["holidayroulette"] = "Yes"
+            else:
+                values["holidayroulette"] = "No"
+            wrote_holiday_roulette = True
+            if "holidayroulette" not in cols:
+                headers = (rows[header_idx] if header_idx < len(rows) else []) or []
+                o_header = ""
+                if len(headers) > 14:
+                    o_header = str(headers[14] or "").strip()
+                if not o_header:
+                    extra.append(
+                        {
+                            "range": safe_title
+                            + "!"
+                            + self._col_letters(14)
+                            + str(header_idx + 1),
+                            "values": [["Holiday Roulette"]],
+                        }
+                    )
+
         if pat1 is not None or pat2 is not None:
             theme_for_pat = values.get("themeselector") or ""
             if not theme_for_pat:
@@ -2836,6 +2869,7 @@ class SheetsBackend:
             "wroteEncore": wrote_encore,
             "wrotePattern": wrote_pattern,
             "wroteRoulette": wrote_roulette,
+            "wroteHolidayRoulette": wrote_holiday_roulette,
             "scrollSpeed": values.get("bgscrollspeed"),
             "presentationSpeed": values.get("presentationspeed"),
             "range": ", ".join([r for r in ranges if r]),

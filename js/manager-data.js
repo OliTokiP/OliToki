@@ -207,6 +207,7 @@
     encoreBg: "secondary",
     presentationSpeed: 3,
     spookyRoulette: "no",
+    holidayRoulette: "no",
     dataSource: global.TOKI_DEFAULT_SOURCE || "restaurant",
     requireRestart: "yes",
     refreshTimer: "30 seconds",

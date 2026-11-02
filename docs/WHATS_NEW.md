@@ -1,9 +1,31 @@
 # What’s New
 
-**Last updated:** 2026-10-07 00:30  
+**Last updated:** 2026-11-02  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-11-02 — Holiday Roulette (Christmas)
+
+**Boards / surface:** Menu Screens (all four boards) + Menu Manager Style and Theme  
+**Sheet:** Style and Theme Settings → **Holiday Roulette** (column O, Yes/No). Header is written on first save if missing.  
+**Summary:** Christmas Theme can superimpose a four-screen “Happy Holidays!” marquee over the live menus at the top of every minute. All four boards fade in together (no stagger). Scroll position is derived from Cloud Run `nowMs` every frame so the wall seam stays aligned.
+
+### Details
+- Font: Fraunces Black Italic 306px (`assets/fonts/Fraunces-BlackItalic.ttf`). Three rows: Highlight (LTR), Secondary (RTL), Highlight Special (LTR).
+- Art: Toki Santa on boards 1+3, Toki Rudolph on 2+4 (`assets/christmas/`).
+- Menu Manager shows **Holiday Roulette** On/Off as a child of Theme only when Theme is Christmas.
+- Overlay does not halt presentation. Closed Status still wins.
+- QA: `?theme=Christmas&roulette=1&splash=hold` (or `splash=1` to play the sequence). `preview-all` forwards `theme`, `roulette`, `splash`, `splashAt`.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [MENU_MANAGER.md](./MENU_MANAGER.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [SHEET_MIGRATION.md](./SHEET_MIGRATION.md)
 
 ---
 

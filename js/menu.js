@@ -641,8 +641,13 @@
 
   function isHolidaySplashArt(img) {
     if (!img) return false;
-    if (img.id === "holiday-splash-art") return true;
-    return !!(img.closest && img.closest("#holiday-splash"));
+    if (img.id === "holiday-splash-art" || img.id === "holiday-roulette-art") {
+      return true;
+    }
+    return !!(
+      img.closest &&
+      (img.closest("#holiday-splash") || img.closest("#holiday-roulette"))
+    );
   }
 
   function armRasterUntilDecode(img) {
@@ -736,8 +741,13 @@
 
     function armTree(root) {
       if (!root) return;
-      if (root.id === "holiday-splash") return;
-      if (root.closest && root.closest("#holiday-splash")) return;
+      if (root.id === "holiday-splash" || root.id === "holiday-roulette") return;
+      if (
+        root.closest &&
+        (root.closest("#holiday-splash") || root.closest("#holiday-roulette"))
+      ) {
+        return;
+      }
       if (root.tagName === "IMG") {
         if (!isHolidaySplashArt(root)) armRasterUntilDecode(root);
       }
@@ -1240,7 +1250,7 @@
    *   E BG Blur | F BG Blend Mode | G BG Opacity | H BG Scroll Speed |
    *   I Presentation Speed | J Show Github Version |
    *   K Encore Spotlight Type | L Encore Spotlight Color |
-   *   M Encore Background Color | N Spooky Roulette
+   *   M Encore Background Color | N Spooky Roulette | O Holiday Roulette
    *
    * Themes Database (rows: section label → headers → theme rows):
    *   A Theme Name | B Main | C Secondary | D Highlight | E Highlight Special
@@ -1266,6 +1276,7 @@
     encoreSpotlightColor: 11,
     encoreBackgroundColor: 12, // M — Color Picker / hex (Encore plate)
     spookyRoulette: 13, // N — Yes/No Holiday Splash (Halloween child)
+    holidayRoulette: 14, // O — Yes/No Christmas wall marquee
   };
   const STYLE_REVISED_THEME = {
     themeName: 0,
@@ -1407,6 +1418,7 @@
     title: "",
     themeName: "",
     spookyRoulette: false,
+    holidayRoulette: false,
     mainColor: "#000000",
     secondaryColor: "#ffffff",
     // Stage BG: color plate always on; image optional on top with FX
@@ -1938,8 +1950,10 @@
     root.style.setProperty("--highlight-special", lp.special || lp.highlight);
     root.style.setProperty("--highlight-new", lp.special || lp.highlight);
     if (lp.spookyRoulette != null) config.spookyRoulette = !!lp.spookyRoulette;
+    if (lp.holidayRoulette != null) config.holidayRoulette = !!lp.holidayRoulette;
     try {
       window.TOKI_SPOOKY_ROULETTE = !!config.spookyRoulette;
+      window.TOKI_HOLIDAY_ROULETTE = !!config.holidayRoulette;
     } catch (e) {}
     if (isDrinks && lp.bgColorOverride) {
       config.bgColorOverride = true;
@@ -1972,6 +1986,7 @@
       highlight: config.highlight || "#26bbcb",
       special: config.highlightSpecial || "#fff900",
       spookyRoulette: !!config.spookyRoulette,
+      holidayRoulette: !!config.holidayRoulette,
     };
     if (isDrinks) {
       p.bgColorOverride = !!config.bgColorOverride;
@@ -3137,15 +3152,31 @@
 
   function applyHalloweenMark(themeNameHint) {
     const H = window.TOKI_HALLOWEEN;
-    if (!H) return;
-    let name = H.urlThemeOverride() || themeNameHint || config.themeName || "";
+    const C = window.TOKI_CHRISTMAS;
+    if (!H && !C) return;
+    let name =
+      (H && H.urlThemeOverride && H.urlThemeOverride()) ||
+      (C && C.urlThemeOverride && C.urlThemeOverride()) ||
+      themeNameHint ||
+      config.themeName ||
+      "";
     if (!name) {
       const lp = readLastPaint();
       if (lp && lp.themeName) name = lp.themeName;
     }
-    const on = H.isHalloween(name);
+    const on = !!(H && H.isHalloween(name));
+    const xmas = !!(C && C.isChristmas(name));
     if (document.body) {
       document.body.classList.toggle("theme-halloween", on);
+      document.body.classList.toggle("theme-christmas", xmas);
+    }
+    if (
+      C &&
+      typeof C.applyPalette === "function" &&
+      C.isChristmas(C.urlThemeOverride && C.urlThemeOverride()) &&
+      !C.isChristmas(config.themeName)
+    ) {
+      C.applyPalette();
     }
     const logo = document.getElementById("logo");
     if (logo) {
@@ -3173,12 +3204,15 @@
     }
     try {
       window.TOKI_SPOOKY_ROULETTE = !!config.spookyRoulette;
+      window.TOKI_HOLIDAY_ROULETTE = !!config.holidayRoulette;
       window.dispatchEvent(
         new CustomEvent("toki:theme-change", {
           detail: {
             themeName: name,
             halloween: on,
+            christmas: xmas,
             spookyRoulette: !!config.spookyRoulette,
+            holidayRoulette: !!config.holidayRoulette,
           },
         })
       );
@@ -5370,6 +5404,10 @@
         parsed.spookyRoulette != null
           ? !!parsed.spookyRoulette
           : !!config.spookyRoulette,
+      holidayRoulette:
+        parsed.holidayRoulette != null
+          ? !!parsed.holidayRoulette
+          : !!config.holidayRoulette,
       mainColor: main,
       secondaryColor: secondary,
       bgColor: bgColor,
@@ -7487,23 +7525,32 @@
     }
 
     let spookyRoulette = false;
+    let holidayRoulette = false;
     if (isRevised) {
       const headers = rows[boardRowIndex - 1] || [];
       let colRoulette = -1;
+      let colHoliday = -1;
       for (let c = 0; c < headers.length; c++) {
         const fold = String(headers[c] || "")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "");
         if (fold === "spookyroulette") {
           colRoulette = c;
-          break;
+        } else if (fold === "holidayroulette") {
+          colHoliday = c;
         }
       }
       if (colRoulette < 0 && setCols.spookyRoulette != null) {
         colRoulette = setCols.spookyRoulette;
       }
+      if (colHoliday < 0 && setCols.holidayRoulette != null) {
+        colHoliday = setCols.holidayRoulette;
+      }
       if (colRoulette >= 0) {
         spookyRoulette = parseYesNo(cell(boardRow, colRoulette), false);
+      }
+      if (colHoliday >= 0) {
+        holidayRoulette = parseYesNo(cell(boardRow, colHoliday), false);
       }
     }
 
@@ -7530,6 +7577,7 @@
       encoreSpotlightColor: encoreSpotlightColor,
       encoreBackgroundColor: encoreBackgroundColor,
       spookyRoulette: !!spookyRoulette,
+      holidayRoulette: !!holidayRoulette,
     };
     tokiInfo(
       "Style theme:",
@@ -7537,6 +7585,8 @@
       theme.themeName || "(unnamed)",
       "roulette",
       theme.spookyRoulette ? "yes" : "no",
+      "holidayRoulette",
+      theme.holidayRoulette ? "yes" : "no",
       "main",
       theme.mainColor,
       "secondary",
@@ -7572,6 +7622,7 @@
     if (!parsed || !theme) return parsed;
     parsed.themeName = theme.themeName || parsed.themeName;
     parsed.spookyRoulette = !!theme.spookyRoulette;
+    parsed.holidayRoulette = !!theme.holidayRoulette;
     parsed.mainColor = theme.mainColor;
     parsed.secondaryColor = theme.secondaryColor;
     parsed.highlight = theme.highlight;
