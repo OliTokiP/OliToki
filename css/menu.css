@@ -2337,8 +2337,9 @@ body.splash-fading #bg-pattern-track {
 }
 
 /* Holiday Roulette — Christmas “Happy Holidays!” wall marquee.
-   Transparent overlay over the live menu; mascot is a CSS background
-   so the food-image decoder never sees it. Under Closed Status (z 40). */
+   Solid Main-color plate (Christmas green) covers the live menu. Mascot
+   is a CSS background so the food-image decoder never sees it. Menu
+   processes halt while body.holiday-roulette-on. Under Closed Status (z 40). */
 @font-face {
   font-family: "Fraunces";
   font-style: italic;
@@ -2356,13 +2357,18 @@ body.splash-fading #bg-pattern-track {
   overflow: hidden;
   opacity: 0;
   visibility: hidden;
-  background: transparent;
+  background-color: var(--main-color, #1a3c2a);
   contain: paint;
   isolation: isolate;
 }
 
 #holiday-roulette.is-visible {
   visibility: visible;
+}
+
+body.holiday-roulette-on #stripes-track,
+body.holiday-roulette-on #bg-pattern-track {
+  animation-play-state: paused !important;
 }
 
 #holiday-roulette[hidden] {

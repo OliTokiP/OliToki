@@ -11,13 +11,14 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 **Boards / surface:** Menu Screens (all four boards) + Menu Manager Style and Theme  
 **Sheet:** Style and Theme Settings → **Holiday Roulette** (column O, Yes/No). Header is written on first save if missing.  
-**Summary:** Christmas Theme can superimpose a four-screen “Happy Holidays!” marquee over the live menus at the top of every minute. All four boards fade in together (no stagger). Scroll position is derived from Cloud Run `nowMs` every frame so the wall seam stays aligned.
+**Summary:** Christmas Theme covers all four menus with a solid Main-color “Happy Holidays!” marquee at the top of every minute. All four boards fade in together (no stagger). Scroll position is derived from Cloud Run `nowMs` every frame so the wall seam stays aligned.
 
 ### Details
 - Font: Fraunces Black Italic 306px (`assets/fonts/Fraunces-BlackItalic.ttf`). Three rows: Highlight (LTR), Secondary (RTL), Highlight Special (LTR).
 - Art: Toki Santa on boards 1+3, Toki Rudolph on 2+4 (`assets/christmas/`).
+- Plate: `#holiday-roulette` fills the Stage with `--main-color` (Christmas green). Live menu is covered, not seen through.
 - Menu Manager shows **Holiday Roulette** On/Off as a child of Theme only when Theme is Christmas.
-- Overlay does not halt presentation. Closed Status still wins.
+- While the plate is up, galaxy pan, presentation, stripes, and soft-refresh halt (`body.holiday-roulette-on` / `toki:holiday-roulette-change`). Weather clock stays armed for the shared `nowMs` scroll. Closed Status still wins.
 - QA: `?theme=Christmas&roulette=1&splash=hold` (or `splash=1` to play the sequence). `preview-all` forwards `theme`, `roulette`, `splash`, `splashAt`.
 
 ### Docs updated

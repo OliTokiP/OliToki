@@ -16,8 +16,13 @@
  *   preload before the first paint; if the font is still loading, the
  *   overlay stays hidden and snaps on when ready.
  *
- * Overlay is CSS text + a CSS-background mascot — never an <img>, so the
- * food-image decoder never sees it. Closed Status still wins.
+ * Overlay is a solid Main-color plate (Christmas green) plus CSS text and
+ * a CSS-background mascot — never an <img>, so the food-image decoder
+ * never sees it. While the plate is up, menu.js halts galaxy pan,
+ * presentation, stripes, and soft-refresh (same hang as Closed Status)
+ * so Fire Sticks are not compositing the menu under an opaque layer.
+ * The weather clock stays armed — roulette scroll is f(nowMs). Closed
+ * Status still wins.
  *
  * Sheet: Style and Theme Settings → Holiday Roulette (column O). Menu
  * Manager shows that row only when Theme is Christmas.
@@ -56,6 +61,7 @@
   var fontReady = false;
   var artReady = false;
   var preloaded = false;
+  var haltOn = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -391,9 +397,28 @@
     }
   }
 
+  function setMenuHalt(on) {
+    on = !!on;
+    if (haltOn === on) return;
+    haltOn = on;
+    try {
+      if (document.body) {
+        document.body.classList.toggle("holiday-roulette-on", on);
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(
+        new CustomEvent("toki:holiday-roulette-change", {
+          detail: { playing: on, board: slot },
+        })
+      );
+    } catch (e) {}
+  }
+
   function hideOverlay() {
     stopRaf();
     playing = false;
+    setMenuHalt(false);
     if (!overlay) return;
     overlay.style.opacity = "0";
     overlay.style.visibility = "hidden";
@@ -471,6 +496,7 @@
     }
     lastMinuteKey = key;
     playing = true;
+    setMenuHalt(true);
     overlay.setAttribute("aria-hidden", "false");
     overlay.classList.add("is-visible");
     if (mode === "now") playStartedAt = Date.now();
@@ -648,6 +674,9 @@
       return slot;
     },
     enabled: enabled,
+    playing: function () {
+      return !!playing;
+    },
     snapshot: function () {
       var el = overlay || $("holiday-roulette");
       var cs = el ? window.getComputedStyle(el) : null;
@@ -656,6 +685,7 @@
         slot: slot,
         enabled: enabled(),
         playing: playing,
+        haltOn: haltOn,
         opacity: isFinite(op) ? op : 0,
         hidden: !el || !!el.hidden,
         phraseW: phraseW,

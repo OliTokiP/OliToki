@@ -38,8 +38,8 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`closed=1`** | Force the Closed Status overlay on (static CL / OS / ED / hours SVGs) and halt galaxy / presentation. `closed=0` forces the menu to stay open. `preview-all.html?closed=1` forwards to each wall iframe. |
 | **`theme=Halloween`** | QA only: treat the Logo / Closed Status as Halloween (per-board costumes + Toki Ghost on Board 4) without writing the sheet. Does not change catalog Theme Selector. |
 | **`theme=Christmas`** | QA only: treat the board as Christmas Theme (Holiday Roulette gate + Christmas palette if the sheet theme is not already Christmas) without writing the sheet. |
-| **`roulette=1`** | Force the active theme’s roulette on. Halloween → Spooky Roulette (Holiday Splash). Christmas → Holiday Roulette (Happy Holidays wall). `roulette=0` forces it off. |
-| **`splash=1`** | Play the Holiday Splash sequence immediately (do not wait for the next minute). `splash=hold` shows the pick and stays. |
+| **`roulette=1`** | Force the active theme’s roulette on. Halloween → Spooky Roulette (Holiday Splash). Christmas → Holiday Roulette (Happy Holidays wall, solid Main-color plate; menu processes halt while the plate is up). `roulette=0` forces it off. |
+| **`splash=1`** | Play the Holiday Splash / Holiday Roulette sequence immediately (do not wait for the next minute). `splash=hold` shows the overlay and stays. |
 | **`splashAt=`** | Freeze the Eastern clock for splash scheduling (ISO timestamp). Same freeze as `wxNow` / `hoursAt` when those are set. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.

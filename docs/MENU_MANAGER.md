@@ -98,7 +98,7 @@ Context-driven children (same idea as the mockup):
 
 When Theme is **Halloween**, a child row **Spooky Roulette** (On / Off) appears under Theme. It writes Style Settings column **N** (`Spooky Roulette`). TV boards overlay a Holiday Splash at the top of every Eastern minute while this is On and Theme stays Halloween.
 
-When Theme is **Christmas**, a child row **Holiday Roulette** (On / Off) appears under Theme. It writes Style Settings column **O** (`Holiday Roulette`). Header is created on first save if missing. TV boards overlay a four-screen “Happy Holidays!” marquee (Fraunces Black Italic, three rows, Santa / Rudolph) at the top of every Eastern minute while this is On and Theme stays Christmas. All four boards fade in together — no stagger — and scroll position is `f(nowMs)` every frame so the wall stays seamed.
+When Theme is **Christmas**, a child row **Holiday Roulette** (On / Off) appears under Theme. It writes Style Settings column **O** (`Holiday Roulette`). Header is created on first save if missing. TV boards cover the live menu with a solid Main-color “Happy Holidays!” marquee (Fraunces Black Italic, three rows, Santa / Rudolph) at the top of every Eastern minute while this is On and Theme stays Christmas. All four boards fade in together — no stagger — and scroll position is `f(nowMs)` every frame so the wall stays seamed. Galaxy pan, presentation, stripes, and soft-refresh halt for the overlay window.
 
 After those Background children, Style and Theme shows **Presentation Speed**, then the New Theme bar. Presentation Style and Encore Spotlight Style / Color / Background are **not** on this screen.
 

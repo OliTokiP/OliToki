@@ -6,7 +6,7 @@
 2. Design **console kill-switches** that truly disable work (not just hide UI)  
 3. Decide when **tearing a feature down and rebuilding** costs more than **leaving it idle**
 
-**Last updated:** 2026-09-22 13:30 (Closed Status overlay)  
+**Last updated:** 2026-11-02 (Holiday Roulette halt)  
 **Primary runtime:** `js/menu.js`, `css/menu.css`  
 **Target display:** 1920×1080; stress cases = Amazon Fire Stick, `preview-all.html` wall (4 boards)
 
@@ -109,6 +109,7 @@ Ratings below assume **one full-quality solo board** unless noted. **×4 wall mu
 | **Disclaimer / Version Stamp** | **Very Low** | Text paint | Disclaimer always shows allergy text. Version Stamp (when enabled) is appended only to the floating Toki Debug header. |
 | **Weather Widget** (Board 4) | **Low** | 1s clock text; Open-Meteo + Store Hours poll ~10 min; one 64² SVG | Hang idle if hidden. **Hard kill:** `TOKI_WEATHER_WIDGET.stop()`. Wall uses **static** SVGs (no CSS keyframes). Fail-soft: clock still runs if weather or hours fetch dies. Closed Status calls `stop()` while the overlay is on. |
 | **Closed Status** (all boards) | **Low** (on) / **saves High** (vs leaving the menu running overnight) | One full-stage static SVG; Store Hours poll ~10 min; 5s open/close check | **Hard kill** of galaxy RAF, presentation / Ken Burns, stripes, Weather Widget, and menu soft-refresh while `body.store-closed`. Overlay is `#closed-status`. Resume on the next open. Hours poll stays armed. |
+| **Holiday Roulette** (Christmas, all boards) | **Low** (on) / **saves High** vs leaving Encore + galaxy running under an opaque plate | One full-stage solid Main-color plate + 3 text tracks + 1 mascot CSS background; one rAF for `f(nowMs)` scroll/fade | **Hard kill** of galaxy RAF, presentation / Ken Burns, stripes, and menu soft-refresh while `body.holiday-roulette-on` (~8s each Eastern minute). Weather clock stays armed (shared `nowMs`). Resume after fade-out. Closed Status still wins. |
 | **Textbox wireframes** (Debug Features **Show Textbox Wireframes** or `?textBoxDebug=1`) | **Very Low** | CSS outlines | QA spacing overlay. Off by default. No layout shift. |
 
 ### 3.4 Data pipeline

@@ -1635,7 +1635,7 @@
     }
   }
 
-  /** True while Closed Status overlay owns the stage (Store Hours / ?closed=). */
+  /** True while Closed Status or Holiday Roulette owns the stage. */
   let _graphicsHalted = false;
 
   function urlPauseRequested() {
@@ -1660,7 +1660,21 @@
     return !!(document.body && document.body.classList.contains("store-closed"));
   }
 
-  function haltForClosed() {
+  function isHolidayRouletteOn() {
+    try {
+      const ui = window.TOKI_HOLIDAY_ROULETTE_UI;
+      if (ui && typeof ui.playing === "function") return !!ui.playing();
+    } catch (e) {}
+    return !!(
+      document.body && document.body.classList.contains("holiday-roulette-on")
+    );
+  }
+
+  function overlayOwnsStage() {
+    return isStoreClosed() || isHolidayRouletteOn();
+  }
+
+  function haltMenuProcesses(reason) {
     stopSlideshow();
     stopAnnouncementSlideshow();
     pauseGalaxyScroll();
@@ -1674,20 +1688,34 @@
       clearInterval(refreshTimer);
       refreshTimer = null;
     }
-    setFeatureActive("closedStatus", true, "store closed overlay");
     if (_graphicsHalted) return;
     _graphicsHalted = true;
-    tokiInfo("closed status: graphics halted");
+    tokiInfo(reason + ": graphics halted");
   }
 
-  function resumeFromClosed() {
-    const wasHalted = _graphicsHalted;
-    _graphicsHalted = false;
-    setFeatureActive("closedStatus", false, "store open");
+  function haltForClosed() {
+    setFeatureActive("closedStatus", true, "store closed overlay");
+    haltMenuProcesses("closed status");
+  }
+
+  function haltForHolidayRoulette() {
+    setFeatureActive("holidayRoulette", true, "holiday roulette overlay");
+    haltMenuProcesses("holiday roulette");
+  }
+
+  function resumeMenuProcesses(reason) {
     if (isStoreClosed()) {
       haltForClosed();
       return;
     }
+    if (isHolidayRouletteOn()) {
+      haltForHolidayRoulette();
+      return;
+    }
+    const wasHalted = _graphicsHalted;
+    _graphicsHalted = false;
+    setFeatureActive("closedStatus", false, "store open");
+    setFeatureActive("holidayRoulette", false, "holiday roulette off");
     if (!_menuPainted) return;
     resumeGalaxyScroll();
     updateStripeAnimation();
@@ -1696,18 +1724,23 @@
       if (isDrinks) {
         setAnnouncementMessage(announcementIndex, { instant: true });
       }
-      tokiInfo("closed status: overlay off (pause=1 keeps presentation still)");
+      tokiInfo(reason + ": overlay off (pause=1 keeps presentation still)");
       return;
     }
     startSlideshow();
     if (isDrinks) startAnnouncementSlideshow();
     if (!boxPackLabEnabled()) startAutoRefresh();
-    if (wasHalted) tokiInfo("closed status: graphics resumed");
+    if (wasHalted) tokiInfo(reason + ": graphics resumed");
+  }
+
+  function resumeFromClosed() {
+    resumeMenuProcesses("closed status");
   }
 
   function syncClosedGraphicsHalt() {
     if (isStoreClosed()) haltForClosed();
-    else if (_graphicsHalted) resumeFromClosed();
+    else if (isHolidayRouletteOn()) haltForHolidayRoulette();
+    else if (_graphicsHalted) resumeMenuProcesses("overlay");
   }
   /** Quarantined xlsx fills — always empty in API-only mode. */
   let sheetFills = {};
@@ -10030,6 +10063,7 @@
 
   function startAnnouncementSlideshow() {
     stopAnnouncementSlideshow();
+    if (overlayOwnsStage()) return;
     const msgs = announcementBox.messages || [];
     if (!msgs.length) return;
     setAnnouncementMessage(announcementIndex, { instant: true });
@@ -15587,7 +15621,7 @@
   function startSlideshow() {
     cancelPresentationAdvance();
     stopMotionEngine();
-    if (isStoreClosed()) {
+    if (overlayOwnsStage()) {
       _presentationRunning = false;
       updateDebugVisuals();
       return;
@@ -15702,7 +15736,7 @@
 
   function resumeGalaxyScroll() {
     if (!galaxyStarted || !config.bgImage || !galaxyTick) return;
-    if (isStoreClosed()) return;
+    if (overlayOwnsStage()) return;
     galaxyPaused = false;
     galaxyResetClock = true;
     if (!galaxyRaf) galaxyRaf = requestAnimationFrame(galaxyTick);
@@ -15717,7 +15751,7 @@
       return;
     }
     if (!els.galaxyA) return;
-    if (isStoreClosed()) galaxyPaused = true;
+    if (overlayOwnsStage()) galaxyPaused = true;
     if (galaxyStarted) {
       resumeGalaxyScroll();
       return;
@@ -16089,7 +16123,8 @@
   }
 
   function applySoftPaint(prevIndex) {
-    const pause = urlPauseRequested() || isStoreClosed();
+    const pause =
+      urlPauseRequested() || isStoreClosed() || isHolidayRouletteOn();
     stopSlideshow();
     stopAnnouncementSlideshow();
     renderTitle();
@@ -16295,9 +16330,13 @@
       refreshTimer = null;
     }
     stopSettingsWatcher();
-    if (isStoreClosed()) {
+    if (overlayOwnsStage()) {
       startSettingsWatcher();
-      setFeatureActive("softRefresh", false, "store closed");
+      setFeatureActive(
+        "softRefresh",
+        false,
+        isStoreClosed() ? "store closed" : "holiday roulette"
+      );
       return;
     }
     if (liveSettings.requireRestart) {
@@ -17564,6 +17603,8 @@
       }
       if (isStoreClosed()) {
         haltForClosed();
+      } else if (isHolidayRouletteOn()) {
+        haltForHolidayRoulette();
       } else {
         playOpeningWindUp();
         if (params.get("pause") !== "1") {
@@ -17668,7 +17709,14 @@
       if (next) haltForClosed();
       else resumeFromClosed();
     });
+    window.addEventListener("toki:holiday-roulette-change", function (ev) {
+      const next =
+        ev && ev.detail ? !!ev.detail.playing : isHolidayRouletteOn();
+      if (next) haltForHolidayRoulette();
+      else resumeMenuProcesses("holiday roulette");
+    });
     if (isStoreClosed()) haltForClosed();
+    else if (isHolidayRouletteOn()) haltForHolidayRoulette();
 
     scaleStageToWindow();
     window.addEventListener("resize", () => {

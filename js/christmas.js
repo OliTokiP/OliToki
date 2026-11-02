@@ -2,8 +2,9 @@
  * TokiMenu — Christmas Theme helpers + Holiday Roulette art.
  *
  * When Style Theme Selector is Christmas, Menu Manager shows Holiday
- * Roulette (On / Off). TV boards overlay a four-screen “Happy Holidays!”
- * marquee (js/holiday-roulette.js) while that flag is On.
+ * Roulette (On / Off). TV boards cover the live menu with a solid
+ * Main-color “Happy Holidays!” marquee (js/holiday-roulette.js) while
+ * that flag is On.
  *
  * QA: ?theme=Christmas  (palette + overlay gate without writing the sheet)
  */
