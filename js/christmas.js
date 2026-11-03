@@ -11,7 +11,7 @@
 (function (root) {
   "use strict";
 
-  var ART_VER = "20261102hr1";
+  var ART_VER = "20261102hr6";
 
   var PALETTE = {
     main: "#1A3C2A",

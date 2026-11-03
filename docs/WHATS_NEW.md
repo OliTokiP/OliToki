@@ -15,14 +15,15 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 ### Details
 - Font: Fraunces Black Italic 306px (`assets/fonts/Fraunces-BlackItalic.ttf`). Three rows: Highlight (LTR), Secondary (RTL), Highlight Special (LTR).
-- Art: Toki Santa on boards 1+3, Toki Rudolph on 2+4 (`assets/christmas/`).
+- Art: Toki Santa on boards 1+3, Toki Rudolph on 2+4 (`assets/christmas/`). Rudolph’s nose uses the PDF shine (`#EC6D6E`) so it does not read as a mouth.
 - Plate: `#holiday-roulette` fills the Stage with `--main-color` (Christmas green). Live menu is covered, not seen through. The three rows keep the PDF’s 367px pitch and are centered in the Stage (caps and descenders on screen).
 - Fire Stick: each track is a few phrase copies with wrapped `translateX`, the Eastern offset is cached off the rAF, and the rest of the Stage is `visibility: hidden` while the plate is up.
 - Menu Manager shows **Holiday Roulette** On/Off as a child of Theme only when Theme is Christmas.
 - Halfway through the plate, Secondary-color circles (Christmas cream, not pure white) fall and get denser. Small circles sit behind the type, medium between the type and the mascot, large in front. Each size varies a little. The field is one 7680-wide clock, same `nowMs` as the type.
 - The exit fades to that theme white, then the white lifts and the menu plates return. It does not fade the green plate away onto black.
 - While the plate is up, galaxy pan, presentation, stripes, and soft-refresh halt (`body.holiday-roulette-on` / `toki:holiday-roulette-change`). Weather clock stays armed for the shared `nowMs` scroll. Closed Status still wins. Snow canvases are small and stop once the white veil covers them.
-- QA: `?theme=Christmas&roulette=1&splash=hold` (or `splash=1` to play the sequence). `preview-all` forwards `theme`, `roulette`, `splash`, `splashAt`.
+- Repeat: `?roulette=1` is the Eastern minute. `?roulette=2` plays the same scene every 30s, `?roulette=4` every 15s. The scene length does not change. `splash=hold` stays up and ignores the divisor.
+- QA uses the Beta workbook so Style can change more than the theme: `?beta&theme=Christmas&roulette=4`. `preview-all` forwards `beta`, `theme`, `roulette`, `splash`, `splashAt`.
 
 ### Docs updated
 - [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)

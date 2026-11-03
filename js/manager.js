@@ -6835,8 +6835,10 @@
     }
     if (params.get("roulette")) {
       var rv = String(params.get("roulette") || "").trim().toLowerCase();
+      var rouletteNum = Number(rv);
       var rouletteOn =
-        rv === "1" || rv === "yes" || rv === "on" || rv === "true";
+        rv === "1" || rv === "yes" || rv === "on" || rv === "true" ||
+        (isFinite(rouletteNum) && rouletteNum > 0);
       var rouletteOff =
         rv === "0" || rv === "no" || rv === "off" || rv === "false";
       var C = window.TOKI_CHRISTMAS;

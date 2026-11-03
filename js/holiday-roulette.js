@@ -49,9 +49,15 @@
  * Sheet: Style and Theme Settings → Holiday Roulette (column O). Menu
  * Manager shows that row only when Theme is Christmas.
  *
- * QA: ?theme=Christmas&roulette=1&splash=1 (play now)
- *     ?splash=hold (show and stay; keeps scrolling unless splashAt/wxNow)
- *     ?roulette=0 force off
+ * QA on the Beta workbook (the theme override does not change the rest
+ * of the sheet): ?beta&theme=Christmas&roulette=4
+ *     ?roulette=1  on, once per Eastern minute (normal)
+ *     ?roulette=2  on, every 30s. ?roulette=4 every 15s. The scene
+ *                  length stays put; only the repeat divides.
+ *     ?splash=1    play the scene once immediately. With roulette=2/4
+ *                  the shortened clock keeps going after that play.
+ *     ?splash=hold show and stay (full snow; ignores the divisor)
+ *     ?roulette=0  force off
  */
 (function (root) {
   "use strict";
@@ -208,19 +214,37 @@
     }
   }
 
-  function readForceRoulette() {
+  function readRouletteRaw() {
     try {
       var raw = query().get("roulette");
-      if (raw == null || raw === "") return null;
-      raw = String(raw).trim().toLowerCase();
-      if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") {
-        return true;
-      }
-      if (raw === "0" || raw === "false" || raw === "no" || raw === "off") {
-        return false;
-      }
-    } catch (e) {}
+      if (raw == null || raw === "") return "";
+      return String(raw).trim().toLowerCase();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function readForceRoulette() {
+    var raw = readRouletteRaw();
+    if (!raw) return null;
+    if (raw === "true" || raw === "yes" || raw === "on") return true;
+    if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+    var n = Number(raw);
+    if (isFinite(n) && n > 0) return true;
     return null;
+  }
+
+  // roulette=1 keeps the Eastern minute. roulette=2 plays every 30s,
+  // roulette=4 every 15s. The scene length does not change.
+  function rouletteDivisor() {
+    var n = Number(readRouletteRaw());
+    if (!isFinite(n) || n <= 1) return 1;
+    if (n > 60) n = 60;
+    return n;
+  }
+
+  function slotPeriodMs() {
+    return 60000 / rouletteDivisor();
   }
 
   function readSplashMode() {
@@ -300,6 +324,21 @@
     var m = ms % 60000;
     if (m < 0) m += 60000;
     return m;
+  }
+
+  // Same Eastern clock as the minute, folded into 60s/N. Every board
+  // derives the slot from nowMs, so a late join still paints the shared phase.
+  function msIntoSlot(d) {
+    var period = slotPeriodMs();
+    var m = msIntoMinute(d) % period;
+    if (m < 0) m += period;
+    return m;
+  }
+
+  function slotKey(d) {
+    var period = slotPeriodMs();
+    var idx = Math.floor(msIntoMinute(d) / period);
+    return minuteKey(d) * 100 + idx;
   }
 
   function splashWindowMs() {
@@ -896,6 +935,9 @@
         elapsed = Date.now() - playStartedAt;
         if (elapsed > splashWindowMs()) {
           splashNowDone = true;
+          // This one-shot already covered the current slot. The next
+          // shortened repeat starts on the following boundary.
+          lastMinuteKey = slotKey(nowDate());
           hideOverlay();
           return;
         }
@@ -905,7 +947,7 @@
         if (!frozenNow) rafId = window.requestAnimationFrame(frame);
         return;
       } else {
-        elapsed = msIntoMinute(nowDate());
+        elapsed = msIntoSlot(nowDate());
         if (elapsed > splashWindowMs()) {
           hideOverlay();
           return;
@@ -918,6 +960,7 @@
   }
 
   var playStartedAt = 0;
+  var playPending = false;
 
   function runPlay(key, mode) {
     if (!enabled()) {
@@ -946,12 +989,16 @@
           phraseW = measurePhrase();
           if (phraseW) {
             fitCopies();
-            paintFrame(mode === "now" ? 0 : msIntoMinute(nowDate()), mode);
+            paintFrame(
+              mode === "now" ? 0 : mode === "hold" ? msIntoMinute(nowDate()) : msIntoSlot(nowDate()),
+              mode
+            );
           }
         }
       }, 50);
     }
-    var elapsed = mode === "now" ? 0 : msIntoMinute(nowDate());
+    var elapsed =
+      mode === "now" ? 0 : mode === "hold" ? msIntoMinute(nowDate()) : msIntoSlot(nowDate());
     if (mode !== "now" && mode !== "hold") {
       if (elapsed >= splashWindowMs()) {
         lastMinuteKey = key;
@@ -972,9 +1019,12 @@
       "minute",
       key,
       mode || "tick",
+      "rate",
+      rouletteDivisor(),
       "phraseW",
       Math.round(phraseW)
     );
+    if (overlay) overlay.setAttribute("data-rate", String(rouletteDivisor()));
     rafLoop(mode);
   }
 
@@ -983,13 +1033,16 @@
       hideOverlay();
       return;
     }
-    if (mode !== "now" && mode !== "hold" && lastMinuteKey === key && playing) {
+    if (mode === "now" && (playing || splashNowDone || playPending)) return;
+    if (mode !== "now" && mode !== "hold" && (playing || playPending) && lastMinuteKey === key) {
       return;
     }
     ensureOverlay();
     if (!overlay) return;
     slot = boardSlot();
+    playPending = true;
     Promise.all([loadFont(), preloadArt()]).then(function () {
+      playPending = false;
       if (!enabled()) {
         hideOverlay();
         return;
@@ -1008,19 +1061,21 @@
       if (!playing) play(minuteKey(nowDate()), "hold");
       return;
     }
-    // ?splash=1 owns its own 8s clock. The minute tick must not cut it
-    // off when the Eastern second is already past the window, and must
-    // not start a second copy after that play finishes.
+    // ?splash=1 owns one immediate play. The slot tick must not cut it
+    // off, and must not start a second copy until that play finishes.
+    // roulette=2/4 keep the shortened clock going after that one play.
     if (splashMode === "now") {
-      if (!splashNowDone && !playing) play(minuteKey(nowDate()), "now");
-      return;
+      if (!splashNowDone && !playing && !playPending) play(slotKey(nowDate()), "now");
+      if (!splashNowDone || playing || playPending || rouletteDivisor() <= 1) return;
     }
     var now = nowDate();
-    var key = minuteKey(now);
-    var elapsed = msIntoMinute(now);
+    var key = slotKey(now);
+    var elapsed = msIntoSlot(now);
     maybeSyncClock(elapsed);
+    // After ?splash=1, do not restart the slot that one-shot just covered.
+    var skipSlot = splashNowDone && splashMode === "now" && key === lastMinuteKey && !playing;
     if (elapsed <= splashWindowMs()) {
-      if (key !== lastMinuteKey || !playing) play(key, "tick");
+      if (!skipSlot && (key !== lastMinuteKey || !playing)) play(key, "tick");
     } else if (playing && elapsed > splashWindowMs()) {
       hideOverlay();
     }
@@ -1029,8 +1084,13 @@
   var lastSyncKey = null;
   function maybeSyncClock(elapsed) {
     if (frozenNow) return;
-    if (elapsed < 55000 || elapsed > 59500) return;
-    var key = minuteKey(nowDate());
+    var period = slotPeriodMs();
+    var tail = Math.min(5000, period * 0.25);
+    var start = period - tail;
+    var end = period - Math.min(500, tail * 0.1);
+    if (end <= start) return;
+    if (elapsed < start || elapsed > end) return;
+    var key = slotKey(nowDate());
     if (lastSyncKey === key) return;
     lastSyncKey = key;
     var wx = root.TOKI_WEATHER_WIDGET;
@@ -1119,7 +1179,12 @@
     if (root.TOKI_HOLIDAY_ROULETTE) sheetRoulette = true;
     var mode = readSplashMode();
     if (mode === "hold" || mode === "now") {
-      if (enabled()) play(minuteKey(nowDate()), mode === "hold" ? "hold" : "now");
+      if (enabled()) {
+        play(
+          mode === "hold" ? minuteKey(nowDate()) : slotKey(nowDate()),
+          mode === "hold" ? "hold" : "now"
+        );
+      }
     }
     syncEnabled();
     document.addEventListener("visibilitychange", function () {
@@ -1180,6 +1245,8 @@
         themeWhite: themeWhite,
         snowDrawn: lastDrawn.slice(),
         frontWorld: frontWorld.slice(),
+        rate: rouletteDivisor(),
+        periodMs: slotPeriodMs(),
       };
     },
   };
