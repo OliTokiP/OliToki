@@ -2485,8 +2485,10 @@ body.holiday-roulette-on #bg-pattern-track {
   white-space: pre;
 }
 
-/* Flattened PDF phrase. Ink height matches the 306px Fraunces run.
-   font-size:0 kills the gap between inline-block tiles. */
+/* Flattened PDF phrase. font-size:0 kills the gap between inline-block tiles.
+   The outline ink fills the 316.54px tile (the ring is part of the art).
+   margin-top is outline-only: 27.73px puts that ink at 14.7–1065.3 in the
+   1080 Stage (center 540). The Fraunces rows do not use this margin. */
 .holiday-roulette-run.is-outline {
   font-size: 0;
   line-height: 0;
@@ -2496,7 +2498,7 @@ body.holiday-roulette-on #bg-pattern-track {
   display: inline-block;
   width: 2574.16px;
   height: 316.54px;
-  margin-top: 63.73px;
+  margin-top: 27.73px;
   vertical-align: top;
   overflow: visible;
   pointer-events: none;
