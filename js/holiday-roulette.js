@@ -19,10 +19,17 @@
  * Overlay is a solid Main-color plate (Christmas green) plus CSS text and
  * a CSS-background mascot — never an <img>, so the food-image decoder
  * never sees it. While the plate is up, menu.js halts galaxy pan,
- * presentation, stripes, and soft-refresh (same hang as Closed Status)
- * and CSS hides the rest of the Stage so Fire Sticks are not compositing
- * the menu under an opaque layer. The weather clock stays armed —
- * roulette scroll is f(nowMs). Closed Status still wins.
+ * presentation, stripes, and soft-refresh (same hang as Closed Status).
+ * The Stage stays painted during the fade-in. CSS hides it
+ * (body.holiday-roulette-cover) only once the green is opaque, and shows
+ * it again before the white lift so the return does not replay Punch-In.
+ * The weather clock stays armed — roulette scroll is f(nowMs). Closed
+ * Status still wins.
+ *
+ * ?outline=1 swaps the Fraunces runs for the flattened PDF phrase
+ * (assets/christmas/happy-holidays-outline.svg). Each row clones the
+ * paths so currentColor is that row’s Highlight / Secondary / Special.
+ * The dark ring stays #070607. Default is the live type.
  *
  * Snow: halfway through the green scene, theme-white circles (Secondary,
  * Christmas cream — never pure #fff) start at the top and get denser.
@@ -31,8 +38,10 @@
  * f(elapsed) from the same nowMs clock. No shadow, no blur.
  *
  * Exit: the plate fades to that same theme white, holds, then the white
- * lifts and the menu plates show through (body.holiday-roulette-reveal).
- * It does not fade the green plate away onto the black stage.
+ * lifts and the menu plates show through. The stage is uncovered while
+ * the overlay is still opaque (body.holiday-roulette-reveal is only a
+ * snapshot flag). It does not fade the green plate away onto the black
+ * stage, and resume does not Punch-In.
  *
  * Vertical: the PDF’s 9pt optical frames sit at -101 / 266 / 633. The
  * shipped 72pt Black Italic draws its ink higher, so those frames clip
@@ -58,6 +67,7 @@
  *                  the shortened clock keeps going after that play.
  *     ?splash=hold show and stay (full snow; ignores the divisor)
  *     ?roulette=0  force off
+ *     ?outline=1   flattened phrase + dark ring (off unless set)
  */
 (function (root) {
   "use strict";
@@ -84,6 +94,10 @@
   var SPEED_PX_S = 192;
   var PHRASE = "Happy Holidays! ";
   var FONT_CSS = '900 italic 306px "Fraunces"';
+  var OUTLINE_VER = "20261103hr7";
+  var OUTLINE_URL = "assets/christmas/happy-holidays-outline.svg?v=" + OUTLINE_VER;
+  var OUTLINE_W = 2574.16;
+  var SVG_NS = "http://www.w3.org/2000/svg";
 
   var LAST_PAINT_KEY = "tokiLastPaint";
   var started = false;
@@ -115,6 +129,12 @@
   var whiteout = null;
   var themeWhite = "#FFF8F0";
   var revealOn = false;
+  var coverOn = false;
+  var outlineWanted = false;
+  var outlineReady = false;
+  var outlineFailed = false;
+  var outlinePaths = [];
+  var outlineViewBox = "120.6479 154.5286 2686.9862 330.4130";
   var lastSnowAmount = 0;
   var lastVeil = 0;
   var lastDrawn = [0, 0, 0];
@@ -261,6 +281,17 @@
       }
     } catch (e) {}
     return "";
+  }
+
+  function readOutlineFlag() {
+    try {
+      var raw = query().get("outline");
+      if (raw == null || raw === "") return false;
+      raw = String(raw).trim().toLowerCase();
+      if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+      if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+    } catch (e) {}
+    return false;
   }
 
   function nowDate() {
@@ -679,22 +710,79 @@
     return n;
   }
 
+  function useOutline() {
+    return outlineWanted && outlineReady && outlinePaths.length >= 2;
+  }
+
+  function makeOutlineTile() {
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "holiday-roulette-outline");
+    svg.setAttribute("viewBox", outlineViewBox);
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var i;
+    for (i = 0; i < outlinePaths.length; i++) {
+      svg.appendChild(document.importNode(outlinePaths[i], true));
+    }
+    return svg;
+  }
+
+  function fillOutlineRun(run, n) {
+    var have = run.querySelectorAll(".holiday-roulette-outline").length;
+    if (
+      run.classList.contains("is-outline") &&
+      run.getAttribute("data-n") === String(n) &&
+      have === n
+    ) {
+      return;
+    }
+    run.textContent = "";
+    run.classList.add("is-outline");
+    var i;
+    for (i = 0; i < n; i++) run.appendChild(makeOutlineTile());
+    run.setAttribute("data-n", String(n));
+  }
+
+  function fillTextRun(run, n) {
+    if (run.classList.contains("is-outline") || run.querySelector(".holiday-roulette-outline")) {
+      run.classList.remove("is-outline");
+      run.textContent = "";
+      run.removeAttribute("data-n");
+    }
+    if (run.getAttribute("data-n") === String(n)) return;
+    run.textContent = PHRASE.repeat(n);
+    run.setAttribute("data-n", String(n));
+  }
+
   function fitCopies() {
     if (!tracks.length) return 0;
     var n = copiesNeeded();
-    var text = PHRASE.repeat(n);
+    var outlined = useOutline();
     var i;
     for (i = 0; i < tracks.length; i++) {
       var run = trackRun(tracks[i].el);
-      if (run.getAttribute("data-n") === String(n)) continue;
-      run.textContent = text;
-      run.setAttribute("data-n", String(n));
+      if (outlined) fillOutlineRun(run, n);
+      else fillTextRun(run, n);
     }
     return n;
   }
 
+  function stageScaleWidth(px) {
+    var stage = $("stage");
+    var stageW = stage ? stage.getBoundingClientRect().width : 0;
+    if (stageW > 0 && BOARD_W > 0) return px * (BOARD_W / stageW);
+    return px;
+  }
+
   function measurePhrase() {
     if (!overlay || !tracks.length) return 0;
+    if (useOutline()) {
+      var tile = tracks[0].el.querySelector(".holiday-roulette-outline");
+      var tw = tile ? tile.getBoundingClientRect().width : 0;
+      if (tw > 0) tw = stageScaleWidth(tw);
+      if (!isFinite(tw) || tw < 32) return OUTLINE_W;
+      return tw;
+    }
     var track = tracks[0].el;
     var probe = track.querySelector(".holiday-roulette-probe");
     if (!probe) {
@@ -703,14 +791,38 @@
       probe.textContent = PHRASE;
       track.appendChild(probe);
     }
-    var w = probe.getBoundingClientRect().width;
-    var stage = $("stage");
-    var stageW = stage ? stage.getBoundingClientRect().width : 0;
-    if (stageW > 0 && BOARD_W > 0) {
-      w = w * (BOARD_W / stageW);
-    }
+    var w = stageScaleWidth(probe.getBoundingClientRect().width);
     if (!isFinite(w) || w < 32) return 0;
     return w;
+  }
+
+  function loadOutline() {
+    if (!readOutlineFlag()) {
+      outlineWanted = false;
+      return Promise.resolve();
+    }
+    outlineWanted = true;
+    if (outlineReady || outlineFailed) return Promise.resolve();
+    return fetch(OUTLINE_URL)
+      .then(function (res) {
+        if (!res.ok) throw new Error("outline");
+        return res.text();
+      })
+      .then(function (text) {
+        var doc = new DOMParser().parseFromString(text, "image/svg+xml");
+        var paths = doc.querySelectorAll("path");
+        var svg = doc.querySelector("svg");
+        if (svg && svg.getAttribute("viewBox")) outlineViewBox = svg.getAttribute("viewBox");
+        outlinePaths = [];
+        var i;
+        for (i = 0; i < paths.length; i++) outlinePaths.push(paths[i]);
+        if (outlinePaths.length < 2) throw new Error("outline paths");
+        outlineReady = true;
+      })
+      .catch(function () {
+        outlineFailed = true;
+        outlineWanted = false;
+      });
   }
 
   function loadFont() {
@@ -858,6 +970,36 @@
       overlay.style.visibility = vis;
       paintedVis = vis;
     }
+    // Cover only while the green plate can hide the stage. Uncover at the
+    // white so the plates are already painted under an opaque overlay.
+    setCover(shouldCoverStage(elapsed, mode, op));
+  }
+
+  function shouldCoverStage(elapsed, mode, op) {
+    if (op < 0.992) return false;
+    if (mode === "hold") return true;
+    return elapsed < WHITE_AT;
+  }
+
+  function parkPlatesFull() {
+    var ids = ["hero-plate", "family-portrait-stage"];
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var el = $(ids[i]);
+      if (!el) continue;
+      el.style.transition = "none";
+      el.style.opacity = "1";
+    }
+  }
+
+  function setCover(on) {
+    on = !!on;
+    if (coverOn === on) return;
+    coverOn = on;
+    try {
+      if (document.body) document.body.classList.toggle("holiday-roulette-cover", on);
+    } catch (e) {}
+    if (on) parkPlatesFull();
   }
 
   function setReveal(on) {
@@ -897,8 +1039,9 @@
   function hideOverlay() {
     stopRaf();
     playing = false;
-    // Drop the halt before the reveal class so the menu does not flash
-    // hidden for a turn between the white lift and the plates.
+    // Uncover first, then drop the halt. Resume snaps the current pose
+    // (no Punch-In) onto plates that are already opacity 1.
+    setCover(false);
     setMenuHalt(false);
     setReveal(false);
     hideSnow();
@@ -981,11 +1124,19 @@
     paintedOp = "0";
     paintedVis = "hidden";
     void overlay.offsetWidth;
-    if (!phraseW) phraseW = measurePhrase();
-    fitCopies();
+    if (useOutline()) {
+      fitCopies();
+      if (!phraseW) phraseW = measurePhrase();
+      fitCopies();
+    } else {
+      if (!phraseW) phraseW = measurePhrase();
+      fitCopies();
+    }
+    if (overlay) overlay.setAttribute("data-outline", useOutline() ? "1" : "0");
     if (!phraseW) {
       window.setTimeout(function () {
         if (playing && overlay && !phraseW) {
+          if (useOutline()) fitCopies();
           phraseW = measurePhrase();
           if (phraseW) {
             fitCopies();
@@ -1041,7 +1192,7 @@
     if (!overlay) return;
     slot = boardSlot();
     playPending = true;
-    Promise.all([loadFont(), preloadArt()]).then(function () {
+    Promise.all([loadFont(), preloadArt(), loadOutline()]).then(function () {
       playPending = false;
       if (!enabled()) {
         hideOverlay();
@@ -1242,6 +1393,8 @@
         snowAmount: lastSnowAmount,
         veil: lastVeil,
         reveal: revealOn,
+        cover: coverOn,
+        outline: useOutline(),
         themeWhite: themeWhite,
         snowDrawn: lastDrawn.slice(),
         frontWorld: frontWorld.slice(),

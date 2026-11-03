@@ -1698,7 +1698,22 @@
     haltMenuProcesses("closed status");
   }
 
+  function freezePlateOpacity(el) {
+    if (!el) return;
+    let op = 1;
+    try {
+      op = parseFloat(window.getComputedStyle(el).opacity);
+    } catch (e) {}
+    if (!isFinite(op)) op = 1;
+    el.style.transition = "none";
+    el.style.opacity = String(op);
+  }
+
   function haltForHolidayRoulette() {
+    // Stop a running Punch-In / Punch-Out where it is. Forcing opacity 1
+    // here would pop the food while the green is still fading in.
+    freezePlateOpacity(els.heroPlate);
+    freezePlateOpacity(els.familyPortrait);
     setFeatureActive("holidayRoulette", true, "holiday roulette overlay");
     haltMenuProcesses("holiday roulette");
   }
@@ -1727,7 +1742,7 @@
       tokiInfo(reason + ": overlay off (pause=1 keeps presentation still)");
       return;
     }
-    startSlideshow();
+    startSlideshow(reason === "holiday roulette" ? { settle: true } : null);
     if (isDrinks) startAnnouncementSlideshow();
     if (!boxPackLabEnabled()) startAutoRefresh();
     if (wasHalted) tokiInfo(reason + ": graphics resumed");
@@ -13788,6 +13803,152 @@
    * Works when both segments are Slideshow, or Slideshow → Ken Burns, etc.
    */
   let _motionEngineColdStart = false;
+  let _motionEngineSettle = false;
+
+  function readPlateNumber(el, prop) {
+    if (!el) return NaN;
+    try {
+      let raw = el.style.getPropertyValue(prop);
+      if (!raw) raw = window.getComputedStyle(el).getPropertyValue(prop);
+      const n = parseFloat(raw);
+      return isFinite(n) ? n : NaN;
+    } catch (e) {
+      return NaN;
+    }
+  }
+
+  /**
+   * Holiday Roulette return. Snap the current pose at opacity 1 and keep
+   * going at Hold → Punch-Out. Do not call heroPunchIn / encorePunchIn —
+   * those zero the plate and the cream panel shows through the food.
+   */
+  function motionEngineSettleResume(slide, style, holdSec, exitSec, gen, flags) {
+    const nextBlock = flags.nextBlock;
+    const isLast = !!flags.isLastInSegment;
+    const nextSlide = flags.nextSlide || null;
+
+    if (slide.type === "portrait") {
+      const stage = familyPortraitPrepareSurface(slide);
+      staticClearHighlights();
+      engineArmHighlightIn(style && style.punchOut);
+      armFpOverviewHighlight(slide);
+      if (stage && window.TOKI_MOTION) {
+        const rig = stage.querySelector(".family-portrait-rig");
+        if (rig) rig.style.transition = "none";
+        stage.style.transition = "none";
+        window.TOKI_MOTION.setPlaneCenterOrigin(stage);
+        window.TOKI_MOTION.snapPortraitZoom(stage, 1);
+        stage.classList.remove("is-dimmed", "is-zoom-out");
+        stage.classList.add("visible");
+        stage.hidden = false;
+        stage.style.opacity = "1";
+        void stage.offsetWidth;
+        stage.style.transition = "";
+        if (rig) rig.style.transition = "";
+      }
+      kenBurnsRunHold(holdSec, gen, function () {
+        if (gen !== _motionEngineGen) return;
+        motionRunExit(slide, style, exitSec, gen, nextBlock, {
+          isLastInSegment: isLast,
+          nextSlide: nextSlide,
+        });
+      });
+      return;
+    }
+
+    if (motionStyleIsEncore(style) || slide.type === "encore") {
+      const before = els.familyPortrait;
+      let zoom = readPlateNumber(before, "--encore-zoom");
+      const dimmed = !!(before && before.classList.contains("is-dimmed"));
+      const stage = encorePrepareSurface(slide);
+      const presItem = resolvePresItem(slide.itemIndex, slide);
+      if (presItem) {
+        _lastEncoreBowItem = presItem;
+        applyEncoreSpotlightChrome(presItem);
+      } else {
+        applyEncoreSpotlightChrome(null);
+      }
+      encoreArmHighlight(slide, exitSec);
+      if (!stage || !window.TOKI_MOTION) {
+        afterMs((holdSec + exitSec) * 1000, gen, nextBlock);
+        return;
+      }
+      if (!isFinite(zoom) || zoom <= 0) {
+        zoom = window.TOKI_MOTION.readEncoreZoomTo(stage);
+      }
+      window.TOKI_MOTION.encoreSnap(stage, {
+        zoom: zoom,
+        pinch: dimmed ? encoreHolePinchPx() : 0,
+        dimmed: dimmed,
+        opacity: 1,
+        itemIndex: slide.itemIndex,
+      });
+      kenBurnsRunHold(holdSec, gen, function () {
+        if (gen !== _motionEngineGen) return;
+        encoreRunExit(slide, style, exitSec, gen, isLast, nextBlock);
+      });
+      return;
+    }
+
+    const plate = heroMotionEl();
+    const item = resolvePresItem(slide.itemIndex, slide) || {
+      image: slide.image,
+      images: slide.images,
+      isNew: !!slide.isNew,
+    };
+    const textOnly = !!slide.textOnly || !slide.image;
+    const heroZoom = readPlateNumber(plate, "--hero-zoom");
+    if (textOnly) {
+      hideHeroPlate({ clearSrc: true, instant: true });
+      finishHideFamilyPortrait();
+      engineArmHighlightIn(exitSec);
+      if (slide.segment === "box") {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      }
+      kenBurnsRunHold(holdSec, gen, function () {
+        if (gen !== _motionEngineGen) return;
+        engineHighlightFadeOut(exitSec);
+        afterMs(exitSec * 1000, gen, nextBlock);
+      });
+      return;
+    }
+
+    engineLoadHeroImage(item, function (ok) {
+      if (gen !== _motionEngineGen) return;
+      engineArmHighlightIn(exitSec);
+      if (slide.segment === "box") {
+        staticSetBoxHighlight(
+          slide.boxKey,
+          slide.boxItemIndex != null ? slide.boxItemIndex : slide.itemIndex,
+          !!slide.isNew
+        );
+      } else {
+        staticSetListHighlight(slide.itemIndex, !!slide.isNew);
+      }
+      if (!ok || !plate || !window.TOKI_MOTION) {
+        afterMs((holdSec + exitSec) * 1000, gen, nextBlock);
+        return;
+      }
+      const zoom = isFinite(heroZoom) && heroZoom > 0 ? heroZoom : 1;
+      window.TOKI_MOTION.heroSnap(plate, 1, zoom);
+      if (motionStyleUsesZoom(style)) {
+        setFeatureActive("kenBurns", true, "holiday roulette settle");
+      }
+      kenBurnsRunHold(holdSec, gen, function () {
+        if (gen !== _motionEngineGen) return;
+        motionRunExit(slide, style, exitSec, gen, nextBlock, {
+          isLastInSegment: isLast,
+          nextSlide: nextSlide,
+        });
+      });
+    });
+  }
 
   function motionEngineRunBlock(index, gen) {
     if (gen !== _motionEngineGen || !_motionEngineRunning) return;
@@ -13806,9 +13967,12 @@
     const nextSlide =
       slides.length > 1 ? slides[(i + 1) % slides.length] : null;
 
-    // Cold start: first block of the run gets segment-first entrance (Encore Wind-up / FP)
+    // Cold start: first block of the run gets segment-first entrance (Encore Wind-up / FP).
+    // Settle: Holiday Roulette resume. Snap opacity 1, do not Punch-In.
     const cold = _motionEngineColdStart;
     _motionEngineColdStart = false;
+    const settle = _motionEngineSettle;
+    _motionEngineSettle = false;
 
     // First of segment OR cold start. After FP overview, next Encore bow is NOT
     // first (prev is portrait, same segment) → Punch-In only (compose).
@@ -13852,6 +14016,8 @@
       motionStyleIsEncore(style) ? "yes" : "no",
       "first=",
       isFirstInSegment,
+      "settle=",
+      settle,
       "last=",
       isLastInSegment,
       "in=",
@@ -13873,6 +14039,15 @@
       if (gen !== _motionEngineGen || !_motionEngineRunning) return;
       motionEngineRunBlock(i + 1, gen);
     };
+
+    if (settle) {
+      motionEngineSettleResume(slide, style, holdSec, exitSec, gen, {
+        isLastInSegment: isLastInSegment,
+        nextSlide: nextSlide,
+        nextBlock: nextBlock,
+      });
+      return;
+    }
 
     // Family Portrait overview stays on the live-only path.
     if (slide.type === "portrait") {
@@ -14006,12 +14181,14 @@
     });
   }
 
-  function startMotionEngineAt(index) {
+  function startMotionEngineAt(index, opts) {
     stopMotionEngine();
     if (!usesBoardSlides() || !slides.length) return;
-    // Board 4 (left-hero box presentation) uses the same engine as boards 1–3
+    // Board 4 (left-hero box presentation) uses the same engine as boards 1–3.
+    // settle is only the Holiday Roulette return. A live advance stays cold.
     _motionEngineRunning = true;
-    _motionEngineColdStart = true;
+    _motionEngineSettle = !!(opts && opts.settle);
+    _motionEngineColdStart = !_motionEngineSettle;
     const gen = ++_motionEngineGen;
     const i = ((index % slides.length) + slides.length) % slides.length;
     tokiInfo(
@@ -15618,7 +15795,8 @@
     tokiInfo("presentation opening Wind-up", animationBlockId(slide));
   }
 
-  function startSlideshow() {
+  function startSlideshow(opts) {
+    const settleResume = !!(opts && opts.settle);
     cancelPresentationAdvance();
     stopMotionEngine();
     if (overlayOwnsStage()) {
@@ -15664,7 +15842,7 @@
         return;
       }
       _presentationRunning = true;
-      startMotionEngineAt(activeIndex);
+      startMotionEngineAt(activeIndex, settleResume ? { settle: true } : null);
       tokiInfo(
         "motion engine START",
         isDrinks ? "Board4" : "board",

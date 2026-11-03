@@ -2339,8 +2339,9 @@ body.splash-fading #bg-pattern-track {
 /* Holiday Roulette — Christmas “Happy Holidays!” wall marquee.
    Solid Main-color plate (Christmas green) covers the live menu. Mascot
    is a CSS background so the food-image decoder never sees it. Menu
-   processes halt while body.holiday-roulette-on, and the rest of the
-   Stage is visibility:hidden so Fire Stick is not compositing it.
+   processes halt while body.holiday-roulette-on. The Stage stays painted
+   during the fade-in. body.holiday-roulette-cover hides it only while the
+   green plate is opaque, then the white lift shows the plates again.
    Under Closed Status (z 40). */
 @font-face {
   font-family: "Fraunces";
@@ -2368,16 +2369,11 @@ body.splash-fading #bg-pattern-track {
   visibility: visible;
 }
 
-/* Drop the live menu out of the compositor while the plate covers it.
-   Closed Status stays paintable so it can still win. */
-body.holiday-roulette-on #stage > :not(#holiday-roulette):not(#closed-status) {
+/* Hide the live menu only once the green plate is opaque. The fade-in
+   paints over the food. Closed Status stays paintable so it can still win.
+   Uncover happens in JS before the white lift (overlay still opaque). */
+body.holiday-roulette-cover #stage > :not(#holiday-roulette):not(#closed-status) {
   visibility: hidden !important;
-}
-
-/* White lift: the menu plates show through the fading theme-white veil.
-   Processes stay halted until the veil is gone. */
-body.holiday-roulette-on.holiday-roulette-reveal #stage > :not(#holiday-roulette):not(#closed-status) {
-  visibility: visible !important;
 }
 
 body.holiday-roulette-on #galaxy .galaxy-layer,
@@ -2487,6 +2483,24 @@ body.holiday-roulette-on #bg-pattern-track {
   visibility: hidden;
   pointer-events: none;
   white-space: pre;
+}
+
+/* Flattened PDF phrase. Ink height matches the 306px Fraunces run.
+   font-size:0 kills the gap between inline-block tiles. */
+.holiday-roulette-run.is-outline {
+  font-size: 0;
+  line-height: 0;
+}
+
+.holiday-roulette-outline {
+  display: inline-block;
+  width: 2574.16px;
+  height: 316.54px;
+  margin-top: 63.73px;
+  vertical-align: top;
+  overflow: visible;
+  pointer-events: none;
+  color: inherit;
 }
 
 .holiday-roulette-mascot {

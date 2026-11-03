@@ -1,6 +1,6 @@
 # OliToki Menu Manager
 
-**Last updated:** 2026-11-02 (Holiday Roulette) 
+**Last updated:** 2026-11-03 (Holiday Roulette outline) 
 **Status:** mobile layout + sheet read + Theme / Background write + Board Settings write (A3/B3/C3/G3)
 
 Boss-facing mobile web app for authoring look, feel, and (later) menu content. This is the start of **Tier B** in [OWNER_HANDOFF.md](./OWNER_HANDOFF.md). Boards stay on the sheet CMS until board screens ship.
@@ -98,7 +98,7 @@ Context-driven children (same idea as the mockup):
 
 When Theme is **Halloween**, a child row **Spooky Roulette** (On / Off) appears under Theme. It writes Style Settings column **N** (`Spooky Roulette`). TV boards overlay a Holiday Splash at the top of every Eastern minute while this is On and Theme stays Halloween.
 
-When Theme is **Christmas**, a child row **Holiday Roulette** (On / Off) appears under Theme. It writes Style Settings column **O** (`Holiday Roulette`). Header is created on first save if missing. TV boards cover the live menu with a solid Main-color “Happy Holidays!” marquee (Fraunces Black Italic, three rows centered on the PDF 367px pitch, Santa / Rudolph) at the top of every Eastern minute while this is On and Theme stays Christmas. All four boards fade in together — no stagger — and scroll position is `f(nowMs)` every frame so the wall stays seamed. Galaxy pan, presentation, stripes, and soft-refresh halt for the overlay window, and the rest of the Stage is hidden.
+When Theme is **Christmas**, a child row **Holiday Roulette** (On / Off) appears under Theme. It writes Style Settings column **O** (`Holiday Roulette`). Header is created on first save if missing. TV boards cover the live menu with a solid Main-color “Happy Holidays!” marquee (Fraunces Black Italic, three rows centered on the PDF 367px pitch, Santa / Rudolph) at the top of every Eastern minute while this is On and Theme stays Christmas. All four boards fade in together — no stagger — and scroll position is `f(nowMs)` every frame so the wall stays seamed. Galaxy pan, presentation, stripes, and soft-refresh halt for the overlay window. The boards stay painted while the green fades in, and the Stage is hidden only while that plate is opaque. `?outline=1` on a board draws the flattened phrase instead of the Fraunces type.
 
 After those Background children, Style and Theme shows **Presentation Speed**, then the New Theme bar. Presentation Style and Encore Spotlight Style / Color / Background are **not** on this screen.
 

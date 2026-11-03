@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-11-02 (Holiday Roulette)
+**Last updated:** 2026-11-03 (Holiday Roulette outline)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -38,8 +38,9 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`closed=1`** | Force the Closed Status overlay on (static CL / OS / ED / hours SVGs) and halt galaxy / presentation. `closed=0` forces the menu to stay open. `preview-all.html?closed=1` forwards to each wall iframe. |
 | **`theme=Halloween`** | QA only: treat the Logo / Closed Status as Halloween (per-board costumes + Toki Ghost on Board 4) without writing the sheet. Does not change catalog Theme Selector. |
 | **`theme=Christmas`** | QA only: treat the board as Christmas Theme (Holiday Roulette gate + Christmas palette if the sheet theme is not already Christmas) without writing the sheet. |
-| **`roulette=1`** | Force the active theme’s roulette on. Halloween → Spooky Roulette (Holiday Splash). Christmas → Holiday Roulette (Happy Holidays wall, solid Main-color plate; menu processes halt while the plate is up). `roulette=0` forces it off. On Christmas, a number above 1 also forces it on and divides the repeat: `roulette=2` every 30s, `roulette=4` every 15s (60÷N). The scene stays ~8.8s. `splash=hold` ignores the divisor and stays up. |
+| **`roulette=1`** | Force the active theme’s roulette on. Halloween → Spooky Roulette (Holiday Splash). Christmas → Holiday Roulette (Happy Holidays wall, solid Main-color plate; menu processes halt while the plate is up). The Stage stays painted during the fade-in and is hidden only while that green plate is opaque. `roulette=0` forces it off. On Christmas, a number above 1 also forces it on and divides the repeat: `roulette=2` every 30s, `roulette=4` every 15s (60÷N). The scene stays ~8.8s. `splash=hold` ignores the divisor and stays up. |
 | **`splash=1`** | Play the Holiday Splash / Holiday Roulette sequence immediately (do not wait for the next minute). `splash=hold` shows the overlay and stays. |
+| **`outline=1`** | Holiday Roulette only. Draw the flattened “Happy Holidays!” art (`assets/christmas/happy-holidays-outline.svg`) instead of the Fraunces type. Fill follows each row’s color; the dark ring stays. `outline=0` (or omitting it) keeps the live type. |
 | **`splashAt=`** | Freeze the Eastern clock for splash scheduling (ISO timestamp). Same freeze as `wxNow` / `hoursAt` when those are set. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
