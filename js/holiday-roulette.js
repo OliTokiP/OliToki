@@ -24,6 +24,16 @@
  * the menu under an opaque layer. The weather clock stays armed —
  * roulette scroll is f(nowMs). Closed Status still wins.
  *
+ * Snow: halfway through the green scene, theme-white circles (Secondary,
+ * Christmas cream — never pure #fff) start at the top and get denser.
+ * Three canvases, one field across the 7680 wall: small behind the type,
+ * medium between the type and the mascot, large in front. Positions are
+ * f(elapsed) from the same nowMs clock. No shadow, no blur.
+ *
+ * Exit: the plate fades to that same theme white, holds, then the white
+ * lifts and the menu plates show through (body.holiday-roulette-reveal).
+ * It does not fade the green plate away onto the black stage.
+ *
  * Vertical: the PDF’s 9pt optical frames sit at -101 / 266 / 633. The
  * shipped 72pt Black Italic draws its ink higher, so those frames clip
  * the caps. CSS shifts that same 367px pitch down 88px and centers the
@@ -32,7 +42,9 @@
  * Fire Stick: each track is a few phrase copies (not a 50k-px run) and
  * translateX wraps inside one phrase. Eastern ms-into-minute caches the
  * timezone offset so the rAF does not build Intl every frame. Opacity is
- * written only while it is changing.
+ * written only while it is changing. Snow canvases are small bitmaps,
+ * hidden until flakes exist, and skipped once the white veil covers them.
+ * preview=all uses fewer flakes and smaller bitmaps.
  *
  * Sheet: Style and Theme Settings → Holiday Roulette (column O). Menu
  * Manager shows that row only when Theme is Christmas.
@@ -47,8 +59,22 @@
   var TZ = "America/New_York";
   var FADE_IN_MS = 250;
   var HOLD_MS = 7000;
-  var FADE_OUT_MS = 500;
+  // Green scene is the fade-in plus the hold. Snow starts halfway through
+  // that scene, fills in before the end, then the exit is a fade to the
+  // theme white (not a fade of the plate onto black).
+  var SCENE_MS = FADE_IN_MS + HOLD_MS;
+  var SNOW_START_MS = 3625;
+  var SNOW_FULL_MS = 6800;
+  var WHITE_IN_MS = 800;
+  var WHITE_HOLD_MS = 200;
+  var WHITE_OUT_MS = 500;
+  var WHITE_AT = SCENE_MS;
+  var WHITE_FULL = WHITE_AT + WHITE_IN_MS;
+  var WHITE_LIFT = WHITE_FULL + WHITE_HOLD_MS;
+  var END_MS = WHITE_LIFT + WHITE_OUT_MS;
   var BOARD_W = 1920;
+  var WALL_W = 7680;
+  var STAGE_H = 1080;
   var SPEED_PX_S = 192;
   var PHRASE = "Happy Holidays! ";
   var FONT_CSS = '900 italic 306px "Fraunces"';
@@ -76,7 +102,68 @@
   var tzCacheOff = 0;
   var paintedOp = "";
   var paintedVis = "";
+  var paintedVeil = "";
+  var paintedPhase = "";
   var splashNowDone = false;
+  var snowLayers = [];
+  var whiteout = null;
+  var themeWhite = "#FFF8F0";
+  var revealOn = false;
+  var lastSnowAmount = 0;
+  var lastVeil = 0;
+  var lastDrawn = [0, 0, 0];
+  var frontWorld = [];
+
+  // perBoard is how many flakes a 1920-wide screen shows at full density.
+  // The sim is one 7680-wide field so a flake can cross the TV seam.
+  // r is CSS px on the 1920×1080 stage. Speed is px/s. Drift is px/s.
+  var SNOW_SPECS = [
+    {
+      name: "back",
+      perBoard: 100,
+      r0: 4,
+      r1: 9,
+      s0: 200,
+      s1: 320,
+      d0: -26,
+      d1: 26,
+      a0: 0.5,
+      a1: 0.8,
+      sway: 14,
+      bw: 800,
+      bh: 450,
+    },
+    {
+      name: "mid",
+      perBoard: 22,
+      r0: 12,
+      r1: 22,
+      s0: 240,
+      s1: 390,
+      d0: -40,
+      d1: 40,
+      a0: 0.7,
+      a1: 0.92,
+      sway: 20,
+      bw: 800,
+      bh: 450,
+    },
+    {
+      name: "front",
+      perBoard: 6,
+      r0: 26,
+      r1: 40,
+      s0: 150,
+      s1: 260,
+      d0: -56,
+      d1: 56,
+      a0: 0.84,
+      a1: 0.97,
+      sway: 28,
+      bw: 960,
+      bh: 540,
+    },
+  ];
 
   function $(id) {
     return document.getElementById(id);
@@ -216,7 +303,210 @@
   }
 
   function splashWindowMs() {
-    return FADE_IN_MS + HOLD_MS + FADE_OUT_MS;
+    return END_MS;
+  }
+
+  function hash01(i, salt) {
+    var x = Math.imul(i + 1, 374761393) ^ Math.imul(salt + 1, 668265263);
+    x = Math.imul(x ^ (x >>> 13), 1274126177);
+    x = x ^ (x >>> 16);
+    return (x >>> 0) / 4294967295;
+  }
+
+  function isWallPreview() {
+    try {
+      if (query().get("preview") === "all") return true;
+      if (document.body && document.body.classList.contains("preview-wall")) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function isPureWhite(raw) {
+    var s = String(raw || "").replace(/\s+/g, "").toLowerCase();
+    return (
+      s === "#fff" ||
+      s === "#ffffff" ||
+      s === "white" ||
+      s === "rgb(255,255,255)" ||
+      s === "rgba(255,255,255,1)" ||
+      s === "rgba(255,255,255,1.0)"
+    );
+  }
+
+  function refreshThemeWhite() {
+    var C = root.TOKI_CHRISTMAS;
+    var fallback = (C && C.PALETTE && C.PALETTE.secondary) || "#FFF8F0";
+    var raw = "";
+    try {
+      raw = getComputedStyle(document.documentElement).getPropertyValue("--secondary-color");
+    } catch (e) {
+      raw = "";
+    }
+    raw = String(raw || "").trim();
+    if (!raw || isPureWhite(raw)) raw = fallback;
+    themeWhite = raw;
+    if (whiteout) whiteout.style.backgroundColor = themeWhite;
+  }
+
+  function smoothstep(u) {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    return u * u * (3 - 2 * u);
+  }
+
+  function ensureSnow() {
+    if (!overlay || snowLayers.length) return;
+    var wall = isWallPreview();
+    var countScale = wall ? 0.55 : 1;
+    var resScale = wall ? 0.7 : 1;
+    var rows = overlay.querySelector(".holiday-roulette-rows");
+    var mascot = overlay.querySelector(".holiday-roulette-mascot");
+    var i;
+    for (i = 0; i < SNOW_SPECS.length; i++) {
+      var spec = SNOW_SPECS[i];
+      var canvas = document.createElement("canvas");
+      canvas.className = "holiday-roulette-snow is-" + spec.name;
+      canvas.setAttribute("aria-hidden", "true");
+      var bw = Math.max(160, Math.round(spec.bw * resScale));
+      var bh = Math.max(90, Math.round(spec.bh * resScale));
+      canvas.width = bw;
+      canvas.height = bh;
+      var count = Math.max(4, Math.round(spec.perBoard * 4 * countScale));
+      var list = [];
+      var n;
+      for (n = 0; n < count; n++) {
+        var sizeT = hash01(n, i * 17 + 2);
+        // Bias small-ward inside the class so a few larger ones read as variation.
+        if (spec.name !== "front") sizeT = sizeT * sizeT;
+        list.push({
+          x0: ((n + hash01(n, i * 17 + 1)) / count) * WALL_W,
+          r: spec.r0 + (spec.r1 - spec.r0) * sizeT,
+          speed: spec.s0 + (spec.s1 - spec.s0) * hash01(n, i * 17 + 4),
+          drift: spec.d0 + (spec.d1 - spec.d0) * hash01(n, i * 17 + 5),
+          alpha: spec.a0 + (spec.a1 - spec.a0) * hash01(n, i * 17 + 6),
+          sway: spec.sway * (0.55 + 0.9 * hash01(n, i * 17 + 8)),
+          swayHz: 0.35 + 0.7 * hash01(n, i * 17 + 9),
+          phase: hash01(n, i * 17 + 7) * Math.PI * 2,
+          // Birth is shuffled, not tied to x0, so every board fills together.
+          birthU: hash01(n, i * 17 + 11),
+        });
+      }
+      snowLayers.push({
+        spec: spec,
+        canvas: canvas,
+        ctx: canvas.getContext("2d"),
+        flakes: list,
+        visible: false,
+      });
+    }
+    var back = snowLayers[0].canvas;
+    var mid = snowLayers[1].canvas;
+    var front = snowLayers[2].canvas;
+    if (rows) overlay.insertBefore(back, rows);
+    else overlay.appendChild(back);
+    if (mascot) overlay.insertBefore(mid, mascot);
+    else overlay.appendChild(mid);
+    if (mascot && mascot.nextSibling) overlay.insertBefore(front, mascot.nextSibling);
+    else overlay.appendChild(front);
+    whiteout = overlay.querySelector(".holiday-roulette-whiteout");
+    if (!whiteout) {
+      whiteout = document.createElement("div");
+      whiteout.className = "holiday-roulette-whiteout";
+      whiteout.setAttribute("aria-hidden", "true");
+    }
+    overlay.appendChild(whiteout);
+    refreshThemeWhite();
+  }
+
+  function hideSnow() {
+    var i;
+    for (i = 0; i < snowLayers.length; i++) {
+      var layer = snowLayers[i];
+      if (!layer.visible) continue;
+      if (layer.ctx) layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+      layer.canvas.style.visibility = "hidden";
+      layer.visible = false;
+    }
+    lastDrawn = [0, 0, 0];
+  }
+
+  function flakeY(flake, age, loopAlways) {
+    var loop = STAGE_H + flake.r * 2 + 48;
+    var travel = flake.speed * (age / 1000);
+    if (!loopAlways && travel < loop) return -flake.r - 12 + travel;
+    var y = -flake.r - 12 + (travel % loop);
+    return y;
+  }
+
+  function drawSnow(elapsed, mode) {
+    if (!snowLayers.length) return;
+    var hold = mode === "hold";
+    if (!hold && elapsed < SNOW_START_MS) {
+      lastSnowAmount = 0;
+      hideSnow();
+      return;
+    }
+    var span = SNOW_FULL_MS - SNOW_START_MS;
+    var amount = 1;
+    if (!hold) {
+      amount = elapsed >= SNOW_FULL_MS ? 1 : (elapsed - SNOW_START_MS) / span;
+      if (amount < 0) amount = 0;
+    }
+    lastSnowAmount = amount;
+    var motionT = hold ? elapsed + 30000 : elapsed;
+    var origin = (slot - 1) * BOARD_W;
+    var li;
+    frontWorld = [];
+    for (li = 0; li < snowLayers.length; li++) {
+      var layer = snowLayers[li];
+      var ctx = layer.ctx;
+      var canvas = layer.canvas;
+      if (!ctx) continue;
+      if (!layer.visible) {
+        canvas.style.visibility = "visible";
+        layer.visible = true;
+      }
+      var sx = canvas.width / BOARD_W;
+      var sy = canvas.height / STAGE_H;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = themeWhite;
+      var drawn = 0;
+      var flakes = layer.flakes;
+      var n;
+      var isFront = layer.spec.name === "front";
+      for (n = 0; n < flakes.length; n++) {
+        var f = flakes[n];
+        var age;
+        if (hold) {
+          age = motionT;
+        } else {
+          var bornAt = SNOW_START_MS + f.birthU * span;
+          if (elapsed < bornAt) continue;
+          age = elapsed - bornAt;
+        }
+        var world =
+          f.x0 +
+          f.drift * (motionT / 1000) +
+          Math.sin(motionT / 1000 * f.swayHz + f.phase) * f.sway;
+        world = wrapMod(world, WALL_W);
+        if (isFront) frontWorld.push(Math.round(world * 10) / 10);
+        var x = world - origin;
+        if (x < -f.r) x += WALL_W;
+        else if (x > BOARD_W + f.r) x -= WALL_W;
+        if (x < -f.r || x > BOARD_W + f.r) continue;
+        var y = flakeY(f, age, hold);
+        if (y < -f.r || y > STAGE_H + f.r) continue;
+        var fadeIn = hold ? 1 : Math.min(1, age / 420);
+        if (fadeIn <= 0.01) continue;
+        ctx.globalAlpha = f.alpha * fadeIn;
+        ctx.beginPath();
+        ctx.arc(x * sx, y * sy, Math.max(0.6, f.r * sx), 0, Math.PI * 2);
+        ctx.fill();
+        drawn += 1;
+      }
+      ctx.globalAlpha = 1;
+      lastDrawn[li] = drawn;
+    }
   }
 
   function readLastPaint() {
@@ -311,6 +601,7 @@
       mascotEl = overlay.querySelector(".holiday-roulette-mascot");
     }
     overlay.setAttribute("data-board", String(slot));
+    ensureSnow();
     return overlay;
   }
 
@@ -434,14 +725,31 @@
     });
   }
 
-  function opacityAt(elapsed, mode) {
+  function plateOpacity(elapsed, mode) {
     if (mode === "hold") return 1;
     if (elapsed <= 0) return 0;
     if (elapsed < FADE_IN_MS) return elapsed / FADE_IN_MS;
-    if (elapsed < FADE_IN_MS + HOLD_MS) return 1;
-    var out = elapsed - FADE_IN_MS - HOLD_MS;
-    if (out >= FADE_OUT_MS) return 0;
-    return 1 - out / FADE_OUT_MS;
+    if (elapsed < WHITE_LIFT) return 1;
+    if (elapsed >= END_MS) return 0;
+    return 1 - smoothstep((elapsed - WHITE_LIFT) / WHITE_OUT_MS);
+  }
+
+  function veilOpacity(elapsed, mode) {
+    if (mode === "hold") return 0;
+    if (elapsed < WHITE_AT) return 0;
+    if (elapsed >= WHITE_FULL) return 1;
+    return smoothstep((elapsed - WHITE_AT) / WHITE_IN_MS);
+  }
+
+  function phaseName(elapsed, mode) {
+    if (mode === "hold") return "hold";
+    if (elapsed < FADE_IN_MS) return "in";
+    if (elapsed < SNOW_START_MS) return "plate";
+    if (elapsed < WHITE_AT) return "snow";
+    if (elapsed < WHITE_FULL) return "white";
+    if (elapsed < WHITE_LIFT) return "white-hold";
+    if (elapsed < END_MS) return "lift";
+    return "done";
   }
 
   function wrapMod(n, period) {
@@ -451,27 +759,56 @@
     return x;
   }
 
+  function paintVeil(veil) {
+    if (!whiteout) return;
+    var veilStr = veil >= 0.999 ? "1" : veil <= 0.001 ? "0" : veil.toFixed(3);
+    if (veilStr !== paintedVeil) {
+      whiteout.style.opacity = veilStr;
+      whiteout.style.visibility = veil > 0.001 ? "visible" : "hidden";
+      paintedVeil = veilStr;
+    }
+    lastVeil = veil;
+  }
+
   function paintFrame(elapsed, mode) {
     if (!overlay || !tracks.length) return;
+    ensureSnow();
     if (!phraseW) phraseW = measurePhrase();
-    var period = phraseW || 1;
-    var raw = (elapsed / 1000) * SPEED_PX_S;
-    var scrolled = wrapMod(raw, period);
-    var slotOff = (slot - 1) * BOARD_W;
-    var i;
-    for (i = 0; i < tracks.length; i++) {
-      var dir = tracks[i].dir === "rtl" ? -1 : 1;
-      // Same wall phase as the unwrapped lead formula, folded into one phrase
-      // so the layer stays a few copies wide. Keep subpixel (do not round per
-      // board) or the seam between sticks drifts by a pixel.
-      var x = wrapMod(dir * scrolled - slotOff, period) - period;
-      var next = "translate3d(" + x.toFixed(3) + "px,0,0)";
-      if (tracks[i].x !== next) {
-        tracks[i].el.style.transform = next;
-        tracks[i].x = next;
+    var veil = veilOpacity(elapsed, mode);
+    var covered = mode !== "hold" && veil >= 0.985;
+    // Once the theme-white veil is opaque the type and flakes are covered.
+    // Skip those paints until the plates return.
+    if (!covered) {
+      var period = phraseW || 1;
+      var raw = (elapsed / 1000) * SPEED_PX_S;
+      var scrolled = wrapMod(raw, period);
+      var slotOff = (slot - 1) * BOARD_W;
+      var i;
+      for (i = 0; i < tracks.length; i++) {
+        var dir = tracks[i].dir === "rtl" ? -1 : 1;
+        // Same wall phase as the unwrapped lead formula, folded into one phrase
+        // so the layer stays a few copies wide. Keep subpixel (do not round per
+        // board) or the seam between sticks drifts by a pixel.
+        var x = wrapMod(dir * scrolled - slotOff, period) - period;
+        var next = "translate3d(" + x.toFixed(3) + "px,0,0)";
+        if (tracks[i].x !== next) {
+          tracks[i].el.style.transform = next;
+          tracks[i].x = next;
+        }
       }
+      drawSnow(elapsed, mode);
+    } else {
+      hideSnow();
+      lastSnowAmount = 1;
     }
-    var op = opacityAt(elapsed, mode);
+    setReveal(mode !== "hold" && elapsed >= WHITE_LIFT && elapsed < END_MS);
+    paintVeil(veil);
+    var phase = phaseName(elapsed, mode);
+    if (phase !== paintedPhase) {
+      overlay.setAttribute("data-phase", phase);
+      paintedPhase = phase;
+    }
+    var op = plateOpacity(elapsed, mode);
     var opStr = op >= 0.999 ? "1" : op <= 0.001 ? "0" : op.toFixed(3);
     if (opStr !== paintedOp) {
       overlay.style.opacity = opStr;
@@ -482,6 +819,15 @@
       overlay.style.visibility = vis;
       paintedVis = vis;
     }
+  }
+
+  function setReveal(on) {
+    on = !!on;
+    if (revealOn === on) return;
+    revealOn = on;
+    try {
+      if (document.body) document.body.classList.toggle("holiday-roulette-reveal", on);
+    } catch (e) {}
   }
 
   function stopRaf() {
@@ -512,14 +858,26 @@
   function hideOverlay() {
     stopRaf();
     playing = false;
+    // Drop the halt before the reveal class so the menu does not flash
+    // hidden for a turn between the white lift and the plates.
     setMenuHalt(false);
+    setReveal(false);
+    hideSnow();
     paintedOp = "";
     paintedVis = "";
+    paintedVeil = "";
+    paintedPhase = "";
+    lastVeil = 0;
+    if (whiteout) {
+      whiteout.style.opacity = "0";
+      whiteout.style.visibility = "hidden";
+    }
     if (!overlay) return;
     overlay.style.opacity = "0";
     overlay.style.visibility = "hidden";
     overlay.classList.remove("is-visible");
     overlay.hidden = true;
+    overlay.removeAttribute("data-phase");
     overlay.setAttribute("aria-hidden", "true");
   }
 
@@ -571,6 +929,7 @@
     slot = boardSlot();
     if (!fontReady) return;
     applyMascot();
+    refreshThemeWhite();
     overlay.hidden = false;
     // Force a blank frame before the measured paint. The skip-cache must
     // match these writes or a second play() leaves the plate at opacity 0.
@@ -744,7 +1103,10 @@
     if (d && d.christmas != null) sheetChristmas = !!d.christmas;
     if (d && d.holidayRoulette != null) sheetRoulette = !!d.holidayRoulette;
     syncEnabled();
-    if (playing && overlay && !overlay.hidden) applyMascot();
+    if (playing && overlay && !overlay.hidden) {
+      applyMascot();
+      refreshThemeWhite();
+    }
   }
 
   function start() {
@@ -811,6 +1173,13 @@
         hidden: !el || !!el.hidden,
         phraseW: phraseW,
         copies: tracks.length ? Number(trackRun(tracks[0].el).getAttribute("data-n")) || 0 : 0,
+        phase: paintedPhase,
+        snowAmount: lastSnowAmount,
+        veil: lastVeil,
+        reveal: revealOn,
+        themeWhite: themeWhite,
+        snowDrawn: lastDrawn.slice(),
+        frontWorld: frontWorld.slice(),
       };
     },
   };

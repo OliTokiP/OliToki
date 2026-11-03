@@ -19,7 +19,9 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 - Plate: `#holiday-roulette` fills the Stage with `--main-color` (Christmas green). Live menu is covered, not seen through. The three rows keep the PDF’s 367px pitch and are centered in the Stage (caps and descenders on screen).
 - Fire Stick: each track is a few phrase copies with wrapped `translateX`, the Eastern offset is cached off the rAF, and the rest of the Stage is `visibility: hidden` while the plate is up.
 - Menu Manager shows **Holiday Roulette** On/Off as a child of Theme only when Theme is Christmas.
-- While the plate is up, galaxy pan, presentation, stripes, and soft-refresh halt (`body.holiday-roulette-on` / `toki:holiday-roulette-change`). Weather clock stays armed for the shared `nowMs` scroll. Closed Status still wins.
+- Halfway through the plate, Secondary-color circles (Christmas cream, not pure white) fall and get denser. Small circles sit behind the type, medium between the type and the mascot, large in front. Each size varies a little. The field is one 7680-wide clock, same `nowMs` as the type.
+- The exit fades to that theme white, then the white lifts and the menu plates return. It does not fade the green plate away onto black.
+- While the plate is up, galaxy pan, presentation, stripes, and soft-refresh halt (`body.holiday-roulette-on` / `toki:holiday-roulette-change`). Weather clock stays armed for the shared `nowMs` scroll. Closed Status still wins. Snow canvases are small and stop once the white veil covers them.
 - QA: `?theme=Christmas&roulette=1&splash=hold` (or `splash=1` to play the sequence). `preview-all` forwards `theme`, `roulette`, `splash`, `splashAt`.
 
 ### Docs updated

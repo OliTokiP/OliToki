@@ -2374,6 +2374,12 @@ body.holiday-roulette-on #stage > :not(#holiday-roulette):not(#closed-status) {
   visibility: hidden !important;
 }
 
+/* White lift: the menu plates show through the fading theme-white veil.
+   Processes stay halted until the veil is gone. */
+body.holiday-roulette-on.holiday-roulette-reveal #stage > :not(#holiday-roulette):not(#closed-status) {
+  visibility: visible !important;
+}
+
 body.holiday-roulette-on #galaxy .galaxy-layer,
 body.holiday-roulette-on #stripes-track,
 body.holiday-roulette-on #bg-pattern-track {
@@ -2385,6 +2391,40 @@ body.holiday-roulette-on #bg-pattern-track {
   display: none !important;
   visibility: hidden;
   opacity: 0;
+}
+
+/* Snow bitmaps are stretched over the Stage. Bitmap size stays small
+   (see holiday-roulette.js); CSS scales the circles up. */
+.holiday-roulette-snow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.holiday-roulette-snow.is-back {
+  z-index: 0;
+}
+
+.holiday-roulette-snow.is-mid {
+  z-index: 2;
+}
+
+.holiday-roulette-snow.is-front {
+  z-index: 4;
+}
+
+.holiday-roulette-whiteout {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: var(--secondary-color, #fff8f0);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .holiday-roulette-rows {
@@ -2459,7 +2499,7 @@ body.holiday-roulette-on #bg-pattern-track {
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
 }
 
