@@ -1,9 +1,29 @@
 # What’s New
 
-**Last updated:** 2026-11-02  
+**Last updated:** 2026-11-05  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-11-05 — Holiday Closed Status (Christmas)
+
+**Boards / surface:** Menu Screens (all four boards)  
+**Summary:** When Theme is Christmas and the shop is closed, the four boards show the Closed Status Xmas art instead of the default CLOSED plate. Snow keeps falling in three layers. Galaxy, presentation, stripes, and the Weather Widget stay halted.
+
+### Details
+- Art is traced from Closed Status Xmas.pdf (no live type). Boards 1–3 are gold **CL / OS / ED** on `#0D3B2E`. Board 4 is Toki Santa plus baked Store Hours (11:00–10:30 Sun–Wed, 11:00–1:30 Thu–Sat).
+- Layer stack, back to front: small flakes, big type, medium flakes, small type and Santa, large flakes. Flakes are the Holiday Roulette circles (Secondary cream, not pure white), one 7680-wide field so the wall stays seamed.
+- `?snow=0` is a small flurry and `?snow=100` is a blizzard. Leaving `snow` off uses **40** until a ship number is chosen. `preview-all` forwards `snow`.
+- QA: `?theme=Christmas&closed=1`. Default and Halloween closed art are unchanged.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 

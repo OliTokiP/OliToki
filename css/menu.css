@@ -2536,6 +2536,51 @@ body.theme-halloween #closed-status {
   background: #1a0924;
 }
 
+/* Christmas Closed Status — PDF green plate. Art SVGs are transparent so
+   snow can sit between the big type and the small type / Santa. */
+body.theme-christmas #closed-status,
+#closed-status.is-xmas {
+  background: #0d3b2e;
+}
+
+#closed-status .closed-snow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+  display: none;
+}
+
+#closed-status.is-xmas .closed-snow.is-back {
+  z-index: 1;
+}
+
+#closed-status.is-xmas #closed-status-art {
+  z-index: 2;
+}
+
+#closed-status.is-xmas .closed-snow.is-mid {
+  z-index: 3;
+}
+
+#closed-status.is-xmas #closed-status-front {
+  z-index: 4;
+}
+
+#closed-status.is-xmas .closed-snow.is-front {
+  z-index: 5;
+}
+
+#closed-status.is-xmas .closed-snow.is-on {
+  display: block;
+}
+
+#closed-status-front[hidden] {
+  display: none !important;
+}
+
 body.store-closed #closed-status {
   display: block;
 }

@@ -3,14 +3,20 @@
  *
  * Mockup: vault Mockups/Closed Status Mockup (Closed 1–4.svg + Closed Status.pdf;
  * Halloween: Closed Status H 1–4 + Closed Status H.pdf).
+ * Christmas: Dropbox Toki Holidays/Mockups/Closed Status Xmas.pdf.
  * When Store Hours say the shop is closed, each board paints its static SVG
  * (CL / OS / ED / bunny+hours) and asks the menu runtime to halt galaxy pan,
  * presentation, stripes, and weather work. Halloween Theme swaps Board 4’s
- * bunny for Toki Ghost (`closed-h-4.svg`). Opens again on the next service
- * window. Independent of the catalog Google load.
+ * bunny for Toki Ghost (`closed-h-4.svg`). Christmas Theme swaps in the
+ * holiday art (`closed-x-*`) and runs the same three-layer circle snow as
+ * Holiday Roulette. Opens again on the next service window. Independent of
+ * the catalog Google load.
  *
  * QA: ?closed=1 force on, ?closed=0 force off, ?wxNow= / ?hoursAt= freeze
  * America/New_York (same codes as the Weather Widget).
+ * ?theme=Christmas&closed=1 shows the holiday plate.
+ * ?snow=0 is a small flurry, ?snow=100 is a blizzard. Omitted snow uses 40
+ * until a ship number is chosen.
  */
 (function (root) {
   "use strict";
@@ -22,6 +28,61 @@
   var STORE_HOURS_GID = "1732597216";
   var ART_BASE = "assets/closed/closed-";
   var ART_VER = "20260924closed2";
+  var XMAS_VER = "20261105cx1";
+  // Stand-in until Feedback picks a ship number. ?snow= overrides it.
+  var SNOW_DEFAULT = 40;
+  var BOARD_W = 1920;
+  var WALL_W = 7680;
+  var STAGE_H = 1080;
+  // Same classes as Holiday Roulette: small behind the type, medium in the
+  // middle, large in front. perBoard is a 1920-wide screen at snow scale 1.
+  var SNOW_SPECS = [
+    {
+      name: "back",
+      perBoard: 100,
+      r0: 4,
+      r1: 9,
+      s0: 200,
+      s1: 320,
+      d0: -26,
+      d1: 26,
+      a0: 0.5,
+      a1: 0.8,
+      sway: 14,
+      bw: 800,
+      bh: 450,
+    },
+    {
+      name: "mid",
+      perBoard: 22,
+      r0: 12,
+      r1: 22,
+      s0: 240,
+      s1: 390,
+      d0: -40,
+      d1: 40,
+      a0: 0.7,
+      a1: 0.92,
+      sway: 20,
+      bw: 800,
+      bh: 450,
+    },
+    {
+      name: "front",
+      perBoard: 6,
+      r0: 26,
+      r1: 40,
+      s0: 150,
+      s1: 260,
+      d0: -56,
+      d1: 56,
+      a0: 0.84,
+      a1: 0.97,
+      sway: 28,
+      bw: 960,
+      bh: 540,
+    },
+  ];
 
   var started = false;
   var closed = false;
@@ -31,8 +92,14 @@
   var hoursSchedule = defaultHours();
   var overlay = null;
   var art = null;
+  var front = null;
   var lastClosed = null;
   var slot = 1;
+  var snowLayers = [];
+  var snowRaf = 0;
+  var snowWanted = false;
+  var themeWhite = "#FFF8F0";
+  var snowLevelCached = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -379,6 +446,214 @@
       });
   }
 
+  function readSnowLevel() {
+    try {
+      var raw = new URLSearchParams(location.search).get("snow");
+      if (raw == null || String(raw).trim() === "") return SNOW_DEFAULT;
+      var n = Number(String(raw).trim());
+      if (!isFinite(n)) return SNOW_DEFAULT;
+      if (n < 0) n = 0;
+      if (n > 100) n = 100;
+      return n;
+    } catch (e) {
+      return SNOW_DEFAULT;
+    }
+  }
+
+  function snowLevel() {
+    if (snowLevelCached == null) snowLevelCached = readSnowLevel();
+    return snowLevelCached;
+  }
+
+  // 0 = small flurry, 100 = blizzard. Scale 1 matches Holiday Roulette’s
+  // full field. Count, size, and speed move together.
+  function snowMul() {
+    var t = snowLevel() / 100;
+    return {
+      count: 0.18 + t * 2.2,
+      radius: 0.85 + t * 0.45,
+      speed: 0.7 + t * 0.6,
+    };
+  }
+
+  function hash01(i, salt) {
+    var x = Math.imul(i + 1, 374761393) ^ Math.imul(salt + 1, 668265263);
+    x = Math.imul(x ^ (x >>> 13), 1274126177);
+    x = x ^ (x >>> 16);
+    return (x >>> 0) / 4294967295;
+  }
+
+  function wrapMod(n, m) {
+    var r = n % m;
+    if (r < 0) r += m;
+    return r;
+  }
+
+  function isWallPreview() {
+    try {
+      if (new URLSearchParams(location.search).get("preview") === "all") return true;
+      if (document.body && document.body.classList.contains("preview-wall")) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function isPureWhite(raw) {
+    var s = String(raw || "").replace(/\s+/g, "").toLowerCase();
+    return (
+      s === "#fff" ||
+      s === "#ffffff" ||
+      s === "white" ||
+      s === "rgb(255,255,255)" ||
+      s === "rgba(255,255,255,1)" ||
+      s === "rgba(255,255,255,1.0)"
+    );
+  }
+
+  function refreshSnowColor() {
+    var C = root.TOKI_CHRISTMAS;
+    var fallback = (C && C.PALETTE && C.PALETTE.secondary) || "#FFF8F0";
+    var raw = "";
+    try {
+      raw = getComputedStyle(document.documentElement).getPropertyValue(
+        "--secondary-color"
+      );
+    } catch (e) {
+      raw = "";
+    }
+    raw = String(raw || "").trim();
+    if (!raw || isPureWhite(raw)) raw = fallback;
+    themeWhite = raw;
+  }
+
+  function ensureSnow() {
+    if (!overlay || !art || snowLayers.length) return;
+    var wall = isWallPreview();
+    var mul = snowMul();
+    var countScale = (wall ? 0.55 : 1) * mul.count;
+    var resScale = wall ? 0.7 : 1;
+    var i;
+    for (i = 0; i < SNOW_SPECS.length; i++) {
+      var spec = SNOW_SPECS[i];
+      var canvas = document.createElement("canvas");
+      canvas.className = "closed-snow is-" + spec.name;
+      canvas.setAttribute("aria-hidden", "true");
+      var bw = Math.max(160, Math.round(spec.bw * resScale));
+      var bh = Math.max(90, Math.round(spec.bh * resScale));
+      canvas.width = bw;
+      canvas.height = bh;
+      var count = Math.round(spec.perBoard * 4 * countScale);
+      var floor = spec.name === "front" ? 4 : spec.name === "mid" ? 8 : 20;
+      if (wall) floor = spec.name === "front" ? 2 : 4;
+      if (count < floor) count = floor;
+      var list = [];
+      var n;
+      for (n = 0; n < count; n++) {
+        var sizeT = hash01(n, i * 17 + 2);
+        if (spec.name !== "front") sizeT = sizeT * sizeT;
+        list.push({
+          x0: ((n + hash01(n, i * 17 + 1)) / count) * WALL_W,
+          r: (spec.r0 + (spec.r1 - spec.r0) * sizeT) * mul.radius,
+          speed: (spec.s0 + (spec.s1 - spec.s0) * hash01(n, i * 17 + 4)) * mul.speed,
+          drift: (spec.d0 + (spec.d1 - spec.d0) * hash01(n, i * 17 + 5)) * mul.speed,
+          alpha: spec.a0 + (spec.a1 - spec.a0) * hash01(n, i * 17 + 6),
+          sway: spec.sway * (0.55 + 0.9 * hash01(n, i * 17 + 8)),
+          swayHz: 0.35 + 0.7 * hash01(n, i * 17 + 9),
+          phase: hash01(n, i * 17 + 7) * Math.PI * 2,
+        });
+      }
+      snowLayers.push({
+        spec: spec,
+        canvas: canvas,
+        ctx: canvas.getContext("2d"),
+        flakes: list,
+      });
+    }
+    // Small flakes < big text < medium flakes < small text & Santa < large flakes.
+    var back = snowLayers[0].canvas;
+    var mid = snowLayers[1].canvas;
+    var frontSnow = snowLayers[2].canvas;
+    overlay.insertBefore(back, art);
+    if (front && front.parentNode === overlay) {
+      overlay.insertBefore(mid, front);
+      overlay.appendChild(frontSnow);
+    } else {
+      overlay.appendChild(mid);
+      overlay.appendChild(frontSnow);
+    }
+  }
+
+  function drawSnow(nowMs) {
+    if (!snowLayers.length) return;
+    var origin = (slot - 1) * BOARD_W;
+    var t = nowMs / 1000;
+    var li;
+    for (li = 0; li < snowLayers.length; li++) {
+      var layer = snowLayers[li];
+      var ctx = layer.ctx;
+      var canvas = layer.canvas;
+      if (!ctx) continue;
+      var sx = canvas.width / BOARD_W;
+      var sy = canvas.height / STAGE_H;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = themeWhite;
+      var flakes = layer.flakes;
+      var n;
+      for (n = 0; n < flakes.length; n++) {
+        var f = flakes[n];
+        var world =
+          f.x0 +
+          f.drift * t +
+          Math.sin(t * f.swayHz + f.phase) * f.sway;
+        world = wrapMod(world, WALL_W);
+        var x = world - origin;
+        if (x < -f.r) x += WALL_W;
+        else if (x > BOARD_W + f.r) x -= WALL_W;
+        if (x < -f.r || x > BOARD_W + f.r) continue;
+        var loop = STAGE_H + f.r * 2 + 48;
+        var y = -f.r - 12 + wrapMod(f.speed * t, loop);
+        ctx.globalAlpha = f.alpha;
+        ctx.beginPath();
+        ctx.arc(x * sx, y * sy, Math.max(0.6, f.r * sx), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function snowFrame() {
+    if (!snowWanted) return;
+    snowRaf = window.requestAnimationFrame(snowFrame);
+    drawSnow(Date.now());
+  }
+
+  function startSnow() {
+    if (!overlay || !art) return;
+    ensureSnow();
+    refreshSnowColor();
+    var i;
+    for (i = 0; i < snowLayers.length; i++) {
+      snowLayers[i].canvas.classList.add("is-on");
+    }
+    if (snowWanted) return;
+    snowWanted = true;
+    console.info("[TokiMenu closed] holiday snow", snowLevel());
+    snowRaf = window.requestAnimationFrame(snowFrame);
+  }
+
+  function stopSnow() {
+    snowWanted = false;
+    if (snowRaf) window.cancelAnimationFrame(snowRaf);
+    snowRaf = 0;
+    var i;
+    for (i = 0; i < snowLayers.length; i++) {
+      var layer = snowLayers[i];
+      layer.canvas.classList.remove("is-on");
+      if (layer.ctx) {
+        layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+      }
+    }
+  }
+
   function ensureOverlay() {
     var stage = $("stage");
     if (!stage) return null;
@@ -398,6 +673,14 @@
       stage.appendChild(overlay);
     } else {
       art = $("closed-status-art") || overlay.querySelector("img");
+    }
+    if (slot === 4 && !front) {
+      front = document.createElement("img");
+      front.id = "closed-status-front";
+      front.alt = "";
+      front.draggable = false;
+      front.hidden = true;
+      overlay.appendChild(front);
     }
     overlay.setAttribute("data-board", String(slot));
     syncArt();
@@ -420,7 +703,36 @@
     return false;
   }
 
+  function christmasOn() {
+    var C = root.TOKI_CHRISTMAS;
+    if (!C || typeof C.isChristmas !== "function") return false;
+    if (typeof C.urlThemeOverride === "function") {
+      var override = C.urlThemeOverride();
+      if (override) return C.isChristmas(override);
+    }
+    if (document.body) {
+      if (document.body.classList.contains("theme-christmas")) return true;
+      if (document.body.classList.contains("theme-halloween")) return false;
+    }
+    try {
+      var raw = localStorage.getItem("tokiLastPaint");
+      var lp = raw ? JSON.parse(raw) : null;
+      if (lp && C.isChristmas(lp.themeName)) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function xmasBigSrc() {
+    if (slot === 4) return "assets/closed/closed-x-4-big.svg?v=" + XMAS_VER;
+    return "assets/closed/closed-x-" + slot + ".svg?v=" + XMAS_VER;
+  }
+
+  function xmasFrontSrc() {
+    return "assets/closed/closed-x-4-front.svg?v=" + XMAS_VER;
+  }
+
   function artSrc() {
+    if (christmasOn()) return xmasBigSrc();
     var H = root.TOKI_HALLOWEEN;
     if (H && typeof H.closedArtUrl === "function") {
       return H.closedArtUrl(slot, halloweenOn());
@@ -430,8 +742,21 @@
 
   function syncArt() {
     if (!art) return;
+    var xmas = christmasOn();
+    if (overlay) overlay.classList.toggle("is-xmas", xmas);
     var next = artSrc();
     if (art.getAttribute("src") !== next) art.src = next;
+    if (front) {
+      if (xmas) {
+        var fsrc = xmasFrontSrc();
+        if (front.getAttribute("src") !== fsrc) front.src = fsrc;
+        front.hidden = false;
+      } else {
+        front.hidden = true;
+      }
+    }
+    if (xmas && closed) startSnow();
+    else stopSnow();
   }
 
   function setWeatherRunning(on) {
@@ -469,6 +794,7 @@
       overlay.setAttribute("aria-hidden", next ? "false" : "true");
     }
     setWeatherRunning(!next);
+    syncArt();
     if (lastClosed === next) return;
     lastClosed = next;
     console.info(

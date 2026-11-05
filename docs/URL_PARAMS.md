@@ -35,13 +35,14 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`encore=old`** | Encore only: park the Spotlight Veil on the **camera rig** (nested `scale(--encore-zoom)`). Default (omit, or `encore=new`) keeps the veil as a stage sibling. |
 | **`beta`** | Load **Beta (Development) Copy** instead of Settings A2 (Restaurant). Also uses Beta’s Settings row (Require restart, Refresh Timer, Debug Mode — A3–G3), not Restaurant A2–G2. Dining-room TVs omit this. Also: `preview-all.html?beta` forwards it to each wall iframe. |
 | **`wxNow=`** | Freeze the Eastern clock at this instant (ISO timestamp, e.g. `2026-09-21T04:15:00Z` = Sunday 12:15 AM EDT). Weather Widget **Open until** and Closed Status both read it. Alias: `hoursAt`. |
-| **`closed=1`** | Force the Closed Status overlay on (static CL / OS / ED / hours SVGs) and halt galaxy / presentation. `closed=0` forces the menu to stay open. `preview-all.html?closed=1` forwards to each wall iframe. |
+| **`closed=1`** | Force the Closed Status overlay on (static CL / OS / ED / hours SVGs) and halt galaxy / presentation. `closed=0` forces the menu to stay open. `preview-all.html?closed=1` forwards to each wall iframe. Christmas Theme (`theme=Christmas`) uses the holiday closed art instead. |
 | **`theme=Halloween`** | QA only: treat the Logo / Closed Status as Halloween (per-board costumes + Toki Ghost on Board 4) without writing the sheet. Does not change catalog Theme Selector. |
-| **`theme=Christmas`** | QA only: treat the board as Christmas Theme (Holiday Roulette gate + Christmas palette if the sheet theme is not already Christmas) without writing the sheet. |
+| **`theme=Christmas`** | QA only: treat the board as Christmas Theme (Holiday Roulette gate + Christmas palette if the sheet theme is not already Christmas, and the holiday Closed Status art) without writing the sheet. |
 | **`roulette=1`** | Force the active theme’s roulette on. Halloween → Spooky Roulette (Holiday Splash). Christmas → Holiday Roulette (Happy Holidays wall, solid Main-color plate; menu processes halt while the plate is up). The Stage stays painted during the fade-in and is hidden only while that green plate is opaque. `roulette=0` forces it off. On Christmas, a number above 1 also forces it on and divides the repeat: `roulette=2` every 30s, `roulette=4` every 15s (60÷N). The scene stays ~8.8s. `splash=hold` ignores the divisor and stays up. |
 | **`splash=1`** | Play the Holiday Splash / Holiday Roulette sequence immediately (do not wait for the next minute). `splash=hold` shows the overlay and stays. |
 | **`outline=1`** | Holiday Roulette only. Draw the flattened “Happy Holidays!” art (`assets/christmas/happy-holidays-outline.svg`) instead of the Fraunces type. Fill follows each row’s color; the dark ring stays. `outline=0` (or omitting it) keeps the live type. |
 | **`splashAt=`** | Freeze the Eastern clock for splash scheduling (ISO timestamp). Same freeze as `wxNow` / `hoursAt` when those are set. |
+| **`snow=0`** … **`snow=100`** | Christmas Closed Status only. Snow density on the closed plate. `0` is a small flurry, `100` is a blizzard. Omitted uses **40** until a ship number is chosen. `preview-all` forwards it. No effect on the default or Halloween closed art. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 
@@ -89,6 +90,9 @@ index.html?beta&theme=Christmas&roulette=1&splash=hold
 index.html?beta&theme=Christmas&roulette=4
 preview-all.html?beta&theme=Christmas&roulette=1&splash=hold
 index4.html?theme=Halloween&closed=1
+index.html?theme=Christmas&closed=1&snow=40
+preview-all.html?theme=Christmas&closed=1&snow=40
+index4.html?theme=Christmas&closed=1&snow=100
 index4.html?wxNow=2026-09-22T04:15:00Z
 ```
 
