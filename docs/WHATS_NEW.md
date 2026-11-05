@@ -1,22 +1,41 @@
 # What’s New
 
-**Last updated:** 2026-11-05  
+**Last updated:** 2026-11-05 18:31  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 ---
 
+## 2026-11-05 18:31 — Christmas Closed Status defaults
+
+**Boards / surface:** Menu Screens (all four boards)  
+**Sheet:** none  
+**Summary:** Christmas Closed Status now ships with snow at 40 and the letter light show on. A build does not need `?snow=` or `?lightshow=1`.
+
+### Details
+- Omitting `snow` uses **40**. `?snow=0` is still a small flurry and `?snow=100` is still a blizzard.
+- The six CLOSED letters run yellow → red → white (5 seconds each), then a 5-second scramble every 30 seconds. `?lightshow=0` keeps the PDF gold.
+- Board 4’s Santa and baked hours stay gold. Default and Halloween closed art are unchanged.
+
+### Docs updated
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+---
+
 ## 2026-11-05 — Christmas Closed Status light show
 
 **Boards / surface:** Menu Screens (boards 1–3)  
-**Summary:** `?lightshow=1` runs the six CLOSED letters through the Christmas theme colors. The default stays the PDF gold.
+**Summary:** The six CLOSED letters run through the Christmas theme colors. This entry shipped them behind `?lightshow=1`. The defaults entry above turns the show on with the theme.
 
 ### Details
 - Solid sequence, 5 seconds each: Highlight Special (yellow), Highlight (red), Secondary (white), then that cycle repeats.
 - Every 30 seconds the hold stops and the letters scramble for 5 seconds (a new pattern every 200ms). Each frame uses each of the three colors twice, and the same color never touches, including across the board seam.
-- The phase comes from `Date.now()`, so the wall stays in step. Board 4’s Santa and hours stay gold. Omitting `lightshow`, or `lightshow=0`, leaves the gold art.
-- QA: `?theme=Christmas&closed=1&lightshow=1`.
+- The phase comes from `Date.now()`, so the wall stays in step. Board 4’s Santa and hours stay gold. `?lightshow=0` leaves the gold art.
 
 ---
 
@@ -28,7 +47,7 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 ### Details
 - Art is traced from Closed Status Xmas.pdf (no live type). Boards 1–3 are gold **CL / OS / ED** on `#0D3B2E`. Board 4 is Toki Santa plus baked Store Hours (11:00–10:30 Sun–Wed, 11:00–1:30 Thu–Sat).
 - Layer stack, back to front: small flakes, big type, medium flakes, small type and Santa, large flakes. Flakes are the Holiday Roulette circles (Secondary cream, not pure white), one 7680-wide field so the wall stays seamed.
-- `?snow=0` is a small flurry and `?snow=100` is a blizzard. Leaving `snow` off uses **40** until a ship number is chosen. `preview-all` forwards `snow`.
+- `?snow=0` is a small flurry and `?snow=100` is a blizzard. Leaving `snow` off uses **40**. `preview-all` forwards `snow`.
 - QA: `?theme=Christmas&closed=1`. Default and Halloween closed art are unchanged.
 
 ### Docs updated

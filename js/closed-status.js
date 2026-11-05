@@ -15,10 +15,9 @@
  * QA: ?closed=1 force on, ?closed=0 force off, ?wxNow= / ?hoursAt= freeze
  * America/New_York (same codes as the Weather Widget).
  * ?theme=Christmas&closed=1 shows the holiday plate.
- * ?snow=0 is a small flurry, ?snow=100 is a blizzard. Omitted snow uses 40
- * until a ship number is chosen.
- * ?lightshow=1 runs the CLOSED-letter lights (Highlight Special, Highlight,
- * Secondary). Omitted or 0 leaves the PDF gold. Boards 1–3 only.
+ * ?snow=0 is a small flurry, ?snow=100 is a blizzard. Omitted snow uses 40.
+ * The CLOSED-letter lights run with the theme (Highlight Special, Highlight,
+ * Secondary). ?lightshow=0 leaves the PDF gold. Boards 1–3 only.
  */
 (function (root) {
   "use strict";
@@ -31,9 +30,9 @@
   var ART_BASE = "assets/closed/closed-";
   var ART_VER = "20260924closed2";
   var XMAS_VER = "20261105cx1";
-  // Stand-in until Feedback picks a ship number. ?snow= overrides it.
+  // Ship density for Christmas Closed Status. ?snow= overrides it.
   var SNOW_DEFAULT = 40;
-  // Christmas closed letters, ?lightshow=1. One clock for the whole wall.
+  // Christmas closed letters. On with the theme. One clock for the whole wall.
   // 25s of solid color (5s yellow, 5s red, 5s white, repeat), then 5s of
   // scramble. Yellow / red / white are Highlight Special, Highlight, Secondary.
   var LIGHT_PERIOD_MS = 30000;
@@ -708,12 +707,13 @@
   function readLightshow() {
     try {
       var raw = new URLSearchParams(location.search).get("lightshow");
-      if (raw == null) return false;
+      if (raw == null) return true;
       var s = String(raw).trim().toLowerCase();
-      if (!s || s === "0" || s === "off" || s === "false" || s === "no") return false;
+      if (!s) return true;
+      if (s === "0" || s === "off" || s === "false" || s === "no") return false;
       return true;
     } catch (e) {
-      return false;
+      return true;
     }
   }
 

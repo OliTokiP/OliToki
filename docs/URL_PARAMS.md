@@ -1,6 +1,6 @@
 # URL codes (display)
 
-**Last updated:** 2026-11-03 (Holiday Roulette outline)
+**Last updated:** 2026-11-05 18:31 (Christmas Closed Status defaults)
 
 Stick these on the end of a board URL. First one starts with `?`, more with `&`.
 
@@ -42,8 +42,8 @@ https://olitokip.github.io/OliToki/index.html?w=1920&dpr=1
 | **`splash=1`** | Play the Holiday Splash / Holiday Roulette sequence immediately (do not wait for the next minute). `splash=hold` shows the overlay and stays. |
 | **`outline=1`** | Holiday Roulette only. Draw the flattened “Happy Holidays!” art (`assets/christmas/happy-holidays-outline.svg`) instead of the Fraunces type. Fill follows each row’s color; the dark ring stays. `outline=0` (or omitting it) keeps the live type. |
 | **`splashAt=`** | Freeze the Eastern clock for splash scheduling (ISO timestamp). Same freeze as `wxNow` / `hoursAt` when those are set. |
-| **`snow=0`** … **`snow=100`** | Christmas Closed Status only. Snow density on the closed plate. `0` is a small flurry, `100` is a blizzard. Omitted uses **40** until a ship number is chosen. `preview-all` forwards it. No effect on the default or Halloween closed art. |
-| **`lightshow=1`** | Christmas Closed Status only. The six CLOSED letters cycle Highlight Special → Highlight → Secondary (yellow, red, white), 5 seconds each, then scramble for 5 seconds every 30 seconds. Each scramble frame uses each color twice and keeps matching colors apart, including across the board seam. `lightshow=0` or omitting it keeps the PDF gold. Board 4 is unchanged. `preview-all` forwards it. |
+| **`snow=0`** … **`snow=100`** | Christmas Closed Status only. Snow density on the closed plate. `0` is a small flurry, `100` is a blizzard. Omitted uses **40**. `preview-all` forwards it. No effect on the default or Halloween closed art. |
+| **`lightshow=0`** | Christmas Closed Status only. The six CLOSED letters cycle Highlight Special → Highlight → Secondary (yellow, red, white), 5 seconds each, then scramble for 5 seconds every 30 seconds. Each scramble frame uses each color twice and keeps matching colors apart, including across the board seam. That show is on with the theme. `lightshow=0` keeps the PDF gold. Board 4 is unchanged. `preview-all` forwards it. |
 
 Typical TV pin: **`?w=1920&dpr=1`**. After a hard refresh, Debug → Display should read **`1920×1080 dpr1`**.
 
@@ -91,11 +91,11 @@ index.html?beta&theme=Christmas&roulette=1&splash=hold
 index.html?beta&theme=Christmas&roulette=4
 preview-all.html?beta&theme=Christmas&roulette=1&splash=hold
 index4.html?theme=Halloween&closed=1
-index.html?theme=Christmas&closed=1&snow=40
-preview-all.html?theme=Christmas&closed=1&snow=40
+index.html?theme=Christmas&closed=1
+preview-all.html?theme=Christmas&closed=1
 index4.html?theme=Christmas&closed=1&snow=100
-index.html?theme=Christmas&closed=1&lightshow=1
-preview-all.html?theme=Christmas&closed=1&snow=40&lightshow=1
+index.html?theme=Christmas&closed=1&lightshow=0
+preview-all.html?theme=Christmas&closed=1&snow=0
 index4.html?wxNow=2026-09-22T04:15:00Z
 ```
 

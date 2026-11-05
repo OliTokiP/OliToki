@@ -4,7 +4,7 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
-**Last updated:** 2026-10-05 15:00 (Halloween Logo costumes)  
+**Last updated:** 2026-11-05 18:31 (Christmas Closed Status defaults)  
 
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
@@ -356,9 +356,9 @@ Full-stage overlay when Store Hours say closed. Static SVGs from `assets/closed/
 
 `#closed-status` fills the Stage (z-index 40, black plate). Galaxy pan, presentation, stripes, and the Weather Widget halt until the next open. `?closed=1` forces the overlay for QA. Halloween Theme Selector (or `?theme=Halloween`) picks the `closed-h-*` files.
 
-Christmas Theme (or `?theme=Christmas`) uses the Closed Status Xmas art on a `#0D3B2E` plate: gold `#FFD44F` **CL / OS / ED**, and Board 4’s Santa plus baked Store Hours (`closed-x-4-big.svg` is “Store Hours:”, `closed-x-4-front.svg` is Santa and the hour lines). Snow is the Holiday Roulette circle field (Secondary `#FFF8F0`, not pure white). Layer stack, back to front: small flakes, big type, medium flakes, small type and Santa, large flakes. `?snow=0` is a small flurry and `?snow=100` is a blizzard. Omitting `snow` uses 40 until a ship number is chosen. The heavy graphics stay halted; only the snow frame runs.
+Christmas Theme (or `?theme=Christmas`) uses the Closed Status Xmas art on a `#0D3B2E` plate: gold `#FFD44F` **CL / OS / ED**, and Board 4’s Santa plus baked Store Hours (`closed-x-4-big.svg` is “Store Hours:”, `closed-x-4-front.svg` is Santa and the hour lines). Snow is the Holiday Roulette circle field (Secondary `#FFF8F0`, not pure white). Layer stack, back to front: small flakes, big type, medium flakes, small type and Santa, large flakes. `?snow=0` is a small flurry and `?snow=100` is a blizzard. Omitting `snow` uses **40**. The heavy graphics stay halted; only the snow frame runs.
 
-`?lightshow=1` recolors the six **CLOSED** letters from the Christmas theme: Highlight Special (yellow), Highlight (red), Secondary (white). They hold together — all yellow, then all red, then all white — for 5 seconds each. Every 30 seconds that hold gives way to a 5-second scramble (a new pattern every 200ms). Each scramble frame uses each color twice and never puts the same color on touching letters, including across the board seam. The clock is `Date.now()`, so the four TVs stay in step. Omitting `lightshow`, or `lightshow=0`, keeps the PDF gold. Board 4’s Santa and hours stay gold either way. `preview-all` forwards `lightshow`.
+The six **CLOSED** letters run the light show with the theme: Highlight Special (yellow), Highlight (red), Secondary (white). They hold together — all yellow, then all red, then all white — for 5 seconds each. Every 30 seconds that hold gives way to a 5-second scramble (a new pattern every 200ms). Each scramble frame uses each color twice and never puts the same color on touching letters, including across the board seam. The clock is `Date.now()`, so the four TVs stay in step. `?lightshow=0` keeps the PDF gold. Board 4’s Santa and hours stay gold either way. `preview-all` forwards `lightshow`.
 
 ---
 

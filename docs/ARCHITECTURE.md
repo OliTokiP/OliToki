@@ -1,6 +1,6 @@
 # TokiMenu — Architecture
 
-**Last updated:** 2026-10-05 15:00 (Halloween Logo costumes)
+**Last updated:** 2026-11-05 18:31 (Christmas Closed Status defaults)
 
 ## 1. Current system (baseline `a50b4d8`)
 
@@ -30,7 +30,7 @@
 | `js/holiday-splash.js` | All boards: Holiday Splash overlay (Spooky Roulette). Six Halloween SVGs; unique pick per board per Eastern minute; stagger fade-in, 7s hold, fade-out together. CSS background (no `<img>`); roulette flag from menu.js Style parse — does not fetch Style itself |
 | `js/christmas.js` | Christmas Theme helpers: `isChristmas`, Holiday Roulette mascot URLs (Santa / Rudolph), QA palette |
 | `js/holiday-roulette.js` | All boards: Holiday Roulette overlay (Christmas). Solid Main-color plate + three-row Fraunces marquee as one 4-board wall, rows centered on the PDF 367px pitch; fade in together; translateX, snow, and the theme-white veil from Cloud Run nowMs every rAF (timezone offset cached). Snow is three small canvases (small behind type, medium between type and mascot, large in front). Exit fades to Secondary white, then lifts onto the plates. Halts galaxy / presentation / stripes / soft-refresh while up and hides the rest of the Stage until the lift (`toki:holiday-roulette-change`). CSS text + mascot background (no `<img>`); flag from menu.js Style parse |
-| `js/closed-status.js` | All boards: Closed Status overlay from Store Hours + static `assets/closed/closed-1.svg` … `closed-4.svg` (CL / OS / ED / hours; Halloween `closed-h-*` with Toki Ghost on Board 4; Christmas `closed-x-*` gold CLOSED plus Board 4 Santa and baked hours, with three-layer circle snow). `?lightshow=1` recolors the six CLOSED letters on the snow frame (Highlight Special / Highlight / Secondary, then a 5s scramble every 30s). Halts galaxy / presentation while closed |
+| `js/closed-status.js` | All boards: Closed Status overlay from Store Hours + static `assets/closed/closed-1.svg` … `closed-4.svg` (CL / OS / ED / hours; Halloween `closed-h-*` with Toki Ghost on Board 4; Christmas `closed-x-*` gold CLOSED plus Board 4 Santa and baked hours, with three-layer circle snow at density 40). The six CLOSED letters run the light show on that snow frame (Highlight Special / Highlight / Secondary, then a 5s scramble every 30s) unless `?lightshow=0`. Halts galaxy / presentation while closed |
 | `js/menu-data.js` | Embedded offline fallback rows |
 | `css/menu.css` | Fixed-stage layout + board modifiers |
 | `scripts/toki_server.py` | Static file server + Sheets CSV proxy + caches |
