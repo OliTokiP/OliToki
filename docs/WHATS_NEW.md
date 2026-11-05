@@ -7,6 +7,19 @@ How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
 
 ---
 
+## 2026-11-05 — Christmas Closed Status light show
+
+**Boards / surface:** Menu Screens (boards 1–3)  
+**Summary:** `?lightshow=1` runs the six CLOSED letters through the Christmas theme colors. The default stays the PDF gold.
+
+### Details
+- Solid sequence, 5 seconds each: Highlight Special (yellow), Highlight (red), Secondary (white), then that cycle repeats.
+- Every 30 seconds the hold stops and the letters scramble for 5 seconds (a new pattern every 200ms). Each frame uses each of the three colors twice, and the same color never touches, including across the board seam.
+- The phase comes from `Date.now()`, so the wall stays in step. Board 4’s Santa and hours stay gold. Omitting `lightshow`, or `lightshow=0`, leaves the gold art.
+- QA: `?theme=Christmas&closed=1&lightshow=1`.
+
+---
+
 ## 2026-11-05 — Holiday Closed Status (Christmas)
 
 **Boards / surface:** Menu Screens (all four boards)  

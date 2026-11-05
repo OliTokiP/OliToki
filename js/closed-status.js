@@ -17,6 +17,8 @@
  * ?theme=Christmas&closed=1 shows the holiday plate.
  * ?snow=0 is a small flurry, ?snow=100 is a blizzard. Omitted snow uses 40
  * until a ship number is chosen.
+ * ?lightshow=1 runs the CLOSED-letter lights (Highlight Special, Highlight,
+ * Secondary). Omitted or 0 leaves the PDF gold. Boards 1–3 only.
  */
 (function (root) {
   "use strict";
@@ -31,6 +33,47 @@
   var XMAS_VER = "20261105cx1";
   // Stand-in until Feedback picks a ship number. ?snow= overrides it.
   var SNOW_DEFAULT = 40;
+  // Christmas closed letters, ?lightshow=1. One clock for the whole wall.
+  // 25s of solid color (5s yellow, 5s red, 5s white, repeat), then 5s of
+  // scramble. Yellow / red / white are Highlight Special, Highlight, Secondary.
+  var LIGHT_PERIOD_MS = 30000;
+  var LIGHT_SCRAMBLE_MS = 5000;
+  var LIGHT_HOLD_MS = 5000;
+  var LIGHT_STEP_MS = 200;
+  // C L O S E D. 0 yellow, 1 red, 2 white. Each color twice, and the same
+  // color never sits on touching letters, including across a board seam.
+  var LIGHT_PATTERNS = [
+    "010212",
+    "102021",
+    "021210",
+    "102102",
+    "021021",
+    "210102",
+    "121020",
+    "012102",
+    "120210",
+    "202101",
+    "021012",
+    "102120",
+    "021201",
+    "102012",
+    "020121",
+    "201210",
+    "120201",
+    "212010",
+    "201201",
+    "210120",
+    "210201",
+    "210210",
+    "012012",
+    "120120",
+    "201012",
+    "012120",
+    "101202",
+    "012021",
+    "120102",
+    "201021",
+  ];
   var BOARD_W = 1920;
   var WALL_W = 7680;
   var STAGE_H = 1080;
@@ -100,6 +143,12 @@
   var snowWanted = false;
   var themeWhite = "#FFF8F0";
   var snowLevelCached = null;
+  var lightSvg = null;
+  var lightPaths = null;
+  var lightReq = 0;
+  var lightHoldMs = null;
+  var lightColorCache = null;
+  var lightColorKey = "";
 
   function $(id) {
     return document.getElementById(id);
@@ -623,7 +672,9 @@
   function snowFrame() {
     if (!snowWanted) return;
     snowRaf = window.requestAnimationFrame(snowFrame);
-    drawSnow(Date.now());
+    var now = lightHoldMs != null ? lightHoldMs : Date.now();
+    drawSnow(now);
+    paintLights(now);
   }
 
   function startSnow() {
@@ -652,6 +703,155 @@
         layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
       }
     }
+  }
+
+  function readLightshow() {
+    try {
+      var raw = new URLSearchParams(location.search).get("lightshow");
+      if (raw == null) return false;
+      var s = String(raw).trim().toLowerCase();
+      if (!s || s === "0" || s === "off" || s === "false" || s === "no") return false;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function cssColor(name) {
+    try {
+      return String(
+        getComputedStyle(document.documentElement).getPropertyValue(name) || ""
+      ).trim();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  // Theme tokens. Before menu.js paints Christmas, fall back to the
+  // Christmas palette so the first frames are not Toki Default cyan.
+  function themeLightColors() {
+    var keyed =
+      document.body && document.body.classList.contains("theme-christmas")
+        ? "on"
+        : "off";
+    if (lightColorCache && lightColorKey === keyed) return lightColorCache;
+    lightColorKey = keyed;
+    var C = root.TOKI_CHRISTMAS;
+    var P = (C && C.PALETTE) || {};
+    var yellow = P.special || "#F5D76E";
+    var red = P.highlight || "#C41E3A";
+    var white = P.secondary || "#FFF8F0";
+    if (keyed === "on") {
+      var y = cssColor("--highlight-special");
+      var r = cssColor("--highlight");
+      var w = cssColor("--secondary-color");
+      if (y) yellow = y;
+      if (r) red = r;
+      if (w && !isPureWhite(w)) white = w;
+    }
+    lightColorCache = [yellow, red, white];
+    return lightColorCache;
+  }
+
+  function describeLights(nowMs) {
+    var phase = nowMs % LIGHT_PERIOD_MS;
+    if (phase < 0) phase += LIGHT_PERIOD_MS;
+    var colors = themeLightColors();
+    var pattern;
+    var mode;
+    var i;
+    if (phase >= LIGHT_PERIOD_MS - LIGHT_SCRAMBLE_MS) {
+      mode = "scramble";
+      var tick = Math.floor(
+        (phase - (LIGHT_PERIOD_MS - LIGHT_SCRAMBLE_MS)) / LIGHT_STEP_MS
+      );
+      var raw = LIGHT_PATTERNS[tick % LIGHT_PATTERNS.length];
+      pattern = [];
+      for (i = 0; i < 6; i++) pattern.push(Number(raw.charAt(i)));
+    } else {
+      mode = "solid";
+      var idx = Math.floor(phase / LIGHT_HOLD_MS) % 3;
+      pattern = [idx, idx, idx, idx, idx, idx];
+    }
+    var six = [];
+    for (i = 0; i < 6; i++) six.push(colors[pattern[i]]);
+    return { mode: mode, phase: phase, pattern: pattern, colors: six };
+  }
+
+  function paintLights(nowMs) {
+    if (!lightPaths || lightPaths.length < 2) return null;
+    var state = describeLights(nowMs);
+    var base = (slot - 1) * 2;
+    if (base < 0 || base > 4) return state;
+    var a = state.colors[base];
+    var b = state.colors[base + 1];
+    if (lightPaths[0].getAttribute("fill") !== a) {
+      lightPaths[0].setAttribute("fill", a);
+    }
+    if (lightPaths[1].getAttribute("fill") !== b) {
+      lightPaths[1].setAttribute("fill", b);
+    }
+    return state;
+  }
+
+  function removeLights() {
+    lightReq++;
+    if (lightSvg && lightSvg.parentNode) lightSvg.parentNode.removeChild(lightSvg);
+    lightSvg = null;
+    lightPaths = null;
+    if (overlay) overlay.classList.remove("is-lightshow");
+  }
+
+  function mountLights(text) {
+    removeLights();
+    var doc;
+    try {
+      doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    } catch (e) {
+      return;
+    }
+    var svg = doc.querySelector("svg");
+    if (!svg || !overlay) return;
+    var node = document.importNode(svg, true);
+    node.id = "closed-status-lights";
+    node.setAttribute("aria-hidden", "true");
+    node.setAttribute("data-slot", String(slot));
+    var paths = node.querySelectorAll("path");
+    if (!paths || paths.length < 2) return;
+    lightPaths = [paths[0], paths[1]];
+    if (art && art.parentNode === overlay) overlay.insertBefore(node, art.nextSibling);
+    else overlay.appendChild(node);
+    lightSvg = node;
+    overlay.classList.add("is-lightshow");
+  }
+
+  function syncLights() {
+    var want = !!(christmasOn() && closed && readLightshow() && slot >= 1 && slot <= 3);
+    if (!want) {
+      removeLights();
+      return;
+    }
+    if (lightSvg && lightSvg.getAttribute("data-slot") === String(slot)) {
+      paintLights(lightHoldMs != null ? lightHoldMs : Date.now());
+      return;
+    }
+    var req = ++lightReq;
+    var src = xmasBigSrc();
+    fetch(src, { cache: "force-cache" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("lights " + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        if (req !== lightReq) return;
+        if (!(christmasOn() && closed && readLightshow())) return;
+        mountLights(text);
+        paintLights(lightHoldMs != null ? lightHoldMs : Date.now());
+        console.info("[TokiMenu closed] lightshow", slot);
+      })
+      .catch(function (err) {
+        console.warn("[TokiMenu closed] lightshow", err);
+      });
   }
 
   function ensureOverlay() {
@@ -757,6 +957,7 @@
     }
     if (xmas && closed) startSnow();
     else stopSnow();
+    syncLights();
   }
 
   function setWeatherRunning(on) {
@@ -843,6 +1044,8 @@
       fetchHours();
     });
     window.addEventListener("toki:theme-change", function () {
+      lightColorCache = null;
+      lightColorKey = "";
       syncArt();
     });
   }
@@ -866,6 +1069,18 @@
     },
     refreshHours: fetchHours,
     syncArt: syncArt,
+    lightshowOn: readLightshow,
+    lightState: function (nowMs) {
+      return describeLights(nowMs == null ? Date.now() : nowMs);
+    },
+    holdLights: function (nowMs) {
+      lightHoldMs = nowMs;
+      paintLights(nowMs);
+      return describeLights(nowMs);
+    },
+    releaseLights: function () {
+      lightHoldMs = null;
+    },
   };
 
   if ($("stage")) {

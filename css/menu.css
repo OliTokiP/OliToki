@@ -2557,8 +2557,25 @@ body.theme-christmas #closed-status,
   z-index: 1;
 }
 
-#closed-status.is-xmas #closed-status-art {
+#closed-status.is-xmas #closed-status-art,
+#closed-status.is-xmas #closed-status-lights {
   z-index: 2;
+}
+
+/* lightshow=1 swaps the baked gold for live fills. The img stays in the
+   stack so the snow layers keep their anchors. */
+#closed-status.is-xmas.is-lightshow #closed-status-art {
+  visibility: hidden;
+}
+
+#closed-status-lights {
+  position: absolute;
+  inset: 0;
+  width: 1920px;
+  height: 1080px;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
 }
 
 #closed-status.is-xmas .closed-snow.is-mid {
