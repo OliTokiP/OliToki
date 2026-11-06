@@ -1,9 +1,31 @@
 # What’s New
 
-**Last updated:** 2026-11-05 18:50  
+**Last updated:** 2026-11-05 21:50  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-11-05 — Christmas plate snow
+
+**Boards / surface:** Menu Screens (all four boards)  
+**Sheet:** none  
+**Summary:** Christmas on the open menu now has a low flurry. `?snow=` sets the density. Omitting it uses **10**.
+
+### Details
+- Small cream circles sit on the Background, under the Frame. Medium circles sit over the menu type and under the Plates. Large circles sit in front of the Plates.
+- Color is the theme Secondary (`#FFF8F0`), not pure white. The field is one 7680-wide wall, stepped from Cloud Run `nowMs`.
+- Slideshow, Ken Burns, and Encore keep running. The snow frame pauses while Closed Status or Holiday Roulette covers the Stage.
+- Closed Status still uses **40** when `snow` is omitted. Setting `?snow=` changes both.
+- `preview-all` forwards `snow` and draws fewer flakes.
+
+### Docs updated
+- [URL_PARAMS.md](./URL_PARAMS.md)
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md)
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [PERFORMANCE.md](./PERFORMANCE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 

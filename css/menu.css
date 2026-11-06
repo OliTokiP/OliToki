@@ -2519,6 +2519,47 @@ body.holiday-roulette-on #bg-pattern-track {
   pointer-events: none;
 }
 
+/* Plate snow — Christmas open menu. ?snow= sets density (default 10).
+   Background (z1) > small > frame and type (z2–z4) > medium > plates (z5)
+   > large. Bitmaps stay small; CSS scales them. No shadow, no blur.
+   Encore puts the Family Portrait under the frame, so .is-menu-only clips
+   the medium layer to the frame and .is-mid-photo sits behind that portrait.
+   Weather (z6) and the disclaimer (z8) stay above the large flakes. */
+.plate-snow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+  display: none;
+}
+
+.plate-snow.is-on {
+  display: block;
+}
+
+.plate-snow.is-back,
+.plate-snow.is-mid-photo {
+  z-index: 1;
+}
+
+.plate-snow.is-mid {
+  z-index: 4;
+}
+
+.plate-snow.is-front {
+  z-index: 5;
+}
+
+.plate-snow.is-mid.is-menu-only {
+  clip-path: polygon(0 0, 1071.9px 0, 1090.3px 234px, 1156.5px 1080px, 0 1080px);
+}
+
+body.board-drinks .plate-snow.is-mid.is-menu-only {
+  clip-path: polygon(1920px 0, 848.1px 0, 829.7px 234px, 763.5px 1080px, 1920px 1080px);
+}
+
 /* Closed Status — full-stage static SVG (Closed 1–4, or Closed H 1–4 on Halloween).
    Replaces board graphics between Store Hours. Halt of RAF / presentation is in
    js/closed-status.js + menu.js. */

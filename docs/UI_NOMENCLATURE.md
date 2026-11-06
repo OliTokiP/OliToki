@@ -287,6 +287,8 @@ As headers migrate, prefer:
 
 Board 4: swap Frame and photo side; Menu List hidden; Announcement Panel + Drink Options Box in the Frame; Stripes optional; **Weather Widget** pinned bottom-left on the photo side (over the Background, above the Plate).
 
+Christmas plate snow (`?snow=`, open menu default **10**) uses the same Stage: small flakes on the Background under the Frame, medium flakes over the menu type and under the Plates, large flakes in front of the Plates. The Weather Widget and the disclaimer stay above the large flakes.
+
 ---
 
 ## 9. Open renames (sheet / code later)
@@ -306,6 +308,7 @@ Track deliberately; do not block handoff:
 
 | Date | Change |
 |------|--------|
+| 2026-11-05 | **Plate snow** — Christmas open menu uses `?snow=` (omitted = **10**). Small under the Frame, medium between the menu and the Plates, large in front of the Plates |
 | 2026-11-05 | **Christmas Closed Status defaults** — snow **40** and the letter light show ship with the theme. `?snow=` still overrides density. `?lightshow=0` keeps the PDF gold |
 | 2026-11-05 | **Christmas Closed Status lights** — six CLOSED letters cycle yellow → red → white, then scramble for 5 seconds every 30 seconds |
 | 2026-11-05 | **Christmas Closed Status** — holiday art from Closed Status Xmas (`closed-x-*`) and three-layer circle snow while the shop is closed. `?snow=0`…`100` |
