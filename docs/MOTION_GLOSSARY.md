@@ -154,7 +154,7 @@ Encore **reuses Family Portrait’s lattice**. One function: `buildPortraitLayou
 | 3. Place images | Each plate sits at a **slot center** — the intersection of its cell (not a tile fill). Native bitmap `1500×1000`, `translate(-50%,-50%) scale(layout.scale)`. |
 | 4. Camera | The **whole scaffold** (`.family-portrait-rig`) scales (`--encore-zoom` `1 → 1.24`). Origin = the **active slot’s lattice point**. That is the “zoom in on one item.” |
 | 5. Veil | Hole is painted at that same lattice point. |
-| 6. Background | Encore **overrides** Style wallpaper/pattern with Encore Background (solid, atmospherically faded: `fg × 0.35` over Secondary). Live: `encore-scaffold-bg` / solid plate. |
+| 6. Background | Encore **overrides** Style wallpaper/pattern with Encore Background (solid). Christmas Theme fades that plate (`fg × 0.35` over Secondary); other themes keep the raw hex. Live: `encore-scaffold-bg` / solid plate. |
 
 **Manager preview:** build this same 848×1080 world, then **scale the world** into the mini photo wedge. Do not invent a second one-photo Encore.
 
@@ -177,10 +177,10 @@ Preview must have the same three layers (stage / rig / veil), even if the “cas
 
 ### 5.2 Spotlight chrome (`applyEncoreSpotlightChrome`)
 
-| Spotlight Color | Veil fill (photo-side shroud — atmospheric fade, same as BG Pattern) |
+| Spotlight Color | Veil fill (photo-side shroud). Christmas Theme: atmospheric fade, same as BG Pattern. Other themes: raw hex. |
 |-----------------|-----------|
-| **Black** | Faded `#000000` (`× 0.35` over Secondary). **New does not override.** |
-| **Highlight** | New → faded `--highlight-special`. Else → faded `--highlight` |
+| **Black** | Christmas: faded `#000000` (`× 0.35` over Secondary). Else: `#000000`. **New does not override.** |
+| **Highlight** | Christmas: New → faded `--highlight-special`. Else → faded `--highlight`. Other themes: those tokens raw. |
 
 | Spotlight Type | Treatment |
 |----------------|-----------|

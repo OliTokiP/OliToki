@@ -1,9 +1,28 @@
 # What’s New
 
-**Last updated:** 2026-11-05 21:50  
+**Last updated:** 2026-11-05 22:30  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-11-05 22:30 — Christmas-only plate fade
+
+**Boards / surface:** Menu Screens (all four boards)  
+**Sheet:** none  
+**Summary:** The atmospheric fade on photo-side solids (Background Plate, Encore Background, Spotlight Veil) is Christmas Theme only. Regular and Halloween keep those solids at full strength. Pattern Bake still composites stripes on every theme.
+
+### Details
+- `atmosphereHex` in `js/menu.js` blends `fg × 0.35` over Secondary only when Theme is Christmas.
+- Frame chrome and New stickers stay saturated on every theme.
+- Pattern Transparency Bake is unchanged: it still bakes stripe hexes on any theme when the Beta checkbox is on.
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md) §11
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [MOTION_GLOSSARY.md](./MOTION_GLOSSARY.md) §5.0–5.2
+- [BETA_FEATURES.md](./BETA_FEATURES.md) Pattern Transparency Bake
 
 ---
 

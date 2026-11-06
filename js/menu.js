@@ -2640,13 +2640,49 @@
   }
 
   /**
+   * Style Theme is Christmas (URL override, live Style name, body class,
+   * or last-paint before Style arrives). Used to gate plate-side fade.
+   */
+  function isChristmasThemeNow() {
+    const C = window.TOKI_CHRISTMAS;
+    if (!C || typeof C.isChristmas !== "function") return false;
+    if (typeof C.urlThemeOverride === "function") {
+      const override = C.urlThemeOverride();
+      if (override) return C.isChristmas(override);
+    }
+    if (C.isChristmas(config.themeName)) return true;
+    if (document.body && document.body.classList.contains("theme-christmas")) {
+      return true;
+    }
+    if (document.body && document.body.classList.contains("theme-halloween")) {
+      return false;
+    }
+    if (!config.themeName) {
+      const lp = readLastPaint();
+      if (lp && C.isChristmas(lp.themeName)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Pattern Bake composite: stripe × 0.35 over theme Secondary.
+   * Used for BG Pattern on every theme, and for Christmas plate-side solids.
+   */
+  function patternBakeCompositeHex(fgHex, fallback) {
+    const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
+    return blendHexOver(fg, patternPlateHex(), PATTERN_BAKE_ALPHA);
+  }
+
+  /**
    * Atmospheric fade for photo-side solids (Background Plate, Encore
-   * Background, Spotlight Veil). Same composite as Style BG Pattern:
-   * fg × 0.35 over theme Secondary. Frame chrome and New stickers stay raw.
+   * Background, Spotlight Veil). Christmas Theme only — same composite
+   * as Style BG Pattern: fg × 0.35 over theme Secondary. Other themes
+   * keep the raw hex. Frame chrome and New stickers stay raw always.
    */
   function atmosphereHex(fgHex, fallback) {
     const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
-    return blendHexOver(fg, patternPlateHex(), PATTERN_BAKE_ALPHA);
+    if (!isChristmasThemeNow()) return fg;
+    return patternBakeCompositeHex(fg);
   }
 
   /**
@@ -2676,7 +2712,7 @@
     const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
     if (!patternBakeOn) return fg;
     // stripe×0.35 + Secondary×0.65  (as if 0.35 over the theme Secondary plate)
-    return atmosphereHex(fg);
+    return patternBakeCompositeHex(fg);
   }
 
   function applyPatternBakeConfig(on) {
@@ -3365,11 +3401,12 @@
   }
 
   /**
-   * Encore plate is Style Encore Background Color, atmospherically faded
-   * (same composite as BG Pattern). Wallpaper fades out, then we park it
-   * (drop src + stop pan RAF) so Fire Stick is not compositing two invisible
-   * full-stage bitmaps under a solid veil. Pan X stays on the img transform
-   * so unpark resumes where it left off. Pattern is display:none while parked.
+   * Encore plate is Style Encore Background Color. Christmas Theme fades
+   * it (same composite as BG Pattern); other themes keep the raw hex.
+   * Wallpaper fades out, then we park it (drop src + stop pan RAF) so
+   * Fire Stick is not compositing two invisible full-stage bitmaps under
+   * a solid veil. Pan X stays on the img transform so unpark resumes
+   * where it left off. Pattern is display:none while parked.
    */
   function encoreBackgroundHex() {
     const raw =
@@ -4279,9 +4316,9 @@
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
 
-    // Encore: Style Encore Background Color plate (already faded). Wallpaper
-    // faded then parked. Do not restore src here while tokiParked — that would
-    // undo the GPU win.
+    // Encore: Style Encore Background Color plate (Christmas: faded).
+    // Wallpaper faded then parked. Do not restore src here while tokiParked
+    // — that would undo the GPU win.
     if (_encoreSolidBg) {
       plate = encoreBackgroundHex();
       document.body.classList.add("encore-solid-bg");

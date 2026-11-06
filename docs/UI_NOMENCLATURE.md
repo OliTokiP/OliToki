@@ -37,7 +37,7 @@ Fixed **1920×1080** canvas.
 |----------------|------------|-------------------|
 | **Stage** | The full 1920×1080 board root | `#stage` |
 | **Background** | Rear-most scene: solid color plate + optional wallpaper image (blur, blend, opacity, scroll) | Galaxy, `#galaxy`, BG Color / BG Wallpaper |
-| **Background Plate** | Solid color layer under the wallpaper (theme or Style BG Color). Photo-side solids use Pattern’s atmospheric fade (`fg × 0.35` over Secondary) | BG color plate |
+| **Background Plate** | Solid color layer under the wallpaper (theme or Style BG Color). Christmas Theme fades photo-side solids the same way as Pattern (`fg × 0.35` over Secondary); other themes stay full strength | BG color plate |
 | **Wallpaper** | Bitmap on the Background (e.g. `film.jpg`, `galaxy-bg.jpg`, or `none`) | BG Image, BG Wallpaper |
 | **Frame** | Opaque vector shape: white **Header Band** + black **Menu Panel**, with diagonal cutout toward the photo side | `#frame`, frame header / frame panel |
 | **Header Band** | White (secondary) top strip of the Frame that holds the Logo and Menu Title | `.frame-header` |

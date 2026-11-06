@@ -4,7 +4,7 @@
 **Fonts:** Roboto 400/700/900; Roboto Condensed 300/700 (disclaimers, some box body type).  
 **Primary references:** `mockups/`, live `css/menu.css`, inline SVG in `index*.html`, verification shots in `screenshots/footer-verify.png` etc.
 
-**Last updated:** 2026-11-05 18:50 (plate-side atmospheric fade)  
+**Last updated:** 2026-11-05 22:30 (Christmas plate-side fade)  
 
 This guide is the **layout contract**. Code may reorganize; these numbers and rules should not drift without an intentional design change.
 
@@ -366,7 +366,7 @@ The six **CLOSED** letters run the light show with the theme: Highlight Special 
 
 ## 11. Background FX
 
-Always paint **BG Color** on `#galaxy`. Photo-side solids (Background Plate, Encore Background, Spotlight Veil) use the same atmospheric fade as Style **BG Pattern**: `fg × 0.35 + theme Secondary × 0.65` (`atmosphereHex` in `js/menu.js`). Frame chrome (Header Band, Menu Panel, Board 4 Stripes) and **New stickers** stay full strength. Wallpaper PNG-average plates are not theme solids and skip the fade.
+Always paint **BG Color** on `#galaxy`. On **Christmas Theme**, photo-side solids (Background Plate, Encore Background, Spotlight Veil) use the same atmospheric fade as Style **BG Pattern**: `fg × 0.35 + theme Secondary × 0.65` (`atmosphereHex` in `js/menu.js`). Other themes keep those solids at full strength. Frame chrome (Header Band, Menu Panel, Board 4 Stripes) and **New stickers** stay full strength on every theme. Wallpaper PNG-average plates are not theme solids and skip the fade. Pattern Bake still composites stripes on every theme.
 
 Optional image layer:
 
