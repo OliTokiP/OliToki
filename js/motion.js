@@ -1339,7 +1339,10 @@
         );
       }
     } else {
-      stage.style.setProperty("--encore-veil-color", "#000000");
+      stage.style.setProperty(
+        "--encore-veil-color",
+        spec.veilHex || "#000000"
+      );
     }
   }
 

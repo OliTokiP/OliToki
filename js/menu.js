@@ -2015,9 +2015,11 @@
       config.bgColor = plate;
       config.bgSolid = plate;
       config.bgMode = "solid";
+      if (lp.secondary) config.secondaryColor = lp.secondary;
+      if (lp.main) config.mainColor = lp.main;
       const galaxy = document.getElementById("galaxy");
       if (galaxy) {
-        galaxy.style.backgroundColor = plate;
+        galaxy.style.backgroundColor = atmosphereHex(plate);
         galaxy.classList.add("is-solid");
         galaxy.classList.remove("has-image");
       }
@@ -2637,11 +2639,44 @@
     );
   }
 
+  /**
+   * Atmospheric fade for photo-side solids (Background Plate, Encore
+   * Background, Spotlight Veil). Same composite as Style BG Pattern:
+   * fg × 0.35 over theme Secondary. Frame chrome and New stickers stay raw.
+   */
+  function atmosphereHex(fgHex, fallback) {
+    const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
+    return blendHexOver(fg, patternPlateHex(), PATTERN_BAKE_ALPHA);
+  }
+
+  /**
+   * Photo-side Background Plate: faded theme solid, unless wallpaper 100%+
+   * Normal has already replaced it with the PNG average.
+   */
+  function visibleThemePlateHex() {
+    const main = config.mainColor || "#000000";
+    const plate =
+      normalizeHex(config.bgColor) ||
+      normalizeHex(config.bgSolid) ||
+      main;
+    if (isDrinks && config.bgColorOverride) return atmosphereHex(plate);
+    const wall = isPreviewWall();
+    let imgP = config.bgImage || null;
+    if (imgP) imgP = wallFriendlyBgPath(imgP);
+    const op = parseUnit01(config.bgOpacity, 1);
+    const bl = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
+    if (imgP && op >= 0.999 && bl === "normal") {
+      const k = bgImageAvgKey(imgP);
+      if (_imageAvgPlateCache[k]) return _imageAvgPlateCache[k];
+    }
+    return atmosphereHex(plate);
+  }
+
   function patternBakeHex(fgHex, fallback) {
     const fg = normalizeHex(fgHex) || normalizeHex(fallback) || fgHex;
     if (!patternBakeOn) return fg;
     // stripe×0.35 + Secondary×0.65  (as if 0.35 over the theme Secondary plate)
-    return blendHexOver(fg, patternPlateHex(), 0.35);
+    return atmosphereHex(fg);
   }
 
   function applyPatternBakeConfig(on) {
@@ -3330,17 +3365,18 @@
   }
 
   /**
-   * Encore plate is Secondary Color. Wallpaper fades out, then we park it
+   * Encore plate is Style Encore Background Color, atmospherically faded
+   * (same composite as BG Pattern). Wallpaper fades out, then we park it
    * (drop src + stop pan RAF) so Fire Stick is not compositing two invisible
    * full-stage bitmaps under a solid veil. Pan X stays on the img transform
    * so unpark resumes where it left off. Pattern is display:none while parked.
    */
   function encoreBackgroundHex() {
-    return (
+    const raw =
       normalizeHex(config.encoreBackgroundColor) ||
       normalizeHex(config.secondaryColor) ||
-      "#ffffff"
-    );
+      "#ffffff";
+    return atmosphereHex(raw);
   }
 
   /**
@@ -3481,23 +3517,7 @@
         galaxy.classList.remove("is-solid");
         galaxy.classList.toggle("has-image", !!config.bgImage);
       } else {
-        let plate =
-          normalizeHex(config.bgColor) ||
-          normalizeHex(config.bgSolid) ||
-          config.mainColor ||
-          "#000000";
-        // Re-apply wallpaper avg plate override (if 100%+Normal) so crossfade
-        // seamless behavior is restored after Encore wind-down.
-        const wall = isPreviewWall();
-        let imgP = config.bgImage || null;
-        if (imgP) imgP = wallFriendlyBgPath(imgP);
-        const op = parseUnit01(config.bgOpacity, 1);
-        const bl = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
-        if (imgP && op >= 0.999 && bl === "normal") {
-          const k = bgImageAvgKey(imgP);
-          if (_imageAvgPlateCache[k]) plate = _imageAvgPlateCache[k];
-        }
-        galaxy.style.backgroundColor = plate;
+        galaxy.style.backgroundColor = visibleThemePlateHex();
       }
     }
   }
@@ -3528,6 +3548,15 @@
       });
       if (opts.forceClear || !isEncoreActiveNow()) {
         stage.style.removeProperty("background-color");
+        const ready =
+          config.encoreSpotlightColor === "highlight"
+            ? atmosphereHex(
+                normalizeHex(config.highlight) ||
+                  config.highlight ||
+                  "#26bbcb"
+              )
+            : atmosphereHex("#000000");
+        stage.style.setProperty("--encore-veil-color", ready);
       }
       syncEncoreHardShadowMode();
       return;
@@ -3549,12 +3578,15 @@
         veilHex = "";
       }
     }
+    if (veilHex) veilHex = atmosphereHex(veilHex);
     TOKI_MOTION.applyEncoreChrome(stage, {
       type: type,
       colorMode: colorMode,
       veilHex: veilHex,
       preserveVeil: preserveVeil,
-      fallbackHex: normalizeHex(config.highlight) || config.highlight || "#26bbcb",
+      fallbackHex: atmosphereHex(
+        normalizeHex(config.highlight) || config.highlight || "#26bbcb"
+      ),
     });
     syncEncoreHardShadowMode();
   }
@@ -3883,10 +3915,11 @@
     const main = config.mainColor || "#000000";
     const secondary = config.secondaryColor || "#ffffff";
     const highlight = config.highlight || "#26bbcb";
-    const plate =
+    const plate = atmosphereHex(
       normalizeHex(config.bgColor) ||
-      normalizeHex(config.bgSolid) ||
-      main;
+        normalizeHex(config.bgSolid) ||
+        main
+    );
     const imagePath = config.bgImage || null;
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blend = parseBgBlendMode(config.bgBlendMode);
@@ -3912,10 +3945,11 @@
         if (config.bgImage !== srcAtStart) return;
         if (parseUnit01(config.bgOpacity, 1) !== opAtStart) return;
         if (parseBgBlendMode(config.bgBlendMode) !== blendAtStart) return;
-        const plateNow =
+        const plateNow = atmosphereHex(
           normalizeHex(config.bgColor) ||
-          normalizeHex(config.bgSolid) ||
-          main;
+            normalizeHex(config.bgSolid) ||
+            main
+        );
         if (plateNow !== plateAtStart) return;
 
         const bg = normalizeHex(compositeHex) || plate;
@@ -4216,10 +4250,7 @@
 
     const wall = isPreviewWall();
     const main = config.mainColor || "#000000";
-    let plate =
-      normalizeHex(config.bgColor) ||
-      normalizeHex(config.bgSolid) ||
-      main;
+    let plate = visibleThemePlateHex();
     let imagePath = config.bgImage || null;
     if (isDrinks && config.bgColorOverride) imagePath = null;
     if (document.body) {
@@ -4248,19 +4279,9 @@
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);
 
-    // Special-case plate override (only when image + 100% opacity + Normal):
-    // Use a pre-computed PNG average (if we have it from a prior load) so the
-    // first paint of the galaxy also uses the matching tone. The async compute
-    // (kicked off below) will fill the cache for subsequent applies / reloads.
-    if (imagePath && opacity01 >= 0.999 && blend === "normal") {
-      const cachedAvg = _imageAvgPlateCache[bgImageAvgKey(imagePath)];
-      if (cachedAvg) {
-        plate = cachedAvg;
-      }
-    }
-
-    // Encore: Style Encore Background Color plate. Wallpaper faded then parked.
-    // Do not restore src here while tokiParked — that would undo the GPU win.
+    // Encore: Style Encore Background Color plate (already faded). Wallpaper
+    // faded then parked. Do not restore src here while tokiParked — that would
+    // undo the GPU win.
     if (_encoreSolidBg) {
       plate = encoreBackgroundHex();
       document.body.classList.add("encore-solid-bg");
@@ -11864,10 +11885,11 @@
 
     const wall = isPreviewWall();
     const main = config.mainColor || "#000000";
-    let plate =
+    let plate = atmosphereHex(
       normalizeHex(config.bgColor) ||
-      normalizeHex(config.bgSolid) ||
-      main;
+        normalizeHex(config.bgSolid) ||
+        main
+    );
     const opacity01 = parseUnit01(config.bgOpacity, 1);
     const blur01 = wall ? 0 : parseUnit01(config.bgBlur, 0);
     const blend = wall ? "normal" : parseBgBlendMode(config.bgBlendMode);

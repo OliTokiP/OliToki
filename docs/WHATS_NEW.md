@@ -1,9 +1,29 @@
 # What’s New
 
-**Last updated:** 2026-11-05 18:31  
+**Last updated:** 2026-11-05 18:50  
 
 Major product and presentation changes, newest first.  
 How to maintain this file: [DOCS_MAINTENANCE.md](./DOCS_MAINTENANCE.md).
+
+---
+
+## 2026-11-05 18:50 — Faded colors on plate-side solids
+
+**Boards / surface:** Menu Screens (all four boards)  
+**Sheet:** none  
+**Summary:** Solid colors on the photo side (Background Plate, Encore Background, Spotlight Veil) now use the same atmospheric fade as Style BG Pattern: the color at 0.35 over theme Secondary. Frame chrome and New stickers stay saturated.
+
+### Details
+- Algorithm is `fg × 0.35 + Secondary × 0.65` (`atmosphereHex` in `js/menu.js`) — the same bake Pattern stripes already used.
+- Board 4’s solid behind the drinks (BG Color Override) matches a pattern stripe of that color. Board 4 Stripes on the Menu Panel stay full strength.
+- Encore Background and the shroud (`--encore-veil-color`) get the faded hex. New stickers keep Highlight Special raw so they sit in front of the faded plane.
+- Wallpaper PNG-average plates skip the fade (they are not theme solids).
+
+### Docs updated
+- [STYLE_GUIDE.md](./STYLE_GUIDE.md) §11
+- [UI_NOMENCLATURE.md](./UI_NOMENCLATURE.md)
+- [MOTION_GLOSSARY.md](./MOTION_GLOSSARY.md) §5.0–5.2
+- [BETA_FEATURES.md](./BETA_FEATURES.md) Pattern Transparency Bake
 
 ---
 

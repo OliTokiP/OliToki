@@ -7,7 +7,7 @@ Use these words in:
 - Product docs, handoff guides, and bug reports
 - Code comments and new CSS/JS identifiers when practical (legacy DOM ids may lag)
 
-**Last updated:** 2026-11-05 18:31 (Christmas Closed Status defaults)  
+**Last updated:** 2026-11-05 18:50 (plate-side atmospheric fade)  
 
 **Pre-launch:** Runtime motion is still path-grown in `menu.js`; a structured Motion Style runner is deferred — see [MOTION_REFACTOR.md](MOTION_REFACTOR.md).  
 **What each style actually does (times, veil, highlight, errors):** [MOTION_GLOSSARY.md](MOTION_GLOSSARY.md).  
@@ -37,7 +37,7 @@ Fixed **1920×1080** canvas.
 |----------------|------------|-------------------|
 | **Stage** | The full 1920×1080 board root | `#stage` |
 | **Background** | Rear-most scene: solid color plate + optional wallpaper image (blur, blend, opacity, scroll) | Galaxy, `#galaxy`, BG Color / BG Wallpaper |
-| **Background Plate** | Solid color layer under the wallpaper (theme or Style BG Color) | BG color plate |
+| **Background Plate** | Solid color layer under the wallpaper (theme or Style BG Color). Photo-side solids use Pattern’s atmospheric fade (`fg × 0.35` over Secondary) | BG color plate |
 | **Wallpaper** | Bitmap on the Background (e.g. `film.jpg`, `galaxy-bg.jpg`, or `none`) | BG Image, BG Wallpaper |
 | **Frame** | Opaque vector shape: white **Header Band** + black **Menu Panel**, with diagonal cutout toward the photo side | `#frame`, frame header / frame panel |
 | **Header Band** | White (secondary) top strip of the Frame that holds the Logo and Menu Title | `.frame-header` |

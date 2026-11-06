@@ -154,7 +154,7 @@ Encore **reuses Family Portrait’s lattice**. One function: `buildPortraitLayou
 | 3. Place images | Each plate sits at a **slot center** — the intersection of its cell (not a tile fill). Native bitmap `1500×1000`, `translate(-50%,-50%) scale(layout.scale)`. |
 | 4. Camera | The **whole scaffold** (`.family-portrait-rig`) scales (`--encore-zoom` `1 → 1.24`). Origin = the **active slot’s lattice point**. That is the “zoom in on one item.” |
 | 5. Veil | Hole is painted at that same lattice point. |
-| 6. Background | Encore **overrides** Style wallpaper/pattern with Encore Background (solid). Live: `encore-scaffold-bg` / solid plate. |
+| 6. Background | Encore **overrides** Style wallpaper/pattern with Encore Background (solid, atmospherically faded: `fg × 0.35` over Secondary). Live: `encore-scaffold-bg` / solid plate. |
 
 **Manager preview:** build this same 848×1080 world, then **scale the world** into the mini photo wedge. Do not invent a second one-photo Encore.
 
@@ -177,10 +177,10 @@ Preview must have the same three layers (stage / rig / veil), even if the “cas
 
 ### 5.2 Spotlight chrome (`applyEncoreSpotlightChrome`)
 
-| Spotlight Color | Veil fill |
+| Spotlight Color | Veil fill (photo-side shroud — atmospheric fade, same as BG Pattern) |
 |-----------------|-----------|
-| **Black** | `#000000` always. **New does not override.** |
-| **Highlight** | New → `--highlight-special`. Else → `--highlight` |
+| **Black** | Faded `#000000` (`× 0.35` over Secondary). **New does not override.** |
+| **Highlight** | New → faded `--highlight-special`. Else → faded `--highlight` |
 
 | Spotlight Type | Treatment |
 |----------------|-----------|

@@ -1,6 +1,6 @@
 # Beta Features — injection guide
 
-**Last updated:** 2026-08-14 (Pattern Bake plate = theme Secondary Color)  
+**Last updated:** 2026-11-05 18:50 (plate-side solids share Pattern Bake math)  
 
 **Tab:** `Beta Features` · **GID:** `1710200195` · constant `BETA_FEATURES_GID` in `js/menu.js`  
 
@@ -52,6 +52,8 @@ Checkbox at **A7** on the Beta Features tab (title **Pattern Transparency Bake**
 | **ON** | Opacity **1**. Each stripe hex is pre-composited: `stripe × 0.35 + theme Secondary Color × 0.65` (same math as CSS src-over over a Secondary plate). No translucent layer. |
 
 A/B the Fire Stick cost of a 0.35 overlay vs an opaque baked fill. Console: `Pattern Bake: ON (opaque bands = 0.35 over #……)` (hex is Secondary).
+
+The same composite (`atmosphereHex`) always paints photo-side **solids** — Background Plate, Encore Background, Spotlight Veil — whether this checkbox is on or off. Frame chrome and New stickers stay raw. See [STYLE_GUIDE.md](./STYLE_GUIDE.md) §11.
 
 ### `Include Footer Boxes` (primary control today)
 
